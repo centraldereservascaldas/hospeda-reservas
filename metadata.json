@@ -1,0 +1,6 @@
+{
+  "name": "Hospeda - Reservas Inspiradas no Airbnb",
+  "description": "Sistema de reservas completo inspirado no Airbnb com busca de acomodações, filtros, fotos, cálculo de diárias, fluxo de reserva com Pix/Cartão, gestão de viagens e modo anfitrião.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
