@@ -5,6 +5,7 @@ export interface SearchAccommodationsParams {
   to?: string;
   guests?: number;
   destination?: string;
+  propertyId?: string;
   cities?: string[];
   limit?: number;
   skip?: number;
@@ -60,6 +61,39 @@ export interface CheckoutResponse {
 }
 
 class CrcnBackendApiService {
+  private getCachedResorts(): Array<{ id: string; name: string }> {
+    try {
+      const cached = JSON.parse(localStorage.getItem('hospeda_properties') || '[]') as Property[];
+      const byId = new Map<string, string>();
+      for (const property of cached) {
+        if (property.staysPropertyId && property.complexName?.trim()) {
+          byId.set(property.staysPropertyId, property.complexName.trim());
+        }
+      }
+      return Array.from(byId, ([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    } catch {
+      return [];
+    }
+  }
+
+  public async getResorts(): Promise<Array<{ id: string; name: string }>> {
+    try {
+      const res = await fetch('/api/resorts');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.headers.get('content-type')?.includes('application/json')) {
+        throw new Error('O servidor respondeu com conteúdo diferente de JSON.');
+      }
+      const json = await res.json();
+      const resorts = Array.isArray(json.data) ? json.data : [];
+      if (resorts.length > 0) return resorts;
+      return this.getCachedResorts();
+    } catch (err) {
+      console.warn('Could not load live resorts; using synchronized cache when available:', err);
+      return this.getCachedResorts();
+    }
+  }
+
   // 1. GET /api/accommodations
   public async getAccommodations(): Promise<Property[]> {
     try {
@@ -122,6 +156,10 @@ class CrcnBackendApiService {
       return { total: json.total || 0, data: json.data || [] };
     } catch (err) {
       console.warn('Falling back to local search filtering:', err);
+      if (params.from && params.to) {
+        // A static catalog cannot confirm availability or provide a date-specific quote.
+        return { total: 0, data: [] };
+      }
       const { STAYS_NET_APARTMENTS } = await import('../data/staysApartments');
       let filtered = STAYS_NET_APARTMENTS;
       if (params.guests && params.guests > 1) {

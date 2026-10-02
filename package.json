@@ -9,7 +9,7 @@
     "start": "tsx server.ts",
     "test": "tsx --test tests/*.test.ts",
     "lint": "tsc --noEmit",
-    "preview": "vite preview --port 3000 --host 0.0.0.0"
+    "preview": "tsx server.ts --serve-dist"
   },
   "dependencies": {
     "cors": "^2.8.6",

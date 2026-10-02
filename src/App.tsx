@@ -25,6 +25,7 @@ import { StaysSearchWidget } from './components/StaysSearchWidget';
 import { SofiaAssistantModal } from './components/SofiaAssistantModal';
 import { LogoCRCN } from './components/LogoCRCN';
 import { crcnBackendApi } from './services/crcnBackendApi';
+import { getSurpriseDateCandidates } from './utils/surpriseDates';
 import { 
   Compass, 
   Heart, 
@@ -191,6 +192,7 @@ export default function App() {
 
   // Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSurpriseLoading, setIsSurpriseLoading] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -259,13 +261,17 @@ export default function App() {
       }
 
       // Destination filter
+      if (filters.destinationPropertyId && prop.staysPropertyId !== filters.destinationPropertyId) {
+        return false;
+      }
       if (filters.destination.trim()) {
         const destLower = filters.destination.toLowerCase();
         const matchesCity = prop.location.city.toLowerCase().includes(destLower);
         const matchesState = prop.location.state.toLowerCase().includes(destLower);
         const matchesTitle = prop.title.toLowerCase().includes(destLower);
         const matchesNeighborhood = prop.location.neighborhood.toLowerCase().includes(destLower);
-        if (!matchesCity && !matchesState && !matchesTitle && !matchesNeighborhood) {
+        const matchesComplex = (prop.complexName || '').toLowerCase().includes(destLower);
+        if (!matchesCity && !matchesState && !matchesTitle && !matchesNeighborhood && !matchesComplex) {
           return false;
         }
       }
@@ -347,13 +353,16 @@ export default function App() {
     checkOut: string;
     persons: number;
     destination?: string;
+    propertyId?: string;
+    surpriseMe?: boolean;
   }) => {
-    let searchedProperties: Property[] | null = null;
+    setIsSurpriseLoading(Boolean(searchParams.surpriseMe));
+    let searchedProperties: Array<Property & { calculatedPrice?: { totalAmount?: number } }> | null = null;
     setFilters((prev) => ({
       ...prev,
-      checkIn: searchParams.checkIn,
-      checkOut: searchParams.checkOut,
-      destination: searchParams.destination || '',
+      ...(searchParams.surpriseMe ? {} : { checkIn: searchParams.checkIn, checkOut: searchParams.checkOut }),
+      destination: searchParams.surpriseMe ? '' : searchParams.destination || '',
+      destinationPropertyId: searchParams.surpriseMe ? '' : searchParams.propertyId || '',
       guests: {
         adults: searchParams.persons,
         children: 0,
@@ -362,22 +371,70 @@ export default function App() {
       },
     }));
 
-    // Search current availability and pricing through the backend
-    try {
-      const searchRes = await crcnBackendApi.searchAccommodations({
-        from: searchParams.checkIn,
-        to: searchParams.checkOut,
-        guests: searchParams.persons,
-        destination: searchParams.destination,
-      });
-      if (searchRes && searchRes.data) searchedProperties = searchRes.data;
-    } catch (e) {
-      console.warn('Backend search error:', e);
+    const dateOptions = searchParams.surpriseMe
+      ? getSurpriseDateCandidates().slice(0, 3)
+      : [{ checkIn: searchParams.checkIn, checkOut: searchParams.checkOut, occasion: '', kind: 'holiday' as const, weight: 1 }];
+    let selectedDateOption: (typeof dateOptions)[number] | null = null;
+
+    // For surprise searches, try a few weighted seasonal/event dates in order.
+    // Every option still requires a live availability result and official quote.
+    for (const dateOption of dateOptions) {
+      try {
+        const searchRes = await crcnBackendApi.searchAccommodations({
+          from: dateOption.checkIn,
+          to: dateOption.checkOut,
+          guests: searchParams.persons,
+          destination: searchParams.destination,
+          propertyId: searchParams.propertyId,
+        });
+        const results = searchRes?.data || [];
+        if (searchParams.surpriseMe) {
+          const confirmedQuotes = results.filter((property) => Number(property.calculatedPrice?.totalAmount) > 0);
+          if (confirmedQuotes.length) {
+            searchedProperties = confirmedQuotes;
+            selectedDateOption = dateOption;
+            break;
+          }
+        } else {
+          searchedProperties = results;
+          break;
+        }
+      } catch (e) {
+        console.warn('Backend search error:', e);
+      }
     }
 
-    if (searchedProperties) setProperties(searchedProperties);
-
-    showToast(`🔍 Buscando apartamentos para ${searchParams.persons} ${searchParams.persons === 1 ? 'hóspede' : 'hóspedes'}!`);
+    if (searchParams.surpriseMe) {
+      const quoted = (searchedProperties || []).filter((property) => Number(property.calculatedPrice?.totalAmount) > 0);
+      const score = (property: Property & { calculatedPrice?: { totalAmount?: number } }) =>
+        (Number(property.rating) || 0) * 10
+        + Math.log10((Number(property.reviewCount) || 0) + 1) * 3
+        + (property.isGuestFavorite ? 5 : 0)
+        + (property.isSuperhost ? 2 : 0);
+      const topCandidates = [...quoted].sort((a, b) =>
+        score(b) - score(a) || Number(a.calculatedPrice?.totalAmount) - Number(b.calculatedPrice?.totalAmount)
+      ).slice(0, 10);
+      const randomizedCandidates = [...topCandidates];
+      for (let index = randomizedCandidates.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [randomizedCandidates[index], randomizedCandidates[swapIndex]] = [randomizedCandidates[swapIndex], randomizedCandidates[index]];
+      }
+      const chosenProperties = randomizedCandidates.slice(0, 5);
+      setProperties(chosenProperties);
+      if (chosenProperties.length) {
+        const suggestedDates = selectedDateOption!;
+        setFilters((prev) => ({ ...prev, checkIn: suggestedDates.checkIn, checkOut: suggestedDates.checkOut }));
+        const formatDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR');
+        showToast(`✨ ${suggestedDates.occasion}: ${formatDate(suggestedDates.checkIn)} a ${formatDate(suggestedDates.checkOut)} · ${chosenProperties.length} acomodações com cotação confirmada.`);
+      } else {
+        showToast('Não encontramos cotação confirmada nas próximas datas especiais. Tente novamente ou escolha suas datas.');
+      }
+      setIsSurpriseLoading(false);
+    } else {
+      if (searchedProperties) setProperties(searchedProperties);
+      setIsSurpriseLoading(false);
+      showToast(`🔍 Buscando apartamentos para ${searchParams.persons} ${searchParams.persons === 1 ? 'hóspede' : 'hóspedes'}!`);
+    }
     const catalogEl = document.getElementById('stays-apartments-catalog');
     if (catalogEl) {
       catalogEl.scrollIntoView({ behavior: 'smooth' });
@@ -392,10 +449,10 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 selection:bg-orange-500/20 selection:text-orange-950">
       
       {/* Toast Notification Banner */}
-      {toastMessage && (
+      {(toastMessage || isSurpriseLoading) && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-60 bg-neutral-900 text-white px-5 py-3 rounded-full text-xs font-semibold shadow-2xl flex items-center gap-2.5 animate-in fade-in slide-in-from-top-4 duration-200">
-          <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-          <span>{toastMessage}</span>
+          {isSurpriseLoading ? <Sparkles className="w-4 h-4 text-amber-300 flex-shrink-0 animate-pulse" /> : <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+          <span>{isSurpriseLoading ? 'Procurando datas especiais e cotações confirmadas…' : toastMessage}</span>
         </div>
       )}
 
@@ -438,7 +495,6 @@ export default function App() {
                 variant="hero"
                 currentFilters={filters}
                 onSearchInApp={handleStaysWidgetSearch}
-                onOpenSofia={() => setIsSofiaOpen(true)}
               />
             </div>
 
@@ -683,15 +739,11 @@ export default function App() {
       <div className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40">
         <button
           onClick={() => setIsSofiaOpen(true)}
-          className="group flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 text-white font-black text-xs shadow-2xl shadow-orange-500/40 border-2 border-white/90 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+          className="group flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-br from-orange-500/75 via-amber-400/70 to-orange-500/75 backdrop-blur-2xl text-white font-black text-xs shadow-[0_8px_26px_rgba(234,88,12,0.24),inset_0_1.5px_2px_rgba(255,255,255,0.8),inset_0_-1px_2px_rgba(255,255,255,0.25)] border border-white/85 ring-1 ring-white/30 hover:from-orange-500/85 hover:via-amber-400/80 hover:to-orange-500/85 hover:scale-105 active:scale-95 transition-all cursor-pointer"
           title="Falar com Sofia - Concierge Virtual Central de Reservas"
         >
-          <div className="relative">
-            <img
-              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=100&q=80"
-              alt="Sofia Concierge"
-              className="w-8 h-8 rounded-full object-cover border border-white"
-            />
+          <div className="relative flex h-8 w-8 flex-shrink-0 items-center justify-center">
+            <LogoCRCN size="sm" showText={false} className="absolute left-1/2 top-1/2 !gap-0 -translate-x-1/2 -translate-y-1/2 scale-[0.68]" />
             <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full animate-ping" />
             <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full" />
           </div>
@@ -763,6 +815,7 @@ export default function App() {
         filters={filters}
         onApplyFilters={(newFilters) => setFilters(newFilters)}
         onResetFilters={() => setFilters(defaultFilters)}
+        onSearchInApp={handleStaysWidgetSearch}
       />
 
       {/* 4. Filter Modal */}

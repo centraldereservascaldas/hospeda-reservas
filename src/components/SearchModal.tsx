@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   X, 
   Search, 
@@ -8,7 +8,6 @@ import {
   Plus, 
   Minus,
   Sparkles,
-  Zap,
   ExternalLink,
   ShieldCheck
 } from 'lucide-react';
@@ -21,6 +20,14 @@ interface SearchModalProps {
   filters: SearchFilters;
   onApplyFilters: (filters: SearchFilters) => void;
   onResetFilters: () => void;
+  onSearchInApp: (searchParams: {
+    checkIn: string;
+    checkOut: string;
+    persons: number;
+    destination?: string;
+    propertyId?: string;
+    surpriseMe?: boolean;
+  }) => void;
 }
 
 export const SearchModal: React.FC<SearchModalProps> = ({
@@ -29,6 +36,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   filters,
   onApplyFilters,
   onResetFilters,
+  onSearchInApp,
 }) => {
   const [activeTab, setActiveTab] = useState<'destination' | 'dates' | 'guests' | 'stays_engine'>('destination');
   const [destination, setDestination] = useState(filters.destination);
@@ -38,6 +46,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [children, setChildren] = useState(filters.guests.children);
   const [infants, setInfants] = useState(filters.guests.infants);
   const [pets, setPets] = useState(filters.guests.pets);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setDestination(filters.destination);
+    setCheckIn(filters.checkIn);
+    setCheckOut(filters.checkOut);
+    setAdults(filters.guests.adults);
+    setChildren(filters.guests.children);
+    setInfants(filters.guests.infants);
+    setPets(filters.guests.pets);
+  }, [filters, isOpen]);
 
   if (!isOpen) return null;
 
@@ -55,6 +74,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     onApplyFilters({
       ...filters,
       destination,
+      destinationPropertyId: destination === filters.destination ? filters.destinationPropertyId : '',
       checkIn,
       checkOut,
       guests: {
@@ -122,8 +142,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 activeTab === 'stays_engine' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm font-bold' : 'text-orange-800 hover:text-orange-950 font-bold'
               }`}
             >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Busca de acomodações</span>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Surpreenda-me</span>
             </button>
           </div>
 
@@ -142,6 +162,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             <div className="space-y-4">
               <StaysSearchWidget
                 variant="modal"
+                surpriseMe
                 currentFilters={{
                   ...filters,
                   destination,
@@ -150,18 +171,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                   guests: { adults, children, infants, pets },
                 }}
                 onSearchInApp={(params) => {
-                  onApplyFilters({
-                    ...filters,
-                    destination: params.destination || destination,
-                    checkIn: params.checkIn,
-                    checkOut: params.checkOut,
-                    guests: {
-                      adults: params.persons,
-                      children: 0,
-                      infants: 0,
-                      pets: 0,
-                    },
-                  });
+                  onSearchInApp(params);
                   onClose();
                 }}
               />

@@ -17,6 +17,8 @@ export interface Review {
 
 export interface Property {
   id: string;
+  staysPropertyId?: string;
+  complexName?: string;
   title: string;
   subtitle: string;
   description: string;
@@ -166,6 +168,7 @@ export interface StaysPriceCalculationResponse {
 
 export interface SearchFilters {
   destination: string;
+  destinationPropertyId?: string;
   checkIn: string;
   checkOut: string;
   guests: {

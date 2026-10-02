@@ -19,6 +19,7 @@ import {
 import { Property, Currency } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
 import { formatCurrency } from '../utils/formatters';
+import { LogoCRCN } from './LogoCRCN';
 
 interface ChatMessage {
   id: string;
@@ -137,26 +138,27 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-60 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-60 bg-white/20 backdrop-blur-sm flex items-end sm:items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
       <div 
-        className="w-full max-w-xl h-[min(92dvh,800px)] sm:h-[min(88dvh,680px)] max-h-full min-h-0 bg-white rounded-3xl shadow-2xl border border-neutral-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
+        className="w-full max-w-xl h-[min(92dvh,800px)] sm:h-[min(88dvh,680px)] max-h-full min-h-0 rounded-3xl shadow-[0_24px_80px_-20px_rgba(15,23,42,0.28)] border border-white/75 flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.48), rgba(255,255,255,0.30))',
+          backdropFilter: 'blur(18px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex flex-shrink-0 items-center justify-between bg-gradient-to-r from-orange-600 via-orange-500 to-amber-500 px-4 py-3 text-white shadow-md sm:px-5 sm:py-4">
+        <div className="relative flex flex-shrink-0 items-center justify-between bg-gradient-to-r from-orange-500/75 via-orange-400/68 to-amber-400/65 px-4 py-3 text-white shadow-[0_8px_24px_rgba(234,88,12,0.12)] backdrop-blur-xl border-b border-white/45 sm:px-5 sm:py-4 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-white/70">
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <img
-                src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80"
-                alt="Sofia Concierge"
-                className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-sm"
-              />
+            <div className="relative flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-white/80 bg-white/45 shadow-sm backdrop-blur-xl">
+              <LogoCRCN size="sm" showText={false} className="!gap-0 scale-[0.72]" />
               <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-2 border-white" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="font-extrabold text-base leading-tight">Sofia</h3>
-                <span className="px-2 py-0.5 rounded-full bg-white/20 text-[10px] font-bold backdrop-blur-md">
+                <span className="px-2 py-0.5 rounded-full bg-white/25 text-[10px] font-bold backdrop-blur-xl border border-white/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.35)]">
                   Concierge IA CRCN
                 </span>
               </div>
@@ -168,14 +170,14 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 flex items-center justify-center transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 border border-white/35 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45)] backdrop-blur-xl flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Messages Body */}
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-neutral-50/70 p-3 sm:p-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-white/10 backdrop-blur-sm p-3 sm:p-5">
           {messages.map((msg) => {
             const isSofia = msg.sender === 'sofia';
             return (
@@ -184,7 +186,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                 className={`flex gap-3 ${isSofia ? 'items-start' : 'items-end justify-end'}`}
               >
                 {isSofia && (
-                  <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 mt-1 shadow-2xs">
+                  <div className="w-8 h-8 rounded-full liquid-glass-button text-orange-600 flex items-center justify-center flex-shrink-0 mt-1 shadow-sm">
                     <Sparkles className="w-4 h-4 text-orange-600" />
                   </div>
                 )}
@@ -194,15 +196,15 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                   <div
                     className={`p-3.5 sm:p-4 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-xs ${
                       isSofia
-                        ? 'bg-white text-neutral-800 border border-neutral-200/80 rounded-tl-xs'
-                        : 'bg-orange-600 text-white rounded-tr-xs font-medium'
+                        ? 'bg-white/45 backdrop-blur-lg text-neutral-800 border border-white/70 shadow-[0_8px_24px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.65)] rounded-tl-xs'
+                        : 'liquid-glass-accent text-white rounded-tr-xs font-medium'
                     }`}
                   >
                     <p className="whitespace-pre-line">{msg.text}</p>
 
                     {/* Filter Suggestion Button */}
                     {isSofia && msg.suggestedFilters && onApplyFilters && (
-                      <div className="mt-3 pt-2.5 border-t border-neutral-100 flex items-center justify-between">
+                      <div className="mt-3 pt-2.5 border-t border-white/70 flex items-center justify-between">
                         <span className="text-[11px] text-neutral-500 font-medium">
                           Deseja ver na vitrine principal?
                         </span>
@@ -213,7 +215,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                               onClose();
                             }
                           }}
-                          className="px-3 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 border border-orange-200"
+                          className="px-3 py-1 rounded-xl liquid-glass-pill hover:bg-white/90 text-orange-700 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 border border-orange-200/70"
                         >
                           <Filter className="w-3 h-3 text-orange-600" />
                           <span>Aplicar filtros no site</span>
@@ -232,7 +234,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                             onSelectProperty(prop);
                             onClose();
                           }}
-                          className="flex items-center gap-3 p-2.5 rounded-2xl bg-white border border-neutral-200 hover:border-orange-400 hover:shadow-md transition-all cursor-pointer group"
+                          className="flex items-center gap-3 p-2.5 rounded-2xl liquid-glass-button hover:border-orange-300 hover:shadow-md transition-all cursor-pointer group"
                         >
                           <img
                             src={prop.images[0]}
@@ -281,7 +283,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
         </div>
 
         {/* Quick Question Pills */}
-        <div className="p-2 sm:px-4 bg-white border-t border-neutral-200 overflow-x-auto no-scrollbar flex items-center gap-1.5 flex-shrink-0">
+        <div className="p-2 sm:px-4 bg-white/20 backdrop-blur-xl border-t border-white/55 overflow-x-auto no-scrollbar flex items-center gap-1.5 flex-shrink-0 shadow-[0_-8px_24px_rgba(15,23,42,0.02)]">
           {quickQuestions.map((q, idx) => {
             const Icon = q.icon;
             return (
@@ -289,7 +291,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                 key={idx}
                 onClick={() => handleSendMessage(q.prompt)}
                 disabled={isLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 hover:bg-orange-100 text-orange-800 text-[11px] font-bold border border-orange-200/80 whitespace-nowrap transition-colors cursor-pointer flex-shrink-0 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full liquid-glass-pill hover:bg-white/90 text-orange-800 text-[11px] font-bold border border-orange-200/65 whitespace-nowrap transition-all cursor-pointer flex-shrink-0 disabled:opacity-50"
               >
                 <Icon className="w-3 h-3 text-orange-600" />
                 <span>{q.label}</span>
@@ -304,7 +306,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
             e.preventDefault();
             handleSendMessage();
           }}
-          className="flex flex-shrink-0 items-center gap-2 border-t border-neutral-200 bg-white p-3 sm:p-4"
+          className="flex flex-shrink-0 items-center gap-2 border-t border-white/55 bg-white/25 backdrop-blur-xl p-3 sm:p-4"
         >
           <input
             ref={inputRef}
@@ -312,13 +314,13 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Pergunte sobre condomínios, regras de bebidas, ingressos..."
-            className="min-w-0 flex-1 rounded-2xl border border-neutral-200 bg-neutral-100 px-4 py-3 text-xs text-neutral-900 outline-none transition-colors placeholder:text-neutral-400 focus:border-orange-500 focus:bg-white sm:text-sm"
+            className="min-w-0 flex-1 rounded-2xl border border-white/75 bg-white/40 px-4 py-3 text-xs text-neutral-900 shadow-[inset_0_1px_3px_rgba(15,23,42,0.03),0_2px_8px_rgba(15,23,42,0.03)] backdrop-blur-lg outline-none transition-all placeholder:text-neutral-500 focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:bg-white/60 sm:text-sm"
           />
 
           <button
             type="submit"
             disabled={!inputValue.trim() || isLoading}
-            className="p-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:hover:scale-100 flex-shrink-0"
+            className="liquid-glass-accent p-3 rounded-2xl text-white font-bold shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:hover:scale-100 flex-shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>

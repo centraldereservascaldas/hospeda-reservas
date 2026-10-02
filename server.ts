@@ -15,6 +15,7 @@ try {
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const SERVE_DIST = process.env.NODE_ENV === 'production' || process.argv.includes('--serve-dist');
 
 // Configuration from environment
 const STAYS_BASE_URL = process.env.STAYS_BASE_URL || 'https://crcn.stays.net/external/v1';
@@ -26,6 +27,7 @@ app.use(express.json());
 
 // In-memory cache for live Stays PMS synchronized properties
 let cachedProperties: Property[] = [...STAYS_NET_APARTMENTS];
+let cachedStaysPropertyNames = new Map<string, string>();
 
 const localizedText = (value: any): string => {
   if (typeof value === 'string') return value;
@@ -85,10 +87,16 @@ function mapStaysListing(l: any, existing?: Property): Property {
   const lat = l.latLng?.lat ?? l.latLng?._f_lat;
   const lng = l.latLng?.lng ?? l.latLng?._f_lng;
   const description = customerFacingText(localizedText(l._msdesc || l.description) || existing?.description || '');
+  const staysPropertyId = l._idproperty || l.property?._id || existing?.staysPropertyId;
+  const complexName = localizedText(l._t_propertyMeta?._mstitle || l.property?._mstitle)
+    || cachedStaysPropertyNames.get(String(staysPropertyId || ''))
+    || existing?.complexName;
 
   return {
     ...(existing || {}),
     id: shortId,
+    staysPropertyId,
+    complexName,
     staysListingId: shortId,
     staysSynced: true,
     title: customerFacingText(localizedText(l._mstitle || l.title) || l.internalName || existing?.title || 'Apartamento Central de Reservas'),
@@ -176,9 +184,57 @@ async function callStaysExternalApi<T>(endpoint: string, options: RequestInit = 
   }
 }
 
+async function fetchStaysProperties(): Promise<any[] | null> {
+  if (!STAYS_CLIENT_ID || !STAYS_CLIENT_SECRET) return null;
+  const properties: any[] = [];
+  for (let skip = 0; skip < 5000; skip += 20) {
+    const page = await callStaysExternalApi<any[]>(`/content/properties?status=active&limit=20&skip=${skip}`);
+    if (!Array.isArray(page)) return properties.length ? properties : null;
+    properties.push(...page);
+    if (page.length < 20) break;
+  }
+  return properties;
+}
+
+function indexStaysPropertyNames(properties: any[]): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const property of properties) {
+    const name = localizedText(property?._mstitle) || property?.internalName || '';
+    if (!name.trim()) continue;
+    if (property?._id) result.set(String(property._id), name.trim());
+    if (property?.id) result.set(String(property.id), name.trim());
+  }
+  return result;
+}
+
+app.get('/api/resorts', async (_req: Request, res: Response) => {
+  try {
+    const properties = await fetchStaysProperties();
+    if (!properties) {
+      return res.status(503).json({ success: false, source: 'unavailable', data: [] });
+    }
+    cachedStaysPropertyNames = indexStaysPropertyNames(properties);
+    const resorts = properties
+      .map((property: any) => ({
+        id: String(property?._id || property?.id || ''),
+        name: localizedText(property?._mstitle) || property?.internalName || '',
+      }))
+      .filter((property: { id: string; name: string }) => property.id && property.name.trim())
+      .filter((property: { id: string; name: string }, index: number, all: { id: string; name: string }[]) =>
+        all.findIndex((item) => item.id === property.id) === index
+      )
+      .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'pt-BR'));
+    return res.json({ success: true, source: 'stays-live', total: resorts.length, data: resorts });
+  } catch (error) {
+    return res.status(500).json({ success: false, source: 'unavailable', error: (error as Error).message, data: [] });
+  }
+});
+
 // 1. GET /api/accommodations -> Stays /content/listings
 app.get('/api/accommodations', async (_req: Request, res: Response) => {
   try {
+    const staysProperties = await fetchStaysProperties();
+    if (staysProperties) cachedStaysPropertyNames = indexStaysPropertyNames(staysProperties);
     // Fetch only active listings and paginate: Stays caps each response page.
     const liveListings: any[] = [];
     if (STAYS_CLIENT_ID && STAYS_CLIENT_SECRET) {
@@ -306,7 +362,7 @@ const normalize = (str: string) =>
 // 3. POST /api/search -> Stays /booking/search-listings
 app.post('/api/search', async (req: Request, res: Response) => {
   try {
-    const { from, to, guests, destination, cities, limit = 20, skip = 0 } = req.body;
+    const { from, to, guests, destination, propertyId, cities, limit = 20, skip = 0 } = req.body;
     const guestCount = parseInt(guests, 10) || 1;
 
     // Prefer the authoritative Stays availability and price search when dates are provided.
@@ -317,7 +373,8 @@ app.post('/api/search', async (req: Request, res: Response) => {
           from,
           to,
           guests: guestCount,
-          cities: cities || (destination ? [destination] : undefined),
+          properties: propertyId ? [propertyId] : undefined,
+          cities: cities || undefined,
           limit,
           skip,
         }),
@@ -391,6 +448,7 @@ app.post('/api/search', async (req: Request, res: Response) => {
 
     // Filter available apartments in Stays catalog
     let results = cachedProperties.filter(p => {
+      if (propertyId && p.staysPropertyId !== propertyId) return false;
       // Guest capacity
       if (p.maxGuests < guestCount) return false;
 
@@ -401,7 +459,8 @@ app.post('/api/search', async (req: Request, res: Response) => {
         const matchesSubtitle = normalize(p.subtitle).includes(destNorm);
         const matchesDesc = normalize(p.description).includes(destNorm);
         const matchesCategory = normalize(p.category).includes(destNorm);
-        if (!matchesTitle && !matchesSubtitle && !matchesDesc && !matchesCategory) {
+        const matchesComplex = normalize(p.complexName || '').includes(destNorm);
+        if (!matchesTitle && !matchesSubtitle && !matchesDesc && !matchesCategory && !matchesComplex) {
           return false;
         }
       }
@@ -1012,7 +1071,7 @@ app.post('/api/sofia/chat', async (req: Request, res: Response) => {
 
 // Vite middleware for dev or static serve for production
 async function startServer() {
-  if (process.env.NODE_ENV === 'production') {
+  if (SERVE_DIST) {
     app.use(express.static(path.resolve('dist')));
     app.get('/{*path}', (_req: Request, res: Response) => {
       res.sendFile(path.resolve('dist/index.html'));
@@ -1026,8 +1085,16 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`CRCN Stays.net backend server running on http://0.0.0.0:${PORT}`);
+  });
+  server.once('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Stop the other process or set PORT to a free port.`);
+      process.exit(1);
+    }
+    console.error('Could not start the backend server:', error.message);
+    process.exit(1);
   });
 }
 

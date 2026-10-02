@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Calendar as CalendarIcon, 
   Users, 
   Search, 
   Sparkles, 
   ShieldCheck,
-  Building2
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
 } from 'lucide-react';
 import { SearchFilters } from '../types';
+import { crcnBackendApi } from '../services/crcnBackendApi';
 
 interface StaysSearchWidgetProps {
   onSearchInApp: (searchParams: {
@@ -15,9 +20,11 @@ interface StaysSearchWidgetProps {
     checkOut: string;
     persons: number;
     destination?: string;
+    propertyId?: string;
+    surpriseMe?: boolean;
   }) => void;
-  onOpenSofia?: () => void;
   currentFilters?: SearchFilters;
+  surpriseMe?: boolean;
   variant?: 'hero' | 'compact' | 'modal';
   className?: string;
 }
@@ -42,15 +49,290 @@ export const fromBrDate = (brDate: string): string => {
   return brDate;
 };
 
+interface LiquidDatePickerProps {
+  label: string;
+  value: string;
+  minDate: string;
+  isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onChange: (value: string) => void;
+}
+
+const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, value, minDate, isOpen, onOpen, onClose, onChange }) => {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const date = value ? new Date(`${value}T12:00:00`) : new Date();
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  });
+  const [position, setPosition] = useState({ left: 8, top: 8, width: 320 });
+
+  const updatePosition = () => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(320, window.innerWidth - 16);
+    const height = 370;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    const below = rect.bottom + 8;
+    const top = below + height <= window.innerHeight ? below : Math.max(8, rect.top - height - 8);
+    setPosition({ left, top, width });
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    updatePosition();
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !popoverRef.current?.contains(target)) onClose();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  const monthStart = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
+  const leadingDays = (monthStart.getDay() + 6) % 7;
+  const calendarDays = Array.from({ length: 42 }, (_, index) =>
+    new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), index - leadingDays + 1)
+  );
+  const monthTitle = visibleMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const shownValue = value
+    ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR')
+    : 'Selecione a data';
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-label={`${label}: ${shownValue}`}
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
+        onClick={() => {
+          const date = value ? new Date(`${value}T12:00:00`) : new Date();
+          setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+          onOpen();
+        }}
+        className={`w-full pl-10 pr-3 py-3 liquid-glass-input rounded-2xl border border-white/80 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-left text-xs sm:text-sm font-bold text-neutral-900 transition-all outline-none cursor-pointer shadow-xs min-w-0 ${value ? '' : 'text-neutral-400'}`}
+      >
+        {shownValue}
+      </button>
+
+      {isOpen && createPortal(
+        <div
+          ref={popoverRef}
+          role="dialog"
+          aria-label={`Calendário de ${label.toLowerCase()}`}
+          className="fixed z-[1000] rounded-3xl border border-white/90 bg-white/80 p-4 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl"
+          style={{ left: position.left, top: position.top, width: position.width }}
+        >
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
+              className="liquid-glass-button flex h-9 w-9 items-center justify-center rounded-full text-neutral-700 transition hover:text-orange-600"
+              aria-label="Mês anterior"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <h3 className="text-sm font-extrabold capitalize text-neutral-900">{monthTitle}</h3>
+            <button
+              type="button"
+              onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+              className="liquid-glass-button flex h-9 w-9 items-center justify-center rounded-full text-neutral-700 transition hover:text-orange-600"
+              aria-label="Próximo mês"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-bold text-neutral-500">
+            {['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'].map((day) => <span key={day} className="py-2">{day}</span>)}
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {calendarDays.map((date) => {
+              const dateValue = isoDate(date);
+              const isCurrentMonth = date.getMonth() === visibleMonth.getMonth();
+              const isSelected = dateValue === value;
+              const isToday = dateValue === isoDate(new Date());
+              const isBeforeMinimum = dateValue < minDate;
+              return (
+                <button
+                  key={dateValue}
+                  type="button"
+                  disabled={!isCurrentMonth || isBeforeMinimum}
+                  onClick={() => { onChange(dateValue); onClose(); }}
+                  className={`aspect-square rounded-xl text-xs font-semibold transition-all disabled:cursor-not-allowed ${
+                    isSelected
+                      ? 'liquid-glass-accent text-white shadow-md'
+                      : isCurrentMonth && !isBeforeMinimum
+                        ? `hover:bg-orange-500/15 hover:text-orange-700 ${isToday ? 'ring-1 ring-orange-400/60 text-orange-700' : 'text-neutral-800'}`
+                        : 'text-neutral-300'
+                  }`}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex justify-end border-t border-neutral-200/70 pt-3">
+            <button type="button" onClick={() => { const today = isoDate(new Date()); if (today >= minDate) { onChange(today); onClose(); } }} className="rounded-full px-3 py-1.5 text-xs font-bold text-orange-700 transition hover:bg-orange-500/10">Hoje</button>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
+
+interface LiquidOption { value: string; label: string; }
+interface LiquidSelectProps {
+  value: string;
+  selectedLabel?: string;
+  placeholder: string;
+  options: LiquidOption[];
+  isOpen: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onChange: (option: LiquidOption) => void;
+  searchable?: boolean;
+  message?: string;
+}
+
+const LiquidSelect: React.FC<LiquidSelectProps> = ({
+  value, selectedLabel, placeholder, options, isOpen, onOpen, onClose, onChange, searchable, message,
+}) => {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: 8, top: 8, width: 300, maxHeight: 360 });
+  const [query, setQuery] = useState('');
+
+  const updatePosition = () => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(Math.max(280, rect.width), window.innerWidth - 16);
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    const belowTop = rect.bottom + 8;
+    const belowSpace = Math.max(0, window.innerHeight - belowTop - 8);
+    const aboveSpace = Math.max(0, rect.top - 8);
+    const maxHeight = Math.min(360, Math.max(belowSpace, aboveSpace));
+    const placeBelow = belowSpace >= Math.min(320, maxHeight) || belowSpace >= aboveSpace;
+    const top = placeBelow ? belowTop : Math.max(8, rect.top - Math.min(360, aboveSpace));
+    setPosition({ left, top, width, maxHeight });
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const frame = window.requestAnimationFrame(updatePosition);
+    const closeOnOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!triggerRef.current?.contains(target) && !menuRef.current?.contains(target)) onClose();
+    };
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    document.addEventListener('pointerdown', closeOnOutside);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+      document.removeEventListener('pointerdown', closeOnOutside);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isOpen]);
+
+  useEffect(() => { if (isOpen) setQuery(''); }, [isOpen]);
+
+  const visibleOptions = options.filter((option) => !query || option.label.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')));
+  const currentLabel = options.find((option) => option.value === value)?.label || selectedLabel || placeholder;
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        onClick={() => onOpen()}
+        className="flex w-full min-w-0 items-center justify-between gap-2 rounded-2xl border border-white/85 bg-white/55 py-3 pl-10 pr-3 text-left text-xs font-bold text-neutral-900 shadow-[inset_0_1px_2px_rgba(255,255,255,0.85),0_3px_10px_rgba(15,23,42,0.04)] backdrop-blur-xl transition hover:bg-white/70 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 sm:text-sm"
+      >
+        <span className={`min-w-0 truncate ${currentLabel === placeholder ? 'text-neutral-500' : ''}`}>{currentLabel}</span>
+        <ChevronDown className={`h-4 w-4 flex-shrink-0 text-neutral-500 transition-transform ${isOpen ? 'rotate-180 text-orange-600' : ''}`} />
+      </button>
+
+      {isOpen && createPortal(
+        <div
+          ref={menuRef}
+          role="dialog"
+          aria-label="Opções de filtro"
+          className="fixed z-[1000] overflow-hidden rounded-2xl border border-white/90 bg-white/78 p-2 text-neutral-800 shadow-[0_18px_55px_-16px_rgba(15,23,42,0.24)] backdrop-blur-2xl"
+          style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}
+        >
+          {searchable && (
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar condomínio..."
+              className="mb-2 w-full rounded-xl border border-white/90 bg-white/65 px-3 py-2.5 text-sm text-neutral-800 shadow-inner outline-none placeholder:text-neutral-400 focus:border-orange-300 focus:ring-2 focus:ring-orange-400/15"
+            />
+          )}
+          <div role="listbox" className="overflow-y-auto overscroll-contain" style={{ maxHeight: Math.max(112, position.maxHeight - (searchable ? 68 : 16)) }}>
+            {visibleOptions.map((option) => (
+              <button
+                key={option.value || 'all'}
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                onClick={() => { onChange(option); onClose(); }}
+                className={`flex w-full items-center rounded-xl px-3 py-2.5 text-left text-xs transition sm:text-sm ${
+                  option.value === value
+                    ? 'bg-orange-500/10 font-extrabold text-orange-800 ring-1 ring-inset ring-orange-300/50'
+                    : 'font-semibold text-neutral-700 hover:bg-white/75 hover:text-orange-700'
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+              </button>
+            ))}
+            {visibleOptions.length === 0 && (
+              <p className="px-3 py-4 text-center text-xs text-neutral-500">{message || 'Nenhuma opção encontrada.'}</p>
+            )}
+            {visibleOptions.length === 1 && options.length === 1 && message && (
+              <p className="px-3 py-2 text-xs text-neutral-500">{message}</p>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
+};
+
 export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   onSearchInApp,
-  onOpenSofia,
   currentFilters,
+  surpriseMe = false,
   className = '',
 }) => {
   // Dates in ISO format YYYY-MM-DD for native input
-  const today = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0];
+  const today = isoDate(new Date());
+  const tomorrow = isoDate(new Date(new Date(`${today}T12:00:00`).getTime() + 86400000 * 2));
 
   const [checkIn, setCheckIn] = useState<string>(currentFilters?.checkIn || today);
   const [checkOut, setCheckOut] = useState<string>(currentFilters?.checkOut || tomorrow);
@@ -58,6 +340,11 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     currentFilters?.guests ? String(currentFilters.guests.adults + currentFilters.guests.children) : '2'
   );
   const [selectedResort, setSelectedResort] = useState<string>(currentFilters?.destination || '');
+  const [selectedResortId, setSelectedResortId] = useState<string>(currentFilters?.destinationPropertyId || '');
+  const [activeDatePicker, setActiveDatePicker] = useState<'checkIn' | 'checkOut' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<'resort' | 'guests' | null>(null);
+  const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
+  const [isLoadingResorts, setIsLoadingResorts] = useState(true);
 
   // Sync with currentFilters if they change externally
   useEffect(() => {
@@ -72,33 +359,45 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     if (currentFilters?.destination !== undefined) {
       setSelectedResort(currentFilters.destination);
     }
+    if (currentFilters) {
+      setSelectedResortId(currentFilters.destinationPropertyId || '');
+    }
   }, [currentFilters]);
+
+  useEffect(() => {
+    let active = true;
+    crcnBackendApi.getResorts().then((items) => {
+      if (active) setResorts(items);
+    }).finally(() => {
+      if (active) setIsLoadingResorts(false);
+    });
+    return () => { active = false; };
+  }, []);
 
   // Form submission handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!checkIn || !checkOut || checkOut <= checkIn) return;
     onSearchInApp({
       checkIn,
       checkOut,
       persons: parseInt(persons, 10) || 2,
-      destination: selectedResort,
+      destination: surpriseMe ? '' : selectedResort,
+      propertyId: surpriseMe ? '' : selectedResortId,
+      surpriseMe,
     });
   };
 
-  // Popular Caldas Novas resorts available through the reservation portal
-  const resorts = [
-    { label: 'Todos os Resorts & Flats', value: '' },
-    { label: 'Condomínio Sol das Caldas', value: 'Sol das Caldas' },
-    { label: 'L’acqua diRoma I a V (Jardins Acqua Park)', value: 'Lacqua' },
-    { label: 'diRoma Exclusive & Fiori', value: 'Exclusive' },
-    { label: 'Piazza diRoma', value: 'Piazza' },
-    { label: 'Golden Dolphin Grand Hotel & Express', value: 'Golden Dolphin' },
-    { label: 'Lagoa Quente Flat Service', value: 'Lagoa Quente' },
-    { label: 'Ecologic Ville Resort & Spa', value: 'Ecologic' },
-    { label: 'Thermas dos Pássaros / Eldorado Flat', value: 'Eldorado' },
-    { label: 'Prive Riviera Park Hotel', value: 'Riviera' },
-    { label: 'Rio Quente & Parque das Fontes', value: 'Rio Quente' },
-    { label: 'Náutico & Marina Clube Corumbá', value: 'Corumbá' },
+  const resortOptions = [
+    { value: '', label: 'Todos os condomínios' },
+    ...resorts.map((resort) => ({ value: resort.id, label: resort.name })),
+  ];
+  const guestOptions = [
+    { value: '', label: 'Hóspedes' },
+    ...Array.from({ length: 17 }, (_, index) => ({
+      value: String(index + 1),
+      label: `${index + 1} ${index === 0 ? 'Pessoa' : 'Pessoas'}`,
+    })),
   ];
 
   return (
@@ -106,23 +405,12 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       {/* Container in Liquid Glass */}
       <div className="relative rounded-3xl liquid-glass-card border border-white/85 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.07)] p-5 sm:p-7">
         
-        {/* Top Header: Clean and focused for guests + Sofia assistant trigger */}
+        {/* Search widget heading */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5 pb-3.5 border-b border-white/60">
           <div className="flex items-center gap-2 text-xs sm:text-sm text-neutral-800 font-bold">
             <Sparkles className="w-4 h-4 text-orange-500 flex-shrink-0" />
-            <span>Encontre sua hospedagem em Caldas Novas por data e condomínio</span>
+            <span>{surpriseMe ? 'Vamos escolher uma data especial e encontrar boas opções para você' : 'Encontre sua hospedagem em Caldas Novas por data e condomínio'}</span>
           </div>
-
-          {onOpenSofia && (
-            <button
-              type="button"
-              onClick={onOpenSofia}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-700 text-xs font-black transition-all cursor-pointer border border-orange-200 shadow-2xs hover:scale-105 active:scale-95"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-orange-600" />
-              <span>Consultar a Sofia (Concierge IA)</span>
-            </button>
-          )}
         </div>
 
         {/* 
@@ -146,50 +434,54 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
           <input name="checkout" value={checkOut} type="hidden" />
           <input name="adults" value={persons} type="hidden" />
           {selectedResort && <input name="q" value={selectedResort} type="hidden" />}
+          {selectedResortId && <input name="propertyId" value={selectedResortId} type="hidden" />}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 items-center">
             
             {/* Resort / Destination Selector */}
-            <div className="lg:col-span-3 min-w-0">
+            {!surpriseMe && <div className="lg:col-span-3 min-w-0">
               <label className="block text-xs font-extrabold uppercase tracking-wider text-neutral-800 mb-1.5 truncate">
                 Complexo / Resort
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500">
+                <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500">
                   <Building2 className="w-4 h-4 text-orange-600 flex-shrink-0" />
                 </div>
-                <select
-                  value={selectedResort}
-                  onChange={(e) => setSelectedResort(e.target.value)}
-                  className="w-full pl-10 pr-8 py-3 liquid-glass-input rounded-2xl border border-white/80 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-xs sm:text-sm font-bold text-neutral-900 transition-all outline-none cursor-pointer appearance-none shadow-xs truncate"
-                >
-                  {resorts.map((r, i) => (
-                    <option key={i} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-neutral-500 text-xs">
-                  ▼
-                </div>
+                <LiquidSelect
+                  value={selectedResortId}
+                  selectedLabel={selectedResort || undefined}
+                  placeholder="Todos os condomínios"
+                  options={resortOptions}
+                  searchable
+                  message={isLoadingResorts ? 'Carregando condomínios da Stays...' : 'Não foi possível carregar os condomínios agora.'}
+                  isOpen={activeDropdown === 'resort'}
+                  onOpen={() => setActiveDropdown('resort')}
+                  onClose={() => setActiveDropdown(null)}
+                  onChange={(option) => {
+                    setSelectedResortId(option.value);
+                    setSelectedResort(option.value ? option.label : '');
+                  }}
+                />
               </div>
-            </div>
+            </div>}
 
             {/* Arrival / Check-in */}
-            <div className="lg:col-span-3 min-w-0">
+            {!surpriseMe && <div className="lg:col-span-3 min-w-0">
               <label className="block text-xs font-extrabold uppercase tracking-wider text-neutral-800 mb-1.5 truncate">
                 Entrada (Check-in)
               </label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500 group-focus-within:text-orange-600">
+                <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500 group-focus-within:text-orange-600">
                   <CalendarIcon className="w-4 h-4 flex-shrink-0" />
                 </div>
-                <input
-                  type="date"
+                <LiquidDatePicker
+                  label="Entrada (Check-in)"
                   value={checkIn}
-                  min={today}
-                  onChange={(e) => {
-                    const newCheckIn = e.target.value;
+                  minDate={today}
+                  isOpen={activeDatePicker === 'checkIn'}
+                  onOpen={() => setActiveDatePicker('checkIn')}
+                  onClose={() => setActiveDatePicker(null)}
+                  onChange={(newCheckIn) => {
                     setCheckIn(newCheckIn);
                     if (newCheckIn >= checkOut) {
                       const next = new Date(new Date(newCheckIn).getTime() + 86400000 * 2)
@@ -198,70 +490,50 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                       setCheckOut(next);
                     }
                   }}
-                  className="w-full pl-10 pr-3 py-3 liquid-glass-input rounded-2xl border border-white/80 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-xs sm:text-sm font-bold text-neutral-900 transition-all outline-none cursor-pointer shadow-xs min-w-0"
-                  required
                 />
               </div>
-            </div>
+            </div>}
 
             {/* Departure / Checkout */}
-            <div className="lg:col-span-3 min-w-0">
+            {!surpriseMe && <div className="lg:col-span-3 min-w-0">
               <label className="block text-xs font-extrabold uppercase tracking-wider text-neutral-800 mb-1.5 truncate">
                 Saída (Checkout)
               </label>
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500 group-focus-within:text-orange-600">
+                <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500 group-focus-within:text-orange-600">
                   <CalendarIcon className="w-4 h-4 flex-shrink-0" />
                 </div>
-                <input
-                  type="date"
+                <LiquidDatePicker
+                  label="Saída (Checkout)"
                   value={checkOut}
-                  min={checkIn || today}
-                  onChange={(e) => setCheckOut(e.target.value)}
-                  className="w-full pl-10 pr-3 py-3 liquid-glass-input rounded-2xl border border-white/80 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-xs sm:text-sm font-bold text-neutral-900 transition-all outline-none cursor-pointer shadow-xs min-w-0"
-                  required
+                  minDate={checkIn || today}
+                  isOpen={activeDatePicker === 'checkOut'}
+                  onOpen={() => setActiveDatePicker('checkOut')}
+                  onClose={() => setActiveDatePicker(null)}
+                  onChange={setCheckOut}
                 />
               </div>
-            </div>
+            </div>}
 
             {/* Guest Count (Persons: 1 to 17) */}
-            <div className="lg:col-span-3 min-w-0">
+            <div className={`${surpriseMe ? 'lg:col-span-4' : 'lg:col-span-3'} min-w-0`}>
               <label className="block text-xs font-extrabold uppercase tracking-wider text-neutral-800 mb-1.5 truncate">
                 Hóspedes
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500">
+                <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500">
                   <Users className="w-4 h-4 text-orange-600 flex-shrink-0" />
                 </div>
-                <select
-                  name="persons"
+                <LiquidSelect
                   value={persons}
-                  onChange={(e) => setPersons(e.target.value)}
-                  className="w-full pl-10 pr-8 py-3 liquid-glass-input rounded-2xl border border-white/80 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-xs sm:text-sm font-bold text-neutral-900 transition-all outline-none cursor-pointer appearance-none shadow-xs min-w-0"
-                  required
-                >
-                  <option value="" className="text-muted">Hóspedes</option>
-                  <option value="1">1 Pessoa</option>
-                  <option value="2">2 Pessoas</option>
-                  <option value="3">3 Pessoas</option>
-                  <option value="4">4 Pessoas</option>
-                  <option value="5">5 Pessoas</option>
-                  <option value="6">6 Pessoas</option>
-                  <option value="7">7 Pessoas</option>
-                  <option value="8">8 Pessoas</option>
-                  <option value="9">9 Pessoas</option>
-                  <option value="10">10 Pessoas</option>
-                  <option value="11">11 Pessoas</option>
-                  <option value="12">12 Pessoas</option>
-                  <option value="13">13 Pessoas</option>
-                  <option value="14">14 Pessoas</option>
-                  <option value="15">15 Pessoas</option>
-                  <option value="16">16 Pessoas</option>
-                  <option value="17">17 Pessoas</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-neutral-500">
-                  ▼
-                </div>
+                  selectedLabel={guestOptions.find((option) => option.value === persons)?.label}
+                  placeholder="Hóspedes"
+                  options={guestOptions}
+                  isOpen={activeDropdown === 'guests'}
+                  onOpen={() => setActiveDropdown('guests')}
+                  onClose={() => setActiveDropdown(null)}
+                  onChange={(option) => { if (option.value) setPersons(option.value); }}
+                />
               </div>
             </div>
 
@@ -281,8 +553,8 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                 type="submit"
                 className="w-full sm:w-auto px-8 py-3.5 rounded-2xl liquid-glass-accent text-white font-extrabold text-sm shadow-md shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2.5"
               >
-                <Search className="w-4 h-4 stroke-[2.5]" />
-                <span>Pesquisar Disponibilidade</span>
+                {surpriseMe ? <Sparkles className="w-4 h-4 stroke-[2.5]" /> : <Search className="w-4 h-4 stroke-[2.5]" />}
+                <span>{surpriseMe ? 'Surpreenda-me' : 'Pesquisar Disponibilidade'}</span>
               </button>
             </div>
           </div>
