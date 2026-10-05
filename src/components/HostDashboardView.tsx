@@ -192,7 +192,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({
                     <span className="font-bold text-neutral-900">
                       {formatCurrency(prop.pricePerNight, currency)} <span className="font-normal text-neutral-500">/ noite</span>
                     </span>
-                    <span className="text-neutral-500">★ {prop.rating.toFixed(2)} ({prop.reviewCount})</span>
+                    {prop.reviewsSynced && prop.reviewCount > 0 && <span className="text-neutral-500">★ {prop.rating.toFixed(2)} ({prop.reviewCount} avaliações)</span>}
                   </div>
                 </div>
               </div>

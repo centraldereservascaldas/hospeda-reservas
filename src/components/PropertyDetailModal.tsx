@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   X, 
@@ -20,11 +20,11 @@ import {
   ChevronDown,
   ChevronLeft,
   Info,
-  Building,
   Home,
   Waves
 } from 'lucide-react';
 import { Property, Currency } from '../types';
+import { LogoCRCN } from './LogoCRCN';
 import { formatCurrency, calculateNights } from '../utils/formatters';
 import { crcnBackendApi, CalculatedPriceResponse } from '../services/crcnBackendApi';
 import { isCalendarRangeAvailable } from '../utils/staysAvailability';
@@ -52,6 +52,26 @@ interface PropertyDetailModalProps {
   }) => void;
 }
 
+const HostAvatar: React.FC<{ src?: string; alt: string; className?: string }> = ({ src, alt, className = '' }) => {
+  const [hasError, setHasError] = useState(!src);
+
+  useEffect(() => setHasError(!src), [src]);
+
+  return (
+    <div className={`relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className}`}>
+      <LogoCRCN showText={false} size="sm" variant="light" className="scale-[0.82]" />
+      {src && !hasError && (
+        <img
+          src={src}
+          alt={alt}
+          onError={() => setHasError(true)}
+          className="absolute inset-0 z-10 h-full w-full rounded-full object-cover"
+        />
+      )}
+    </div>
+  );
+};
+
 export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   property,
   initialCheckIn,
@@ -75,6 +95,14 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [infants, setInfants] = useState<number>(initialGuests.infants);
   const [pets, setPets] = useState<number>(initialGuests.pets);
   const [isGuestSelectorOpen, setIsGuestSelectorOpen] = useState(false);
+  const guestSelectorTriggerRef = useRef<HTMLButtonElement>(null);
+  const [guestPopoverPosition, setGuestPopoverPosition] = useState({ top: 0, left: 0, width: 280 });
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const [activeDateField, setActiveDateField] = useState<'checkIn' | 'checkOut'>('checkIn');
+  const [displayedMonth, setDisplayedMonth] = useState(() => {
+    const date = new Date(`${defaultCheckIn}T12:00:00`);
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  });
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -97,7 +125,31 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     setChildren(initialGuests.children);
     setInfants(initialGuests.infants);
     setPets(initialGuests.pets);
+    setDisplayedMonth(new Date(`${nextCheckIn}T12:00:00`));
   }, [property?.id, initialCheckIn, initialCheckOut, initialGuests.adults, initialGuests.children, initialGuests.infants, initialGuests.pets]);
+
+  useEffect(() => {
+    if (!isDatePickerOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsDatePickerOpen(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDatePickerOpen]);
+
+  useEffect(() => {
+    if (!isGuestSelectorOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsGuestSelectorOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isGuestSelectorOpen]);
 
   useEffect(() => {
     if (!showAllPhotos) return;
@@ -118,6 +170,35 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const openPhotoGallery = (index = 0) => {
     setActivePhotoIndex(index);
     setShowAllPhotos(true);
+  };
+
+  const openDatePicker = (field: 'checkIn' | 'checkOut') => {
+    setActiveDateField(field);
+    const selectedDate = field === 'checkIn' ? checkIn : (checkOut || checkIn);
+    const date = new Date(`${selectedDate}T12:00:00`);
+    setDisplayedMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    setIsDatePickerOpen(true);
+  };
+
+  const toggleGuestSelector = () => {
+    if (isGuestSelectorOpen) {
+      setIsGuestSelectorOpen(false);
+      return;
+    }
+    const trigger = guestSelectorTriggerRef.current;
+    if (trigger) {
+      const bounds = trigger.getBoundingClientRect();
+      const popoverHeight = 300;
+      const popoverWidth = Math.min(320, Math.max(280, bounds.width), window.innerWidth - 24);
+      const top = window.innerHeight - bounds.bottom >= popoverHeight + 16
+        ? bounds.bottom + 8
+        : bounds.top >= popoverHeight + 16
+          ? bounds.top - popoverHeight - 8
+          : Math.max(12, (window.innerHeight - popoverHeight) / 2);
+      const left = Math.min(Math.max(12, bounds.left), window.innerWidth - popoverWidth - 12);
+      setGuestPopoverPosition({ top, left, width: popoverWidth });
+    }
+    setIsGuestSelectorOpen(true);
   };
 
   // Refresh the current occupancy window independently from the selected quote.
@@ -168,6 +249,35 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
   if (!property) return null;
 
+  const staysReviews = property.reviewsSynced
+    ? property.reviews.filter((review) => Boolean(review.source))
+    : [];
+  const hasReviews = property.reviewsSynced && staysReviews.length > 0;
+  const scrollToReviews = () => {
+    document.getElementById('property-reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  const reviewSourceLabels: Record<string, string> = {
+    airbnb: 'Airbnb',
+    bookingcom: 'Booking.com',
+    expedia: 'Expedia',
+    internal: 'Central de Reservas',
+  };
+  const reviewCategories = [
+    ['cleanliness', 'Limpeza'],
+    ['accuracy', 'Precisão'],
+    ['communication', 'Comunicação'],
+    ['location', 'Localização'],
+    ['checkIn', 'Check-in'],
+    ['value', 'Custo-benefício'],
+  ].flatMap(([key, label]) => {
+    const values = staysReviews
+      .map((review) => review.categories[key as keyof typeof review.categories])
+      .filter((value): value is number => Number.isFinite(value) && Number(value) > 0);
+    return values.length
+      ? [{ label, score: values.reduce((sum, value) => sum + value, 0) / values.length }]
+      : [];
+  });
+
   const nights = calculateNights(checkIn, checkOut);
   const baseSubtotal = staysPrice ? staysPrice.baseTotal : property.pricePerNight * nights;
   const discount = staysPrice ? staysPrice.discount : 0;
@@ -175,6 +285,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const serviceFee = staysPrice ? staysPrice.serviceFee : Math.round((baseSubtotal - discount) * property.serviceFeeRate);
   const totalAmount = staysPrice ? staysPrice.total : baseSubtotal - discount + cleaningFee + serviceFee;
   const totalGuests = adults + children;
+  const guestLimit = Math.max(1, Number(property.maxGuests) || 1);
   const selectedRangeAvailable = calendarAvailable && isCalendarRangeAvailable(calendarDays, checkIn, checkOut);
   const isCounterFee = (fee: NonNullable<CalculatedPriceResponse['fees']>[number]) =>
     /balc[aã]o|counter/i.test(`${fee.internalName || ''} ${fee._mstitle?.pt_BR || ''} ${fee._mstitle?.pt_PT || ''}`);
@@ -183,6 +294,65 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     fee._mstitle?.pt_BR || fee._mstitle?.pt_PT || fee.internalName || 'Taxa da hospedagem';
   const feeAmount = (fee: NonNullable<CalculatedPriceResponse['fees']>[number]) =>
     Number(fee._mcval?.[staysPrice?.currency || 'BRL'] ?? fee._mcval?.BRL ?? 0);
+  const latitude = property.location.lat;
+  const longitude = property.location.lng;
+  const hasValidCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
+    && Math.abs(latitude) > 0.01 && Math.abs(longitude) > 0.01;
+  const mapBounds = new URLSearchParams({
+    bbox: `${longitude - 0.008},${latitude - 0.006},${longitude + 0.008},${latitude + 0.006}`,
+    layer: 'mapnik',
+    marker: `${latitude},${longitude}`,
+  });
+  const mapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?${mapBounds.toString()}`;
+  const externalMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
+  const calendarYear = displayedMonth.getFullYear();
+  const calendarMonth = displayedMonth.getMonth();
+  const calendarLeadingDays = (new Date(calendarYear, calendarMonth, 1).getDay() + 6) % 7;
+  const calendarDaysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+  const calendarCells: Array<Date | null> = [
+    ...Array.from({ length: calendarLeadingDays }, () => null),
+    ...Array.from({ length: calendarDaysInMonth }, (_, index) => new Date(calendarYear, calendarMonth, index + 1)),
+  ];
+  const calendarMonthLabel = displayedMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const formatDateLabel = (value: string) => value
+    ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    : 'Selecionar';
+  const chooseDate = (date: Date) => {
+    const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    if (activeDateField === 'checkIn') {
+      setCheckIn(dateValue);
+      if (checkOut && dateValue >= checkOut) setCheckOut('');
+      setActiveDateField('checkOut');
+      return;
+    }
+    if (dateValue <= checkIn) {
+      setCheckIn(dateValue);
+      setCheckOut('');
+      setActiveDateField('checkOut');
+      return;
+    }
+    setCheckOut(dateValue);
+    setIsDatePickerOpen(false);
+  };
+  const guestCounter = (
+    label: string,
+    value: number,
+    minimum: number,
+    maximum: number,
+    setValue: React.Dispatch<React.SetStateAction<number>>,
+  ) => {
+    const safeMaximum = Math.max(minimum, maximum);
+    return (
+      <div className="flex items-center justify-between gap-4 py-1">
+        <span className="text-sm font-medium text-neutral-800">{label}</span>
+        <div className="flex items-center gap-3">
+          <button type="button" disabled={value <= minimum} aria-label={`Remover: ${label}`} onClick={() => setValue((count) => Math.max(minimum, count - 1))} className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-lg text-neutral-700 transition hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-35">−</button>
+          <span aria-live="polite" className="w-5 text-center text-sm font-bold text-neutral-900">{value}</span>
+          <button type="button" disabled={value >= safeMaximum} aria-label={`Adicionar: ${label}`} onClick={() => setValue((count) => Math.min(safeMaximum, count + 1))} className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-lg text-neutral-700 transition hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-35">+</button>
+        </div>
+      </div>
+    );
+  };
 
   const handleShare = () => {
     navigator.clipboard?.writeText(window.location.href);
@@ -286,11 +456,26 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                 {property.title}
               </h1>
               <div className="mt-2 flex flex-wrap items-center gap-y-2 gap-x-4 text-xs sm:text-sm text-neutral-600">
-                <div className="flex items-center gap-1 font-semibold text-neutral-900">
-                  <Star className="w-4 h-4 fill-neutral-900 text-neutral-900" />
-                  <span>{property.rating.toFixed(2)}</span>
-                  <span className="text-neutral-500 font-normal">({property.reviewCount} avaliações)</span>
-                </div>
+                {hasReviews && (
+                  <>
+                    <div className="flex items-center gap-1 font-semibold text-neutral-900">
+                      <Star className="w-4 h-4 fill-neutral-900 text-neutral-900" />
+                      <span>{property.rating.toFixed(2)}</span>
+                      <span className="text-neutral-500 font-normal">({property.reviewCount} no último ano)</span>
+                    </div>
+                    <span>•</span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={scrollToReviews}
+                  className="underline font-medium text-neutral-600 hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-sm"
+                  aria-label={hasReviews ? `Ver ${property.reviewCount} avaliações dos hóspedes` : 'Ver seção de avaliações dos hóspedes'}
+                >
+                  {hasReviews
+                    ? `${property.reviewCount} avaliações dos hóspedes`
+                    : 'Avaliações dos hóspedes'}
+                </button>
                 <span>•</span>
                 {property.isSuperhost && (
                   <>
@@ -369,11 +554,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                       </p>
                     </div>
 
-                    <img
-                      src={property.host.avatar}
-                      alt={property.host.name}
-                      className="w-14 h-14 rounded-full object-cover ring-2 ring-orange-500/20 shadow-md"
-                    />
+                    <HostAvatar src={property.host.avatar} alt={property.host.name} className="ring-2 ring-orange-500/20 shadow-md" />
                   </div>
 
                   {property.isGuestFavorite && (
@@ -561,115 +742,38 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Stylized Interactive Map Card */}
-                  <div className="relative rounded-2xl overflow-hidden border border-neutral-200 bg-[#e8e6e1] shadow-xs h-72 sm:h-80 group">
-                    {/* Map Graphic Layer */}
-                    <div className="absolute inset-0 w-full h-full opacity-90">
-                      <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                        <defs>
-                          <pattern id="modalMapGrid" width="30" height="30" patternUnits="userSpaceOnUse">
-                            <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#d5d0c7" strokeWidth="0.8" />
-                          </pattern>
-                        </defs>
-                        {/* Land backdrop */}
-                        <rect width="100%" height="100%" fill="#f4f1ea" />
-                        <rect width="100%" height="100%" fill="url(#modalMapGrid)" opacity="0.6" />
-
-                        {/* Thermal Water Rivers / Streams in Caldas Novas */}
-                        <path
-                          d="M -20,120 Q 180,80 340,160 T 700,140 Q 880,180 1100,100"
-                          fill="none"
-                          stroke="#93c5fd"
-                          strokeWidth="14"
-                          strokeLinecap="round"
-                          opacity="0.55"
-                        />
-                        <path
-                          d="M 120,-20 Q 220,180 420,240 T 750,380"
-                          fill="none"
-                          stroke="#bfdbfe"
-                          strokeWidth="8"
-                          strokeLinecap="round"
-                          opacity="0.45"
-                        />
-
-                        {/* Avenue / Roads lines */}
-                        <path d="M 0,200 L 1000,200" stroke="#ffffff" strokeWidth="6" />
-                        <path d="M 0,200 L 1000,200" stroke="#e0dbd1" strokeWidth="2" strokeDasharray="6 4" />
-                        <path d="M 450,0 L 450,400" stroke="#ffffff" strokeWidth="6" />
-                        <path d="M 450,0 L 450,400" stroke="#e0dbd1" strokeWidth="2" strokeDasharray="6 4" />
-                        
-                        {/* Secondary streets */}
-                        <path d="M 150,50 L 800,320" stroke="#ffffff" strokeWidth="4" opacity="0.8" />
-                        <path d="M 280,350 L 650,20" stroke="#ffffff" strokeWidth="4" opacity="0.8" />
-
-                        {/* Green park zones */}
-                        <circle cx="22%" cy="30%" r="55" fill="#dcfce7" opacity="0.7" />
-                        <circle cx="78%" cy="70%" r="70" fill="#dcfce7" opacity="0.7" />
-                      </svg>
-                    </div>
-
-                    {/* Central Property Orange Beacon Pin */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex flex-col items-center">
-                      <div className="relative flex items-center justify-center">
-                        <span className="absolute w-12 h-12 rounded-full bg-orange-500/30 animate-ping" />
-                        <div className="relative w-11 h-11 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 text-white flex items-center justify-center shadow-xl border-2 border-white">
-                          <Building className="w-5 h-5 text-white" />
-                        </div>
+                  <div className="relative h-72 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-xs sm:h-80">
+                    {hasValidCoordinates ? (
+                      <iframe
+                        title={`Mapa da localização de ${property.title}`}
+                        src={mapEmbedUrl}
+                        className="h-full w-full border-0"
+                        style={{ filter: 'saturate(0.78) sepia(0.12) hue-rotate(-8deg)' }}
+                        loading="lazy"
+                        referrerPolicy="no-referrer-when-downgrade"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-600">
+                        Não há coordenadas disponíveis para mostrar o mapa desta acomodação.
                       </div>
-                      <div className="mt-1.5 px-3 py-1 rounded-xl bg-neutral-900/90 text-white text-[11px] font-extrabold shadow-lg backdrop-blur-md flex items-center gap-1.5 border border-white/20 whitespace-nowrap">
-                        <span className="w-2 h-2 rounded-full bg-orange-400" />
-                        <span>{property.title.split('-')[0].trim()}</span>
-                      </div>
-                    </div>
-
-                    {/* Floating Nearby Points of Interest */}
-                    <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5 pointer-events-none">
-                      <div className="px-2.5 py-1 rounded-lg bg-white/90 backdrop-blur-md border border-white/80 shadow-2xs text-[10px] font-bold text-neutral-800 flex items-center gap-1.5">
-                        <Waves className="w-3 h-3 text-sky-600" />
-                        <span>Parques Termais a poucos metros</span>
-                      </div>
-                      <div className="px-2.5 py-1 rounded-lg bg-white/90 backdrop-blur-md border border-white/80 shadow-2xs text-[10px] font-bold text-neutral-800 flex items-center gap-1.5">
-                        <MapPin className="w-3 h-3 text-orange-600" />
-                        <span>{property.location.address || 'Acesso rápido às principais atrações'}</span>
-                      </div>
-                    </div>
-
-                    {/* Open in external Maps button */}
-                    <a
-                      href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${property.title}, Caldas Novas, GO`)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="absolute bottom-3 right-3 z-20 px-3 py-1.5 rounded-xl bg-white/95 hover:bg-white text-xs font-bold text-neutral-900 shadow-md border border-neutral-200 transition-all hover:scale-105 flex items-center gap-1.5"
-                    >
-                      <span>Abrir no Google Maps</span>
-                      <MapPin className="w-3.5 h-3.5 text-orange-600" />
-                    </a>
+                    )}
+                    {hasValidCoordinates && (
+                      <a
+                        href={externalMapUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white/95 px-3 py-1.5 text-xs font-bold text-neutral-900 shadow-md transition-colors hover:bg-white"
+                      >
+                        <span>Abrir no Google Maps</span>
+                        <MapPin className="h-3.5 w-3.5 text-orange-600" />
+                      </a>
+                    )}
                   </div>
-
-                  {/* Neighborhood highlights */}
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs text-neutral-700">
-                    <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-150">
-                      <p className="font-bold text-neutral-900">Bairro Turístico</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">Região nobre cercada de restaurantes, empórios e conveniências 24h.</p>
-                    </div>
-                    <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-150">
-                      <p className="font-bold text-neutral-900">Segurança & Portaria</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">Condomínio fechado com controle de acesso, biometria e pulseiras.</p>
-                    </div>
-                    <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-150">
-                      <p className="font-bold text-neutral-900">Acesso Facilitado</p>
-                      <p className="text-[11px] text-neutral-500 mt-0.5">Fácil locomoção para o centro, Feira do Luar e parques aquáticos.</p>
-                    </div>
-                  </div>
+                  <p className="mt-2 text-[11px] text-neutral-500">A localização exibida pode ser aproximada para proteger a privacidade do anfitrião.</p>
                 </div>
                 <div className="pt-6">
                   <div className="flex items-start gap-4">
-                    <img
-                      src={property.host.avatar}
-                      alt={property.host.name}
-                      className="w-14 h-14 rounded-full object-cover shadow-sm"
-                    />
+                    <HostAvatar src={property.host.avatar} alt={property.host.name} className="shadow-sm" />
                     <div>
                       <h3 className="text-base font-bold text-neutral-900">
                         Hospedado por {property.host.name}
@@ -706,119 +810,65 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                       <span className="text-xs text-neutral-500 ml-1">/ noite</span>
                     </div>
 
-                    <div className="flex items-center gap-1 text-xs font-semibold text-neutral-800 bg-white/60 px-2 py-0.5 rounded-lg border border-white/80 shadow-2xs">
-                      <Star className="w-3.5 h-3.5 fill-neutral-900 text-neutral-900" />
-                      <span>{property.rating.toFixed(2)}</span>
-                      <span className="text-neutral-400">({property.reviewCount})</span>
-                    </div>
+                    {hasReviews && (
+                      <div className="flex items-center gap-1 text-xs font-semibold text-neutral-800 bg-white/60 px-2 py-0.5 rounded-lg border border-white/80 shadow-2xs">
+                        <Star className="w-3.5 h-3.5 fill-neutral-900 text-neutral-900" />
+                        <span>{property.rating.toFixed(2)}</span>
+                        <span className="text-neutral-400">({property.reviewCount})</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Dates & Guests Selector Box with Glass Borders */}
-                  <div className="rounded-2xl border border-neutral-300/80 bg-white/50 backdrop-blur-md divide-y divide-neutral-200/80 overflow-hidden shadow-2xs">
+                  <div className="rounded-2xl border border-neutral-300/80 bg-white/50 backdrop-blur-md divide-y divide-neutral-200/80 shadow-2xs">
                     <div className="grid grid-cols-2 divide-x divide-neutral-200/80">
-                      <div className="p-2.5">
-                        <label className="text-[10px] uppercase font-bold text-neutral-500 block">Check-in</label>
-                        <input
-                          type="date"
-                          value={checkIn}
-                          min={new Date().toISOString().split('T')[0]}
-                          onChange={(e) => {
-                            const nextCheckIn = e.target.value;
-                            setCheckIn(nextCheckIn);
-                            if (checkOut && nextCheckIn >= checkOut) setCheckOut('');
-                          }}
-                          className="w-full text-xs font-semibold text-neutral-900 outline-none mt-0.5 bg-transparent"
-                        />
-                      </div>
-                      <div className="p-2.5">
-                        <label className="text-[10px] uppercase font-bold text-neutral-500 block">Check-out</label>
-                        <input
-                          type="date"
-                          value={checkOut}
-                          min={checkIn ? new Date(new Date(`${checkIn}T12:00:00`).getTime() + 86400000).toISOString().slice(0, 10) : undefined}
-                          onChange={(e) => setCheckOut(e.target.value)}
-                          className="w-full text-xs font-semibold text-neutral-900 outline-none mt-0.5 bg-transparent"
-                        />
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => openDatePicker('checkIn')}
+                        aria-haspopup="dialog"
+                        aria-expanded={isDatePickerOpen}
+                        className="flex min-h-16 w-full items-center justify-between gap-2 p-2.5 text-left transition-colors hover:bg-orange-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500"
+                      >
+                        <span>
+                          <span className="block text-[10px] font-bold uppercase text-neutral-500">Check-in</span>
+                          <span className="mt-0.5 block text-xs font-semibold text-neutral-900">{formatDateLabel(checkIn)}</span>
+                        </span>
+                        <CalendarIcon className="h-4 w-4 shrink-0 text-orange-600" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openDatePicker('checkOut')}
+                        aria-haspopup="dialog"
+                        aria-expanded={isDatePickerOpen}
+                        className="flex min-h-16 w-full items-center justify-between gap-2 p-2.5 text-left transition-colors hover:bg-orange-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500"
+                      >
+                        <span>
+                          <span className="block text-[10px] font-bold uppercase text-neutral-500">Check-out</span>
+                          <span className="mt-0.5 block text-xs font-semibold text-neutral-900">{formatDateLabel(checkOut)}</span>
+                        </span>
+                        <CalendarIcon className="h-4 w-4 shrink-0 text-orange-600" />
+                      </button>
                     </div>
 
                     {/* Guests dropdown */}
-                    <div className="relative p-2.5">
+                    <div className="relative z-30 p-2.5">
                       <button
-                        onClick={() => setIsGuestSelectorOpen(!isGuestSelectorOpen)}
+                        ref={guestSelectorTriggerRef}
+                        type="button"
+                        onClick={toggleGuestSelector}
+                        aria-haspopup="dialog"
+                        aria-expanded={isGuestSelectorOpen}
                         className="w-full flex items-center justify-between text-left cursor-pointer"
                       >
                         <div>
                           <label className="text-[10px] uppercase font-bold text-neutral-500 block">Hóspedes</label>
                           <span className="text-xs font-semibold text-neutral-900">
-                            {totalGuests} hóspede{totalGuests > 1 ? 's' : ''} {pets > 0 ? `, ${pets} pet` : ''}
+                            {totalGuests} hóspede{totalGuests > 1 ? 's' : ''}{infants > 0 ? `, ${infants} bebê${infants > 1 ? 's' : ''}` : ''}
                           </span>
                         </div>
                         <ChevronDown className="w-4 h-4 text-neutral-500" />
                       </button>
 
-                      {isGuestSelectorOpen && (
-                        <div className="absolute left-0 right-0 top-full mt-1 bg-white/90 backdrop-blur-2xl border border-white/90 rounded-2xl p-4 shadow-2xl z-20 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold">Adultos</span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                disabled={adults <= 1}
-                                onClick={() => setAdults(adults - 1)}
-                                className="w-6 h-6 rounded-full border border-neutral-300 disabled:opacity-40"
-                              >-</button>
-                              <span className="text-xs font-bold w-4 text-center">{adults}</span>
-                              <button
-                                disabled={totalGuests >= property.maxGuests}
-                                onClick={() => setAdults(adults + 1)}
-                                className="w-6 h-6 rounded-full border border-neutral-300"
-                              >+</button>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold">Crianças (2-12)</span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                disabled={children <= 0}
-                                onClick={() => setChildren(children - 1)}
-                                className="w-6 h-6 rounded-full border border-neutral-300 disabled:opacity-40"
-                              >-</button>
-                              <span className="text-xs font-bold w-4 text-center">{children}</span>
-                              <button
-                                disabled={totalGuests >= property.maxGuests}
-                                onClick={() => setChildren(children + 1)}
-                                className="w-6 h-6 rounded-full border border-neutral-300"
-                              >+</button>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold">Animais de estimação</span>
-                            <div className="flex items-center gap-2">
-                              <button
-                                disabled={pets <= 0}
-                                onClick={() => setPets(pets - 1)}
-                                className="w-6 h-6 rounded-full border border-neutral-300 disabled:opacity-40"
-                              >-</button>
-                              <span className="text-xs font-bold w-4 text-center">{pets}</span>
-                              <button
-                                onClick={() => setPets(pets + 1)}
-                                className="w-6 h-6 rounded-full border border-neutral-300"
-                              >+</button>
-                            </div>
-                          </div>
-
-                          <div className="pt-2 border-t border-neutral-100 flex justify-end">
-                            <button
-                              onClick={() => setIsGuestSelectorOpen(false)}
-                              className="text-xs font-bold text-orange-600 underline cursor-pointer"
-                            >
-                              Fechar
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -886,61 +936,57 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             </div>
 
             {/* Reviews Section */}
-            <div className="pt-8 border-t border-neutral-200">
-              <div className="flex items-center gap-3 mb-6">
-                <Star className="w-6 h-6 fill-neutral-900 text-neutral-900" />
-                <h3 className="text-xl font-bold text-neutral-900">
-                  {property.rating.toFixed(2)} • {property.reviewCount} avaliações
-                </h3>
-              </div>
-
-              {/* Review Dimension Progress Bars */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 p-6 rounded-2xl bg-neutral-50/70 border border-neutral-100">
-                {[
-                  { label: 'Limpeza', score: 4.9 },
-                  { label: 'Precisão', score: 5.0 },
-                  { label: 'Comunicação', score: 5.0 },
-                  { label: 'Localização', score: 4.9 },
-                  { label: 'Check-in', score: 5.0 },
-                  { label: 'Custo-benefício', score: 4.8 },
-                ].map((item, idx) => (
-                  <div key={idx} className="space-y-1">
-                    <div className="flex justify-between text-xs font-semibold text-neutral-700">
-                      <span>{item.label}</span>
-                      <span>{item.score.toFixed(1)}</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-neutral-200 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-neutral-900 rounded-full"
-                        style={{ width: `${(item.score / 5) * 100}%` }}
-                      />
-                    </div>
+            <section id="property-reviews" aria-labelledby="property-reviews-title" className="scroll-mt-8 pt-8 border-t border-neutral-200">
+              {hasReviews ? (
+                <>
+                  <div className="flex items-center gap-3 mb-6">
+                    <Star className="w-6 h-6 fill-neutral-900 text-neutral-900" />
+                    <h2 id="property-reviews-title" className="text-xl font-bold text-neutral-900">
+                      {property.rating.toFixed(2)} • {property.reviewCount} avaliações no último ano
+                    </h2>
                   </div>
-                ))}
-              </div>
 
-              {/* Review cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {property.reviews.map((rev) => (
+                  {reviewCategories.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 p-6 rounded-2xl bg-neutral-50/70 border border-neutral-100">
+                      {reviewCategories.map((item) => (
+                        <div key={item.label} className="space-y-1">
+                          <div className="flex justify-between text-xs font-semibold text-neutral-700">
+                            <span>{item.label}</span>
+                            <span>{item.score.toFixed(1)}</span>
+                          </div>
+                          <div className="h-1.5 w-full bg-neutral-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-neutral-900 rounded-full" style={{ width: `${(item.score / 5) * 100}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {staysReviews.map((rev) => (
                   <div key={rev.id} className="p-4 rounded-2xl border border-neutral-100 bg-white shadow-2xs space-y-3">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={rev.authorAvatar}
-                        alt={rev.authorName}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
+                      <div aria-hidden="true" className="w-10 h-10 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-sm font-bold">H</div>
                       <div>
                         <p className="text-xs font-bold text-neutral-900">{rev.authorName}</p>
-                        <p className="text-[11px] text-neutral-400">{rev.date}</p>
+                        <p className="text-[11px] text-neutral-400">{rev.date}{rev.source ? ` · ${reviewSourceLabels[rev.source] || rev.source}` : ''}</p>
                       </div>
                     </div>
-                    <p className="text-xs text-neutral-700 leading-relaxed">
-                      "{rev.comment}"
-                    </p>
+                    <div className="flex items-center gap-1 text-xs font-semibold text-neutral-700"><Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />{rev.rating.toFixed(1)} / 5</div>
+                    {rev.comment ? <p className="text-xs text-neutral-700 leading-relaxed whitespace-pre-line">{rev.comment}</p> : <p className="text-xs text-neutral-500 italic">Hóspede avaliou sem deixar comentário.</p>}
                   </div>
-                ))}
-              </div>
-            </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-2xl border border-neutral-200 bg-white/60 p-6 text-sm text-neutral-600">
+                  <h2 id="property-reviews-title" className="mb-2 text-lg font-bold text-neutral-900">Avaliações dos hóspedes</h2>
+                  {property.reviewsSynced
+                    ? 'A API não retornou avaliações para este apartamento.'
+                    : 'As avaliações da API não estão disponíveis no momento.'}
+                </div>
+              )}
+            </section>
 
             {/* House Rules & Cancellation Policy */}
             <div className="pt-8 border-t border-neutral-200 space-y-4">
@@ -970,6 +1016,127 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       </div>
 
       {/* Centered lightbox gallery */}
+      {isGuestSelectorOpen && createPortal(
+        <>
+          <div className="fixed inset-0 z-[70] bg-transparent" aria-hidden="true" onMouseDown={() => setIsGuestSelectorOpen(false)} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Selecionar quantidade de hóspedes"
+            className="fixed z-[71] rounded-3xl border border-white/90 bg-white/95 p-5 shadow-2xl backdrop-blur-2xl"
+            style={{ top: guestPopoverPosition.top, left: guestPopoverPosition.left, width: guestPopoverPosition.width }}
+          >
+            <div className="mb-3 flex items-center justify-between border-b border-neutral-100 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-neutral-900">Hóspedes</h2>
+                <p className="mt-0.5 text-[11px] text-neutral-500">Limite de {guestLimit} hóspede{guestLimit === 1 ? '' : 's'} na acomodação</p>
+              </div>
+              <button type="button" onClick={() => setIsGuestSelectorOpen(false)} aria-label="Fechar seletor de hóspedes" className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-orange-50 hover:text-orange-700">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="divide-y divide-neutral-100">
+              {guestCounter('Adultos', adults, 1, guestLimit - children, setAdults)}
+              {guestCounter('Crianças (2–12 anos)', children, 0, guestLimit - adults, setChildren)}
+              {guestCounter('Bebês (até 2 anos)', infants, 0, 5, setInfants)}
+            </div>
+            <div className="mt-3 border-t border-neutral-100 pt-3 text-right">
+              <button type="button" onClick={() => setIsGuestSelectorOpen(false)} className="rounded-full bg-orange-50 px-4 py-2 text-xs font-bold text-orange-800 transition hover:bg-orange-100">Aplicar</button>
+            </div>
+          </div>
+        </>,
+        document.body,
+      )}
+
+      {isDatePickerOpen && createPortal(
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/25 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Selecionar datas da hospedagem"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setIsDatePickerOpen(false); }}
+        >
+          <div className="w-full max-w-sm rounded-3xl border border-white/90 bg-white/95 p-5 shadow-2xl backdrop-blur-2xl" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-neutral-900">Escolha as datas</h2>
+                <p className="mt-0.5 text-xs text-neutral-500">Selecione entrada e saída da hospedagem</p>
+              </div>
+              <button type="button" onClick={() => setIsDatePickerOpen(false)} aria-label="Fechar calendário" className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-orange-50 hover:text-orange-700">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl bg-orange-50/70 p-1.5">
+              <button type="button" onClick={() => setActiveDateField('checkIn')} className={`rounded-xl px-3 py-2 text-left transition ${activeDateField === 'checkIn' ? 'bg-white text-orange-800 shadow-sm ring-1 ring-orange-100' : 'text-neutral-600 hover:bg-white/60'}`}>
+                <span className="block text-[10px] font-bold uppercase tracking-wide">Check-in</span>
+                <span className="mt-0.5 block text-xs font-semibold">{formatDateLabel(checkIn)}</span>
+              </button>
+              <button type="button" onClick={() => setActiveDateField('checkOut')} className={`rounded-xl px-3 py-2 text-left transition ${activeDateField === 'checkOut' ? 'bg-white text-orange-800 shadow-sm ring-1 ring-orange-100' : 'text-neutral-600 hover:bg-white/60'}`}>
+                <span className="block text-[10px] font-bold uppercase tracking-wide">Check-out</span>
+                <span className="mt-0.5 block text-xs font-semibold">{formatDateLabel(checkOut)}</span>
+              </button>
+            </div>
+
+            <div className="mb-3 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setDisplayedMonth(new Date(calendarYear, calendarMonth - 1, 1))}
+                disabled={calendarYear === today.getFullYear() && calendarMonth <= today.getMonth()}
+                aria-label="Mês anterior"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-orange-200 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <h3 className="text-sm font-bold capitalize text-neutral-900">{calendarMonthLabel}</h3>
+              <button
+                type="button"
+                onClick={() => setDisplayedMonth(new Date(calendarYear, calendarMonth + 1, 1))}
+                aria-label="Próximo mês"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-orange-200 hover:bg-orange-50"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-semibold text-neutral-400">
+              {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((weekday) => <span key={weekday} className="py-2">{weekday}</span>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center">
+              {calendarCells.map((date, index) => {
+                if (!date) return <span key={`empty-${index}`} className="h-10" />;
+                const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                const isSelected = dateValue === checkIn || dateValue === checkOut;
+                const isInRange = Boolean(checkIn && checkOut && dateValue > checkIn && dateValue < checkOut);
+                const isDisabled = dateValue < todayIso || (activeDateField === 'checkOut' && dateValue <= checkIn);
+                return (
+                  <button
+                    key={dateValue}
+                    type="button"
+                    disabled={isDisabled}
+                    aria-pressed={isSelected}
+                    onClick={() => chooseDate(date)}
+                    className={`h-10 rounded-xl text-xs font-semibold transition ${
+                      isSelected
+                        ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                        : isInRange
+                          ? 'bg-orange-100 text-orange-900'
+                          : 'text-neutral-700 hover:bg-orange-50 hover:text-orange-800'
+                    } disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent`}
+                  >
+                    {date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-4 border-t border-neutral-100 pt-3 text-center text-[11px] text-neutral-500">
+              {activeDateField === 'checkIn' ? 'Toque em um dia para escolher o check-in.' : 'Agora escolha o dia do check-out.'}
+            </p>
+          </div>
+        </div>,
+        document.body,
+      )}
+
       {showAllPhotos && property.images.length > 0 && createPortal(
         <div
           className="fixed inset-0 z-[2147483647] flex flex-col items-center justify-center overflow-hidden bg-white/95 p-4 backdrop-blur-2xl animate-in fade-in duration-200 sm:p-8"

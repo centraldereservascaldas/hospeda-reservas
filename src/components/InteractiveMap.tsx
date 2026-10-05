@@ -284,7 +284,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <div className="relative mb-2 aspect-[16/9] overflow-hidden rounded-xl bg-neutral-100">
             {activeProperty.images[0] && <img src={activeProperty.images[0]} alt={activeProperty.title} className="h-full w-full object-cover" />}
             <button type="button" onClick={() => setActiveProperty(null)} aria-label="Fechar detalhes do marcador" className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white"><X className="h-4 w-4" /></button>
-            <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[10px] font-bold"><Star className="h-3 w-3 fill-current" />{activeProperty.rating.toFixed(2)}</span>
+            {activeProperty.reviewsSynced && activeProperty.reviewCount > 0 && <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[10px] font-bold"><Star className="h-3 w-3 fill-current" />{activeProperty.rating.toFixed(2)}</span>}
           </div>
           <p className="truncate text-sm font-extrabold text-neutral-900">{activeProperty.title}</p>
           <p className="truncate text-xs text-neutral-500">{activeProperty.location.neighborhood}, {activeProperty.location.city}</p>

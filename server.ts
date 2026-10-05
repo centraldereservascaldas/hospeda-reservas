@@ -5,6 +5,7 @@ import { STAYS_NET_APARTMENTS } from './src/data/staysApartments';
 import { Property } from './src/types';
 import { hasQuoteChanged, normalizeStaysQuote } from './src/utils/staysPricing';
 import { extractStaysImages, mergeStaysImageSources } from './src/utils/staysImages';
+import { normalizeStaysGuestReview, StaysGuestReviewRecord, summarizeStaysReviews } from './src/utils/staysReviews';
 
 // Node 20+ natively loads the local environment file before configuration is read.
 try {
@@ -28,6 +29,73 @@ app.use(express.json());
 // In-memory cache for live Stays PMS synchronized properties
 let cachedProperties: Property[] = [...STAYS_NET_APARTMENTS];
 let cachedStaysPropertyNames = new Map<string, string>();
+let cachedStaysReviews: { byListing: Map<string, Property['reviews']>; expiresAt: number } | null = null;
+let staysReviewsRequest: Promise<Map<string, Property['reviews']> | null> | null = null;
+
+const STAYS_REVIEWS_CACHE_MS = 15 * 60 * 1000;
+const STAYS_REVIEWS_PAGE_SIZE = 100;
+const STAYS_REVIEWS_MAX_PAGES = 20;
+
+async function fetchStaysReviewIndex(): Promise<Map<string, Property['reviews']> | null> {
+  if (!STAYS_CLIENT_ID || !STAYS_CLIENT_SECRET) return null;
+  if (cachedStaysReviews && cachedStaysReviews.expiresAt > Date.now()) {
+    return cachedStaysReviews.byListing;
+  }
+  if (staysReviewsRequest) return staysReviewsRequest;
+
+  staysReviewsRequest = (async () => {
+    const toDate = new Date();
+    const fromDate = new Date(toDate.getTime() - 364 * 24 * 60 * 60 * 1000);
+    const to = toDate.toISOString().slice(0, 10);
+    const from = fromDate.toISOString().slice(0, 10);
+    const byListing = new Map<string, Property['reviews']>();
+
+    for (let page = 0; page < STAYS_REVIEWS_MAX_PAGES; page += 1) {
+      const query = new URLSearchParams({
+        from,
+        to,
+        limit: String(STAYS_REVIEWS_PAGE_SIZE),
+        page: String(page),
+      });
+      const response = await callStaysExternalApi<{ reviewList?: StaysGuestReviewRecord[] }>(`/reviews/guest?${query}`);
+      if (!response || !Array.isArray(response.reviewList)) return null;
+
+      for (const rawReview of response.reviewList) {
+        const propertyObjectId = String(rawReview?.apartment?._id || '');
+        if (!propertyObjectId) continue;
+        const review = normalizeStaysGuestReview(rawReview);
+        if (!review) continue;
+        const listingReviews = byListing.get(propertyObjectId) || [];
+        listingReviews.push(review);
+        byListing.set(propertyObjectId, listingReviews);
+      }
+
+      if (response.reviewList.length < STAYS_REVIEWS_PAGE_SIZE) {
+        cachedStaysReviews = { byListing, expiresAt: Date.now() + STAYS_REVIEWS_CACHE_MS };
+        return byListing;
+      }
+    }
+
+    // Fail closed rather than displaying an incomplete aggregate if the safety cap is hit.
+    console.warn('Stays reviews pagination exceeded the configured safety cap; omitting review data.');
+    return null;
+  })();
+
+  try {
+    return await staysReviewsRequest;
+  } finally {
+    staysReviewsRequest = null;
+  }
+}
+
+function attachStaysReviews(property: Property, reviewIndex: Map<string, Property['reviews']> | null): Property {
+  if (!reviewIndex) {
+    return { ...property, rating: 0, reviewCount: 0, reviews: [], reviewsSynced: false };
+  }
+  const reviews = reviewIndex.get(String(property.staysListingObjectId || '')) || [];
+  const summary = summarizeStaysReviews(reviews);
+  return { ...property, ...summary, reviews, reviewsSynced: true };
+}
 
 const localizedText = (value: any): string => {
   if (typeof value === 'string') return value;
@@ -95,6 +163,7 @@ function mapStaysListing(l: any, existing?: Property): Property {
   return {
     ...(existing || {}),
     id: shortId,
+    staysListingObjectId: String(l._id || existing?.staysListingObjectId || ''),
     staysPropertyId,
     complexName,
     staysListingId: shortId,
@@ -118,10 +187,10 @@ function mapStaysListing(l: any, existing?: Property): Property {
       : 0) || l.price || existing?.pricePerNight || 0,
     cleaningFee: l.cleaningFee ?? existing?.cleaningFee ?? 0,
     serviceFeeRate: existing?.serviceFeeRate ?? 0.10,
-    rating: existing?.rating || 0,
-    reviewCount: existing?.reviewCount || 0,
-    isSuperhost: existing?.isSuperhost || false,
-    isGuestFavorite: existing?.isGuestFavorite || false,
+    rating: 0,
+    reviewCount: 0,
+    isSuperhost: false,
+    isGuestFavorite: false,
     instantBook: l.instantBooking ?? existing?.instantBook ?? false,
     images: [...new Set([
       mainImage,
@@ -154,7 +223,8 @@ function mapStaysListing(l: any, existing?: Property): Property {
       responseRate: 'não informado',
       bio: '',
     },
-    reviews: existing?.reviews || [],
+    reviews: [],
+    reviewsSynced: false,
   };
 }
 
@@ -266,8 +336,10 @@ app.get('/api/accommodations', async (_req: Request, res: Response) => {
       for (let index = 0; index < liveListings.length; index += 5) {
         mapped.push(...await Promise.all(liveListings.slice(index, index + 5).map(mapListing)));
       }
-      cachedProperties = mapped;
-      return res.json({ success: true, source: 'stays-live', count: mapped.length, data: mapped });
+      const reviewIndex = await fetchStaysReviewIndex();
+      const withReviews = mapped.map((property) => attachStaysReviews(property, reviewIndex));
+      cachedProperties = withReviews;
+      return res.json({ success: true, source: 'stays-live', count: withReviews.length, data: withReviews });
     }
 
     // Default fallback to high-fidelity CRCN Stays PMS catalog
@@ -338,6 +410,11 @@ app.get('/api/accommodations/:id', async (req: Request, res: Response) => {
       }));
     }
 
+    const reviewIndex = await fetchStaysReviewIndex();
+    property = attachStaysReviews(property, reviewIndex);
+    const cachedPropertyIndex = cachedProperties.findIndex((item) => item.id === property?.id);
+    if (cachedPropertyIndex >= 0) cachedProperties[cachedPropertyIndex] = property;
+
     return res.json({
       success: true,
       data: {
@@ -381,6 +458,7 @@ app.post('/api/search', async (req: Request, res: Response) => {
       });
 
       if (Array.isArray(liveResults)) {
+        const reviewIndex = await fetchStaysReviewIndex();
         const mapSearchResult = async (listing: any) => {
           const listingId = listing.id || listing.code || listing._id;
           const existing = cachedProperties.find(p =>
@@ -393,7 +471,7 @@ app.post('/api/search', async (req: Request, res: Response) => {
             detail = await callStaysExternalApi<any>(`/content/listings/${encodeURIComponent(listing._id || listing.id || listing.code || listingId)}`);
           }
           const completeListing = detail ? { ...listing, ...detail } : listing;
-          const property = mapStaysListing(completeListing, existing);
+          const property = attachStaysReviews(mapStaysListing(completeListing, existing), reviewIndex);
           const gallery = mergeStaysImageSources(detail, listing, { images: existing?.images });
           if (gallery.length > 0) property.images = gallery;
           const cacheIndex = cachedProperties.findIndex(p => p.id === property.id || p.staysListingId === property.staysListingId);

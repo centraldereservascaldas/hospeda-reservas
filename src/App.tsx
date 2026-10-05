@@ -33,7 +33,6 @@ import {
   Sparkles, 
   MapPin, 
   SlidersHorizontal, 
-  CheckCircle, 
   Globe, 
   ShieldCheck, 
   Search 
@@ -63,19 +62,16 @@ export default function App() {
     return STAYS_NET_APARTMENTS;
   });
 
-  const handlePullStaysApartments = async (silent = false) => {
+  const handlePullStaysApartments = async () => {
     try {
       const res = await staysApi.fetchListings();
       if (res.success && res.listings.length > 0) {
         setProperties(res.listings);
         localStorage.setItem('hospeda_properties', JSON.stringify(res.listings));
         localStorage.setItem('hospeda_properties_source', 'stays-live');
-        if (!silent) {
-          showToast(`🎉 ${res.listings.length} acomodações atualizadas com sucesso!`);
-        }
       }
     } catch {
-      if (!silent) showToast('Não foi possível atualizar as acomodações. Tente novamente.');
+      // Keep the current catalogue when refreshing from the API fails.
     }
   };
 
@@ -83,7 +79,7 @@ export default function App() {
     // Replace the local demo seed with account-owned listing IDs before users
     // start quoting or attempting checkout; synthetic seed IDs are not valid
     // identifiers in the live booking catalog.
-    void handlePullStaysApartments(true);
+    void handlePullStaysApartments();
   }, []);
 
   // Persistent Reservations State
@@ -190,15 +186,6 @@ export default function App() {
     }
   };
 
-  // Toast Notification
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isSurpriseLoading, setIsSurpriseLoading] = useState(false);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
-  };
-
   // Refresh accommodation catalog from the booking service
   useEffect(() => {
     crcnBackendApi.getAccommodations().then((list) => {
@@ -245,10 +232,8 @@ export default function App() {
   const handleToggleSave = (propertyId: string) => {
     if (savedPropertyIds.includes(propertyId)) {
       setSavedPropertyIds(savedPropertyIds.filter((id) => id !== propertyId));
-      showToast('Acomodação removida dos seus favoritos');
     } else {
       setSavedPropertyIds([...savedPropertyIds, propertyId]);
-      showToast('Acomodação salva nos seus favoritos! ❤️');
     }
   };
 
@@ -340,12 +325,10 @@ export default function App() {
   // Handlers
   const handleAddNewProperty = (newProp: Property) => {
     setProperties([newProp, ...properties]);
-    showToast(`"${newProp.title}" foi anunciada com sucesso! ✨`);
   };
 
   const handleCancelReservation = (reservationId: string) => {
     void reservationId;
-    showToast('O cancelamento online ainda não está disponível. Nenhuma reserva foi cancelada.');
   };
 
   const handleStaysWidgetSearch = async (searchParams: {
@@ -356,7 +339,6 @@ export default function App() {
     propertyId?: string;
     surpriseMe?: boolean;
   }) => {
-    setIsSurpriseLoading(Boolean(searchParams.surpriseMe));
     let searchedProperties: Array<Property & { calculatedPrice?: { totalAmount?: number } }> | null = null;
     setFilters((prev) => ({
       ...prev,
@@ -424,16 +406,9 @@ export default function App() {
       if (chosenProperties.length) {
         const suggestedDates = selectedDateOption!;
         setFilters((prev) => ({ ...prev, checkIn: suggestedDates.checkIn, checkOut: suggestedDates.checkOut }));
-        const formatDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR');
-        showToast(`✨ ${suggestedDates.occasion}: ${formatDate(suggestedDates.checkIn)} a ${formatDate(suggestedDates.checkOut)} · ${chosenProperties.length} acomodações com cotação confirmada.`);
-      } else {
-        showToast('Não encontramos cotação confirmada nas próximas datas especiais. Tente novamente ou escolha suas datas.');
       }
-      setIsSurpriseLoading(false);
     } else {
       if (searchedProperties) setProperties(searchedProperties);
-      setIsSurpriseLoading(false);
-      showToast(`🔍 Buscando apartamentos para ${searchParams.persons} ${searchParams.persons === 1 ? 'hóspede' : 'hóspedes'}!`);
     }
     const catalogEl = document.getElementById('stays-apartments-catalog');
     if (catalogEl) {
@@ -448,14 +423,6 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 selection:bg-orange-500/20 selection:text-orange-950">
       
-      {/* Toast Notification Banner */}
-      {(toastMessage || isSurpriseLoading) && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-60 bg-neutral-900 text-white px-5 py-3 rounded-full text-xs font-semibold shadow-2xl flex items-center gap-2.5 animate-in fade-in slide-in-from-top-4 duration-200">
-          {isSurpriseLoading ? <Sparkles className="w-4 h-4 text-amber-300 flex-shrink-0 animate-pulse" /> : <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
-          <span>{isSurpriseLoading ? 'Procurando datas especiais e cotações confirmadas…' : toastMessage}</span>
-        </div>
-      )}
-
       {/* Main Header */}
       <Header
         onOpenSearch={() => setIsSearchOpen(true)}

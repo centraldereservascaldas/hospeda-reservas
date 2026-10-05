@@ -1,18 +1,20 @@
 export interface Review {
   id: string;
   authorName: string;
-  authorAvatar: string;
+  authorAvatar?: string;
   rating: number;
   date: string;
   comment: string;
-  categories: {
+  source?: 'airbnb' | 'bookingcom' | 'expedia' | 'internal';
+  publicationStatus?: 'published' | 'not-published';
+  categories: Partial<{
     cleanliness: number;
     accuracy: number;
     communication: number;
     location: number;
     checkIn: number;
     value: number;
-  };
+  }>;
 }
 
 export interface Property {
@@ -79,7 +81,9 @@ export interface Property {
   };
   reviews: Review[];
   staysListingId?: string;
+  staysListingObjectId?: string;
   staysSynced?: boolean;
+  reviewsSynced?: boolean;
 }
 
 export interface Reservation {

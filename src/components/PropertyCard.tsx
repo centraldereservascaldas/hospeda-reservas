@@ -151,11 +151,13 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           <h3 className="font-extrabold text-neutral-950 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-orange-600 transition-colors">
             {property.title}
           </h3>
-          <div className="flex items-center gap-1 flex-shrink-0 font-bold text-xs liquid-glass px-2 py-0.5 rounded-lg border border-white/80 shadow-2xs">
-            <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
-            <span className="text-neutral-950 font-black">{property.rating.toFixed(2)}</span>
-            <span className="text-neutral-500 font-normal">({property.reviewCount})</span>
-          </div>
+          {property.reviewsSynced && property.reviewCount > 0 && (
+            <div className="flex items-center gap-1 flex-shrink-0 font-bold text-xs liquid-glass px-2 py-0.5 rounded-lg border border-white/80 shadow-2xs" aria-label={`${property.rating.toFixed(2)} de média em ${property.reviewCount} avaliações recebidas pela Central de Reservas no último ano`}>
+              <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+              <span className="text-neutral-950 font-black">{property.rating.toFixed(2)}</span>
+              <span className="text-neutral-500 font-normal">({property.reviewCount})</span>
+            </div>
+          )}
         </div>
 
         {/* Location & Caldas Novas • GO */}

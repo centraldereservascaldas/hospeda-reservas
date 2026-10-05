@@ -231,10 +231,12 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           {property.title}
                         </h4>
                       </div>
-                      <div className="flex items-center gap-1 text-[11px] font-semibold text-neutral-800">
-                        <span>★ {property.rating.toFixed(2)}</span>
-                        <span className="text-neutral-400">({property.reviewCount} avaliações)</span>
-                      </div>
+                      {property.reviewsSynced && property.reviewCount > 0 && (
+                        <div className="flex items-center gap-1 text-[11px] font-semibold text-neutral-800">
+                          <span>★ {property.rating.toFixed(2)}</span>
+                          <span className="text-neutral-400">({property.reviewCount} avaliações)</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
