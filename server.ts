@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
+import { createClient, User } from '@supabase/supabase-js';
 import { STAYS_NET_APARTMENTS } from './src/data/staysApartments';
 import { Property } from './src/types';
 import { hasQuoteChanged, normalizeStaysQuote } from './src/utils/staysPricing';
@@ -22,6 +23,13 @@ const SERVE_DIST = process.env.NODE_ENV === 'production' || process.argv.include
 const STAYS_BASE_URL = process.env.STAYS_BASE_URL || 'https://crcn.stays.net/external/v1';
 const STAYS_CLIENT_ID = process.env.STAYS_CLIENT_ID || '';
 const STAYS_CLIENT_SECRET = process.env.STAYS_CLIENT_SECRET || '';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+    })
+  : null;
 
 app.use(cors());
 app.use(express.json());
@@ -252,6 +260,245 @@ async function callStaysExternalApi<T>(endpoint: string, options: RequestInit = 
     console.error(`Error calling Stays API [${endpoint}]:`, err);
     return null;
   }
+}
+
+type VerifiedGuest = { id: string; email: string; fullName: string; user: User };
+
+async function authenticateVerifiedGuest(req: Request): Promise<{
+  guest?: VerifiedGuest;
+  status?: number;
+  code?: string;
+  message?: string;
+}> {
+  if (!supabaseAdmin) {
+    return { status: 503, code: 'auth_not_configured', message: 'O acesso de hóspedes ainda não está configurado.' };
+  }
+  const authorization = req.headers.authorization || '';
+  const token = /^Bearer\s+(.+)$/i.exec(authorization)?.[1];
+  if (!token) {
+    return { status: 401, code: 'authentication_required', message: 'Entre na sua conta para continuar.' };
+  }
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
+    const user = data.user;
+    if (error || !user || !user.email) {
+      return { status: 401, code: 'invalid_session', message: 'Sua sessão expirou. Entre novamente.' };
+    }
+    if (!user.email_confirmed_at) {
+      return { status: 403, code: 'email_not_confirmed', message: 'Confirme seu e-mail antes de continuar.' };
+    }
+    const fullName = String(user.user_metadata?.full_name || user.user_metadata?.name || '').trim();
+    if (fullName.split(/\s+/).filter(Boolean).length < 2) {
+      return { status: 403, code: 'profile_name_required', message: 'Atualize seu nome completo antes de reservar.' };
+    }
+    return { guest: { id: user.id, email: user.email.trim().toLowerCase(), fullName, user } };
+  } catch {
+    return { status: 503, code: 'auth_unavailable', message: 'Não foi possível validar sua sessão agora.' };
+  }
+}
+
+async function staysGuestRequest<T>(endpoint: string, method = 'GET', body?: unknown): Promise<{
+  ok: boolean;
+  status: number;
+  data?: T;
+}> {
+  if (!STAYS_CLIENT_ID || !STAYS_CLIENT_SECRET) return { ok: false, status: 503 };
+  try {
+    const configuredBase = STAYS_BASE_URL.replace(/\/+$/, '');
+    const apiBase = /\/external\/v1$/i.test(configuredBase) ? configuredBase : `${configuredBase}/external/v1`;
+    const response = await fetch(`${apiBase}/${endpoint.replace(/^\//, '')}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${Buffer.from(`${STAYS_CLIENT_ID}:${STAYS_CLIENT_SECRET}`).toString('base64')}`,
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const text = await response.text();
+    let data: T | undefined;
+    try { data = JSON.parse(text) as T; } catch { data = undefined; }
+    return { ok: response.ok, status: response.status, data };
+  } catch {
+    // Do not log a request URL/body here: these calls can contain guest PII.
+    return { ok: false, status: 502 };
+  }
+}
+
+const guestSyncRequests = new Map<string, Promise<{ ok: boolean; code?: string }>>();
+
+async function syncVerifiedGuestToStays(guest: VerifiedGuest): Promise<{ ok: boolean; code?: string }> {
+  if (!supabaseAdmin) return { ok: false, code: 'auth_not_configured' };
+  const activeRequest = guestSyncRequests.get(guest.id);
+  if (activeRequest) return activeRequest;
+
+  const request = (async (): Promise<{ ok: boolean; code?: string }> => {
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('guest_profiles')
+      .select('stays_client_id')
+      .eq('id', guest.id)
+      .maybeSingle();
+    if (profileError) return { ok: false, code: 'profile_storage_unavailable' };
+    if (profile?.stays_client_id) return { ok: true };
+
+    const query = new URLSearchParams({ email: guest.email, limit: '20' });
+    const lookup = await staysGuestRequest<any>(`/booking/clients?${query}`);
+    if (!lookup.ok) return { ok: false, code: 'stays_client_lookup_failed' };
+    const clients = Array.isArray(lookup.data)
+      ? lookup.data
+      : Array.isArray(lookup.data?.clients) ? lookup.data.clients : [];
+    const existingClient = clients.find((client: any) =>
+      String(client?.email || '').trim().toLowerCase() === guest.email
+    );
+
+    let staysClientId = String(existingClient?._id || '');
+    if (existingClient && existingClient.isUser !== true) {
+      const activated = await staysGuestRequest<any>(
+        `/booking/clients/${encodeURIComponent(staysClientId)}`,
+        'PATCH',
+        { isUser: true },
+      );
+      if (!activated.ok) return { ok: false, code: 'stays_client_activation_failed' };
+    } else if (!existingClient) {
+      const nameParts = guest.fullName.split(/\s+/).filter(Boolean);
+      const created = await staysGuestRequest<any>('/booking/clients', 'POST', {
+        kind: 'person',
+        fName: nameParts[0],
+        lName: nameParts.slice(1).join(' '),
+        email: guest.email,
+        isUser: true,
+        prefLang: 'pt_BR',
+      });
+      staysClientId = String(created.data?._id || '');
+      if (!created.ok || !staysClientId) {
+        // If a concurrent registration created the same client, resolve it with an exact email match.
+        const retry = await staysGuestRequest<any>(`/booking/clients?${query}`);
+        const retryClients = Array.isArray(retry.data)
+          ? retry.data
+          : Array.isArray(retry.data?.clients) ? retry.data.clients : [];
+        const duplicate = retryClients.find((client: any) =>
+          String(client?.email || '').trim().toLowerCase() === guest.email
+        );
+        if (!retry.ok || !duplicate?._id) return { ok: false, code: 'stays_client_create_failed' };
+        staysClientId = String(duplicate._id);
+        if (duplicate.isUser !== true) {
+          const activated = await staysGuestRequest<any>(
+            `/booking/clients/${encodeURIComponent(staysClientId)}`,
+            'PATCH',
+            { isUser: true },
+          );
+          if (!activated.ok) return { ok: false, code: 'stays_client_activation_failed' };
+        }
+      }
+    }
+
+    if (!staysClientId) return { ok: false, code: 'stays_client_create_failed' };
+    const { error: saveError } = await supabaseAdmin.from('guest_profiles').upsert({
+      id: guest.id,
+      full_name: guest.fullName,
+      stays_client_id: staysClientId,
+      stays_synced_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+    if (saveError) return { ok: false, code: 'profile_storage_unavailable' };
+    return { ok: true };
+  })();
+
+  guestSyncRequests.set(guest.id, request);
+  try {
+    return await request;
+  } finally {
+    guestSyncRequests.delete(guest.id);
+  }
+}
+
+async function getLinkedStaysClientId(guest: VerifiedGuest): Promise<string | null> {
+  if (!supabaseAdmin) return null;
+  const { data, error } = await supabaseAdmin
+    .from('guest_profiles')
+    .select('stays_client_id')
+    .eq('id', guest.id)
+    .maybeSingle();
+  if (error) return null;
+  if (data?.stays_client_id) return String(data.stays_client_id);
+
+  const sync = await syncVerifiedGuestToStays(guest);
+  if (!sync.ok) return null;
+  const { data: linked } = await supabaseAdmin
+    .from('guest_profiles')
+    .select('stays_client_id')
+    .eq('id', guest.id)
+    .maybeSingle();
+  return linked?.stays_client_id ? String(linked.stays_client_id) : null;
+}
+
+function clientReservations(client: any): any[] {
+  if (Array.isArray(client?.reservations)) return client.reservations;
+  if (Array.isArray(client?.data?.reservations)) return client.data.reservations;
+  return [];
+}
+
+function mapStaysGuestReservation(record: any): any | null {
+  const staysId = String(record?.id || record?._id || '').trim();
+  const checkIn = String(record?.checkInDate || '');
+  const checkOut = String(record?.checkOutDate || '');
+  if (!staysId || !isIsoDate(checkIn) || !isIsoDate(checkOut)) return null;
+
+  const rawType = String(record?.type || '').toLowerCase();
+  const status = ['canceled', 'cancelled'].includes(rawType)
+    ? 'cancelled'
+    : ['booked', 'reserved', 'contract'].includes(rawType) ? 'confirmed' : null;
+  if (!status) return null;
+
+  const propertyId = String(record?._idlisting || '');
+  const property = cachedProperties.find((item) => item.staysListingId === propertyId || item.id === propertyId);
+  const nights = Math.max(1, stayNights(checkIn, checkOut));
+  const total = Number(record?.price?._f_total ?? record?.price?.hostingDetails?._f_total ?? 0) || 0;
+  const nightRate = Number(record?.price?.hostingDetails?._f_nightPrice ?? 0) || total / nights;
+  const fees = [
+    ...(Array.isArray(record?.fees) ? record.fees : []),
+    ...(Array.isArray(record?.price?.hostingDetails?.fees) ? record.price.hostingDetails.fees : []),
+  ];
+  const cleaningFee = fees.reduce((sum: number, fee: any) => {
+    const label = `${fee?.name || ''} ${fee?._mstitle?.pt_BR || ''}`.toLowerCase();
+    return /limpez|clean/.test(label) ? sum + (Number(fee?._f_val ?? fee?._mcval?.BRL ?? 0) || 0) : sum;
+  }, 0);
+  const bookedName = String(record?.bookerDetails?.name || record?.guestsDetails?.list?.find((g: any) => g?.primary)?.name || '');
+  const bookedEmail = String(record?.bookerDetails?.email || record?.guestsDetails?.list?.find((g: any) => g?.primary)?.email || '');
+  const today = new Date().toISOString().slice(0, 10);
+  const finalStatus = status === 'confirmed' && checkOut < today ? 'completed' : status;
+
+  return {
+    id: staysId,
+    code: staysId,
+    propertyId,
+    propertyTitle: property?.title || String(record?._mslistingTitle?.pt_BR || 'Acomodação'),
+    propertyLocation: property?.subtitle || '',
+    propertyImage: property?.images?.[0] || STAYS_NET_APARTMENTS[0]?.images?.[0] || '',
+    checkIn,
+    checkOut,
+    nights,
+    guests: {
+      adults: Number(record?.guestsDetails?.adults ?? record?.guests ?? 1) || 1,
+      children: Number(record?.guestsDetails?.children || 0),
+      infants: Number(record?.guestsDetails?.infants || 0),
+      pets: 0,
+    },
+    pricePerNight: nightRate,
+    cleaningFee,
+    serviceFee: 0,
+    discount: 0,
+    totalAmount: total,
+    paymentMethod: 'pix',
+    status: finalStatus,
+    createdAt: String(record?.creationDate || ''),
+    hostName: 'Central de Reservas Caldas Novas',
+    guestName: bookedName,
+    guestEmail: bookedEmail,
+    guestPhone: '',
+    staysReservationId: staysId,
+    staysLocator: String(record?.partnerCode || ''),
+    staysSyncStatus: 'synced',
+  };
 }
 
 async function fetchStaysProperties(): Promise<any[] | null> {
@@ -722,17 +969,107 @@ app.post('/api/price', async (req: Request, res: Response) => {
   }
 });
 
-// 6. POST /api/checkout -> revalidate quote and initiate Stays hosted checkout
+app.post('/api/auth/sync-stays', async (req: Request, res: Response) => {
+  const authentication = await authenticateVerifiedGuest(req);
+  if (!authentication.guest) {
+    return res.status(authentication.status || 401).json({
+      success: false,
+      code: authentication.code,
+      message: authentication.message,
+    });
+  }
+
+  const result = await syncVerifiedGuestToStays(authentication.guest);
+  if (!result.ok) {
+    const status = result.code === 'auth_not_configured' || result.code === 'profile_storage_unavailable' ? 503 : 502;
+    return res.status(status).json({
+      success: false,
+      code: result.code,
+      message: 'Não foi possível sincronizar seu cadastro agora. Tente novamente em instantes.',
+    });
+  }
+  return res.json({ success: true, staysSynced: true });
+});
+
+app.get('/api/my-reservations', async (req: Request, res: Response) => {
+  const authentication = await authenticateVerifiedGuest(req);
+  if (!authentication.guest) {
+    return res.status(authentication.status || 401).json({ success: false, code: authentication.code, message: authentication.message });
+  }
+  const clientId = await getLinkedStaysClientId(authentication.guest);
+  if (!clientId) {
+    return res.status(503).json({ success: false, code: 'guest_sync_required', message: 'Não foi possível localizar seu cadastro no sistema de reservas.' });
+  }
+  const response = await staysGuestRequest<any>(`/booking/clients/${encodeURIComponent(clientId)}`);
+  if (!response.ok) {
+    return res.status(502).json({ success: false, code: 'reservations_unavailable', message: 'Não foi possível carregar suas reservas agora.' });
+  }
+  const client = response.data?.client || response.data?.data || response.data;
+  const reservations = clientReservations(client)
+    .map(mapStaysGuestReservation)
+    .filter(Boolean);
+  return res.json({ success: true, data: reservations });
+});
+
+app.post('/api/my-reservations/:reservationId/cancel', async (req: Request, res: Response) => {
+  const authentication = await authenticateVerifiedGuest(req);
+  if (!authentication.guest) {
+    return res.status(authentication.status || 401).json({ success: false, code: authentication.code, message: authentication.message });
+  }
+  const reservationId = String(req.params.reservationId || '').trim();
+  if (!reservationId || reservationId.length > 120) {
+    return res.status(400).json({ success: false, code: 'invalid_reservation_id', message: 'Identificador de reserva inválido.' });
+  }
+  const clientId = await getLinkedStaysClientId(authentication.guest);
+  if (!clientId) {
+    return res.status(503).json({ success: false, code: 'guest_sync_required', message: 'Não foi possível validar o titular desta reserva.' });
+  }
+  const clientResponse = await staysGuestRequest<any>(`/booking/clients/${encodeURIComponent(clientId)}`);
+  if (!clientResponse.ok) {
+    return res.status(502).json({ success: false, code: 'reservation_owner_check_failed', message: 'Não foi possível validar a titularidade da reserva.' });
+  }
+  const client = clientResponse.data?.client || clientResponse.data?.data || clientResponse.data;
+  const reservation = clientReservations(client).find((item: any) =>
+    [item?.id, item?._id].some((id) => String(id || '') === reservationId)
+  );
+  if (!reservation) {
+    return res.status(404).json({ success: false, code: 'reservation_not_found', message: 'Esta reserva não foi encontrada na sua conta.' });
+  }
+  if (['canceled', 'cancelled'].includes(String(reservation.type || '').toLowerCase())) {
+    return res.status(409).json({ success: false, code: 'already_cancelled', message: 'Esta reserva já está cancelada.' });
+  }
+  if (!['booked', 'reserved', 'contract'].includes(String(reservation.type || '').toLowerCase())) {
+    return res.status(409).json({ success: false, code: 'reservation_not_cancellable', message: 'O status atual desta reserva não permite cancelamento por este fluxo.' });
+  }
+
+  const result = await staysGuestRequest<any>(`/booking/reservations/${encodeURIComponent(reservationId)}`, 'PATCH', {
+    type: 'canceled',
+    cancelMessage: 'Cancelamento solicitado pelo hóspede pelo site Central de Reservas Caldas Novas.',
+  });
+  if (!result.ok) {
+    return res.status(502).json({ success: false, code: 'stays_cancel_failed', message: 'A Stays não confirmou o cancelamento. A reserva continua ativa; entre em contato com a Central.' });
+  }
+  return res.json({ success: true, reservationId });
+});
+
+// 6. POST /api/checkout -> require a verified guest and initiate Stays hosted checkout
 app.post('/api/checkout', async (req: Request, res: Response) => {
   try {
+    const authentication = await authenticateVerifiedGuest(req);
+    if (!authentication.guest) {
+      return res.status(authentication.status || 401).json({
+        success: false,
+        code: authentication.code,
+        message: authentication.message,
+      });
+    }
+    const guest = authentication.guest;
     const {
       listingId,
       listingIds,
       from,
       to,
       guests,
-      guestName,
-      guestEmail,
       quoteTotal,
     } = req.body;
 
@@ -747,9 +1084,6 @@ app.post('/api/checkout', async (req: Request, res: Response) => {
     const persons = adults + children;
     if (!property || !isIsoDate(from) || !isIsoDate(to) || stayNights(from, to) < 1 || persons < 1 || persons > property.maxGuests) {
       return res.status(400).json({ success: false, code: 'invalid_checkout_request', message: 'Imóvel, datas ou quantidade de hóspedes inválidos.' });
-    }
-    if (String(guestName || '').trim().split(/\s+/).filter(Boolean).length < 2 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(guestEmail || '').trim())) {
-      return res.status(400).json({ success: false, code: 'invalid_guest', message: 'Informe nome completo e e-mail válido do hóspede titular.' });
     }
     if (!STAYS_CLIENT_ID || !STAYS_CLIENT_SECRET) {
       return res.status(503).json({ success: false, code: 'stays_not_configured', message: 'Checkout seguro indisponível no momento.' });
@@ -784,7 +1118,16 @@ app.post('/api/checkout', async (req: Request, res: Response) => {
       return res.status(409).json({ success: false, code: 'quote_changed', message: 'O preço ou a disponibilidade mudou. Revise a cotação atualizada antes de continuar.', quote: currentQuote });
     }
 
-    const names = String(guestName || '').trim().split(/\s+/).filter(Boolean);
+    const sync = await syncVerifiedGuestToStays(guest);
+    if (!sync.ok) {
+      return res.status(503).json({
+        success: false,
+        code: sync.code || 'stays_client_sync_failed',
+        message: 'Não foi possível confirmar seu cadastro com o sistema de reservas. Nenhuma reserva foi iniciada. Tente novamente.',
+      });
+    }
+
+    const names = guest.fullName.split(/\s+/).filter(Boolean);
     const bookRequest = await callStaysExternalApi<any>('/book-request', {
       method: 'POST',
       body: JSON.stringify({
@@ -793,7 +1136,7 @@ app.post('/api/checkout', async (req: Request, res: Response) => {
         aptid: property.staysListingId || property.id,
         persons,
         client: {
-          email: String(guestEmail || '').trim(),
+          email: guest.email,
           fName: names[0] || '',
           lName: names.slice(1).join(' '),
         },

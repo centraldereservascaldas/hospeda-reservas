@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { Property, Reservation, SearchFilters, Currency } from './types';
 import { CalculatedPriceResponse } from './services/crcnBackendApi';
-import { INITIAL_RESERVATIONS } from './data/mockProperties';
 import { STAYS_NET_APARTMENTS } from './data/staysApartments';
 import { staysApi } from './services/staysApi';
 import { Header } from './components/Header';
@@ -15,6 +15,7 @@ import { PropertyCard } from './components/PropertyCard';
 import { InteractiveMap } from './components/InteractiveMap';
 import { PropertyDetailModal } from './components/PropertyDetailModal';
 import { CheckoutModal } from './components/CheckoutModal';
+import { GuestAccountModal } from './components/GuestAccountModal';
 import { SearchModal } from './components/SearchModal';
 import { FilterModal } from './components/FilterModal';
 import { TripsView } from './components/TripsView';
@@ -25,6 +26,7 @@ import { StaysSearchWidget } from './components/StaysSearchWidget';
 import { SofiaAssistantModal } from './components/SofiaAssistantModal';
 import { LogoCRCN } from './components/LogoCRCN';
 import { crcnBackendApi } from './services/crcnBackendApi';
+import { initialAuthCallbackError, supabase } from './services/supabase';
 import { getSurpriseDateCandidates } from './utils/surpriseDates';
 import { 
   Compass, 
@@ -83,19 +85,7 @@ export default function App() {
   }, []);
 
   // Persistent Reservations State
-  const [reservations, setReservations] = useState<Reservation[]>(() => {
-    const saved = localStorage.getItem('hospeda_reservations');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const cleaned = parsed.filter((r: Reservation) => !r.propertyId.startsWith('prop-'));
-          if (cleaned.length > 0) return cleaned;
-        }
-      } catch (e) { /* fallback */ }
-    }
-    return INITIAL_RESERVATIONS;
-  });
+  const [reservations, setReservations] = useState<Reservation[]>([]);
 
   // Persistent saved accommodation IDs
   const [savedPropertyIds, setSavedPropertyIds] = useState<string[]>(() => {
@@ -117,6 +107,38 @@ export default function App() {
   const [showTotalWithTaxes, setShowTotalWithTaxes] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [currentView, setCurrentView] = useState<'explore' | 'trips' | 'wishlists' | 'host'>('explore');
+  const [authCallbackNotice, setAuthCallbackNotice] = useState('');
+  const [accountSession, setAccountSession] = useState<Session | null>(null);
+  const [accountModalMode, setAccountModalMode] = useState<'login' | 'signup' | 'recovery' | null>(null);
+
+  useEffect(() => {
+    const authHash = new URLSearchParams(window.location.hash.slice(1));
+    if (authHash.get('type') === 'recovery') setAccountModalMode('recovery');
+    if (initialAuthCallbackError) {
+      setAuthCallbackNotice(`Não foi possível confirmar o e-mail: ${initialAuthCallbackError}`);
+    }
+    if (!supabase) return;
+
+    const handleConfirmedSession = (session: import('@supabase/supabase-js').Session | null) => {
+      if (localStorage.getItem('hospeda_pending_email_confirmation') !== 'true') return;
+      if (!session?.user.email_confirmed_at) return;
+      localStorage.removeItem('hospeda_pending_email_confirmation');
+      setAuthCallbackNotice('E-mail confirmado! Volte à reserva e entre na sua conta para continuar.');
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setAccountSession(session);
+      if (event === 'PASSWORD_RECOVERY') setAccountModalMode('recovery');
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        handleConfirmedSession(session);
+      }
+    });
+    void supabase.auth.getSession().then(({ data }) => {
+      setAccountSession(data.session);
+      handleConfirmedSession(data.session);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   // Modals & Active selections
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -202,8 +224,16 @@ export default function App() {
   }, [properties]);
 
   useEffect(() => {
-    localStorage.setItem('hospeda_reservations', JSON.stringify(reservations));
-  }, [reservations]);
+    if (!accountSession?.access_token) {
+      setReservations([]);
+      return;
+    }
+    let cancelled = false;
+    void crcnBackendApi.getMyReservations(accountSession.access_token)
+      .then((items) => { if (!cancelled) setReservations(items); })
+      .catch((error) => { if (!cancelled) { setReservations([]); console.warn('Unable to load guest reservations:', error); } });
+    return () => { cancelled = true; };
+  }, [accountSession?.access_token]);
 
   useEffect(() => {
     localStorage.setItem('hospeda_wishlist', JSON.stringify(savedPropertyIds));
@@ -327,8 +357,20 @@ export default function App() {
     setProperties([newProp, ...properties]);
   };
 
-  const handleCancelReservation = (reservationId: string) => {
-    void reservationId;
+  const handleCancelReservation = async (reservationId: string) => {
+    if (!accountSession?.access_token) throw new Error('Entre na sua conta para solicitar o cancelamento.');
+    await crcnBackendApi.cancelMyReservation(reservationId, accountSession.access_token);
+    setReservations((current) => current.map((reservation) =>
+      reservation.id === reservationId ? { ...reservation, status: 'cancelled' } : reservation
+    ));
+    try {
+      const refreshed = await crcnBackendApi.getMyReservations(accountSession.access_token);
+      setReservations(refreshed.map((reservation) =>
+        reservation.id === reservationId ? { ...reservation, status: 'cancelled' } : reservation
+      ));
+    } catch {
+      // Stays has already confirmed the cancellation; keep that confirmed status visible.
+    }
   };
 
   const handleStaysWidgetSearch = async (searchParams: {
@@ -422,18 +464,31 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 selection:bg-orange-500/20 selection:text-orange-950">
+      {authCallbackNotice && (
+        <div role={initialAuthCallbackError ? 'alert' : 'status'} aria-live="polite" className={`fixed left-1/2 top-24 z-[120] flex w-[min(92vw,560px)] -translate-x-1/2 items-start gap-3 rounded-2xl border bg-white/95 px-5 py-4 text-sm font-semibold shadow-xl backdrop-blur-xl ${initialAuthCallbackError ? 'border-red-200 text-red-900' : 'border-emerald-200 text-emerald-900'}`}>
+          <span className="flex-1">{authCallbackNotice}</span>
+          <button type="button" aria-label="Fechar aviso" onClick={() => setAuthCallbackNotice('')} className="-mt-1 rounded-full px-2 py-1 text-lg leading-none text-emerald-800 hover:bg-emerald-100">×</button>
+        </div>
+      )}
       
       {/* Main Header */}
       <Header
         onOpenSearch={() => setIsSearchOpen(true)}
-        onOpenCreateListing={() => setIsCreateListingOpen(true)}
         currentView={currentView}
         setCurrentView={setCurrentView}
         currency={currency}
         setCurrency={setCurrency}
-        savedCount={savedPropertyIds.length}
         tripsCount={reservations.filter((r) => r.status === 'confirmed').length}
         searchSummaryText={filters.destination || undefined}
+        accountName={String(accountSession?.user.user_metadata?.full_name || accountSession?.user.user_metadata?.name || '')}
+        accountEmail={accountSession?.user.email || ''}
+        isAccountConnected={Boolean(accountSession?.user.email_confirmed_at)}
+        onOpenAccount={setAccountModalMode}
+        onSignOut={async () => {
+          if (!supabase) throw new Error('Serviço de autenticação indisponível.');
+          const { error } = await supabase.auth.signOut();
+          if (error) throw error;
+        }}
       />
 
       {/* Category Bar & Controls (Visible only on Explore view) */}
@@ -773,6 +828,12 @@ export default function App() {
         onClose={() => setBookingPayload(null)}
         bookingData={bookingPayload}
         currency={currency}
+      />
+
+      <GuestAccountModal
+        isOpen={accountModalMode !== null}
+        initialMode={accountModalMode || 'login'}
+        onClose={() => setAccountModalMode(null)}
       />
 
       {/* 3. Search Modal */}

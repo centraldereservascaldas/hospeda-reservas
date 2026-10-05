@@ -12,6 +12,7 @@
     "preview": "tsx server.ts --serve-dist"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "lucide-react": "^0.475.0",

@@ -15,7 +15,7 @@ import {
 interface TripsViewProps {
   reservations: Reservation[];
   currency: Currency;
-  onCancelReservation: (id: string) => void;
+  onCancelReservation: (id: string) => Promise<void>;
   onExploreMore: () => void;
 }
 
@@ -27,6 +27,8 @@ export const TripsView: React.FC<TripsViewProps> = ({
 }) => {
   const [selectedVoucher, setSelectedVoucher] = useState<Reservation | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
+  const [cancellationError, setCancellationError] = useState('');
 
   const activeReservations = reservations.filter((r) => r.status === 'confirmed');
   const pastReservations = reservations.filter((r) => r.status === 'completed');
@@ -277,25 +279,37 @@ export const TripsView: React.FC<TripsViewProps> = ({
             <div className="text-center">
               <h3 className="font-bold text-base text-neutral-900">Deseja cancelar esta reserva?</h3>
               <p className="text-xs text-neutral-500 mt-1">
-                De acordo com a política flexível, você receberá 100% de reembolso na forma original de pagamento em até 2 dias úteis.
+                O pedido será enviado ao sistema de reservas. Reembolso e eventuais cobranças seguem as condições da sua reserva. Reservas feitas por Airbnb, Booking ou outro canal devem ser canceladas no próprio canal.
               </p>
             </div>
 
+            {cancellationError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">{cancellationError}</p>}
+
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setCancellingId(null)}
+                disabled={isSubmittingCancellation}
+                onClick={() => { setCancellingId(null); setCancellationError(''); }}
                 className="flex-1 py-2.5 rounded-full border border-neutral-300 font-semibold text-xs text-neutral-700 hover:bg-neutral-50 cursor-pointer"
               >
                 Manter viagem
               </button>
               <button
-                onClick={() => {
-                  onCancelReservation(cancellingId);
-                  setCancellingId(null);
+                disabled={isSubmittingCancellation}
+                onClick={async () => {
+                  setIsSubmittingCancellation(true);
+                  setCancellationError('');
+                  try {
+                    await onCancelReservation(cancellingId);
+                    setCancellingId(null);
+                  } catch (error) {
+                    setCancellationError(error instanceof Error ? error.message : 'Não foi possível solicitar o cancelamento. A reserva continua ativa.');
+                  } finally {
+                    setIsSubmittingCancellation(false);
+                  }
                 }}
-                className="flex-1 py-2.5 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs cursor-pointer shadow-md shadow-orange-500/25 transition-all hover:scale-102 active:scale-98"
+                className="flex-1 py-2.5 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs cursor-pointer shadow-md shadow-orange-500/25 transition-all hover:scale-102 active:scale-98 disabled:cursor-wait disabled:opacity-60"
               >
-                Confirmar cancelamento
+                {isSubmittingCancellation ? 'Enviando pedido…' : 'Confirmar cancelamento'}
               </button>
             </div>
           </div>

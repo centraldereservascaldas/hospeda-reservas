@@ -1,4 +1,4 @@
-import { Property } from '../types';
+import { Property, Reservation } from '../types';
 
 export interface SearchAccommodationsParams {
   from?: string;
@@ -45,8 +45,6 @@ export interface CheckoutRequestPayload {
   from: string;
   to: string;
   guests: { adults: number; children: number; infants: number; pets: number };
-  guestName: string;
-  guestEmail: string;
   quoteTotal: number;
 }
 
@@ -218,11 +216,27 @@ class CrcnBackendApiService {
   }
 
   // 6. POST /api/checkout
-  public async createCheckout(payload: CheckoutRequestPayload): Promise<CheckoutResponse | null> {
+  public async syncStaysGuest(accessToken: string): Promise<{ success: boolean; message?: string } | null> {
+    try {
+      const res = await fetch('/api/auth/sync-stays', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      return await res.json();
+    } catch (err) {
+      console.warn('Error syncing authenticated guest:', err);
+      return null;
+    }
+  }
+
+  public async createCheckout(payload: CheckoutRequestPayload, accessToken: string): Promise<CheckoutResponse | null> {
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify(payload),
       });
       return await res.json();
@@ -230,6 +244,24 @@ class CrcnBackendApiService {
       console.warn('Error creating checkout on backend:', err);
       return null;
     }
+  }
+
+  public async getMyReservations(accessToken: string): Promise<Reservation[]> {
+    const res = await fetch('/api/my-reservations', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível carregar suas reservas.');
+    return Array.isArray(json.data) ? json.data as Reservation[] : [];
+  }
+
+  public async cancelMyReservation(reservationId: string, accessToken: string): Promise<void> {
+    const res = await fetch(`/api/my-reservations/${encodeURIComponent(reservationId)}/cancel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível cancelar esta reserva.');
   }
 
   // 7. GET /api/stays/status
