@@ -8,12 +8,16 @@ import type { Session } from '@supabase/supabase-js';
 import { Property, Reservation, SearchFilters, Currency } from './types';
 import { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { STAYS_NET_APARTMENTS } from './data/staysApartments';
+import { CATEGORIES } from './data/mockProperties';
 import { staysApi } from './services/staysApi';
+import { matchesPropertyCategory } from './utils/propertyCategories';
 import { Header } from './components/Header';
 import { CategoryBar } from './components/CategoryBar';
 import { PropertyCard } from './components/PropertyCard';
+import { CondominiumDirectory } from './components/CondominiumDirectory';
 import { InteractiveMap } from './components/InteractiveMap';
 import { PropertyDetailModal } from './components/PropertyDetailModal';
+import { CondominiumDetailModal } from './components/CondominiumDetailModal';
 import { CheckoutModal } from './components/CheckoutModal';
 import { GuestAccountModal } from './components/GuestAccountModal';
 import { SearchModal } from './components/SearchModal';
@@ -21,6 +25,7 @@ import { FilterModal } from './components/FilterModal';
 import { TripsView } from './components/TripsView';
 import { WishlistsView } from './components/WishlistsView';
 import { HostDashboardView } from './components/HostDashboardView';
+import { OwnerAccessAdminView } from './components/OwnerAccessAdminView';
 import { CreateListingModal } from './components/CreateListingModal';
 import { StaysSearchWidget } from './components/StaysSearchWidget';
 import { SofiaAssistantModal } from './components/SofiaAssistantModal';
@@ -28,6 +33,8 @@ import { LogoCRCN } from './components/LogoCRCN';
 import { crcnBackendApi } from './services/crcnBackendApi';
 import { initialAuthCallbackError, supabase } from './services/supabase';
 import { getSurpriseDateCandidates } from './utils/surpriseDates';
+import { buildCondominiumCatalog } from './utils/condominiumCatalog';
+import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { 
   Compass, 
   Heart, 
@@ -106,10 +113,13 @@ export default function App() {
   const [currency, setCurrency] = useState<Currency>('BRL');
   const [showTotalWithTaxes, setShowTotalWithTaxes] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
-  const [currentView, setCurrentView] = useState<'explore' | 'trips' | 'wishlists' | 'host'>('explore');
+  const [currentView, setCurrentView] = useState<'explore' | 'trips' | 'wishlists' | 'host' | 'ownerAdmin'>('explore');
   const [authCallbackNotice, setAuthCallbackNotice] = useState('');
   const [accountSession, setAccountSession] = useState<Session | null>(null);
   const [accountModalMode, setAccountModalMode] = useState<'login' | 'signup' | 'recovery' | null>(null);
+  const [ownerAccessStatus, setOwnerAccessStatus] = useState<'loading' | 'unavailable' | 'none' | 'pending' | 'approved' | 'suspended'>('none');
+  const [ownerRequestLoading, setOwnerRequestLoading] = useState(false);
+  const [isOwnerAdmin, setIsOwnerAdmin] = useState(false);
 
   useEffect(() => {
     const authHash = new URLSearchParams(window.location.hash.slice(1));
@@ -146,6 +156,7 @@ export default function App() {
   const [isCreateListingOpen, setIsCreateListingOpen] = useState(false);
   const [isSofiaOpen, setIsSofiaOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [selectedCondominium, setSelectedCondominium] = useState<CondominiumSummary | null>(null);
   const [bookingPayload, setBookingPayload] = useState<{
     property: Property;
     checkIn: string;
@@ -236,6 +247,46 @@ export default function App() {
   }, [accountSession?.access_token]);
 
   useEffect(() => {
+    if (!accountSession?.access_token) {
+      setOwnerAccessStatus('none');
+      setIsOwnerAdmin(false);
+      if (currentView === 'host' || currentView === 'ownerAdmin') setCurrentView('explore');
+      return;
+    }
+    let cancelled = false;
+    setOwnerAccessStatus('loading');
+    void crcnBackendApi.getOwnerAccess(accountSession.access_token)
+      .then((status) => { if (!cancelled) setOwnerAccessStatus(status); })
+      .catch((error) => {
+        if (!cancelled) {
+          setOwnerAccessStatus('unavailable');
+          console.warn('Unable to verify owner access:', error);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [accountSession?.access_token]);
+
+  useEffect(() => {
+    if (!accountSession?.access_token) {
+      setIsOwnerAdmin(false);
+      return;
+    }
+    let cancelled = false;
+    void crcnBackendApi.getOwnerAdminStatus(accountSession.access_token)
+      .then((isAdmin) => {
+        if (cancelled) return;
+        setIsOwnerAdmin(isAdmin);
+        if (!isAdmin && currentView === 'ownerAdmin') setCurrentView('explore');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setIsOwnerAdmin(false);
+        if (currentView === 'ownerAdmin') setCurrentView('explore');
+      });
+    return () => { cancelled = true; };
+  }, [accountSession?.access_token]);
+
+  useEffect(() => {
     localStorage.setItem('hospeda_wishlist', JSON.stringify(savedPropertyIds));
   }, [savedPropertyIds]);
 
@@ -271,7 +322,7 @@ export default function App() {
   const filteredProperties = useMemo(() => {
     return properties.filter((prop) => {
       // Category filter
-      if (filters.category !== 'all' && prop.category !== filters.category) {
+      if (!matchesPropertyCategory(prop, filters.category)) {
         return false;
       }
 
@@ -339,6 +390,17 @@ export default function App() {
     });
   }, [properties, filters]);
 
+  const availableCategories = useMemo(() =>
+    CATEGORIES.filter((category) => category.id === 'all'
+      || category.id === 'condominiums'
+      || category.id === 'pools_24h'
+      || category.id === filters.category
+      || properties.some((property) => matchesPropertyCategory(property, category.id))),
+  [properties, filters.category]);
+
+  const condominiums = useMemo(() => buildCondominiumCatalog(properties), [properties]);
+  const isCondominiumView = filters.category === 'condominiums';
+
   // Active filter count
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -371,6 +433,30 @@ export default function App() {
     } catch {
       // Stays has already confirmed the cancellation; keep that confirmed status visible.
     }
+  };
+
+  const handleRequestOwnerAccess = async () => {
+    if (!accountSession?.access_token) {
+      setAccountModalMode('login');
+      return;
+    }
+    setOwnerRequestLoading(true);
+    try {
+      const status = await crcnBackendApi.requestOwnerAccess(accountSession.access_token);
+      setOwnerAccessStatus(status);
+      if (status === 'pending') setAuthCallbackNotice('Solicitação de acesso ao painel de proprietário enviada para análise.');
+    } catch (error) {
+      setAuthCallbackNotice(error instanceof Error ? error.message : 'Não foi possível solicitar acesso ao painel.');
+      setOwnerAccessStatus('unavailable');
+    } finally {
+      setOwnerRequestLoading(false);
+    }
+  };
+
+  const handleSetCurrentView = (view: 'explore' | 'trips' | 'wishlists' | 'host' | 'ownerAdmin') => {
+    if (view === 'host' && ownerAccessStatus !== 'approved') return;
+    if (view === 'ownerAdmin' && !isOwnerAdmin) return;
+    setCurrentView(view);
   };
 
   const handleStaysWidgetSearch = async (searchParams: {
@@ -475,7 +561,7 @@ export default function App() {
       <Header
         onOpenSearch={() => setIsSearchOpen(true)}
         currentView={currentView}
-        setCurrentView={setCurrentView}
+        setCurrentView={handleSetCurrentView}
         currency={currency}
         setCurrency={setCurrency}
         tripsCount={reservations.filter((r) => r.status === 'confirmed').length}
@@ -489,19 +575,28 @@ export default function App() {
           const { error } = await supabase.auth.signOut();
           if (error) throw error;
         }}
+        ownerAccessStatus={ownerAccessStatus}
+        ownerRequestLoading={ownerRequestLoading}
+        onRequestOwnerAccess={handleRequestOwnerAccess}
+        isOwnerAdmin={isOwnerAdmin}
       />
 
       {/* Category Bar & Controls (Visible only on Explore view) */}
       {currentView === 'explore' && (
         <CategoryBar
+          availableCategories={availableCategories}
           selectedCategory={filters.category}
-          onSelectCategory={(catId) => setFilters({ ...filters, category: catId })}
+          onSelectCategory={(catId) => {
+            setFilters({ ...filters, category: catId });
+            if (catId === 'condominiums') setViewMode('grid');
+          }}
           onOpenFilters={() => setIsFilterOpen(true)}
           activeFilterCount={activeFilterCount}
           showTotalWithTaxes={showTotalWithTaxes}
           setShowTotalWithTaxes={setShowTotalWithTaxes}
           viewMode={viewMode}
           setViewMode={setViewMode}
+          isCondominiumView={isCondominiumView}
         />
       )}
 
@@ -512,16 +607,16 @@ export default function App() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             
             {/* Search accommodation and dates */}
-            <div className="mb-8">
+            {!isCondominiumView && <div className="mb-8">
               <StaysSearchWidget
                 variant="hero"
                 currentFilters={filters}
                 onSearchInApp={handleStaysWidgetSearch}
               />
-            </div>
+            </div>}
 
             {/* Filter pills if active */}
-            {(filters.destination || activeFilterCount > 0) && (
+            {!isCondominiumView && (filters.destination || activeFilterCount > 0) && (
               <div className="mb-6 flex flex-wrap items-center gap-2 text-xs">
                 <span className="font-extrabold text-neutral-800">Filtros ativos:</span>
                 {filters.destination && (
@@ -557,7 +652,9 @@ export default function App() {
 
             {/* View Mode: Grid or Interactive Map */}
             <div id="stays-apartments-catalog" className="scroll-mt-24">
-            {viewMode === 'grid' ? (
+            {isCondominiumView ? (
+              <CondominiumDirectory condominiums={condominiums} onSelectCondominium={setSelectedCondominium} />
+            ) : viewMode === 'grid' ? (
               filteredProperties.length === 0 ? (
                 <div className="text-center py-20 max-w-md mx-auto space-y-4">
                   <div className="w-16 h-16 rounded-full bg-neutral-100 text-neutral-400 flex items-center justify-center mx-auto">
@@ -629,12 +726,12 @@ export default function App() {
         {/* HOST DASHBOARD VIEW */}
         {currentView === 'host' && (
           <HostDashboardView
-            properties={properties}
-            reservations={reservations}
-            currency={currency}
-            onOpenCreateListing={() => setIsCreateListingOpen(true)}
-            onSelectProperty={handleSelectProperty}
+            accessToken={accountSession?.access_token || ''}
           />
+        )}
+
+        {currentView === 'ownerAdmin' && isOwnerAdmin && accountSession?.access_token && (
+          <OwnerAccessAdminView accessToken={accountSession.access_token} />
         )}
       </main>
 
@@ -676,15 +773,15 @@ export default function App() {
           )}
         </button>
 
-        <button
-          onClick={() => setCurrentView('host')}
+        {ownerAccessStatus === 'approved' && <button
+          onClick={() => handleSetCurrentView('host')}
           className={`flex flex-col items-center gap-1 text-[10px] font-bold cursor-pointer transition-all ${
             currentView === 'host' ? 'text-orange-600 scale-105' : 'text-neutral-500'
           }`}
         >
           <Sparkles className="w-5 h-5" />
-          <span>Gestor</span>
-        </button>
+          <span>Proprietário</span>
+        </button>}
       </nav>
 
       {/* Footer in Liquid Glass */}
@@ -795,6 +892,11 @@ export default function App() {
           handleClosePropertyDetail();
           setBookingPayload(bookingData);
         }}
+      />
+
+      <CondominiumDetailModal
+        condominium={selectedCondominium}
+        onClose={() => setSelectedCondominium(null)}
       />
 
       {/* 2. Sofia Concierge Assistant Modal */}

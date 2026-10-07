@@ -13,15 +13,16 @@ import {
   Check,
   Zap,
   ChevronDown,
-  LogOut
+  LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 import { Currency } from '../types';
 import { LogoCRCN } from './LogoCRCN';
 
 interface HeaderProps {
   onOpenSearch: () => void;
-  currentView: 'explore' | 'trips' | 'wishlists' | 'host';
-  setCurrentView: (view: 'explore' | 'trips' | 'wishlists' | 'host') => void;
+  currentView: 'explore' | 'trips' | 'wishlists' | 'host' | 'ownerAdmin';
+  setCurrentView: (view: 'explore' | 'trips' | 'wishlists' | 'host' | 'ownerAdmin') => void;
   currency: Currency;
   setCurrency: (c: Currency) => void;
   tripsCount: number;
@@ -31,6 +32,10 @@ interface HeaderProps {
   isAccountConnected: boolean;
   onOpenAccount: (mode: 'login' | 'signup') => void;
   onSignOut: () => Promise<void>;
+  ownerAccessStatus: 'loading' | 'unavailable' | 'none' | 'pending' | 'approved' | 'suspended';
+  ownerRequestLoading: boolean;
+  onRequestOwnerAccess: () => Promise<void>;
+  isOwnerAdmin: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -46,6 +51,10 @@ export const Header: React.FC<HeaderProps> = ({
   isAccountConnected,
   onOpenAccount,
   onSignOut,
+  ownerAccessStatus,
+  ownerRequestLoading,
+  onRequestOwnerAccess,
+  isOwnerAdmin,
 }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isCurrencyMenuOpen, setIsCurrencyMenuOpen] = useState(false);
@@ -319,6 +328,44 @@ export const Header: React.FC<HeaderProps> = ({
                           <span className="font-semibold">Favoritos</span>
                         </div>
                       </button>
+                      {ownerAccessStatus === 'approved' && (
+                        <button
+                          onClick={() => { setCurrentView('host'); setIsUserMenuOpen(false); }}
+                          className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors hover:bg-orange-50 ${currentView === 'host' ? 'bg-orange-50 font-bold text-orange-700' : 'text-neutral-800'}`}
+                        >
+                          <Briefcase className="h-4 w-4 flex-shrink-0 text-orange-600" />
+                          <span className="font-semibold">Painel do Proprietário</span>
+                        </button>
+                      )}
+                      {ownerAccessStatus === 'none' && (
+                        <button
+                          type="button"
+                          disabled={ownerRequestLoading}
+                          onClick={() => { void onRequestOwnerAccess(); }}
+                          className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-neutral-800 transition-colors hover:bg-orange-50 disabled:opacity-60"
+                        >
+                          <Sparkles className="h-4 w-4 flex-shrink-0 text-orange-600" />
+                          <span className="font-semibold">{ownerRequestLoading ? 'Enviando solicitação…' : 'Solicitar acesso de proprietário'}</span>
+                        </button>
+                      )}
+                      {ownerAccessStatus === 'pending' && (
+                        <div className="flex items-center gap-3 px-4 py-2.5 text-neutral-600" role="status">
+                          <Sparkles className="h-4 w-4 flex-shrink-0 text-orange-600" />
+                          <span className="font-semibold">Solicitação de proprietário em análise</span>
+                        </div>
+                      )}
+                      {ownerAccessStatus === 'suspended' && (
+                        <div className="px-4 py-2.5 text-[11px] text-neutral-500" role="status">Para revisar seu acesso de proprietário, fale com a Central.</div>
+                      )}
+                      {isOwnerAdmin && (
+                        <button
+                          onClick={() => { setCurrentView('ownerAdmin'); setIsUserMenuOpen(false); }}
+                          className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors hover:bg-orange-50 ${currentView === 'ownerAdmin' ? 'bg-orange-50 font-bold text-orange-700' : 'text-neutral-800'}`}
+                        >
+                          <ShieldCheck className="h-4 w-4 flex-shrink-0 text-orange-600" />
+                          <span className="font-semibold">Analisar acesso de proprietários</span>
+                        </button>
+                      )}
                     </div>}
 
                   </div>

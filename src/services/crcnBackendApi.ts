@@ -58,6 +58,48 @@ export interface CheckoutResponse {
   quote?: CalculatedPriceResponse;
 }
 
+export type OwnerAccessStatus = 'none' | 'pending' | 'approved' | 'suspended';
+
+export interface OwnerAccessRequest {
+  userId: string;
+  fullName: string;
+  email: string;
+  requestedAt: string;
+}
+
+export interface StaysOwnerSummary {
+  id: string;
+  name: string;
+  propertyCount: number;
+}
+
+export interface OwnerDashboardData {
+  period: { from: string; to: string };
+  ownerName: string;
+  totals: { debit: number; credit: number };
+  properties: Array<{
+    staysListingId: string;
+    title: string;
+    image: string;
+    debit: number;
+    credit: number;
+  }>;
+  reservations: Array<{
+    id: string;
+    code: string;
+    listingId: string;
+    propertyTitle: string;
+    propertyImage: string;
+    guestName: string;
+    checkIn: string;
+    checkOut: string;
+    status: 'confirmed' | 'cancelled' | 'blocked' | 'other';
+    total: number;
+    currency: string;
+    nights: number;
+  }>;
+}
+
 class CrcnBackendApiService {
   private getCachedResorts(): Array<{ id: string; name: string }> {
     try {
@@ -264,6 +306,73 @@ class CrcnBackendApiService {
     if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível cancelar esta reserva.');
   }
 
+  public async getOwnerAccess(accessToken: string): Promise<OwnerAccessStatus> {
+    const res = await fetch('/api/owner/access', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível verificar o acesso de proprietário.');
+    return json.status as OwnerAccessStatus;
+  }
+
+  public async requestOwnerAccess(accessToken: string): Promise<OwnerAccessStatus> {
+    const res = await fetch('/api/owner/access/request', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível solicitar acesso ao painel.');
+    return json.status as OwnerAccessStatus;
+  }
+
+  public async getOwnerDashboard(accessToken: string, from: string, to: string): Promise<OwnerDashboardData> {
+    const query = new URLSearchParams({ from, to });
+    const res = await fetch(`/api/owner/dashboard?${query}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível carregar o painel de proprietário.');
+    return json as OwnerDashboardData;
+  }
+
+  public async getOwnerAdminStatus(accessToken: string): Promise<boolean> {
+    const res = await fetch('/api/owner/admin/status', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível verificar o acesso administrativo.');
+    return json.isAdmin === true;
+  }
+
+  public async getOwnerAccessRequests(accessToken: string): Promise<OwnerAccessRequest[]> {
+    const res = await fetch('/api/owner/admin/requests', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível carregar as solicitações.');
+    return Array.isArray(json.requests) ? json.requests as OwnerAccessRequest[] : [];
+  }
+
+  public async searchStaysOwners(accessToken: string, query: string): Promise<StaysOwnerSummary[]> {
+    const params = new URLSearchParams({ q: query });
+    const res = await fetch(`/api/owner/admin/stays-owners?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível pesquisar os proprietários na Stays.');
+    return Array.isArray(json.owners) ? json.owners as StaysOwnerSummary[] : [];
+  }
+
+  public async approveOwnerAccess(accessToken: string, userId: string, staysOwnerId: string): Promise<void> {
+    const res = await fetch('/api/owner/admin/approve', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, staysOwnerId, identityVerified: true }),
+    });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível aprovar o acesso.');
+  }
+
   // 7. GET /api/stays/status
   public async getStaysStatus(): Promise<any> {
     try {
@@ -276,34 +385,35 @@ class CrcnBackendApiService {
   }
 
   // 8. POST /api/sofia/chat
-  public async chatWithSofia(message: string): Promise<{
+  public async chatWithSofia(message: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = []): Promise<{
     success: boolean;
     reply: string;
     matchedProperties: Property[];
     suggestedFilters?: { destination?: string; guests?: number; from?: string; to?: string };
     totalFound?: number;
+    assistant?: 'openai' | 'catalog';
   }> {
     try {
       const res = await fetch('/api/sofia/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message, history }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        return {
+          success: false,
+          reply: result.message || 'A Sofia está temporariamente indisponível. Tente novamente em instantes.',
+          matchedProperties: [],
+        };
+      }
+      return result;
     } catch (err) {
       console.warn('Fallback local Sofia processing:', err);
-      const { STAYS_NET_APARTMENTS } = await import('../data/staysApartments');
-      const lower = message.toLowerCase();
-      let matched = STAYS_NET_APARTMENTS;
-      if (lower.includes('lacqua')) {
-        matched = STAYS_NET_APARTMENTS.filter(p => p.category === 'diroma' && p.title.toLowerCase().includes('lacqua'));
-      }
       return {
         success: true,
-        reply: 'Olá! No L’acqua diRoma é permitido descer com seu cooler e bebidas para as áreas de solário das piscinas (apenas latas e plásticos, sem vidro). Selecionei as opções no nosso catálogo:',
-        matchedProperties: matched.slice(0, 3),
-        suggestedFilters: { destination: "L'acqua diRoma", guests: 5 },
+        reply: 'Não consegui consultar a Sofia agora. Tente novamente em instantes ou pesquise as acomodações diretamente no site.',
+        matchedProperties: [],
       };
     }
   }

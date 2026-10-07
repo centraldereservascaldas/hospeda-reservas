@@ -168,6 +168,40 @@ Esta seção é um mapa resumido; schemas, parâmetros, códigos de resposta e m
 7. Testar paginação, datas, anúncios sem avaliação, fontes diferentes, item oculto, comentários privados, erros/timeout, duplicidade e não vazamento de dados no JSON público.
 8. Conferir no site Stays quais avaliações são visíveis e comparar uma amostra por apartamento antes de publicar.
 
+## Painel de proprietário no site
+
+O painel do site consulta somente leitura os endpoints documentados `GET /finance/owners/{ownerId}?from=...&to=...` e `GET /booking/reservations` (com `dateType=included` e `listingId`). O endpoint financeiro retorna o proprietário, os totais de débito/crédito e seus anúncios; as reservas são buscadas apenas para esses IDs e datas. O site não chama `GET /finance/owner-profiles`, que retorna identificadores fiscais completos.
+
+### Aprovação obrigatória
+
+O Swagger não documenta um e-mail de login que associe com segurança a conta do site ao cadastro financeiro do proprietário. Assim, a conta autenticada pode solicitar acesso, mas a solicitação permanece `pending` até a equipe verificar a identidade e inserir o ID correto da Stays. Nunca aprovar com base apenas no nome informado pelo solicitante.
+
+1. Aplicar a migração `supabase/migrations/20261006000000_owner_access.sql`.
+2. Verificar a identidade do proprietário fora do site e localizar o `_id` em `GET /finance/owners` na Stays.
+3. No SQL Editor do Supabase, associar o UUID autenticado (tabela `auth.users`) ao `_id` conferido:
+
+```sql
+insert into public.owner_access (user_id, full_name, stays_owner_id, status, approved_at)
+values ('UUID-DO-USUARIO-VERIFICADO', 'Nome verificado', 'ID-DO-PROPRIETARIO-NA-STAYS', 'approved', now())
+on conflict (user_id) do update
+set full_name = excluded.full_name,
+    stays_owner_id = excluded.stays_owner_id,
+    status = 'approved',
+    approved_at = now();
+```
+
+A tabela não concede leitura direta a `anon`/`authenticated`; só o servidor com a chave `service_role` confere o vínculo. A rota de painel autentica e-mail confirmado, confere `status=approved` no servidor e somente então consulta a Stays. O site não envia e-mail/telefone do hóspede no resultado do painel. Reservas e totais podem conter dados pessoais/financeiros; manter HTTPS, acesso operacional restrito e logs sem corpos de resposta.
+
+O painel implementado apresenta propriedades, reservas confirmadas/canceladas/bloqueios, calendário derivado das reservas retornadas e créditos/débitos do mês. Ele não altera calendários, reservas, cobranças nem anúncios. O resumo financeiro usa os agregados que a API documenta; não deve ser chamado de extrato detalhado até validar em produção os campos de lançamento retornados pela conta Stays.
+
+### Análise administrativa de solicitações
+
+O servidor oferece uma área administrativa protegida pelo allowlist `OWNER_ADMIN_EMAILS` (endereços separados por vírgula), além da autenticação Supabase com e-mail confirmado. Configure somente e-mails institucionais/equipe em variável de ambiente do servidor — nunca em `VITE_*`. A área lista pedidos pendentes e consulta `GET /finance/owners` somente no servidor, com `from` e `to` obrigatórios (janela dos últimos 10 anos); o resultado enviado ao navegador é reduzido a ID, nome e quantidade de imóveis, sem dados financeiros ou fiscais. A busca exige pelo menos dois caracteres e a resposta desconhecida é rejeitada em vez de retornar a carga bruta.
+
+O endpoint `/finance/owner-profiles` foi descartado para este fluxo: o Swagger informa que ele retorna identificadores fiscais completos e exige concessão explícita à aplicação. Não pedir essa permissão para fazer o vínculo de conta.
+
+Para aprovar, a equipe deve confirmar a identidade do solicitante por um canal oficial e selecionar o registro Stays correspondente. O servidor confirma que o pedido está pendente, que o ID existe na lista Stays e que o proprietário não está associado a outra conta; então grava o vínculo e os campos `reviewed_by`/`reviewed_at`. O nome sozinho nunca é considerado prova. Configure também a nova migração `20261006010000_owner_access_review_metadata.sql` antes de habilitar aprovações.
+
 ## Limites desta captura
 
 O Swagger autenticado foi inspecionado visualmente na sessão da conta em 2026-10-02. A rede do shell deste ambiente não permitiu baixar o JSON/YAML OpenAPI diretamente; por isso **não foi possível salvar o documento OpenAPI bruto completo**. O guia acima é um índice documentado e resumido, não substitui a especificação viva. Não foram feitas chamadas de teste, criação/alteração de reservas, mensagens, preços ou configurações.

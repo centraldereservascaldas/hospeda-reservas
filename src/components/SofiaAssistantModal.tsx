@@ -3,17 +3,7 @@ import {
   Sparkles, 
   Send, 
   X, 
-  Bot, 
-  User, 
-  MapPin, 
-  Building, 
   ChevronRight, 
-  ShieldCheck, 
-  Waves, 
-  Beer, 
-  Ticket,
-  Maximize2,
-  Minimize2,
   Filter
 } from 'lucide-react';
 import { Property, Currency } from '../types';
@@ -27,6 +17,7 @@ interface ChatMessage {
   text: string;
   properties?: Property[];
   suggestedFilters?: { destination?: string; guests?: number; from?: string; to?: string };
+  assistantSource?: 'openai' | 'catalog';
   timestamp: string;
 }
 
@@ -71,29 +62,6 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
     }
   }, [isOpen, messages]);
 
-  const quickQuestions = [
-    {
-      label: 'Lacqua: 5 pessoas e descer com bebida',
-      prompt: 'Sofia, quero um apartamento no Lacqua para 5 pessoas no próximo final de semana e preciso poder descer com bebida.',
-      icon: Beer,
-    },
-    {
-      label: 'Resorts com Ingressos Inclusos',
-      prompt: 'Quais apartamentos têm ingressos inclusos para o diRoma Acqua Park?',
-      icon: Ticket,
-    },
-    {
-      label: 'Frente ao Lago Corumbá',
-      prompt: 'Quero opções de resort com vista e acesso ao Lago Corumbá para esportes náuticos.',
-      icon: Waves,
-    },
-    {
-      label: 'Centro com Águas Termais 24h',
-      prompt: 'Quero apartamento no centro de Caldas Novas perto da Feira do Luar e com piscinas quentes 24h.',
-      icon: Building,
-    },
-  ];
-
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputValue).trim();
     if (!text || isLoading) return;
@@ -110,13 +78,17 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
     setIsLoading(true);
 
     try {
-      const response = await crcnBackendApi.chatWithSofia(text);
+      const response = await crcnBackendApi.chatWithSofia(text, messages.slice(-10).map((item) => ({
+        role: item.sender === 'sofia' ? 'assistant' : 'user',
+        content: item.text,
+      })));
       const sofiaMsg: ChatMessage = {
         id: `sofia-${Date.now()}`,
         sender: 'sofia',
         text: response.reply,
         properties: response.matchedProperties,
         suggestedFilters: response.suggestedFilters,
+        assistantSource: response.assistant,
         timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, sofiaMsg]);
@@ -126,7 +98,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
         {
           id: `sofia-err-${Date.now()}`,
           sender: 'sofia',
-          text: 'Tive uma pequena oscilação na consulta ao catálogo, mas estou aqui! O L’acqua diRoma permite sim descer com caixas térmicas e copos térmicos nas piscinas (sem vidros). Você pode buscar as opções diretamente na barra de busca!',
+          text: 'A Sofia está temporariamente indisponível para consultar essa informação. Tente novamente em instantes.',
           timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -201,9 +173,8 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                     }`}
                   >
                     <p className="whitespace-pre-line">{msg.text}</p>
-
                     {/* Filter Suggestion Button */}
-                    {isSofia && msg.suggestedFilters && onApplyFilters && (
+                    {isSofia && msg.suggestedFilters && Object.values(msg.suggestedFilters).some((value) => value !== undefined && value !== '') && onApplyFilters && (
                       <div className="mt-3 pt-2.5 border-t border-white/70 flex items-center justify-between">
                         <span className="text-[11px] text-neutral-500 font-medium">
                           Deseja ver na vitrine principal?
@@ -250,8 +221,14 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                             </p>
                             <div className="mt-1 flex items-center justify-between">
                               <span className="text-xs font-black text-neutral-900">
-                                {formatCurrency(prop.pricePerNight, currency)}{' '}
-                                <span className="text-[10px] font-normal text-neutral-500">/noite</span>
+                                {Number.isFinite(prop.pricePerNight) && prop.pricePerNight > 0 ? (
+                                  <>
+                                    {formatCurrency(prop.pricePerNight, currency)}{' '}
+                                    <span className="text-[10px] font-normal text-neutral-500">/noite</span>
+                                  </>
+                                ) : (
+                                  <span className="text-[10px] font-semibold text-neutral-500">Consulte valores nas datas</span>
+                                )}
                               </span>
                               <span className="text-[11px] font-bold text-orange-600 flex items-center gap-0.5">
                                 <span>Ver detalhes</span>
@@ -280,24 +257,6 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
           )}
 
           <div ref={messagesEndRef} />
-        </div>
-
-        {/* Quick Question Pills */}
-        <div className="p-2 sm:px-4 bg-white/20 backdrop-blur-xl border-t border-white/55 overflow-x-auto no-scrollbar flex items-center gap-1.5 flex-shrink-0 shadow-[0_-8px_24px_rgba(15,23,42,0.02)]">
-          {quickQuestions.map((q, idx) => {
-            const Icon = q.icon;
-            return (
-              <button
-                key={idx}
-                onClick={() => handleSendMessage(q.prompt)}
-                disabled={isLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full liquid-glass-pill hover:bg-white/90 text-orange-800 text-[11px] font-bold border border-orange-200/65 whitespace-nowrap transition-all cursor-pointer flex-shrink-0 disabled:opacity-50"
-              >
-                <Icon className="w-3 h-3 text-orange-600" />
-                <span>{q.label}</span>
-              </button>
-            );
-          })}
         </div>
 
         {/* Input Bar */}

@@ -402,7 +402,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       ];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-white/25 backdrop-blur-xl animate-in fade-in duration-200">
       <div 
         className="min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start"
         onClick={(e) => {
@@ -596,6 +596,17 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                     {property.description}
                   </p>
                 </div>
+
+                {property.complexDescription?.trim() && (
+                  <div className="pt-6">
+                    <h3 className="text-lg font-bold text-neutral-900 mb-3">
+                      Sobre o condomínio{property.complexName ? ` ${property.complexName}` : ''}
+                    </h3>
+                    <p className="text-sm text-neutral-700 leading-relaxed whitespace-pre-line">
+                      {property.complexDescription}
+                    </p>
+                  </div>
+                )}
 
                 {/* Sleeping arrangements */}
                 <div className="pt-6">
@@ -1050,7 +1061,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
       {isDatePickerOpen && createPortal(
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-neutral-950/25 p-4 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-white/25 p-4 backdrop-blur-xl animate-in fade-in duration-150"
           role="dialog"
           aria-modal="true"
           aria-label="Selecionar datas da hospedagem"

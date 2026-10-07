@@ -3,14 +3,14 @@ import { STAYS_NET_APARTMENTS } from './staysApartments';
 
 export const CATEGORIES = [
   { id: 'all', label: 'Todos os espaços', icon: 'Sparkles' },
-  { id: 'waterpark', label: 'Parques Aquáticos Inclusos', icon: 'Waves' },
-  { id: 'thermal_24h', label: 'Piscinas Termais 24h', icon: 'Droplets' },
-  { id: 'diroma', label: 'Complexo diRoma', icon: 'Crown' },
-  { id: 'rio_quente', label: 'Rio Quente & Hot Park', icon: 'Palmtree' },
-  { id: 'corumba_lake', label: 'À beira do Lago Corumbá', icon: 'Fish' },
-  { id: 'resorts_flats', label: 'Resorts & Flats', icon: 'Home' },
-  { id: 'chalets', label: 'Chalés & Casas', icon: 'Trees' },
-  { id: 'spa_luxury', label: 'Spa & Relaxamento', icon: 'Mountain' },
+  { id: 'condominiums', label: 'Condomínios', icon: 'Building' },
+  { id: 'pools_24h', label: 'Piscinas 24 horas', icon: 'Droplets' },
+  { id: 'beverages_allowed', label: 'Pode descer com bebidas', icon: 'GlassWater' },
+  { id: 'near_center', label: 'Até 3 km do centro', icon: 'MapPin' },
+  { id: 'waterpark_included', label: 'Parque aquático incluso', icon: 'Waves' },
+  { id: 'family_friendly', label: 'Para famílias', icon: 'Users' },
+  { id: 'pet_friendly', label: 'Aceita animais', icon: 'PawPrint' },
+  { id: 'hot_tub', label: 'Com hidromassagem', icon: 'Sparkles' },
 ];
 
 // Authoritative accommodation catalogue (no mockups)

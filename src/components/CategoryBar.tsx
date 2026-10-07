@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Sparkles, 
   Waves, 
@@ -14,10 +14,19 @@ import {
   SlidersHorizontal,
   Map,
   Grid,
+  GlassWater,
+  MapPin,
+  Users,
+  PawPrint,
+  Building,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
 } from 'lucide-react';
-import { CATEGORIES } from '../data/mockProperties';
+interface CategoryOption {
+  id: string;
+  label: string;
+  icon: string;
+}
 
 interface CategoryBarProps {
   selectedCategory: string;
@@ -28,6 +37,8 @@ interface CategoryBarProps {
   setShowTotalWithTaxes: (show: boolean) => void;
   viewMode: 'grid' | 'map';
   setViewMode: (mode: 'grid' | 'map') => void;
+  availableCategories: CategoryOption[];
+  isCondominiumView?: boolean;
 }
 
 export const CategoryBar: React.FC<CategoryBarProps> = ({
@@ -39,7 +50,49 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   setShowTotalWithTaxes,
   viewMode,
   setViewMode,
+  availableCategories,
+  isCondominiumView = false,
 }) => {
+  const toolbarRowRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const [visibleCategoryCount, setVisibleCategoryCount] = useState(4);
+  const [categoryPage, setCategoryPage] = useState(0);
+  const [categoryItemWidth, setCategoryItemWidth] = useState(112);
+  const [categoryGap, setCategoryGap] = useState(12);
+
+  useEffect(() => {
+    const toolbarRow = toolbarRowRef.current;
+    if (!toolbarRow) return;
+
+    const updateVisibleCount = () => {
+      const rowWidth = toolbarRow.clientWidth;
+      const actionsWidth = actionsRef.current?.getBoundingClientRect().width ?? 0;
+      const itemWidth = window.innerWidth < 640 ? 96 : 112;
+      const gap = window.innerWidth < 640 ? 8 : 12;
+      const rowGap = window.innerWidth < 640 ? 8 : 16;
+      // Fit complete cards, navigation arrows, and the action controls without stretching empty space.
+      const categoryWidth = Math.max(itemWidth, rowWidth - actionsWidth - rowGap - 80);
+      const nextCount = Math.max(1, Math.floor((categoryWidth + gap) / (itemWidth + gap)));
+      setCategoryItemWidth(itemWidth);
+      setCategoryGap(gap);
+      setVisibleCategoryCount((current) => current === nextCount ? current : nextCount);
+    };
+
+    updateVisibleCount();
+    const observer = new ResizeObserver(updateVisibleCount);
+    observer.observe(toolbarRow);
+    if (actionsRef.current) observer.observe(actionsRef.current);
+    return () => observer.disconnect();
+  }, [isCondominiumView]);
+
+  const pageCount = Math.max(1, Math.ceil(availableCategories.length / visibleCategoryCount));
+  const categoryPageWidth = visibleCategoryCount * categoryItemWidth + Math.max(0, visibleCategoryCount - 1) * categoryGap;
+  const categoryTrackWidth = availableCategories.length * categoryItemWidth + Math.max(0, availableCategories.length - 1) * categoryGap;
+
+  useEffect(() => {
+    setCategoryPage((current) => Math.min(current, pageCount - 1));
+  }, [pageCount]);
+
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case 'Waves': return <Waves className="w-5 h-5" />;
@@ -52,105 +105,79 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
       case 'Landmark': return <Landmark className="w-5 h-5" />;
       case 'Fish': return <Fish className="w-5 h-5" />;
       case 'Tent': return <Tent className="w-5 h-5" />;
+      case 'GlassWater': return <GlassWater className="w-5 h-5" />;
+      case 'MapPin': return <MapPin className="w-5 h-5" />;
+      case 'Users': return <Users className="w-5 h-5" />;
+      case 'PawPrint': return <PawPrint className="w-5 h-5" />;
+      case 'Building': return <Building className="w-5 h-5" />;
       default: return <Sparkles className="w-5 h-5" />;
-    }
-  };
-
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
-  const carouselRef = useRef<HTMLDivElement>(null);
-
-  const checkScroll = () => {
-    if (carouselRef.current) {
-      const { scrollLeft, scrollWidth, clientWidth } = carouselRef.current;
-      setCanScrollLeft(scrollLeft > 10);
-      setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
-    }
-  };
-
-  useEffect(() => {
-    checkScroll();
-    window.addEventListener('resize', checkScroll);
-    return () => window.removeEventListener('resize', checkScroll);
-  }, []);
-
-  const handleScroll = (direction: 'left' | 'right') => {
-    if (carouselRef.current) {
-      const scrollAmount = direction === 'left' ? -280 : 280;
-      carouselRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-      setTimeout(checkScroll, 300);
     }
   };
 
   return (
     <div className="sticky top-16 sm:top-20 z-30 liquid-glass border-b border-white/50 backdrop-blur-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2 sm:py-3">
-        <div className="flex items-center justify-between gap-2 sm:gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2">
+        <div ref={toolbarRowRef} className="flex items-center justify-center gap-2 sm:gap-4">
           
-          {/* Categories Carousel with smooth scroll controls without overlapping icons */}
-          <div className="relative flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2">
-            {/* Scroll Left Button */}
-            {canScrollLeft && (
-              <button
-                onClick={() => handleScroll('left')}
-                className="hidden md:flex flex-shrink-0 w-8 h-8 rounded-full liquid-glass-button hover:bg-white shadow-md border border-white/80 text-neutral-800 items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-95"
-                aria-label="Rolar para esquerda"
-              >
-                <ChevronLeft className="w-4 h-4" />
+          {/* Exibe apenas cartões inteiros; as setas alternam páginas sem cortar rótulos. */}
+          <div className="flex min-w-0 flex-none items-center gap-2">
+            {categoryPage > 0 && (
+              <button type="button" onClick={() => setCategoryPage((page) => Math.max(0, page - 1))} aria-label="Ver filtros anteriores" title="Ver filtros anteriores" className="liquid-glass-button flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/85 text-neutral-800 shadow-md transition hover:scale-105 hover:bg-white active:scale-95">
+                <ChevronLeft className="h-4 w-4" />
               </button>
             )}
-
-            <div 
-              ref={carouselRef}
-              onScroll={checkScroll}
-              className="flex items-center gap-4 sm:gap-6 overflow-x-auto no-scrollbar scroll-smooth flex-1 py-2 px-1"
-            >
-              {CATEGORIES.map((cat) => {
+            <div className="min-w-0 max-w-full flex-none overflow-hidden py-1" style={{ width: categoryPageWidth }}>
+              <div className="category-filter-track flex items-stretch gap-2 px-1 sm:gap-3" style={{ width: categoryTrackWidth, transform: `translateX(-${categoryPage * categoryPageWidth}px)` }}>
+              {availableCategories.map((cat) => {
                 const isSelected = selectedCategory === cat.id;
                 return (
                   <button
                     key={cat.id}
                     onClick={() => onSelectCategory(cat.id)}
-                    className={`flex flex-col items-center gap-1.5 pb-1.5 border-b-2 transition-all cursor-pointer flex-shrink-0 group ${
+                    aria-pressed={isSelected}
+                    className={`flex w-24 min-w-24 flex-shrink-0 flex-col items-center gap-1 border-b-2 py-1 text-center transition-all duration-300 cursor-pointer group rounded-2xl px-1 sm:w-28 sm:min-w-28 sm:px-1 lg:px-2 ${
                       isSelected
-                        ? 'border-orange-500 text-neutral-950 font-bold'
-                        : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:border-neutral-300'
+                        ? 'border-orange-500/65 text-neutral-950 font-bold'
+                        : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:border-white/80'
                     }`}
                   >
-                    <div className={`p-2 rounded-xl transition-all duration-200 group-hover:scale-110 ${
-                      isSelected 
-                        ? 'bg-orange-500/15 text-orange-600 scale-105 shadow-2xs border border-orange-400/40 backdrop-blur-xs' 
-                        : 'bg-white/60 text-neutral-600 border border-white/70 group-hover:bg-white group-hover:text-neutral-900 group-hover:shadow-xs'
+                    <div className={`relative isolate flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border transition-all duration-300 group-hover:-translate-y-0.5 group-hover:scale-105 ${
+                      isSelected
+                        ? 'border-white/90 bg-[linear-gradient(145deg,rgba(255,255,255,0.94),rgba(255,247,237,0.62)_48%,rgba(251,146,60,0.20))] text-orange-700 shadow-[0_8px_20px_-9px_rgba(234,88,12,0.55),inset_0_1.5px_1px_rgba(255,255,255,1),inset_0_-1px_1px_rgba(234,88,12,0.12)] ring-1 ring-orange-300/35 backdrop-blur-2xl'
+                        : 'border-white/90 bg-[linear-gradient(145deg,rgba(255,255,255,0.88),rgba(255,255,255,0.48))] text-neutral-600 shadow-[0_5px_14px_-8px_rgba(15,23,42,0.32),inset_0_1.5px_1px_rgba(255,255,255,0.98)] backdrop-blur-2xl group-hover:text-orange-700 group-hover:shadow-[0_8px_18px_-9px_rgba(15,23,42,0.3),inset_0_1.5px_1px_rgba(255,255,255,1)]'
                     }`}>
-                      {getIcon(cat.icon)}
+                      <span aria-hidden="true" className={`pointer-events-none absolute inset-x-1 top-px h-1/2 rounded-t-[15px] bg-gradient-to-b from-white/90 to-white/0 ${isSelected ? 'opacity-100' : 'opacity-75'}`} />
+                      {isSelected && <span aria-hidden="true" className="pointer-events-none absolute -right-2 -top-3 h-8 w-8 rounded-full bg-orange-300/35 blur-md" />}
+                      <span className="relative z-10 transition-transform duration-300 group-hover:scale-105">{getIcon(cat.icon)}</span>
                     </div>
-                    <span className="text-[11px] sm:text-xs font-semibold whitespace-nowrap">
-                      {cat.label}
+                    <span className="flex h-7 w-full items-center justify-center text-center">
+                      <span className="block w-full whitespace-normal break-words text-[10px] leading-3 font-semibold sm:text-[11px] sm:leading-4">{cat.label}</span>
                     </span>
                   </button>
                 );
               })}
+              </div>
             </div>
-
-            {/* Scroll Right Button */}
-            {canScrollRight && (
+            {categoryPage < pageCount - 1 && (
               <button
-                onClick={() => handleScroll('right')}
-                className="hidden md:flex flex-shrink-0 w-8 h-8 rounded-full liquid-glass-button hover:bg-white shadow-md border border-white/80 text-neutral-800 items-center justify-center transition-all cursor-pointer hover:scale-110 active:scale-95"
-                aria-label="Rolar para direita"
+                type="button"
+                onClick={() => setCategoryPage((page) => Math.min(pageCount - 1, page + 1))}
+                aria-label="Ver outros filtros"
+                title="Ver outros filtros"
+                className="liquid-glass-button flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/85 text-neutral-800 shadow-md transition hover:scale-105 hover:bg-white active:scale-95"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="h-4 w-4" />
               </button>
             )}
           </div>
 
           {/* Action buttons on the right: Filters, Tax Toggle, Map view */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 pl-2">
+          {!isCondominiumView && <div ref={actionsRef} className="flex flex-shrink-0 items-center gap-1 sm:gap-3">
             
             {/* Filter button in Crisp Glass */}
             <button
               onClick={onOpenFilters}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl liquid-glass-button hover:bg-white border border-white/85 shadow-xs text-xs font-bold text-neutral-800 transition-all cursor-pointer hover:scale-105 active:scale-95"
+              className="flex items-center gap-2 px-2 py-2 sm:px-4 sm:py-2.5 rounded-2xl liquid-glass-button hover:bg-white border border-white/85 shadow-xs text-xs font-bold text-neutral-800 transition-all cursor-pointer hover:scale-105 active:scale-95"
             >
               <SlidersHorizontal className="w-3.5 h-3.5 text-neutral-700" />
               <span className="hidden sm:inline">Filtros</span>
@@ -162,7 +189,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             </button>
 
             {/* Toggle Total with taxes */}
-            <div className="flex items-center gap-1.5 sm:gap-3 px-2 sm:px-4 py-2 sm:py-2.5 rounded-2xl liquid-glass-card border border-white/80 text-xs font-semibold text-neutral-800 shadow-xs">
+            <div className="hidden lg:flex items-center gap-1.5 sm:gap-3 px-2 sm:px-4 py-2 sm:py-2.5 rounded-2xl liquid-glass-card border border-white/80 text-xs font-semibold text-neutral-800 shadow-xs">
               <span className="hidden lg:inline whitespace-nowrap">Exibir total com taxas</span>
               <span className="lg:hidden whitespace-nowrap">Total + taxas</span>
               <button
@@ -187,7 +214,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             {/* Toggle Grid vs Map button */}
             <button
               onClick={() => setViewMode(viewMode === 'grid' ? 'map' : 'grid')}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl liquid-glass-dark text-white text-xs font-bold shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95"
+              className="flex items-center gap-2 px-2 py-2.5 sm:px-4 rounded-2xl liquid-glass-dark text-white text-xs font-bold shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95"
             >
               {viewMode === 'grid' ? (
                 <>
@@ -202,7 +229,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               )}
             </button>
 
-          </div>
+          </div>}
 
         </div>
       </div>

@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+.category-filter-track {
+  transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .category-filter-track {
+    transition-duration: 1ms;
+  }
+}
+
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;
@@ -93,5 +104,3 @@ body {
 * {
   -webkit-tap-highlight-color: transparent;
 }
-
-

@@ -19,6 +19,25 @@ test('collects every supported Stays gallery field and preserves distinct photos
   ]);
 });
 
+test('reads the property gallery returned by GET /content/properties/{propertyId}', () => {
+  const images = extractStaysImages({
+    images: [
+      { _id: 'condo-facade-id', tags: [{ _idtag: 'main' }] },
+      { _id: 'condo-pool-id', tags: [{ _idtag: 'surrounding' }] },
+    ],
+    _t_imagesMeta: [
+      { _id: 'condo-facade-id', url: 'https://crcn.stays.net/image/condo-facade-id', _msname: { pt_BR: 'Fachada' }, area: 'main' },
+      { _id: 'condo-pool-id', url: 'https://crcn.stays.net/image/condo-pool-id', _msname: { pt_BR: 'Piscina' }, area: 'surrounding' },
+    ],
+    _t_mainImageMeta: { url: 'https://crcn.stays.net/image/condo-facade-id' },
+  });
+
+  assert.deepEqual(images, [
+    'https://crcn.stays.net/image/condo-facade-id',
+    'https://crcn.stays.net/image/condo-pool-id',
+  ]);
+});
+
 test('merges list and detail galleries when the list response has only a cover', () => {
   const merged = mergeStaysImageSources(
     { _t_mainImageMeta: { url: 'https://cdn.stays.test/cover.jpg' } },
