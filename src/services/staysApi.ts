@@ -1,64 +1,8 @@
 import { Property, StaysConfig, StaysApiLog, StaysPriceCalculationRequest, StaysPriceCalculationResponse } from '../types';
+import { isProperty, isRecord } from '../utils/apiValidation';
 
 const CONFIG_KEY = 'stays_net_config';
 const LOGS_KEY = 'stays_net_api_logs';
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
-const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === 'string');
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value);
-
-const isHighlight = (value: unknown): value is Property['highlights'][number] =>
-  isRecord(value) && typeof value.icon === 'string' &&
-  typeof value.title === 'string' && typeof value.description === 'string';
-
-const isSleepingArrangement = (value: unknown): value is Property['sleepingArrangements'][number] =>
-  isRecord(value) && typeof value.roomName === 'string' &&
-  typeof value.bedType === 'string' && typeof value.icon === 'string';
-
-const isReview = (value: unknown): value is Property['reviews'][number] => {
-  if (!isRecord(value) || !isRecord(value.categories)) return false;
-  return typeof value.id === 'string' && typeof value.authorName === 'string' &&
-    isFiniteNumber(value.rating) && typeof value.date === 'string' &&
-    typeof value.comment === 'string' &&
-    Object.values(value.categories).every((score) => score === undefined || isFiniteNumber(score));
-};
-
-const isProperty = (value: unknown): value is Property => {
-  if (!isRecord(value) || !isRecord(value.location) || !isRecord(value.host)) return false;
-  const propertyType = value.propertyType;
-  const calendarIsValid = value.calendar === undefined || (Array.isArray(value.calendar) && value.calendar.every((day) =>
-    isRecord(day) && typeof day.date === 'string' && isFiniteNumber(day.avail) &&
-    (day.price === undefined || isFiniteNumber(day.price)) &&
-    (day.minStay === undefined || isFiniteNumber(day.minStay)) &&
-    (day.closedToArrival === undefined || typeof day.closedToArrival === 'boolean') &&
-    (day.closedToDeparture === undefined || typeof day.closedToDeparture === 'boolean')));
-  return typeof value.id === 'string' && typeof value.title === 'string' &&
-    typeof value.subtitle === 'string' && typeof value.description === 'string' &&
-    typeof value.category === 'string' &&
-    (propertyType === 'entire_place' || propertyType === 'private_room' || propertyType === 'cabin' || propertyType === 'villa') &&
-    typeof value.location.city === 'string' && typeof value.location.state === 'string' &&
-    typeof value.location.country === 'string' && typeof value.location.neighborhood === 'string' &&
-    typeof value.location.address === 'string' && isFiniteNumber(value.location.lat) &&
-    isFiniteNumber(value.location.lng) && isFiniteNumber(value.pricePerNight) &&
-    isFiniteNumber(value.cleaningFee) && isFiniteNumber(value.serviceFeeRate) &&
-    isFiniteNumber(value.rating) && isFiniteNumber(value.reviewCount) &&
-    typeof value.isSuperhost === 'boolean' && typeof value.isGuestFavorite === 'boolean' &&
-    typeof value.instantBook === 'boolean' && isStringArray(value.images) &&
-    isFiniteNumber(value.bedrooms) && isFiniteNumber(value.beds) &&
-    isFiniteNumber(value.bathrooms) && isFiniteNumber(value.maxGuests) &&
-    isStringArray(value.amenities) && Array.isArray(value.highlights) && value.highlights.every(isHighlight) &&
-    Array.isArray(value.sleepingArrangements) && value.sleepingArrangements.every(isSleepingArrangement) &&
-    isStringArray(value.rules) && Array.isArray(value.reviews) && value.reviews.every(isReview) &&
-    typeof value.host.name === 'string' && typeof value.host.avatar === 'string' &&
-    isFiniteNumber(value.host.joinedYear) && typeof value.host.isSuperhost === 'boolean' &&
-    typeof value.host.responseTime === 'string' && typeof value.host.responseRate === 'string' &&
-    typeof value.host.bio === 'string' && calendarIsValid;
-};
 
 const isStaysApiLog = (value: unknown): value is StaysApiLog =>
   isRecord(value) && typeof value.id === 'string' && typeof value.timestamp === 'string' &&

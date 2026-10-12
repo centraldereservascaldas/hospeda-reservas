@@ -31,16 +31,42 @@ const localizedText = (value: unknown): string => {
 };
 
 const amountBRL = (value: unknown): number => {
-  if (!value || typeof value !== 'object') return 0;
-  const amount = Number((value as Record<string, unknown>).BRL);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return 0;
+  const rawAmount = (value as Record<string, unknown>).BRL;
+  const amount = typeof rawAmount === 'number' || typeof rawAmount === 'string' ? Number(rawAmount) : Number.NaN;
   return Number.isFinite(amount) ? amount : 0;
 };
 
-export function normalizeStaysQuote(price: any, nights: number): NormalizedStaysQuote | null {
-  const total = amountBRL(price?._mctotal);
-  if (!Number.isFinite(total) || total <= 0 || nights < 1 || typeof price?.feesIncluded !== 'boolean') return null;
+const normalizedFee = (value: unknown): StaysFee | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const fee = value as Record<string, unknown>;
+  const translations = fee._mstitle && typeof fee._mstitle === 'object' && !Array.isArray(fee._mstitle)
+    ? Object.fromEntries(Object.entries(fee._mstitle).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+    : undefined;
+  const values = fee._mcval && typeof fee._mcval === 'object' && !Array.isArray(fee._mcval)
+    ? Object.fromEntries(Object.entries(fee._mcval).flatMap(([currency, amount]) => {
+      const numericAmount = Number(amount);
+      return Number.isFinite(numericAmount) ? [[currency, numericAmount]] : [];
+    }))
+    : undefined;
+  if (!values || typeof values.BRL !== 'number') return null;
+  return {
+    ...(typeof fee._id === 'string' ? { _id: fee._id } : {}),
+    ...(typeof fee.internalName === 'string' ? { internalName: fee.internalName } : {}),
+    ...(translations ? { _mstitle: translations } : {}),
+    ...(values ? { _mcval: values } : {}),
+  };
+};
 
-  const fees: StaysFee[] = Array.isArray(price?.fees) ? price.fees : [];
+export function normalizeStaysQuote(price: unknown, nights: number): NormalizedStaysQuote | null {
+  if (!price || typeof price !== 'object' || Array.isArray(price)) return null;
+  const quote = price as Record<string, unknown>;
+  const total = amountBRL(quote._mctotal);
+  if (!Number.isFinite(total) || total <= 0 || nights < 1 || typeof quote.feesIncluded !== 'boolean') return null;
+
+  const fees: StaysFee[] = Array.isArray(quote.fees)
+    ? quote.fees.map(normalizedFee).filter((fee): fee is StaysFee => fee !== null)
+    : [];
   const feeAmount = (fee: StaysFee) => amountBRL(fee._mcval);
   const label = (fee: StaysFee) => `${fee.internalName || ''} ${localizedText(fee._mstitle)}`;
   const isCleaningFee = (fee: StaysFee) => /clean|limpez/i.test(label(fee));
@@ -49,7 +75,7 @@ export function normalizeStaysQuote(price: any, nights: number): NormalizedStays
     .filter((fee) => /service|servi/i.test(label(fee)))
     .reduce((sum, fee) => sum + feeAmount(fee), 0);
   const allFees = fees.reduce((sum, fee) => sum + feeAmount(fee), 0);
-  const feesIncluded = price.feesIncluded === true;
+  const feesIncluded = quote.feesIncluded === true;
   const finalTotal = feesIncluded ? total : total + allFees;
 
   // All non-cleaning fees (including the account-specific counter fee) are
@@ -69,7 +95,7 @@ export function normalizeStaysQuote(price: any, nights: number): NormalizedStays
     // also supplies a verifiable gross amount for the undiscounted stay.
     discount: 0,
     total: finalTotal,
-    currency: price.mainCurrency || 'BRL',
+    currency: typeof quote.mainCurrency === 'string' ? quote.mainCurrency : 'BRL',
     feesIncluded,
     fees: fees.filter(isCleaningFee),
     cleaningIncluded: feesIncluded && cleaningFee > 0,

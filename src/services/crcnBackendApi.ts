@@ -1,4 +1,6 @@
-import { Property, Reservation } from '../types';
+import type { Property, Reservation } from '../types';
+import type { StaysCalendarDay } from '../utils/staysAvailability';
+import { isFiniteNumber, isProperty, isRecord, isStaysCalendarDay } from '../utils/apiValidation';
 
 export interface SearchAccommodationsParams {
   from?: string;
@@ -103,7 +105,8 @@ export interface OwnerDashboardData {
 class CrcnBackendApiService {
   private getCachedResorts(): Array<{ id: string; name: string }> {
     try {
-      const cached = JSON.parse(localStorage.getItem('hospeda_properties') || '[]') as Property[];
+      const cachedValue: unknown = JSON.parse(localStorage.getItem('hospeda_properties') || '[]');
+      const cached = Array.isArray(cachedValue) ? cachedValue.filter(isProperty) : [];
       const byId = new Map<string, string>();
       for (const property of cached) {
         if (property.staysPropertyId && property.complexName?.trim()) {
@@ -124,8 +127,11 @@ class CrcnBackendApiService {
       if (!res.headers.get('content-type')?.includes('application/json')) {
         throw new Error('O servidor respondeu com conteúdo diferente de JSON.');
       }
-      const json = await res.json();
-      const resorts = Array.isArray(json.data) ? json.data : [];
+      const json: unknown = await res.json();
+      const resorts = isRecord(json) && Array.isArray(json.data)
+        ? json.data.filter((item): item is { id: string; name: string } =>
+          isRecord(item) && typeof item.id === 'string' && typeof item.name === 'string')
+        : [];
       if (resorts.length > 0) return resorts;
       return this.getCachedResorts();
     } catch (err) {
@@ -139,8 +145,11 @@ class CrcnBackendApiService {
     try {
       const res = await fetch('/api/accommodations');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const accommodations = Array.isArray(json.data) ? json.data as Property[] : [];
+      const json: unknown = await res.json();
+      if (!isRecord(json) || !Array.isArray(json.data) || !json.data.every(isProperty)) {
+        throw new Error('O catálogo retornou dados inválidos.');
+      }
+      const accommodations: Property[] = json.data;
       if (json.source === 'stays-live' && accommodations.length > 0) {
         localStorage.setItem('hospeda_properties', JSON.stringify(accommodations));
         localStorage.setItem('hospeda_properties_source', 'stays-live');
@@ -158,11 +167,15 @@ class CrcnBackendApiService {
     try {
       const res = await fetch(`/api/accommodations/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      const property = json.data as Property | null;
+      const json: unknown = await res.json();
+      if (!isRecord(json) || (json.data !== null && !isProperty(json.data))) {
+        throw new Error('A acomodação retornou dados inválidos.');
+      }
+      const property = json.data;
       if (property && Array.isArray(property.images)) {
         try {
-          const cached = JSON.parse(localStorage.getItem('hospeda_properties') || '[]') as Property[];
+          const cachedValue: unknown = JSON.parse(localStorage.getItem('hospeda_properties') || '[]');
+          const cached = Array.isArray(cachedValue) ? cachedValue.filter(isProperty) : [];
           const index = cached.findIndex((item) => item.id === property.id || item.staysListingId === property.staysListingId);
           if (index >= 0) cached[index] = property;
           else cached.push(property);
@@ -183,7 +196,7 @@ class CrcnBackendApiService {
   // 3. POST /api/search
   public async searchAccommodations(params: SearchAccommodationsParams): Promise<{
     total: number;
-    data: (Property & { calculatedPrice?: any })[];
+    data: Property[];
   }> {
     try {
       const res = await fetch('/api/search', {
@@ -192,8 +205,11 @@ class CrcnBackendApiService {
         body: JSON.stringify(params),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      return { total: json.total || 0, data: json.data || [] };
+      const json: unknown = await res.json();
+      if (!isRecord(json) || !isFiniteNumber(json.total) || !Array.isArray(json.data) || !json.data.every(isProperty)) {
+        throw new Error('A pesquisa retornou uma resposta inválida.');
+      }
+      return { total: json.total, data: json.data };
     } catch (err) {
       console.warn('Falling back to local search filtering:', err);
       if (params.from && params.to) {
@@ -214,15 +230,16 @@ class CrcnBackendApiService {
   }
 
   // 4. GET /api/accommodations/:id/calendar
-  public async getAccommodationCalendar(id: string, from?: string, to?: string): Promise<any[]> {
+  public async getAccommodationCalendar(id: string, from?: string, to?: string): Promise<StaysCalendarDay[]> {
     try {
       const query = new URLSearchParams();
       if (from) query.set('from', from);
       if (to) query.set('to', to);
       const res = await fetch(`/api/accommodations/${encodeURIComponent(id)}/calendar?${query.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      return json.data || [];
+      const json: unknown = await res.json();
+      if (!isRecord(json) || !Array.isArray(json.data)) return [];
+      return json.data.filter(isStaysCalendarDay);
     } catch (err) {
       console.warn('Falling back for calendar:', err);
       return [];
@@ -374,7 +391,7 @@ class CrcnBackendApiService {
   }
 
   // 7. GET /api/stays/status
-  public async getStaysStatus(): Promise<any> {
+  public async getStaysStatus(): Promise<unknown> {
     try {
       const res = await fetch('/api/stays/status');
       if (!res.ok) return null;

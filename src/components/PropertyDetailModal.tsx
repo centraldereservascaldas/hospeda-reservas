@@ -28,6 +28,7 @@ import { LogoCRCN } from './LogoCRCN';
 import { formatCurrency, calculateNights } from '../utils/formatters';
 import { crcnBackendApi, CalculatedPriceResponse } from '../services/crcnBackendApi';
 import { isCalendarRangeAvailable } from '../utils/staysAvailability';
+import type { StaysCalendarDay } from '../utils/staysAvailability';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -107,7 +108,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
   const [staysPrice, setStaysPrice] = useState<CalculatedPriceResponse | null>(null);
-  const [calendarDays, setCalendarDays] = useState<any[]>([]);
+  const [calendarDays, setCalendarDays] = useState<StaysCalendarDay[]>([]);
   const [calendarAvailable, setCalendarAvailable] = useState(false);
   const [calendarMessage, setCalendarMessage] = useState('');
   const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);

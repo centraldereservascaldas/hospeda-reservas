@@ -44,6 +44,19 @@ test('returns null for missing/invalid PMS prices', () => {
   assert.equal(normalizeStaysQuote({ _mctotal: { BRL: 100 } }, 2), null);
 });
 
+test('ignores malformed fee records and amounts while keeping valid quote totals', () => {
+  const quote = normalizeStaysQuote({
+    _mctotal: { BRL: 1000 },
+    feesIncluded: false,
+    fees: [null, 'invalid', { internalName: 'Cleaning', _mcval: { BRL: 'invalid' } }, fee('Cleaning fee', 80)],
+  }, 2);
+
+  assert.equal(quote?.total, 1080);
+  assert.equal(quote?.cleaningFee, 80);
+  assert.equal(quote?.dailyRate, 500);
+  assert.equal(quote?.fees.length, 1);
+});
+
 test('requires reconfirmation whenever the PMS quote changes by one cent or more', () => {
   assert.equal(hasQuoteChanged(3001, 3001), false);
   assert.equal(hasQuoteChanged(3001, 3001.01), true);

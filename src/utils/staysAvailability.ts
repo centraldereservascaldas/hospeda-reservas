@@ -3,7 +3,7 @@ export type StaysCalendarDay = {
   avail: number;
   closedToArrival?: boolean;
   closedToDeparture?: boolean;
-  prices?: Array<{ minStay?: number }>;
+  prices?: Array<{ minStay?: number; _mcval?: Record<string, number> }>;
 };
 
 const DAY_MS = 86_400_000;
