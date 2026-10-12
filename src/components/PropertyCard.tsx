@@ -10,6 +10,7 @@ interface PropertyCardProps {
   onToggleSave: (id: string) => void;
   onSelectProperty: (property: Property) => void;
   showTotalWithTaxes: boolean;
+  prioritizeImage?: boolean;
 }
 
 export const PropertyCard: React.FC<PropertyCardProps> = ({
@@ -19,6 +20,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   onToggleSave,
   onSelectProperty,
   showTotalWithTaxes,
+  prioritizeImage = false,
 }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const galleryKey = property.images.join('|');
@@ -70,7 +72,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           src={currentImage}
           alt={property.title}
           className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
-          loading="lazy"
+          loading={prioritizeImage ? 'eager' : 'lazy'}
+          fetchPriority={prioritizeImage ? 'high' : 'auto'}
         />
 
         {/* Favorite Heart Button */}
