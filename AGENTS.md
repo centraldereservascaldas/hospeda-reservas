@@ -19,6 +19,18 @@
 - Nunca grave segredos em arquivos versionados, logs, respostas ou código do frontend.
 - Não faça commit, push ou deploy sem solicitação explícita.
 
+## Qualidade do frontend
+
+- Siga o plano de melhorias em `docs/frontend-quality-plan.md` para mudanças da auditoria; preserve os contratos da API Laravel e o fluxo de checkout hospedado.
+- Use `npm` e `package-lock.json` para instalar dependências. Não gere outro lockfile.
+- Prefira tipos explícitos para props, serviços e respostas; valide dados externos antes de usá-los na interface e evite novos `any`.
+- Associe labels aos campos, dê nomes acessíveis a botões com ícone e mantenha o foco visível para teclado.
+- Todo diálogo precisa de nome acessível, semântica de modal e gerenciamento de foco, inclusive retorno ao controle que o abriu. Verifique Escape e diálogos aninhados.
+- Reutilize tokens e componentes existentes quando houver repetição real. Respeite `prefers-reduced-motion` em animações.
+- Escolha a prioridade de carregamento das imagens conforme sua posição na tela; não adie a imagem principal sem motivo.
+- Ao alterar uma jornada, revise estados de carregamento, sucesso, vazio e erro, além dos impactos em busca, detalhe, autenticação, checkout e acesso de proprietário.
+- Antes de concluir uma feature, revise o diff, faça as verificações proporcionais à mudança e registre o resultado. Use o checklist completo em `docs/frontend-quality-plan.md`.
+
 ## Comandos
 
 - `composer setup`: dependências PHP, ambiente local, SQLite e build frontend.
