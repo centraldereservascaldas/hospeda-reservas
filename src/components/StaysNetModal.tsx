@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { 
   X, 
   CheckCircle2, 
@@ -23,8 +24,20 @@ import {
 } from 'lucide-react';
 import { staysApi } from '../services/staysApi';
 import { crcnBackendApi } from '../services/crcnBackendApi';
-import { StaysConfig, StaysApiLog, Property } from '../types';
+import { StaysConfig, StaysApiLog, Property, StaysPriceCalculationRequest } from '../types';
 import { StaysSearchWidget } from './StaysSearchWidget';
+import { useDialogFocus } from './useDialogFocus';
+
+type StaysNetTab = 'overview' | 'sync' | 'explorer' | 'widget' | 'logs';
+type StaysEndpointId = 'calculate_price' | 'get_listings' | 'calendar_availability' | 'book_request';
+
+const getErrorMessage = (error: unknown, fallback: string): string =>
+  error instanceof Error ? error.message : fallback;
+
+const toResponseRecord = (value: unknown): Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : { result: value };
 
 interface StaysNetModalProps {
   isOpen: boolean;
@@ -41,21 +54,19 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
   onSyncProperties,
   onShowToast,
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'sync' | 'explorer' | 'widget' | 'logs'>('widget');
+  const fieldId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
+  const [activeTab, setActiveTab] = useState<StaysNetTab>('widget');
   const [config, setConfig] = useState<StaysConfig>(staysApi.getConfig());
   const [isTesting, setIsTesting] = useState(false);
   const [copiedWidgetHtml, setCopiedWidgetHtml] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    success: boolean;
-    latencyMs: number;
-    message: string;
-    accountInfo?: any;
-  } | null>(null);
+  const [testResult, setTestResult] = useState<Awaited<ReturnType<typeof staysApi.testConnection>> | null>(null);
 
   // Endpoint Explorer state
   const [selectedEndpoint, setSelectedEndpoint] = useState<string>('calculate_price');
   const [isExecutingApi, setIsExecutingApi] = useState(false);
-  const [apiResponse, setApiResponse] = useState<any>(null);
+  const [apiResponse, setApiResponse] = useState<Record<string, unknown> | null>(null);
   const [apiLatency, setApiLatency] = useState<number | null>(null);
   const [copiedCurl, setCopiedCurl] = useState(false);
 
@@ -86,11 +97,11 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
       } else {
         onShowToast('Erro ao conectar com Stays.net');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult({
         success: false,
         latencyMs: 0,
-        message: err?.message || 'Falha na comunicação com a API Stays.net',
+        message: getErrorMessage(err, 'Falha na comunicação com a API Stays.net'),
       });
     } finally {
       setIsTesting(false);
@@ -116,19 +127,21 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
   };
 
   // Endpoint definitions for the explorer
-  const ENDPOINTS = [
+  const samplePriceRequest: StaysPriceCalculationRequest = {
+    listingId: 'LH20J',
+    checkInDate: '2026-11-19',
+    checkOutDate: '2026-11-21',
+    guests: { adults: 2, children: 0, infants: 0 },
+  };
+
+  const ENDPOINTS: Array<{ id: StaysEndpointId; method: 'GET' | 'POST'; path: string; title: string; desc: string; sampleBody: unknown }> = [
     {
       id: 'calculate_price',
       method: 'POST',
       path: '/external/v1/booking/calculate-price',
       title: 'Calcular Cotação e Taxas',
       desc: 'Calcula o valor da reserva com diárias dinâmicas, taxas de limpeza e descontos no Stays PMS.',
-      sampleBody: {
-        listingId: 'LH20J',
-        checkInDate: '2026-11-19',
-        checkOutDate: '2026-11-21',
-        guests: { adults: 2, children: 0, infants: 0 },
-      },
+      sampleBody: samplePriceRequest,
     },
     {
       id: 'get_listings',
@@ -172,13 +185,17 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
 
     try {
       if (selectedEndpoint === 'calculate_price') {
-        const res = await staysApi.calculatePrice(currentEndpointDef.sampleBody as any, 780);
-        setApiResponse(res);
+        const res = await staysApi.calculatePrice(samplePriceRequest, 780);
+        setApiResponse(toResponseRecord(res));
       } else if (selectedEndpoint === 'get_listings') {
         const response = await fetch('/api/accommodations');
-        const json = await response.json();
-        if (!response.ok || json.source !== 'stays-live') throw new Error('Não foi possível carregar anúncios ao vivo da Stays.');
-        setApiResponse({ total: json.count, results: json.data });
+        const json: unknown = await response.json();
+        if (!response.ok || typeof json !== 'object' || json === null || Array.isArray(json) ||
+          (json as Record<string, unknown>).source !== 'stays-live') {
+          throw new Error('Não foi possível carregar anúncios ao vivo da Stays.');
+        }
+        const data = json as Record<string, unknown>;
+        setApiResponse({ total: data.count, results: data.data });
       } else if (selectedEndpoint === 'calendar_availability') {
         const calendar = await crcnBackendApi.getAccommodationCalendar('LH20J', '2026-11-19', '2026-11-21');
         setApiResponse({ listingId: 'LH20J', calendar });
@@ -186,8 +203,8 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
         throw new Error('O book-request inicia um checkout real na Stays e não será fingido pelo painel de teste. Use a cotação e o botão de reserva da acomodação.');
       }
       setApiLatency(Date.now() - start);
-    } catch (err: any) {
-      setApiResponse({ error: true, message: err?.message || 'Falha ao executar chamada' });
+    } catch (err: unknown) {
+      setApiResponse({ error: true, message: getErrorMessage(err, 'Falha ao executar chamada') });
     } finally {
       setIsExecutingApi(false);
       setLogs(staysApi.getLogs());
@@ -205,8 +222,8 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl border border-neutral-200/90 shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <div ref={dialogRef} data-dialog-focus-root role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`} tabIndex={-1} className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl border border-neutral-200/90 shadow-2xl overflow-hidden">
         
         {/* Header with Crisp Glass and Stays.net Branding */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-orange-200/80 bg-gradient-to-r from-orange-50 via-amber-50/60 to-white">
@@ -216,7 +233,7 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-neutral-950 tracking-tight">
+                <h2 id={`${fieldId}-title`} className="text-base sm:text-lg font-black text-neutral-950 tracking-tight">
                   Integração Stays.net External API
                 </h2>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 ${
@@ -248,6 +265,9 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
             <button
+              ref={closeButtonRef}
+              type="button"
+              aria-label="Fechar integração Stays.net"
               onClick={onClose}
               className="w-9 h-9 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-700 hover:text-neutral-950 border border-neutral-200 flex items-center justify-center transition-all cursor-pointer shadow-xs"
             >
@@ -257,20 +277,23 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-2 px-6 pt-3 border-b border-neutral-200 bg-neutral-50/90 backdrop-blur-md overflow-x-auto">
-          {[
+        <div role="group" aria-label="Seções da integração Stays.net" className="flex items-center gap-2 px-6 pt-3 border-b border-neutral-200 bg-neutral-50/90 backdrop-blur-md overflow-x-auto">
+          {([
             { id: 'widget', label: 'Motor de Reserva (Widget)', icon: Globe },
             { id: 'sync', label: `Apartamentos Stays (${properties.length})`, icon: RefreshCw },
             { id: 'explorer', label: 'Explorador da API', icon: Terminal },
             { id: 'overview', label: 'Conexão & Credenciais', icon: Key },
             { id: 'logs', label: `Logs (${logs.length})`, icon: Code2 },
-          ].map((tab) => {
+          ] satisfies Array<{ id: StaysNetTab; label: string; icon: LucideIcon }>).map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                id={`${fieldId}-tab-${tab.id}`}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer border-b-2 whitespace-nowrap ${
                   isActive
                     ? 'border-orange-500 text-orange-600 bg-white/80 shadow-xs'
@@ -345,11 +368,12 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[11px] font-bold text-neutral-600 mb-1">
+                    <label htmlFor={`${fieldId}-account-domain`} className="block text-[11px] font-bold text-neutral-600 mb-1">
                       Domínio da Conta Stays (Account Subdomain)
                     </label>
                     <div className="relative">
                       <input
+                        id={`${fieldId}-account-domain`}
                         type="text"
                         value={config.accountDomain}
                         onChange={(e) => setConfig({ ...config, accountDomain: e.target.value })}
@@ -362,12 +386,11 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-neutral-600 mb-1">
-                      Ambiente da API
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <p id={`${fieldId}-environment-label`} className="block text-[11px] font-bold text-neutral-600 mb-1">Ambiente da API</p>
+                    <div role="group" aria-labelledby={`${fieldId}-environment-label`} className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
+                        aria-pressed={config.environment === 'sandbox'}
                         onClick={() => setConfig({ ...config, environment: 'sandbox' })}
                         className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                           config.environment === 'sandbox'
@@ -379,6 +402,7 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
                       </button>
                       <button
                         type="button"
+                        aria-pressed={config.environment === 'production'}
                         onClick={() => setConfig({ ...config, environment: 'production' })}
                         className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
                           config.environment === 'production'
@@ -392,10 +416,11 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-neutral-600 mb-1">
+                    <label htmlFor={`${fieldId}-client-id`} className="block text-[11px] font-bold text-neutral-600 mb-1">
                       Client ID (API Key)
                     </label>
                     <input
+                      id={`${fieldId}-client-id`}
                       type="text"
                       value=""
                       readOnly
@@ -405,10 +430,11 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-bold text-neutral-600 mb-1">
+                    <label htmlFor={`${fieldId}-client-secret`} className="block text-[11px] font-bold text-neutral-600 mb-1">
                       Client Secret (Chave Secreta)
                     </label>
                     <input
+                      id={`${fieldId}-client-secret`}
                       type="password"
                       value=""
                       readOnly
@@ -419,9 +445,7 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
                 </div>
 
                 <div className="pt-2">
-                    <label className="block text-[11px] font-bold text-neutral-600 mb-1">
-                      Webhook Stays
-                    </label>
+                    <p className="block text-[11px] font-bold text-neutral-600 mb-1">Webhook Stays</p>
                     <p className="text-[10px] text-neutral-500 mt-1">
                       A sincronização de reservas não está habilitada. Configure a URL pública e a validação criptográfica após receber da Stays os dados de ativação e a chave pública.
                     </p>
@@ -618,7 +642,7 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
                 </div>
 
                 {/* Request Payload */}
-                {currentEndpointDef.sampleBody && (
+                {Boolean(currentEndpointDef.sampleBody) && (
                   <div>
                     <p className="text-[11px] font-bold text-neutral-600 mb-1.5">Corpo da Requisição (Request Payload):</p>
                     <pre className="p-3 rounded-xl bg-neutral-900 text-neutral-100 font-mono text-[11px] overflow-x-auto max-h-48 border border-neutral-800">
@@ -628,13 +652,13 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
                 )}
 
                 {/* Response Payload */}
-                {apiResponse && (
+                {apiResponse !== null && (
                   <div className="animate-in fade-in space-y-1.5">
                     <div className="flex items-center justify-between">
                       <p className="text-[11px] font-bold text-neutral-700 flex items-center gap-2">
                         <span>Resposta da Stays.net API</span>
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${apiResponse.error ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                          {apiResponse.error ? 'Falha / não executada' : 'Resposta recebida'}
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${apiResponse.error === true ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                          {apiResponse.error === true ? 'Falha / não executada' : 'Resposta recebida'}
                         </span>
                       </p>
                       {apiLatency && (
@@ -906,7 +930,7 @@ action="https://www.centraldereservascaldas.com.br/pt/search"
                           </span>
                         </div>
                       </div>
-                      {log.responseBody && (
+                      {Boolean(log.responseBody) && (
                         <div className="p-2 bg-neutral-900 text-neutral-200 rounded-lg text-[10px] overflow-x-auto max-h-24">
                           {JSON.stringify(log.responseBody, null, 2)}
                         </div>

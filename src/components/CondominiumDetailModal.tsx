@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Building, ChevronLeft, ChevronRight, Images, MapPin, X } from 'lucide-react';
 import type { CondominiumSummary } from '../utils/condominiumCatalog';
+import { useDialogFocus } from './useDialogFocus';
 
 interface CondominiumDetailModalProps {
   condominium: CondominiumSummary | null;
@@ -11,6 +12,10 @@ interface CondominiumDetailModalProps {
 export const CondominiumDetailModal: React.FC<CondominiumDetailModalProps> = ({ condominium, onClose }) => {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [showGallery, setShowGallery] = useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const galleryCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useDialogFocus(condominium !== null, onClose, { initialFocusRef: closeButtonRef });
+  const galleryDialogRef = useDialogFocus(showGallery && condominium !== null, () => setShowGallery(false), { initialFocusRef: galleryCloseButtonRef });
 
   useEffect(() => {
     setPhotoIndex(0);
@@ -21,10 +26,6 @@ export const CondominiumDetailModal: React.FC<CondominiumDetailModalProps> = ({ 
     if (!condominium) return;
     const previousOverflow = document.body.style.overflow;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        if (showGallery) setShowGallery(false);
-        else onClose();
-      }
       if (showGallery && condominium.images.length > 1 && event.key === 'ArrowRight') {
         setPhotoIndex((index) => (index + 1) % condominium.images.length);
       }
@@ -52,6 +53,9 @@ export const CondominiumDetailModal: React.FC<CondominiumDetailModalProps> = ({ 
   return createPortal(
     <>
       <div
+        ref={dialogRef}
+        data-dialog-focus-root
+        tabIndex={-1}
         className="fixed inset-0 z-[100] overflow-y-auto bg-white/25 px-2 py-6 backdrop-blur-xl animate-in fade-in duration-200 sm:px-6 sm:py-10"
         role="dialog"
         aria-modal="true"
@@ -61,7 +65,7 @@ export const CondominiumDetailModal: React.FC<CondominiumDetailModalProps> = ({ 
         <div className="liquid-glass-card mx-auto w-full max-w-5xl overflow-hidden rounded-3xl animate-in zoom-in-95 duration-200">
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/70 bg-white/45 px-5 py-3.5 backdrop-blur-2xl sm:px-7">
             <span className="text-sm font-bold text-neutral-800">Detalhes do condomínio</span>
-            <button type="button" onClick={onClose} aria-label="Fechar detalhes do condomínio" className="liquid-glass-button flex h-10 w-10 items-center justify-center rounded-full text-neutral-700 transition hover:bg-orange-50 hover:text-orange-700">
+            <button ref={closeButtonRef} type="button" onClick={onClose} aria-label="Fechar detalhes do condomínio" className="liquid-glass-button flex h-10 w-10 items-center justify-center rounded-full text-neutral-700 transition hover:bg-orange-50 hover:text-orange-700">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -110,10 +114,10 @@ export const CondominiumDetailModal: React.FC<CondominiumDetailModalProps> = ({ 
       </div>
 
       {showGallery && imageCount > 0 && createPortal(
-        <div className="fixed inset-0 z-[2147483647] flex flex-col items-center justify-center overflow-hidden bg-neutral-950/95 p-4 text-white backdrop-blur-xl" role="dialog" aria-modal="true" aria-label={`Galeria de fotos do condomínio ${condominium.name}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setShowGallery(false); }}>
+        <div ref={galleryDialogRef} data-dialog-focus-root tabIndex={-1} className="fixed inset-0 z-[2147483647] flex flex-col items-center justify-center overflow-hidden bg-neutral-950/95 p-4 text-white backdrop-blur-xl" role="dialog" aria-modal="true" aria-label={`Galeria de fotos do condomínio ${condominium.name}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setShowGallery(false); }}>
           <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 py-4 sm:px-8">
             <div><h2 className="text-sm font-bold sm:text-base">{condominium.name}</h2><p className="mt-0.5 text-xs text-white/70">{photoIndex + 1} de {imageCount} fotos do condomínio</p></div>
-            <button type="button" onClick={() => setShowGallery(false)} aria-label="Fechar galeria" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25"><X className="h-5 w-5" /></button>
+            <button ref={galleryCloseButtonRef} type="button" onClick={() => setShowGallery(false)} aria-label="Fechar galeria" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25"><X className="h-5 w-5" /></button>
           </div>
           <div className="relative flex h-full w-full max-w-6xl items-center justify-center pb-16 pt-14">
             <img src={condominium.images[photoIndex]} alt={`${condominium.name} — foto ${photoIndex + 1} do condomínio`} className="max-h-full max-w-full rounded-xl object-contain shadow-2xl" />

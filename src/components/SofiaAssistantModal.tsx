@@ -10,6 +10,7 @@ import { Property, Currency } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
 import { formatCurrency } from '../utils/formatters';
 import { LogoCRCN } from './LogoCRCN';
+import { useDialogFocus } from './useDialogFocus';
 
 interface ChatMessage {
   id: string;
@@ -48,6 +49,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: inputRef });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -57,7 +59,6 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
     if (isOpen) {
       setTimeout(() => {
         scrollToBottom();
-        inputRef.current?.focus();
       }, 150);
     }
   }, [isOpen, messages]);
@@ -110,8 +111,14 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-60 bg-white/20 backdrop-blur-sm flex items-end sm:items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-60 bg-white/20 backdrop-blur-sm flex items-end sm:items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div 
+        ref={dialogRef}
+        data-dialog-focus-root
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sofia-assistant-title"
+        tabIndex={-1}
         className="w-full max-w-xl h-[min(92dvh,800px)] sm:h-[min(88dvh,680px)] max-h-full min-h-0 rounded-3xl shadow-[0_24px_80px_-20px_rgba(15,23,42,0.28)] border border-white/75 flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
         style={{
           background: 'linear-gradient(135deg, rgba(255,255,255,0.48), rgba(255,255,255,0.30))',
@@ -129,7 +136,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h3 className="font-extrabold text-base leading-tight">Sofia</h3>
+                <h3 id="sofia-assistant-title" className="font-extrabold text-base leading-tight">Sofia</h3>
                 <span className="px-2 py-0.5 rounded-full bg-white/25 text-[10px] font-bold backdrop-blur-xl border border-white/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.35)]">
                   Concierge IA CRCN
                 </span>
@@ -141,6 +148,8 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
           </div>
 
           <button
+            type="button"
+            aria-label="Fechar assistente Sofia"
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 border border-white/35 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45)] backdrop-blur-xl flex items-center justify-center transition-colors cursor-pointer"
           >

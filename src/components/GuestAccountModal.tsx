@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, LogIn, UserPlus, ShieldCheck, ArrowLeft } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, supabaseConfigured } from '../services/supabase';
 import { crcnBackendApi } from '../services/crcnBackendApi';
+import { useDialogFocus } from './useDialogFocus';
 
 interface GuestAccountModalProps {
   isOpen: boolean;
@@ -11,6 +12,8 @@ interface GuestAccountModalProps {
 }
 
 export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({ isOpen, initialMode, onClose }) => {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'recovery'>(initialMode);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -182,13 +185,13 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({ isOpen, in
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-slate-900/10 px-4 py-8 backdrop-blur-[3px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="guest-account-title" className="liquid-glass-card my-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/80 !bg-white/55 shadow-[0_24px_80px_-20px_rgba(15,23,42,0.3)] backdrop-blur-2xl">
+      <section ref={dialogRef} data-dialog-focus-root tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="guest-account-title" className="liquid-glass-card my-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/80 !bg-white/55 shadow-[0_24px_80px_-20px_rgba(15,23,42,0.3)] backdrop-blur-2xl">
         <div className="liquid-glass-accent flex items-center justify-between border-b border-white/40 px-6 py-5 text-white">
           <div>
             <p className="text-xs font-semibold text-white/85">Central de Reservas Caldas Novas</p>
             <h2 id="guest-account-title" className="mt-1 text-xl font-black">Minha conta</h2>
           </div>
-          <button type="button" aria-label="Fechar" onClick={onClose} className="rounded-full border border-white/50 bg-white/15 p-2 transition hover:bg-white/25"><X className="h-5 w-5" /></button>
+          <button ref={closeButtonRef} type="button" aria-label="Fechar janela da conta" onClick={onClose} className="rounded-full border border-white/50 bg-white/15 p-2 transition hover:bg-white/25"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="space-y-5 bg-white/35 p-6 backdrop-blur-xl">
