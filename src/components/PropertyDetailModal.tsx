@@ -85,6 +85,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   onToggleSave,
   onStartBooking,
 }) => {
+  const detailCloseRef = useRef<HTMLButtonElement>(null);
+  const detailDialogRef = useDialogFocus(property !== null, onClose, { initialFocusRef: detailCloseRef });
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const defaultCheckIn = initialCheckIn || todayIso;
@@ -410,7 +412,15 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       ];
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-white/25 backdrop-blur-xl animate-in fade-in duration-200">
+    <div
+      ref={detailDialogRef}
+      data-dialog-focus-root
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="property-detail-title"
+      className="fixed inset-0 z-50 overflow-y-auto bg-white/25 backdrop-blur-xl animate-in fade-in duration-200"
+    >
       <div 
         className="min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start"
         onClick={(e) => {
@@ -422,7 +432,10 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           {/* Top Bar Navigation Crisp Glass */}
           <div className="sticky top-0 z-30 px-6 py-4 bg-white/95 backdrop-blur-xl border-b border-neutral-200 flex items-center justify-between">
             <button
+              ref={detailCloseRef}
+              type="button"
               onClick={onClose}
+              aria-label="Fechar detalhes da acomodação"
               className="w-9 h-9 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 backdrop-blur-md flex items-center justify-center text-neutral-700 hover:text-neutral-950 shadow-2xs transition-all cursor-pointer hover:scale-105"
             >
               <X className="w-5 h-5" />
@@ -460,7 +473,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   Central de Reservas Caldas Novas • Seleção Oficial
                 </span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
+              <h1 id="property-detail-title" className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
                 {property.title}
               </h1>
               <div className="mt-2 flex flex-wrap items-center gap-y-2 gap-x-4 text-xs sm:text-sm text-neutral-600">
