@@ -6,7 +6,7 @@ import { STAYS_NET_APARTMENTS } from './src/data/staysApartments';
 import { Property } from './src/types';
 import { hasQuoteChanged, normalizeStaysQuote } from './src/utils/staysPricing';
 import { extractStaysImages, mergeStaysImageSources } from './src/utils/staysImages';
-import { normalizeStaysGuestReview, StaysGuestReviewRecord, summarizeStaysReviews } from './src/utils/staysReviews';
+import { normalizePublishedStaysGuestReview, StaysGuestReviewRecord, summarizeStaysReviews } from './src/utils/staysReviews';
 import { normalizeStaysOwners, StaysOwnerSummary } from './src/utils/staysOwners';
 import { buildSofiaFallback } from './src/utils/sofiaConcierge';
 
@@ -82,7 +82,7 @@ async function fetchStaysReviewIndex(): Promise<Map<string, Property['reviews']>
       for (const rawReview of response.reviewList) {
         const propertyObjectId = String(rawReview?.apartment?._id || '');
         if (!propertyObjectId) continue;
-        const review = normalizeStaysGuestReview(rawReview);
+        const review = normalizePublishedStaysGuestReview(rawReview);
         if (!review) continue;
         const listingReviews = byListing.get(propertyObjectId) || [];
         listingReviews.push(review);

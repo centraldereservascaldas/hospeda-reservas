@@ -107,6 +107,12 @@ export function normalizeStaysGuestReview(raw: StaysGuestReviewRecord): Review |
   };
 }
 
+/** Normalize only reviews explicitly marked as published for public responses. */
+export function normalizePublishedStaysGuestReview(raw: StaysGuestReviewRecord): Review | null {
+  const review = normalizeStaysGuestReview(raw);
+  return review?.publicationStatus === 'published' ? review : null;
+}
+
 export function summarizeStaysReviews(reviews: Review[]): { rating: number; reviewCount: number } {
   if (reviews.length === 0) return { rating: 0, reviewCount: 0 };
   const average = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;

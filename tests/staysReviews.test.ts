@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeStaysGuestReview, summarizeStaysReviews } from '../src/utils/staysReviews.ts';
+import {
+  normalizePublishedStaysGuestReview,
+  normalizeStaysGuestReview,
+  summarizeStaysReviews,
+} from '../src/utils/staysReviews.ts';
 
 test('includes reviews that are not published and marks their status clearly', () => {
   const review = normalizeStaysGuestReview({
@@ -13,6 +17,38 @@ test('includes reviews that are not published and marks their status clearly', (
 
   assert.equal(review?.publicationStatus, 'not-published');
   assert.equal(review?.comment, 'not yet public');
+});
+
+test('excludes reviews unless the source explicitly marks them as published', () => {
+  assert.equal(
+    normalizePublishedStaysGuestReview({
+      _id: 'review-private',
+      status: 'new',
+      source: 'internal',
+      rating: 5,
+      reviewText: 'Private feedback',
+    }),
+    null,
+  );
+  assert.equal(
+    normalizePublishedStaysGuestReview({
+      _id: 'review-public',
+      status: 'Published',
+      source: 'internal',
+      rating: 5,
+      reviewText: 'Public feedback',
+    })?.comment,
+    'Public feedback',
+  );
+  assert.equal(
+    normalizePublishedStaysGuestReview({
+      _id: 'review-unknown-status',
+      source: 'internal',
+      rating: 5,
+      reviewText: 'Unclassified feedback',
+    }),
+    null,
+  );
 });
 
 test('maps a published Airbnb review with the guest name, but never private feedback', () => {
@@ -62,8 +98,20 @@ test('maps Booking.com text fields and only semantically matching category score
 });
 
 test('summarizes only supplied published reviews and returns zero for an empty list', () => {
-  const first = normalizeStaysGuestReview({ _id: 'a', status: 'published', source: 'internal', rating: 4, reviewText: 'Ok' })!;
-  const second = normalizeStaysGuestReview({ _id: 'b', status: 'published', source: 'expedia', rating: 5, publicReview: 'Good' })!;
+  const first = normalizeStaysGuestReview({
+    _id: 'a',
+    status: 'published',
+    source: 'internal',
+    rating: 4,
+    reviewText: 'Ok',
+  })!;
+  const second = normalizeStaysGuestReview({
+    _id: 'b',
+    status: 'published',
+    source: 'expedia',
+    rating: 5,
+    publicReview: 'Good',
+  })!;
 
   assert.deepEqual(summarizeStaysReviews([first, second]), { rating: 4.5, reviewCount: 2 });
   assert.deepEqual(summarizeStaysReviews([]), { rating: 0, reviewCount: 0 });
