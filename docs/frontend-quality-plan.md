@@ -26,13 +26,13 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 | 2 — tipos e dependências | Concluída para o escopo frontend auditado | TypeScript estrito; npm é o único gerenciador; validação compartilhada de payloads do catálogo e calendário. Rever os avisos restantes e não confundir código legado do servidor Express com o escopo frontend. |
 | 3 — bundle e carregamento | Em andamento | Telas/modais e catálogo Stays são carregados sob demanda; primeira imagem do catálogo recebe prioridade. Build atual: chunk de entrada 570,21 kB minificados / 162,17 kB gzip, ainda acima do aviso de 500 kB. Gerar relatório de composição antes de novas divisões; não alegar melhora de Web Vitals sem medição real. |
 | 4 — tokens e movimento | Parcialmente concluída | Tokens de foco, página e borda de vidro; suporte global a movimento reduzido. Revisão visual de consistência nas telas principais continua pendente. |
-| 5 — decomposição dos hotspots | Em andamento | Extraído cálculo puro de preços/taxas de `PropertyDetailModal.tsx` para `src/utils/propertyPricing.ts`; agora coberto por testes. Continuar com seções apresentacionais e depois `StaysNetModal.tsx` e `App.tsx`, sem alterar regras de negócio. Um hotspot por vez. |
-| 6 — lint, formatação, testes e CI | Base implementada | ESLint, Prettier, testes de foco/diálogo e workflow GitHub Actions. No estado mais recente, `npm run lint` passa sem avisos, `npm test` passa (55/55), `npm run format:check` e `npm run build` passam. Formatação segue limitada para evitar reformatar o legado. |
+| 5 — decomposição dos hotspots | Em andamento | Extraídos cálculo puro de preços/taxas (`src/utils/propertyPricing.ts`) e seção apresentacional de avaliações (`PropertyReviewsSection.tsx`) de `PropertyDetailModal.tsx`; lógica de médias coberta por testes. Continuar com outras seções apresentacionais e depois `StaysNetModal.tsx` e `App.tsx`, sem alterar regras de negócio. Um hotspot por vez. |
+| 6 — lint, formatação, testes e CI | Base implementada | ESLint, Prettier, testes de foco/diálogo e workflow GitHub Actions. No estado mais recente, `npm run lint` passa sem avisos, `npm test` passa (57/57), `npm run format:check` e `npm run build` passam. Formatação segue limitada para evitar reformatar o legado. |
 | 7 — convenções permanentes | Parcialmente concluída | Regras de qualidade foram adicionadas ao `AGENTS.md`; manter este plano atualizado com critérios e estado executável. |
 
 ### Evidência de bundle (2026-10-12)
 
-Build reproduzido com sourcemaps em `/tmp/hospeda-reservas-bundle-report` (artefato temporário, fora do repositório): chunk inicial 570,26 kB minificado / 162,20 kB gzip. O mapa aponta React DOM (runtime), Supabase Auth e Supabase Storage/PostgREST entre as maiores contribuições. `App.tsx` consulta a sessão no início e checkout/conta também usam auth; um `import()` chamado no início só deslocaria código para outro arquivo, sem reduzir bytes transferidos. Não introduzir divisão manual do Supabase sem redesenhar e testar a jornada de inicialização de auth. `PropertyDetailModal.tsx` é cerca de 44,6 kB minificado no build atual e já é chunk carregado sob demanda; sua decomposição é prioritariamente manutenção, não redução do chunk inicial. A extração de `propertyPricing.ts` mantém o chunk inicial em 570,21 kB / 162,16 kB gzip.
+Build reproduzido com sourcemaps em `/tmp/hospeda-reservas-bundle-report` (artefato temporário, fora do repositório): chunk inicial 570,26 kB minificado / 162,20 kB gzip. O mapa aponta React DOM (runtime), Supabase Auth e Supabase Storage/PostgREST entre as maiores contribuições. `App.tsx` consulta a sessão no início e checkout/conta também usam auth; um `import()` chamado no início só deslocaria código para outro arquivo, sem reduzir bytes transferidos. Não introduzir divisão manual do Supabase sem redesenhar e testar a jornada de inicialização de auth. `PropertyDetailModal.tsx` é 44,89 kB minificado no build atual e já é chunk carregado sob demanda; sua decomposição é prioritariamente manutenção, não redução do chunk inicial. As extrações de preço e avaliações mantêm o chunk inicial em 570,21 kB / 162,16 kB gzip.
 
 ### Revisão manual no navegador (2026-10-12)
 
@@ -56,9 +56,10 @@ Em `http://localhost:3173/`, Chromium carregou o catálogo local sem erros de co
 
 ### Próximos pacotes
 
-1. Continuar a decomposição incremental de `PropertyDetailModal.tsx`, priorizando seções apresentacionais de menor acoplamento antes de mover estado ou diálogos; acrescentar testes para invariantes de reserva antes de extrair o widget de reserva.
-2. Avaliar com evidência de execução se há uma arquitetura de sessão Supabase que possa ser carregada sob demanda sem bloquear callback OAuth, restauração de sessão ou checkout; se não houver, documentar o limite de transferência em vez de dividir artificialmente.
-3. Fazer revisão visual e funcional das jornadas em desktop e viewport estreito quando o browser local estiver disponível; registrar limitações se o ambiente não permitir.
+1. Revisar o fluxo de publicação de avaliações: a lista sincronizada atualmente inclui qualquer avaliação com fonte, embora a UI seja pública e não mostre `publicationStatus`. Definir e testar o filtro correto antes de expor conteúdo não publicado.
+2. Continuar a decomposição incremental de `PropertyDetailModal.tsx`, priorizando seções apresentacionais de menor acoplamento antes de mover estado ou diálogos; acrescentar testes para invariantes de reserva antes de extrair o widget de reserva.
+3. Avaliar com evidência de execução se há uma arquitetura de sessão Supabase que possa ser carregada sob demanda sem bloquear callback OAuth, restauração de sessão ou checkout; se não houver, documentar o limite de transferência em vez de dividir artificialmente.
+4. Fazer revisão visual e funcional das jornadas em desktop e viewport estreito quando o browser local estiver disponível; registrar limitações se o ambiente não permitir.
 
 ## Regras para execução e subagentes
 
