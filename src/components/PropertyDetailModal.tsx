@@ -9,15 +9,12 @@ import {
   Calendar as CalendarIcon, 
   Sparkles, 
   ChevronRight, 
-  Check, 
   BedDouble, 
   MapPin, 
   Clock, 
   Maximize2,
   ChevronDown,
   ChevronLeft,
-  Home,
-  Waves
 } from 'lucide-react';
 import { Property, Currency } from '../types';
 import { LogoCRCN } from './LogoCRCN';
@@ -28,6 +25,7 @@ import type { StaysCalendarDay } from '../utils/staysAvailability';
 import { calculatePropertyPricing, getPropertyFeeAmount, getPropertyFeeLabel } from '../utils/propertyPricing';
 import { getSyncedPropertyReviews } from '../utils/propertyReviews';
 import { PropertyReviewsSection } from './PropertyReviewsSection';
+import { PropertyAmenitiesSection } from './PropertyAmenitiesSection';
 import { useDialogFocus } from './useDialogFocus';
 
 interface PropertyDetailModalProps {
@@ -343,31 +341,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     });
   };
 
-  // Amenities breakdown (apartamento vs condomínio)
-  const apartmentAmenities = property.listingAmenities && property.listingAmenities.length > 0
-    ? property.listingAmenities
-    : [
-        'Ar-condicionado split silencioso',
-        'Copa completa com micro-ondas e frigobar',
-        'Wi-Fi fibra óptica de alta velocidade',
-        'Smart TV no quarto e sala',
-        'Roupa de cama e banho higienizada',
-        'Banheiro privativo com ducha termal',
-      ];
-
-  const condoAmenities = property.propertyAmenities && property.propertyAmenities.length > 0
-    ? property.propertyAmenities
-    : [
-        'Acesso livre ao Parque Aquático Termal',
-        'Piscinas termais naturais quentes 24 horas',
-        'Toboáguas para adultos e crianças',
-        'Sauna a vapor e ofurôs relaxantes',
-        'Recepção e portaria 24 horas com suporte ao hóspede',
-        'Estacionamento privativo numerado e monitorado',
-        'Restaurante, pizzaria e lanchonetes no complexo',
-        'Quadra poliesportiva e salão de jogos',
-      ];
-
   return (
     <div
       ref={detailDialogRef}
@@ -601,42 +574,10 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   </div>
                 </div>
 
-                {/* Amenities separated by apartment and condominium */}
-                <div className="pt-6 space-y-6">
-                  <h3 className="text-lg font-bold text-neutral-900">O que esse lugar oferece</h3>
-
-                  {/* No Apartamento */}
-                  <div className="p-5 rounded-2xl bg-orange-50/40 border border-orange-100 space-y-3">
-                    <div className="flex items-center gap-2 text-xs font-black text-orange-950 uppercase tracking-wider">
-                      <Home className="w-4 h-4 text-orange-600" />
-                      <span>No Apartamento</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {apartmentAmenities.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-2.5 text-xs font-semibold text-neutral-800">
-                          <Check className="w-4 h-4 text-orange-600 flex-shrink-0" />
-                          <span>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* No Condomínio & Parque Aquático */}
-                  <div className="p-5 rounded-2xl bg-sky-50/40 border border-sky-100 space-y-3">
-                    <div className="flex items-center gap-2 text-xs font-black text-sky-950 uppercase tracking-wider">
-                      <Waves className="w-4 h-4 text-sky-600" />
-                      <span>No Condomínio & Complexo Termal</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {condoAmenities.map((item, idx) => (
-                        <div key={idx} className="flex items-center gap-2.5 text-xs font-semibold text-neutral-800">
-                          <Check className="w-4 h-4 text-sky-600 flex-shrink-0" />
-                          <span>{item}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <PropertyAmenitiesSection
+                  listingAmenities={property.listingAmenities}
+                  propertyAmenities={property.propertyAmenities}
+                />
 
                 {/* Airbnb Style Availability & Daily Price Calendar */}
                 <div className="pt-6">
