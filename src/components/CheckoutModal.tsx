@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { X, ChevronLeft, ShieldCheck } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { Property, Currency } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { crcnBackendApi, CalculatedPriceResponse } from '../services/crcnBackendApi';
 import { supabase, supabaseConfigured } from '../services/supabase';
+import { useDialogFocus } from './useDialogFocus';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -30,6 +31,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   bookingData,
   currency,
 }) => {
+  const fieldId = useId();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useDialogFocus(isOpen && bookingData !== null, onClose, { initialFocusRef: closeButtonRef });
   
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
@@ -195,23 +199,28 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        <div className="w-full max-w-4xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-neutral-200/90 animate-in zoom-in-95 duration-200">
+        <div ref={dialogRef} data-dialog-focus-root role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`} tabIndex={-1} className="w-full max-w-4xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-neutral-200/90 animate-in zoom-in-95 duration-200">
           
           {/* Header */}
           <div className="px-6 py-4 border-b border-neutral-200 bg-white/95 backdrop-blur-md flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
+                ref={closeButtonRef}
+                type="button"
+                aria-label="Voltar e fechar checkout"
                 onClick={onClose}
                 className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 flex items-center justify-center text-neutral-700 transition-colors shadow-2xs"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
-              <h2 className="text-lg font-black text-neutral-950">
+              <h2 id={`${fieldId}-title`} className="text-lg font-black text-neutral-950">
                 Central de Reservas Caldas Novas • Confirmar Estadia
               </h2>
             </div>
 
             <button
+              type="button"
+              aria-label="Fechar checkout"
               onClick={onClose}
               className="w-8 h-8 rounded-full bg-white/70 hover:bg-white border border-white/80 flex items-center justify-center text-neutral-500 hover:text-neutral-900 transition-colors shadow-2xs"
             >
@@ -283,17 +292,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </div>
                       {authMode === 'signup' && (
                         <div>
-                          <label htmlFor="guest-account-name" className="mb-1 block text-xs font-semibold text-neutral-700">Nome completo</label>
-                          <input id="guest-account-name" autoComplete="name" required minLength={3} value={authFullName} onChange={(e) => setAuthFullName(e.target.value)} className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500" />
+                        <label htmlFor={`${fieldId}-guest-name`} className="mb-1 block text-xs font-semibold text-neutral-700">Nome completo</label>
+                          <input id={`${fieldId}-guest-name`} autoComplete="name" required minLength={3} value={authFullName} onChange={(e) => setAuthFullName(e.target.value)} className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-600" />
                         </div>
                       )}
                       <div>
-                        <label htmlFor="guest-account-email" className="mb-1 block text-xs font-semibold text-neutral-700">E-mail</label>
-                        <input id="guest-account-email" type="email" autoComplete="email" required value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500" />
+                        <label htmlFor={`${fieldId}-guest-email`} className="mb-1 block text-xs font-semibold text-neutral-700">E-mail</label>
+                        <input id={`${fieldId}-guest-email`} type="email" autoComplete="email" required value={guestEmail} onChange={(e) => setGuestEmail(e.target.value)} className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-600" />
                       </div>
                       <div>
-                        <label htmlFor="guest-account-password" className="mb-1 block text-xs font-semibold text-neutral-700">Senha</label>
-                        <input id="guest-account-password" type="password" autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'} required minLength={authMode === 'signup' ? 8 : 1} value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500" />
+                        <label htmlFor={`${fieldId}-guest-password`} className="mb-1 block text-xs font-semibold text-neutral-700">Senha</label>
+                        <input id={`${fieldId}-guest-password`} type="password" autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'} required minLength={authMode === 'signup' ? 8 : 1} value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus-visible:ring-2 focus-visible:ring-orange-600" />
                         {authMode === 'signup' && <p className="mt-1 text-[11px] text-neutral-500">Use pelo menos 8 caracteres.</p>}
                       </div>
                       {authError && <p role="alert" className="text-xs font-semibold text-red-700">{authError}</p>}
@@ -314,15 +323,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                 {/* Message to Central */}
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-neutral-700 block">
+                  <label htmlFor={`${fieldId}-message-to-host`} className="text-xs font-semibold text-neutral-700 block">
                     Observações para a Central de Reservas Caldas Novas (Opcional)
                   </label>
                   <textarea
+                    id={`${fieldId}-message-to-host`}
                     rows={2}
                     value={messageToHost}
                     onChange={(e) => setMessageToHost(e.target.value)}
                     placeholder="Ex: Horário estimado de chegada, solicitação de berço ou dúvidas sobre parques..."
-                    className="w-full p-3 rounded-xl border border-neutral-300 text-xs focus:border-neutral-900 outline-none"
+                    className="w-full p-3 rounded-xl border border-neutral-300 text-xs focus:border-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 outline-none"
                   />
                 </div>
 
