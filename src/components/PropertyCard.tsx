@@ -49,10 +49,13 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   // Price calculations
   const defaultNights = 3;
   const totalPrice = (property.pricePerNight * defaultNights) + property.cleaningFee + (property.pricePerNight * defaultNights * property.serviceFeeRate);
-  const calculatedPrice = (property as any).calculatedPrice;
-  const hasValidCalculatedPrice =
-    Number.isFinite(Number(calculatedPrice?.totalAmount)) && Number(calculatedPrice?.totalAmount) > 0 &&
-    Number.isFinite(Number(calculatedPrice?.dailyRate)) && Number(calculatedPrice?.dailyRate) > 0;
+  const calculatedPrice = property.calculatedPrice;
+  const validCalculatedPrice = calculatedPrice &&
+    Number.isFinite(calculatedPrice.totalAmount) && calculatedPrice.totalAmount > 0 &&
+    Number.isFinite(calculatedPrice.dailyRate) && calculatedPrice.dailyRate > 0 &&
+    Number.isInteger(calculatedPrice.nights) && calculatedPrice.nights > 0
+    ? calculatedPrice
+    : null;
 
   return (
     <div
@@ -185,14 +188,14 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
         {/* Search total pricing */}
         <div className="mt-1 flex items-baseline gap-1">
-          {hasValidCalculatedPrice ? (
+          {validCalculatedPrice ? (
             <div className="flex flex-col">
               <span className="font-black text-base sm:text-lg text-neutral-950">
-                {formatCurrency(showTotalWithTaxes ? calculatedPrice.totalAmount : calculatedPrice.dailyRate, currency)}
+                {formatCurrency(showTotalWithTaxes ? validCalculatedPrice.totalAmount : validCalculatedPrice.dailyRate, currency)}
               </span>
               <span className="text-[11px] font-semibold text-neutral-600">
                 {showTotalWithTaxes
-                  ? `total com taxas • ${calculatedPrice.nights} ${calculatedPrice.nights === 1 ? 'diária' : 'diárias'}`
+                  ? `total com taxas • ${validCalculatedPrice.nights} ${validCalculatedPrice.nights === 1 ? 'diária' : 'diárias'}`
                   : '/ noite' }
               </span>
             </div>

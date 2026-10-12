@@ -86,6 +86,16 @@ export interface Property {
   staysListingObjectId?: string;
   staysSynced?: boolean;
   reviewsSynced?: boolean;
+  calculatedPrice?: {
+    nights: number;
+    dailyRate: number;
+    basePrice: number;
+    cleaningFee: number;
+    serviceFee: number;
+    totalAmount: number;
+    currency: string;
+    fees?: unknown[];
+  };
 }
 
 export interface Reservation {
@@ -141,8 +151,8 @@ export interface StaysApiLog {
   endpoint: string;
   status: number;
   durationMs: number;
-  requestBody?: any;
-  responseBody?: any;
+  requestBody?: unknown;
+  responseBody?: unknown;
   success: boolean;
 }
 
