@@ -1,33 +1,39 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Hospeda Reservas
 
-# Run and deploy your AI Studio app
+Aplicação de reservas com frontend React 19, TypeScript, Vite 6 e Tailwind CSS 4; API Laravel 13/PHP 8.3+; banco configurável via Laravel (SQLite local por padrão). Supabase Auth continua como provedor de identidade. Dados de hóspedes e permissões de proprietário são persistidos no banco Laravel. Stays e OpenAI são acessados apenas pelo backend.
 
-This contains everything you need to run your app locally.
+## Requisitos
 
-View your app in AI Studio: https://ai.studio/apps/edbabd71-ac78-4216-b8da-f7238d02739c
+- PHP 8.3+ com extensões PDO SQLite, OpenSSL, Mbstring e Ctype
+- Composer 2+
+- Node.js 20+
 
-## Run Locally
+## Configuração local
 
-**Prerequisites:**  Node.js
+1. `composer install`
+2. `cp .env.example .env` e configure Supabase, Stays e OpenAI quando aplicável. Mantenha chaves privadas sem prefixo `VITE_`.
+3. `php artisan key:generate`
+4. Crie o SQLite local: `touch database/database.sqlite`
+5. `php artisan migrate`
+6. `npm ci`
+7. Inicie a API com `composer dev` (porta 8000) e o frontend em outro terminal com `npm run dev` (porta 3000).
 
+O Vite encaminha `/api/*` e `/external/v1/*` para `VITE_API_PROXY_TARGET`. O padrão local é `http://127.0.0.1:8000`.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+O backend Express anterior permanece disponível durante a migração pelo comando `npm run legacy:dev`; o fluxo padrão usa Laravel. Não remova `server.ts` nem as dependências Express até concluir a migração e validar os endpoints restantes.
 
-## Guest accounts and Stays synchronization
+## Verificação
 
-Guest signup/login is provided by Supabase Auth. Only an email-confirmed account can be synchronized to Stays or start checkout. The browser uses the public Supabase URL/anon key; the server validates access tokens and uses the service-role key to store the private mapping from Supabase user ID to Stays client ID. Stays receives the guest name/email and `isUser: true`; it never receives or stores the website password.
+- Frontend: `npm run build`, `npm test`, `npm run lint`
+- Backend: `php artisan test`, `./vendor/bin/pint --test`, `php artisan route:list --path=api`
+- Health check: `GET /api/health`
 
-1. Create a Supabase project and enable email confirmations in **Authentication → Providers → Email**.
-2. Add the local site URL (for example `http://localhost:3000/`) to **Authentication → URL Configuration → Redirect URLs**.
-3. Copy `.env.example` to `.env`. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from Supabase project settings; set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` on the server only. Keep the service-role key secret and do not expose it with a `VITE_` prefix.
-4. In the Supabase SQL editor, apply `supabase/migrations/20261005000000_guest_profiles.sql`.
-5. Ensure the Stays API credential is allowed to create and update booking clients (`POST/PATCH /booking/clients`). The app links an existing client only after Supabase confirms the same email; otherwise it creates one and marks `isUser` true.
-6. Restart the server after changing `.env` and run `npm run dev`.
+## Autenticação e dados
 
-The site blocks checkout if authentication, email confirmation, profile persistence, or Stays synchronization fails. Configure the Supabase email delivery settings before production use.
+O navegador usa apenas `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. O middleware valida cada bearer token no Supabase Auth. Laravel grava o vínculo `guest_profiles` e os pedidos de acesso `owner_access`; não há FK para `auth.users`, pois a identidade continua externa. `SUPABASE_SERVICE_ROLE_KEY`, credenciais Stays e chave OpenAI são exclusivamente server-side.
+
+A API mantém os contratos consumidos em `src/services/crcnBackendApi.ts` e os aliases `/external/v1` usados pela interface de integração. Reservas e disponibilidade permanecem autoritativas na Stays. O checkout redireciona para o checkout hospedado Stays; não confirma pagamento localmente.
+
+## Skills e instruções locais
+
+As skills Laravel e de testes estão em `.agents/skills/`. Leia `AGENTS.md` antes de alterar este sistema.

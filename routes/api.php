@@ -1,0 +1,48 @@
+<?php
+
+use App\Http\Controllers\Api\AccommodationController;
+use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\GuestReservationController;
+use App\Http\Controllers\Api\OwnerAccessController;
+use App\Http\Controllers\Api\OwnerAdminController;
+use App\Http\Controllers\Api\OwnerDashboardController;
+use App\Http\Controllers\Api\SofiaController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/health', fn () => response()->json(['success' => true, 'service' => 'hospeda-reservas-api']));
+
+Route::get('/resorts', [AccommodationController::class, 'resorts']);
+Route::get('/accommodations', [AccommodationController::class, 'index']);
+Route::get('/accommodations/{id}', [AccommodationController::class, 'show']);
+Route::post('/search', [AccommodationController::class, 'search']);
+Route::get('/accommodations/{id}/calendar', [AccommodationController::class, 'calendar']);
+Route::post('/price', [BookingController::class, 'price']);
+Route::get('/stays/status', [BookingController::class, 'staysStatus']);
+
+Route::middleware('supabase.guest')->group(function (): void {
+    Route::post('/auth/sync-stays', [GuestReservationController::class, 'sync']);
+    Route::get('/my-reservations', [GuestReservationController::class, 'index']);
+    Route::post('/my-reservations/{reservationId}/cancel', [GuestReservationController::class, 'cancel']);
+    Route::get('/owner/access', [OwnerAccessController::class, 'show']);
+    Route::post('/owner/access/request', [OwnerAccessController::class, 'requestAccess']);
+    Route::get('/owner/dashboard', [OwnerDashboardController::class, 'show']);
+});
+Route::post('/sofia/chat', [SofiaController::class, 'chat']);
+Route::get('/owner/admin/status', [OwnerAdminController::class, 'status'])->middleware('supabase.guest');
+Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->group(function (): void {
+    Route::get('/requests', [OwnerAdminController::class, 'requests']);
+    Route::get('/stays-owners', [OwnerAdminController::class, 'staysOwners']);
+    Route::post('/approve', [OwnerAdminController::class, 'approve']);
+});
+Route::post('/checkout', [BookingController::class, 'checkout'])->middleware('supabase.guest');
+
+Route::get('/external/v1/content/listings', [AccommodationController::class, 'staysListings']);
+Route::get('/external/v1/content/listings/{id}', [AccommodationController::class, 'staysListing']);
+Route::get('/accommodations/{id}/rooms', [AccommodationController::class, 'rooms']);
+Route::get('/external/v1/content/listing-rooms/{id}', [AccommodationController::class, 'rooms']);
+Route::get('/external/v1/translation/listing-amenities', [AccommodationController::class, 'listingAmenities']);
+Route::get('/external/v1/translation/property-amenities', [AccommodationController::class, 'propertyAmenities']);
+Route::post('/external/v1/booking/search-listings', [AccommodationController::class, 'searchListings']);
+Route::get('/external/v1/calendar/listing/{id}', [AccommodationController::class, 'legacyCalendar']);
+Route::post('/external/v1/booking/calculate-price', [BookingController::class, 'staysPrice']);
+Route::post('/external/v1/book-request', fn () => response()->json(['error' => 'Use o checkout hospedado da Stays.'], 410));

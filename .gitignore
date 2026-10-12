@@ -3,3 +3,15 @@ dist/
 .env
 .env.*
 !.env.example
+
+graphify-out/
+
+# Laravel
+/vendor/
+/.env
+/.env.backup
+/.phpunit.cache/
+/database/database.sqlite
+/storage/logs/*.log
+/public/build/
+/public/hot
