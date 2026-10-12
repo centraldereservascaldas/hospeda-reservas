@@ -23,11 +23,11 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 |---|---|---|
 | 0 — padrão de diálogo | Implementada; validação manual parcial | Testes automatizados cobrem foco inicial, contenção de Tab, Escape e retorno do foco. Em Chromium local, detalhes e diálogos aninhados de hóspedes, datas e galeria abriram com nome/foco esperados; Escape fechou a camada superior e restaurou foco ao acionador. Outros fluxos seguem pendentes. |
 | 1 — acessibilidade | Implementada; revisão visual parcial | Busca, filtros, checkout, cadastro, conta, suporte, condomínio, detalhe e cartões receberam melhorias de semântica, rótulos e teclado. O detalhe foi revisto visualmente em largura móvel de 375 px, sem overflow horizontal. Revisar as demais jornadas e leitor de tela. |
-| 2 — tipos e dependências | Concluída para o escopo frontend auditado | TypeScript estrito; npm é o único gerenciador; validação compartilhada de payloads do catálogo e calendário. Rever os avisos restantes e não confundir código legado do servidor Express com o escopo frontend. |
+| 2 — tipos e dependências | Concluída para o escopo auditado | TypeScript estrito agora checa frontend, `server.ts` e testes via `tsconfig.json`; declaração local mínima tipa o uso existente de jsdom. npm é o único gerenciador; payloads externos seguem validados. |
 | 3 — bundle e carregamento | Em andamento | Telas/modais e catálogo Stays são carregados sob demanda; primeira imagem do catálogo recebe prioridade. Build atual: chunk de entrada 570,21 kB minificados / 162,17 kB gzip, ainda acima do aviso de 500 kB. Gerar relatório de composição antes de novas divisões; não alegar melhora de Web Vitals sem medição real. |
 | 4 — tokens e movimento | Parcialmente concluída | Tokens de foco, página e borda de vidro; suporte global a movimento reduzido. Revisão visual de consistência nas telas principais continua pendente. |
 | 5 — decomposição dos hotspots | Em andamento | Extraídos cálculo puro de preços/taxas (`src/utils/propertyPricing.ts`) e seção apresentacional de avaliações (`PropertyReviewsSection.tsx`) de `PropertyDetailModal.tsx`; lógica de médias coberta por testes. Continuar com outras seções apresentacionais e depois `StaysNetModal.tsx` e `App.tsx`, sem alterar regras de negócio. Um hotspot por vez. |
-| 6 — lint, formatação, testes e CI | Base implementada | ESLint, Prettier, testes de foco/diálogo e workflow GitHub Actions. No estado mais recente, `npm run lint` passa sem avisos, `npm test` passa (57/57), `npm run format:check` e `npm run build` passam. Formatação segue limitada para evitar reformatar o legado. |
+| 6 — lint, formatação, testes e CI | Base implementada | ESLint, Prettier, testes de foco/diálogo e workflow GitHub Actions. `npm run lint` checa agora o `tsconfig.json` completo (frontend, servidor e testes); lint sem avisos, `npm test` passa (58/58), `npm run format:check` e `npm run build` passam. Formatação segue limitada para evitar reformatar o legado. |
 | 7 — convenções permanentes | Parcialmente concluída | Regras de qualidade foram adicionadas ao `AGENTS.md`; manter este plano atualizado com critérios e estado executável. |
 
 ### Evidência de bundle (2026-10-12)
@@ -56,10 +56,9 @@ Em `http://localhost:3173/`, Chromium carregou o catálogo local sem erros de co
 
 ### Próximos pacotes
 
-1. Revisar o fluxo de publicação de avaliações: a lista sincronizada atualmente inclui qualquer avaliação com fonte, embora a UI seja pública e não mostre `publicationStatus`. Definir e testar o filtro correto antes de expor conteúdo não publicado.
-2. Continuar a decomposição incremental de `PropertyDetailModal.tsx`, priorizando seções apresentacionais de menor acoplamento antes de mover estado ou diálogos; acrescentar testes para invariantes de reserva antes de extrair o widget de reserva.
-3. Avaliar com evidência de execução se há uma arquitetura de sessão Supabase que possa ser carregada sob demanda sem bloquear callback OAuth, restauração de sessão ou checkout; se não houver, documentar o limite de transferência em vez de dividir artificialmente.
-4. Fazer revisão visual e funcional das jornadas em desktop e viewport estreito quando o browser local estiver disponível; registrar limitações se o ambiente não permitir.
+1. Continuar a decomposição incremental de `PropertyDetailModal.tsx`, priorizando seções apresentacionais de menor acoplamento antes de mover estado ou diálogos; acrescentar testes para invariantes de reserva antes de extrair o widget de reserva.
+2. Avaliar com evidência de execução se há uma arquitetura de sessão Supabase que possa ser carregada sob demanda sem bloquear callback OAuth, restauração de sessão ou checkout; se não houver, documentar o limite de transferência em vez de dividir artificialmente.
+3. Fazer revisão visual e funcional das jornadas em desktop e viewport estreito quando o browser local estiver disponível; registrar limitações se o ambiente não permitir.
 
 ## Regras para execução e subagentes
 
