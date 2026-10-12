@@ -21,8 +21,8 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 
 | Fase | Estado | Evidência / pendência |
 |---|---|---|
-| 0 — padrão de diálogo | Implementada; validação manual pendente | `useDialogFocus` atende aos modais principais e subdiálogos. Testes automatizados cobrem foco inicial, contenção de Tab, Escape e retorno do foco; revisar fluxos completos no navegador quando disponível. |
-| 1 — acessibilidade | Implementada; revisão visual pendente | Busca, filtros, checkout, cadastro, conta, suporte, condomínio, detalhe e cartões receberam melhorias de semântica, rótulos e teclado. Revisar visualmente os fluxos compostos em desktop e viewport estreito. |
+| 0 — padrão de diálogo | Implementada; validação manual parcial | Testes automatizados cobrem foco inicial, contenção de Tab, Escape e retorno do foco. Em Chromium local, detalhes e diálogos aninhados de hóspedes, datas e galeria abriram com nome/foco esperados; Escape fechou a camada superior e restaurou foco ao acionador. Outros fluxos seguem pendentes. |
+| 1 — acessibilidade | Implementada; revisão visual parcial | Busca, filtros, checkout, cadastro, conta, suporte, condomínio, detalhe e cartões receberam melhorias de semântica, rótulos e teclado. O detalhe foi revisto visualmente em largura móvel de 375 px, sem overflow horizontal. Revisar as demais jornadas e leitor de tela. |
 | 2 — tipos e dependências | Concluída para o escopo frontend auditado | TypeScript estrito; npm é o único gerenciador; validação compartilhada de payloads do catálogo e calendário. Rever os avisos restantes e não confundir código legado do servidor Express com o escopo frontend. |
 | 3 — bundle e carregamento | Em andamento | Telas/modais e catálogo Stays são carregados sob demanda; primeira imagem do catálogo recebe prioridade. Build atual: chunk de entrada 570,21 kB minificados / 162,17 kB gzip, ainda acima do aviso de 500 kB. Gerar relatório de composição antes de novas divisões; não alegar melhora de Web Vitals sem medição real. |
 | 4 — tokens e movimento | Parcialmente concluída | Tokens de foco, página e borda de vidro; suporte global a movimento reduzido. Revisão visual de consistência nas telas principais continua pendente. |
@@ -33,6 +33,10 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 ### Evidência de bundle (2026-10-12)
 
 Build reproduzido com sourcemaps em `/tmp/hospeda-reservas-bundle-report` (artefato temporário, fora do repositório): chunk inicial 570,26 kB minificado / 162,20 kB gzip. O mapa aponta React DOM (runtime), Supabase Auth e Supabase Storage/PostgREST entre as maiores contribuições. `App.tsx` consulta a sessão no início e checkout/conta também usam auth; um `import()` chamado no início só deslocaria código para outro arquivo, sem reduzir bytes transferidos. Não introduzir divisão manual do Supabase sem redesenhar e testar a jornada de inicialização de auth. `PropertyDetailModal.tsx` é cerca de 44,6 kB minificado no build atual e já é chunk carregado sob demanda; sua decomposição é prioritariamente manutenção, não redução do chunk inicial. A extração de `propertyPricing.ts` mantém o chunk inicial em 570,21 kB / 162,16 kB gzip.
+
+### Revisão manual no navegador (2026-10-12)
+
+Em `http://localhost:3173/`, Chromium carregou o catálogo local sem erros de console. O modal de detalhes anunciou o título e moveu foco ao botão fechar. Hóspedes, calendário e galeria abriram como segundo diálogo acessível; Escape fechou o diálogo superior e devolveu foco ao respectivo acionador. Galeria respondeu às setas. Em viewport CSS de 375 px, `documentElement.scrollWidth` também foi 375 px e o detalhe não teve overflow horizontal. A API local não confirmou disponibilidade e o diálogo exibiu o estado existente “Não foi possível confirmar a disponibilidade”; checkout não foi acionado. Esta verificação cobre a jornada do modal em navegador, não substitui leitor de tela nem validação dos outros fluxos.
 
 ### Commits locais relevantes
 
