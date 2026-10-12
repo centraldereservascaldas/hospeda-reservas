@@ -25,6 +25,7 @@ import { formatCurrency, calculateNights } from '../utils/formatters';
 import { crcnBackendApi, CalculatedPriceResponse } from '../services/crcnBackendApi';
 import { isCalendarRangeAvailable } from '../utils/staysAvailability';
 import type { StaysCalendarDay } from '../utils/staysAvailability';
+import { calculatePropertyPricing, getPropertyFeeAmount, getPropertyFeeLabel } from '../utils/propertyPricing';
 import { useDialogFocus } from './useDialogFocus';
 
 interface PropertyDetailModalProps {
@@ -271,21 +272,16 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   });
 
   const nights = calculateNights(checkIn, checkOut);
-  const baseSubtotal = staysPrice ? staysPrice.baseTotal : property.pricePerNight * nights;
-  const discount = staysPrice ? staysPrice.discount : 0;
-  const cleaningFee = staysPrice ? staysPrice.cleaningFee : property.cleaningFee;
-  const serviceFee = staysPrice ? staysPrice.serviceFee : Math.round((baseSubtotal - discount) * property.serviceFeeRate);
-  const totalAmount = staysPrice ? staysPrice.total : baseSubtotal - discount + cleaningFee + serviceFee;
+  const { baseSubtotal, discount, cleaningFee, serviceFee, totalAmount, visibleFees } = calculatePropertyPricing({
+    nightlyRate: property.pricePerNight,
+    cleaningFee: property.cleaningFee,
+    serviceFeeRate: property.serviceFeeRate,
+    nights,
+    quote: staysPrice,
+  });
   const totalGuests = adults + children;
   const guestLimit = Math.max(1, Number(property.maxGuests) || 1);
   const selectedRangeAvailable = calendarAvailable && isCalendarRangeAvailable(calendarDays, checkIn, checkOut);
-  const isCounterFee = (fee: NonNullable<CalculatedPriceResponse['fees']>[number]) =>
-    /balc[aã]o|counter/i.test(`${fee.internalName || ''} ${fee._mstitle?.pt_BR || ''} ${fee._mstitle?.pt_PT || ''}`);
-  const visibleFees = staysPrice?.fees?.filter((fee) => !isCounterFee(fee)) || [];
-  const feeLabel = (fee: NonNullable<CalculatedPriceResponse['fees']>[number]) =>
-    fee._mstitle?.pt_BR || fee._mstitle?.pt_PT || fee.internalName || 'Taxa da hospedagem';
-  const feeAmount = (fee: NonNullable<CalculatedPriceResponse['fees']>[number]) =>
-    Number(fee._mcval?.[staysPrice?.currency || 'BRL'] ?? fee._mcval?.BRL ?? 0);
   const latitude = property.location.lat;
   const longitude = property.location.lng;
   const hasValidCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
@@ -923,8 +919,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                       </div>
                     ) : null) : visibleFees.length ? visibleFees.map((fee, index) => (
                       <div key={fee._id || index} className="flex items-center justify-between text-neutral-600">
-                          <span>{feeLabel(fee)}{staysPrice?.feesIncluded ? ' (incluída na diária)' : ''}</span>
-                        <span>{formatCurrency(feeAmount(fee), currency)}</span>
+                          <span>{getPropertyFeeLabel(fee)}{staysPrice?.feesIncluded ? ' (incluída na diária)' : ''}</span>
+                        <span>{formatCurrency(getPropertyFeeAmount(fee, staysPrice?.currency || 'BRL'), currency)}</span>
                       </div>
                     )) : !staysPrice?.fees?.length ? (
                       <>
