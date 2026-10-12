@@ -26,6 +26,7 @@ import { calculatePropertyPricing, getPropertyFeeAmount, getPropertyFeeLabel } f
 import { getSyncedPropertyReviews } from '../utils/propertyReviews';
 import { PropertyReviewsSection } from './PropertyReviewsSection';
 import { PropertyAmenitiesSection } from './PropertyAmenitiesSection';
+import { PropertyPoliciesSection } from './PropertyPoliciesSection';
 import { useDialogFocus } from './useDialogFocus';
 
 interface PropertyDetailModalProps {
@@ -871,27 +872,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               reviews={staysReviews}
             />
 
-            {/* House Rules & Cancellation Policy */}
-            <div className="pt-8 border-t border-neutral-200 space-y-4">
-              <h3 className="text-lg font-bold text-neutral-900">Regras e Políticas</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs text-neutral-700">
-                <div className="p-4 rounded-2xl border border-neutral-100 bg-neutral-50/50 space-y-2">
-                  <p className="font-bold text-neutral-900">Regras da casa</p>
-                  {property.rules.map((rule, idx) => (
-                    <p key={idx} className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
-                      <span>{rule}</span>
-                    </p>
-                  ))}
-                </div>
-                <div className="p-4 rounded-2xl border border-neutral-100 bg-neutral-50/50 space-y-2">
-                  <p className="font-bold text-neutral-900">Política de cancelamento flexível</p>
-                  <p className="text-neutral-600 leading-relaxed">
-                    Cancele até 48 horas antes do check-in para receber reembolso integral. Caso cancele após esse prazo, a primeira noite e a taxa de serviço não serão reembolsadas.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <PropertyPoliciesSection rules={property.rules} />
 
           </div>
 
