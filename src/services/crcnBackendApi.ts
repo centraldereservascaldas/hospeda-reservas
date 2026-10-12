@@ -396,7 +396,7 @@ class CrcnBackendApiService {
       const res = await fetch('/api/stays/status');
       if (!res.ok) return null;
       return await res.json();
-    } catch (err) {
+    } catch {
       return null;
     }
   }

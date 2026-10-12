@@ -4,12 +4,10 @@ import {
   Search, 
   MapPin, 
   Calendar as CalendarIcon, 
-  Users, 
   Plus, 
   Minus,
   Sparkles,
   ExternalLink,
-  ShieldCheck
 } from 'lucide-react';
 import { SearchFilters } from '../types';
 import { StaysSearchWidget, toBrDate } from './StaysSearchWidget';
@@ -118,7 +116,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         aria-labelledby={`${fieldId}-title`}
         tabIndex={-1}
         className="w-full max-w-3xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl border border-neutral-200/90 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200"
-        onClick={(e) => e.stopPropagation()}
       >
         <h2 id={`${fieldId}-title`} className="sr-only">Buscar hospedagens</h2>
         {/* Header Tabs with Crisp Glass pills */}

@@ -7,20 +7,15 @@ import {
   RefreshCw, 
   ExternalLink, 
   Key, 
-  Server, 
   Globe, 
   Terminal, 
   ShieldCheck, 
-  Layers, 
   Zap, 
   Code2, 
   Copy, 
   Check, 
   Play,
   Database,
-  Sliders,
-  Send,
-  Sparkles
 } from 'lucide-react';
 import { staysApi } from '../services/staysApi';
 import { crcnBackendApi } from '../services/crcnBackendApi';
@@ -72,7 +67,6 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
 
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
-  const [syncCount, setSyncCount] = useState<number | null>(null);
 
   // Logs state
   const [logs, setLogs] = useState<StaysApiLog[]>(staysApi.getLogs());
@@ -114,7 +108,6 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
     try {
       const res = await staysApi.fetchListings();
       if (res.success && res.listings) {
-        setSyncCount(res.listings.length);
         if (onSyncProperties) onSyncProperties(res.listings);
         onShowToast(`🎉 ${res.listings.length} apartamentos puxados com sucesso da Stays.net!`);
       }
@@ -222,7 +215,7 @@ export const StaysNetModal: React.FC<StaysNetModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200">
       <div ref={dialogRef} data-dialog-focus-root role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`} tabIndex={-1} className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl border border-neutral-200/90 shadow-2xl overflow-hidden">
         
         {/* Header with Crisp Glass and Stays.net Branding */}

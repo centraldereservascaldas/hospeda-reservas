@@ -77,7 +77,7 @@ class StaysApiService {
         const parsed: unknown = JSON.parse(saved);
         return Array.isArray(parsed) ? parsed.filter(isStaysApiLog).slice(0, 50) : [];
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
     return [];
@@ -91,7 +91,7 @@ class StaysApiService {
     this.logs = [];
     try {
       localStorage.removeItem(LOGS_KEY);
-    } catch (e) {
+    } catch {
       // ignore
     }
   }
@@ -105,7 +105,7 @@ class StaysApiService {
     this.logs = [entry, ...this.logs.slice(0, 49)];
     try {
       localStorage.setItem(LOGS_KEY, JSON.stringify(this.logs));
-    } catch (e) {
+    } catch {
       // ignore
     }
   }

@@ -22,6 +22,15 @@ export default tseslint.config(
   ...tseslint.configs.recommended.map(reportAsWarning),
   reportAsWarning(jsxA11y.flatConfigs.recommended),
   {
+    files: ['**/*.{ts,tsx}'],
+    rules: {
+      // TypeScript has its own unused-variable implementation; avoid duplicate reports.
+      'no-unused-vars': 'off',
+      // Superseded by label-has-associated-control in the current jsx-a11y rules.
+      'jsx-a11y/label-has-for': 'off',
+    },
+  },
+  {
     files: ['src/**/*.{ts,tsx}', 'tests/**/*.ts', 'vite.config.ts'],
     languageOptions: {
       globals: {

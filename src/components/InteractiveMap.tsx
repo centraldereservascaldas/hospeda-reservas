@@ -197,10 +197,13 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     window.open(`https://www.openstreetmap.org/?mlat=${(south + north) / 2}&mlon=${(west + east) / 2}#map=${zoom}/${(south + north) / 2}/${(west + east) / 2}`, '_blank', 'noopener,noreferrer');
   };
 
+  // The map canvas is a keyboard-operable composite widget; arrow keys pan the map.
+  /* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
   return (
     <div
       ref={containerRef}
-      role="region"
+      role="application"
+      aria-roledescription="mapa interativo"
       aria-label="Mapa interativo das acomodações"
       className="relative h-[calc(100dvh-250px)] min-h-[420px] max-h-[850px] w-full overflow-hidden rounded-3xl border border-neutral-200 bg-[#e8eee9] shadow-inner touch-none"
       onPointerDown={onPointerDown}
@@ -297,4 +300,5 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       )}
     </div>
   );
+  /* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */
 };

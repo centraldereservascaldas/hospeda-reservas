@@ -1,8 +1,7 @@
 import React, { useId, useRef, useState } from 'react';
-import { X, Plus, Sparkles, Check, Image as ImageIcon } from 'lucide-react';
+import { X, Sparkles, Check } from 'lucide-react';
 import { Property, Currency } from '../types';
 import { CATEGORIES } from '../data/mockProperties';
-import { formatCurrency } from '../utils/formatters';
 import { useDialogFocus } from './useDialogFocus';
 
 interface CreateListingModalProps {
@@ -143,9 +142,6 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
         className="min-h-screen py-8 px-3 sm:px-6 flex justify-center items-start"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
       >
         <div ref={dialogRef} data-dialog-focus-root role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`} tabIndex={-1} className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-neutral-100 animate-in zoom-in-95 duration-200">
           

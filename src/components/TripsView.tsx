@@ -31,7 +31,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const [cancellationError, setCancellationError] = useState('');
 
   const activeReservations = reservations.filter((r) => r.status === 'confirmed');
-  const pastReservations = reservations.filter((r) => r.status === 'completed');
   const cancelledReservations = reservations.filter((r) => r.status === 'cancelled');
 
   return (

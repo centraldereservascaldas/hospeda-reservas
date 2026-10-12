@@ -184,7 +184,7 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({ isOpen, in
   };
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-slate-900/10 px-4 py-8 backdrop-blur-[3px]" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-slate-900/10 px-4 py-8 backdrop-blur-[3px]">
       <section ref={dialogRef} data-dialog-focus-root tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="guest-account-title" className="liquid-glass-card my-auto w-full max-w-md overflow-hidden rounded-3xl border border-white/80 !bg-white/55 shadow-[0_24px_80px_-20px_rgba(15,23,42,0.3)] backdrop-blur-2xl">
         <div className="liquid-glass-accent flex items-center justify-between border-b border-white/40 px-6 py-5 text-white">
           <div>

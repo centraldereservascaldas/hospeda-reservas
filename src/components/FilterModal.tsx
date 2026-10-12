@@ -117,7 +117,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({
         aria-labelledby={`${fieldId}-title`}
         tabIndex={-1}
         className="w-full max-w-2xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl border border-neutral-200/90 overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-150"
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-neutral-200 bg-white/95 backdrop-blur-md flex items-center justify-between">

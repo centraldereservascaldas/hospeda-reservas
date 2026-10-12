@@ -60,17 +60,21 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
     : null;
 
   return (
-    <div
-      onClick={() => onSelectProperty(property)}
-      className="group flex flex-col cursor-pointer transition-transform duration-200 p-2 sm:p-2.5 rounded-3xl liquid-glass border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-xl hover:-translate-y-1 transition-all"
-    >
+    <article className="group relative flex flex-col cursor-pointer transition-transform duration-200 p-2 sm:p-2.5 rounded-3xl liquid-glass border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-xl hover:-translate-y-1 transition-all">
+      <button
+        type="button"
+        onClick={() => onSelectProperty(property)}
+        aria-label={`Ver detalhes de ${property.title}`}
+        className="absolute inset-0 z-0 rounded-3xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-600"
+      />
+      <div className="relative z-10 flex flex-col pointer-events-none">
       {/* Photo Carousel Container */}
       <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-neutral-100/60 border border-white/80 shadow-2xs group-hover:shadow-md transition-all duration-300">
         
         {/* Images */}
         <img
           src={currentImage}
-          alt={property.title}
+          alt=""
           className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
           loading={prioritizeImage ? 'eager' : 'lazy'}
           fetchPriority={prioritizeImage ? 'high' : 'auto'}
@@ -79,8 +83,10 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         {/* Favorite Heart Button */}
         <button
           onClick={handleFavoriteClick}
-          aria-label="Salvar favorito"
-          className="absolute top-3 right-3 z-20 p-2 sm:p-2.5 rounded-full liquid-glass-button bg-black/25 hover:bg-black/45 text-white hover:scale-115 active:scale-95 transition-all cursor-pointer shadow-sm border border-white/40 flex-shrink-0"
+          type="button"
+          aria-label={isSaved ? `Remover ${property.title} dos favoritos` : `Salvar ${property.title} nos favoritos`}
+          aria-pressed={isSaved}
+          className="pointer-events-auto absolute top-3 right-3 z-20 p-2 sm:p-2.5 rounded-full liquid-glass-button bg-black/25 hover:bg-black/45 text-white hover:scale-115 active:scale-95 transition-all cursor-pointer shadow-sm border border-white/40 flex-shrink-0"
         >
           <Heart
             className={`w-4 h-4 transition-colors duration-200 stroke-[2.2] ${
@@ -111,8 +117,9 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             {currentImageIndex > 0 && (
               <button
                 onClick={prevImage}
+                type="button"
                 aria-label="Foto anterior"
-                className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 sm:w-8 sm:h-8 rounded-full liquid-glass-button hover:bg-white text-neutral-900 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/90"
+                className="pointer-events-auto absolute left-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 sm:w-8 sm:h-8 rounded-full liquid-glass-button hover:bg-white text-neutral-900 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/90"
               >
                 <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
               </button>
@@ -120,8 +127,9 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             {currentImageIndex < imageCount - 1 && (
               <button
                 onClick={nextImage}
+                type="button"
                 aria-label="Próxima foto"
-                className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 sm:w-8 sm:h-8 rounded-full liquid-glass-button hover:bg-white text-neutral-900 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/90"
+                className="pointer-events-auto absolute right-2 top-1/2 -translate-y-1/2 z-10 w-7 h-7 sm:w-8 sm:h-8 rounded-full liquid-glass-button hover:bg-white text-neutral-900 flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all cursor-pointer border border-white/90"
               >
                 <ChevronRight className="w-4 h-4 stroke-[2.5]" />
               </button>
@@ -136,13 +144,13 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
               <button
                 key={idx}
                 type="button"
-                aria-label={`Mostrar foto ${idx + 1}`}
-                onClick={(event) => { event.stopPropagation(); goToImage(idx); }}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
+                className={`pointer-events-auto h-1.5 rounded-full transition-all duration-300 ${
                   idx === currentImageIndex
                     ? 'w-5 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]'
                     : 'w-1.5 bg-white/70'
                 }`}
+                aria-label={`Mostrar foto ${idx + 1}`}
+                onClick={(event) => { event.stopPropagation(); goToImage(idx); }}
               />
             ))}
           </div>
@@ -226,6 +234,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         </div>
 
       </div>
-    </div>
+      </div>
+    </article>
   );
 };

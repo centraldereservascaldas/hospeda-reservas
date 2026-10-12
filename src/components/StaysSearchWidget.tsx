@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Calendar as CalendarIcon, 
@@ -51,6 +51,7 @@ export const fromBrDate = (brDate: string): string => {
 
 interface LiquidDatePickerProps {
   label: string;
+  labelId: string;
   value: string;
   minDate: string;
   isOpen: boolean;
@@ -61,7 +62,7 @@ interface LiquidDatePickerProps {
 
 const isoDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, value, minDate, isOpen, onOpen, onClose, onChange }) => {
+const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, labelId, value, minDate, isOpen, onOpen, onClose, onChange }) => {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [visibleMonth, setVisibleMonth] = useState(() => {
@@ -85,24 +86,33 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, value, minDa
   useEffect(() => {
     if (!isOpen) return;
     updatePosition();
+    const focusFrame = window.requestAnimationFrame(() => {
+      const selectedDay = popoverRef.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]:not(:disabled)');
+      const firstAvailableDay = popoverRef.current?.querySelector<HTMLButtonElement>('[data-calendar-day]:not(:disabled)');
+      (selectedDay || firstAvailableDay)?.focus();
+    });
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
       if (!triggerRef.current?.contains(target) && !popoverRef.current?.contains(target)) onClose();
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        triggerRef.current?.focus();
+      }
     };
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
     document.addEventListener('pointerdown', handlePointerDown);
     document.addEventListener('keydown', handleKeyDown);
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   const monthStart = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
   const leadingDays = (monthStart.getDay() + 6) % 7;
@@ -119,7 +129,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, value, minDa
       <button
         ref={triggerRef}
         type="button"
-        aria-label={`${label}: ${shownValue}`}
+        aria-labelledby={`${labelId} ${labelId}-value`}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         onClick={() => {
@@ -129,7 +139,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, value, minDa
         }}
         className={`w-full pl-10 pr-3 py-3 liquid-glass-input rounded-2xl border border-white/80 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-left text-xs sm:text-sm font-bold text-neutral-900 transition-all outline-none cursor-pointer shadow-xs min-w-0 ${value ? '' : 'text-neutral-400'}`}
       >
-        {shownValue}
+        <span id={`${labelId}-value`}>{shownValue}</span>
       </button>
 
       {isOpen && createPortal(
@@ -175,7 +185,9 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, value, minDa
                   key={dateValue}
                   type="button"
                   disabled={!isCurrentMonth || isBeforeMinimum}
-                  onClick={() => { onChange(dateValue); onClose(); }}
+                  onClick={() => { onChange(dateValue); onClose(); triggerRef.current?.focus(); }}
+                  aria-pressed={isSelected}
+                  data-calendar-day
                   className={`aspect-square rounded-xl text-xs font-semibold transition-all disabled:cursor-not-allowed ${
                     isSelected
                       ? 'liquid-glass-accent text-white shadow-md'
@@ -190,7 +202,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, value, minDa
             })}
           </div>
           <div className="mt-3 flex justify-end border-t border-neutral-200/70 pt-3">
-            <button type="button" onClick={() => { const today = isoDate(new Date()); if (today >= minDate) { onChange(today); onClose(); } }} className="rounded-full px-3 py-1.5 text-xs font-bold text-orange-700 transition hover:bg-orange-500/10">Hoje</button>
+            <button type="button" onClick={() => { const today = isoDate(new Date()); if (today >= minDate) { onChange(today); onClose(); triggerRef.current?.focus(); } }} className="rounded-full px-3 py-1.5 text-xs font-bold text-orange-700 transition hover:bg-orange-500/10">Hoje</button>
           </div>
         </div>,
         document.body
@@ -201,6 +213,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, value, minDa
 
 interface LiquidOption { value: string; label: string; }
 interface LiquidSelectProps {
+  labelId: string;
   value: string;
   selectedLabel?: string;
   placeholder: string;
@@ -214,10 +227,12 @@ interface LiquidSelectProps {
 }
 
 const LiquidSelect: React.FC<LiquidSelectProps> = ({
-  value, selectedLabel, placeholder, options, isOpen, onOpen, onClose, onChange, searchable, message,
+  labelId, value, selectedLabel, placeholder, options, isOpen, onOpen, onClose, onChange, searchable, message,
 }) => {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [position, setPosition] = useState({ left: 8, top: 8, width: 300, maxHeight: 360 });
   const [query, setQuery] = useState('');
 
@@ -255,12 +270,33 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
       document.removeEventListener('pointerdown', closeOnOutside);
       document.removeEventListener('keydown', closeOnEscape);
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   useEffect(() => { if (isOpen) setQuery(''); }, [isOpen]);
 
   const visibleOptions = options.filter((option) => !query || option.label.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')));
   const currentLabel = options.find((option) => option.value === value)?.label || selectedLabel || placeholder;
+  const selectedIndex = visibleOptions.findIndex((option) => option.value === value);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (searchable) searchInputRef.current?.focus();
+      else (optionRefs.current[selectedIndex] || optionRefs.current[0])?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isOpen, searchable, selectedIndex]);
+
+  const selectOption = (option: LiquidOption) => {
+    onChange(option);
+    onClose();
+    triggerRef.current?.focus();
+  };
+
+  const moveOptionFocus = (index: number, direction: -1 | 1) => {
+    const next = Math.min(Math.max(index + direction, 0), visibleOptions.length - 1);
+    optionRefs.current[next]?.focus();
+  };
 
   return (
     <>
@@ -268,39 +304,66 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
         ref={triggerRef}
         type="button"
         aria-haspopup="listbox"
+        aria-labelledby={`${labelId} ${labelId}-value`}
+        aria-controls={`${labelId}-listbox`}
         aria-expanded={isOpen}
         onClick={() => onOpen()}
         className="flex w-full min-w-0 items-center justify-between gap-2 rounded-2xl border border-white/85 bg-white/55 py-3 pl-10 pr-3 text-left text-xs font-bold text-neutral-900 shadow-[inset_0_1px_2px_rgba(255,255,255,0.85),0_3px_10px_rgba(15,23,42,0.04)] backdrop-blur-xl transition hover:bg-white/70 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 sm:text-sm"
       >
-        <span className={`min-w-0 truncate ${currentLabel === placeholder ? 'text-neutral-500' : ''}`}>{currentLabel}</span>
+        <span id={`${labelId}-value`} className={`min-w-0 truncate ${currentLabel === placeholder ? 'text-neutral-500' : ''}`}>{currentLabel}</span>
         <ChevronDown className={`h-4 w-4 flex-shrink-0 text-neutral-500 transition-transform ${isOpen ? 'rotate-180 text-orange-600' : ''}`} />
       </button>
 
       {isOpen && createPortal(
         <div
           ref={menuRef}
-          role="dialog"
+          role="group"
           aria-label="Opções de filtro"
           className="fixed z-[1000] overflow-hidden rounded-2xl border border-white/90 bg-white/78 p-2 text-neutral-800 shadow-[0_18px_55px_-16px_rgba(15,23,42,0.24)] backdrop-blur-2xl"
           style={{ left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight }}
         >
           {searchable && (
             <input
-              autoFocus
+              ref={searchInputRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown' && visibleOptions.length > 0) {
+                  event.preventDefault();
+                  (optionRefs.current[selectedIndex] || optionRefs.current[0])?.focus();
+                }
+                if (event.key === 'Escape') {
+                  onClose();
+                  triggerRef.current?.focus();
+                }
+              }}
+              aria-label="Buscar condomínio"
               placeholder="Buscar condomínio..."
               className="mb-2 w-full rounded-xl border border-white/90 bg-white/65 px-3 py-2.5 text-sm text-neutral-800 shadow-inner outline-none placeholder:text-neutral-400 focus:border-orange-300 focus:ring-2 focus:ring-orange-400/15"
             />
           )}
-          <div role="listbox" className="overflow-y-auto overscroll-contain" style={{ maxHeight: Math.max(112, position.maxHeight - (searchable ? 68 : 16)) }}>
-            {visibleOptions.map((option) => (
+          <div id={`${labelId}-listbox`} role="listbox" aria-label="Opções disponíveis" className="overflow-y-auto overscroll-contain" style={{ maxHeight: Math.max(112, position.maxHeight - (searchable ? 68 : 16)) }}>
+            {visibleOptions.map((option, index) => (
               <button
+                ref={(element) => { optionRefs.current[index] = element; }}
                 key={option.value || 'all'}
                 type="button"
                 role="option"
                 aria-selected={option.value === value}
-                onClick={() => { onChange(option); onClose(); }}
+                onClick={() => selectOption(option)}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    moveOptionFocus(index, event.key === 'ArrowDown' ? 1 : -1);
+                  } else if (event.key === 'Home' || event.key === 'End') {
+                    event.preventDefault();
+                    optionRefs.current[event.key === 'Home' ? 0 : visibleOptions.length - 1]?.focus();
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    onClose();
+                    triggerRef.current?.focus();
+                  }
+                }}
                 className={`flex w-full items-center rounded-xl px-3 py-2.5 text-left text-xs transition sm:text-sm ${
                   option.value === value
                     ? 'bg-orange-500/10 font-extrabold text-orange-800 ring-1 ring-inset ring-orange-300/50'
@@ -341,6 +404,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   );
   const [selectedResort, setSelectedResort] = useState<string>(currentFilters?.destination || '');
   const [selectedResortId, setSelectedResortId] = useState<string>(currentFilters?.destinationPropertyId || '');
+  const fieldId = useId().replace(/:/g, '');
   const [activeDatePicker, setActiveDatePicker] = useState<'checkIn' | 'checkOut' | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<'resort' | 'guests' | null>(null);
   const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
@@ -440,14 +504,15 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
             
             {/* Resort / Destination Selector */}
             {!surpriseMe && <div className="lg:col-span-3 min-w-0">
-              <label className="block text-xs font-extrabold uppercase tracking-wider text-neutral-800 mb-1.5 truncate">
+              <span id={`${fieldId}-resort-label`} className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800">
                 Complexo / Resort
-              </label>
+              </span>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500">
                   <Building2 className="w-4 h-4 text-orange-600 flex-shrink-0" />
                 </div>
                 <LiquidSelect
+                  labelId={`${fieldId}-resort-label`}
                   value={selectedResortId}
                   selectedLabel={selectedResort || undefined}
                   placeholder="Todos os condomínios"
@@ -467,15 +532,16 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
 
             {/* Arrival / Check-in */}
             {!surpriseMe && <div className="lg:col-span-3 min-w-0">
-              <label className="block text-xs font-extrabold uppercase tracking-wider text-neutral-800 mb-1.5 truncate">
+              <span id={`${fieldId}-checkin-label`} className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800">
                 Entrada (Check-in)
-              </label>
+              </span>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500 group-focus-within:text-orange-600">
                   <CalendarIcon className="w-4 h-4 flex-shrink-0" />
                 </div>
                 <LiquidDatePicker
                   label="Entrada (Check-in)"
+                  labelId={`${fieldId}-checkin-label`}
                   value={checkIn}
                   minDate={today}
                   isOpen={activeDatePicker === 'checkIn'}
@@ -496,15 +562,16 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
 
             {/* Departure / Checkout */}
             {!surpriseMe && <div className="lg:col-span-3 min-w-0">
-              <label className="block text-xs font-extrabold uppercase tracking-wider text-neutral-800 mb-1.5 truncate">
+              <span id={`${fieldId}-checkout-label`} className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800">
                 Saída (Checkout)
-              </label>
+              </span>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500 group-focus-within:text-orange-600">
                   <CalendarIcon className="w-4 h-4 flex-shrink-0" />
                 </div>
                 <LiquidDatePicker
                   label="Saída (Checkout)"
+                  labelId={`${fieldId}-checkout-label`}
                   value={checkOut}
                   minDate={checkIn || today}
                   isOpen={activeDatePicker === 'checkOut'}
@@ -517,14 +584,15 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
 
             {/* Guest Count (Persons: 1 to 17) */}
             <div className={`${surpriseMe ? 'lg:col-span-4' : 'lg:col-span-3'} min-w-0`}>
-              <label className="block text-xs font-extrabold uppercase tracking-wider text-neutral-800 mb-1.5 truncate">
+              <span id={`${fieldId}-guests-label`} className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800">
                 Hóspedes
-              </label>
+              </span>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500">
                   <Users className="w-4 h-4 text-orange-600 flex-shrink-0" />
                 </div>
                 <LiquidSelect
+                  labelId={`${fieldId}-guests-label`}
                   value={persons}
                   selectedLabel={guestOptions.find((option) => option.value === persons)?.label}
                   placeholder="Hóspedes"

@@ -6,20 +6,16 @@ import {
   Heart, 
   Share2, 
   Medal, 
-  ShieldCheck, 
   Calendar as CalendarIcon, 
-  Users, 
   Sparkles, 
   ChevronRight, 
   Check, 
-  Bed, 
   BedDouble, 
   MapPin, 
   Clock, 
   Maximize2,
   ChevronDown,
   ChevronLeft,
-  Info,
   Home,
   Waves
 } from 'lucide-react';
@@ -89,6 +85,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const detailDialogRef = useDialogFocus(property !== null, onClose, { initialFocusRef: detailCloseRef });
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const propertyId = property?.id;
   const defaultCheckIn = initialCheckIn || todayIso;
   const defaultCheckOut = initialCheckOut || new Date(new Date(`${defaultCheckIn}T12:00:00`).getTime() + 2 * 86400000).toISOString().slice(0, 10);
   // Booking state
@@ -123,7 +120,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
 
   useEffect(() => {
-    if (!property) return;
+    if (!propertyId) return;
     const nextCheckIn = initialCheckIn || todayIso;
     const requestedCheckOut = initialCheckOut;
     const nextCheckOut = requestedCheckOut > nextCheckIn
@@ -136,36 +133,21 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     setInfants(initialGuests.infants);
     setPets(initialGuests.pets);
     setDisplayedMonth(new Date(`${nextCheckIn}T12:00:00`));
-  }, [property?.id, initialCheckIn, initialCheckOut, initialGuests.adults, initialGuests.children, initialGuests.infants, initialGuests.pets]);
+  }, [propertyId, todayIso, initialCheckIn, initialCheckOut, initialGuests.adults, initialGuests.children, initialGuests.infants, initialGuests.pets]);
 
   useEffect(() => {
     if (!isDatePickerOpen) return;
     const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsDatePickerOpen(false);
-    };
     document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isDatePickerOpen]);
-
-  useEffect(() => {
-    if (!isGuestSelectorOpen) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsGuestSelectorOpen(false);
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isGuestSelectorOpen]);
 
   useEffect(() => {
     if (!showAllPhotos) return;
     const previousOverflow = document.body.style.overflow;
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setShowAllPhotos(false);
       if (event.key === 'ArrowRight') setActivePhotoIndex((index) => (index + 1) % Math.max(property?.images.length || 1, 1));
       if (event.key === 'ArrowLeft') setActivePhotoIndex((index) => (index - 1 + Math.max(property?.images.length || 1, 1)) % Math.max(property?.images.length || 1, 1));
     };
@@ -230,7 +212,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     });
 
     return () => { isMounted = false; };
-  }, [property?.id, checkIn]);
+  }, [property, checkIn, todayIso]);
 
   // Requote whenever guests or the selected stay changes.
   useEffect(() => {
@@ -255,7 +237,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [property?.id, checkIn, checkOut, adults, children]);
+  }, [property, checkIn, checkOut, adults, children]);
 
   if (!property) return null;
 
@@ -423,9 +405,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     >
       <div 
         className="min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start"
-        onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
       >
         <div className="relative w-full max-w-5xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-neutral-200/90 animate-in zoom-in-95 duration-200">
           
@@ -518,32 +497,36 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-2 h-[340px] sm:h-[460px]">
                 
                 {/* Main large photo */}
-                <div 
-                  className="md:col-span-2 md:row-span-2 relative overflow-hidden group cursor-pointer"
+                <button
+                  type="button"
+                  aria-label={`Ampliar foto principal de ${property.title}`}
+                  className="md:col-span-2 md:row-span-2 relative overflow-hidden group cursor-pointer border-0 p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
                   onClick={() => openPhotoGallery(0)}
                 >
                   <img
                     src={property.images[0]}
-                    alt={property.title}
+                    alt=""
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
-                </div>
+                </button>
 
                 {/* 4 smaller photos */}
                 {property.images.slice(1, 5).map((img, i) => (
-                  <div
+                  <button
                     key={i}
-                    className="relative overflow-hidden group cursor-pointer hidden md:block"
+                    type="button"
+                    aria-label={`Ampliar foto ${i + 2} de ${property.title}`}
+                    className="relative overflow-hidden group cursor-pointer hidden md:block border-0 p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
                     onClick={() => openPhotoGallery(i + 1)}
                   >
                     <img
                       src={img}
-                      alt={`Foto ${i + 2}`}
+                      alt=""
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
-                  </div>
+                  </button>
                 ))}
               </div>
 
@@ -893,7 +876,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                         className="w-full flex items-center justify-between text-left cursor-pointer"
                       >
                         <div>
-                          <label className="text-[10px] uppercase font-bold text-neutral-500 block">Hóspedes</label>
+                          <span className="text-[10px] uppercase font-bold text-neutral-500 block">Hóspedes</span>
                           <span className="text-xs font-semibold text-neutral-900">
                             {totalGuests} hóspede{totalGuests > 1 ? 's' : ''}{infants > 0 ? `, ${infants} bebê${infants > 1 ? 's' : ''}` : ''}
                           </span>
@@ -1092,9 +1075,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="stay-dates-title"
-          onMouseDown={(event) => { if (event.target === event.currentTarget) setIsDatePickerOpen(false); }}
         >
-          <div className="w-full max-w-sm rounded-3xl border border-white/90 bg-white/95 p-5 shadow-2xl backdrop-blur-2xl" onMouseDown={(event) => event.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-3xl border border-white/90 bg-white/95 p-5 shadow-2xl backdrop-blur-2xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 id="stay-dates-title" className="text-lg font-bold text-neutral-900">Escolha as datas</h2>
@@ -1184,7 +1166,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="property-gallery-title"
-          onMouseDown={(event) => { if (event.target === event.currentTarget) setShowAllPhotos(false); }}
         >
           <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 py-4 text-neutral-900 sm:px-8">
             <div>

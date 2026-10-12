@@ -93,7 +93,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
         timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, sofiaMsg]);
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -111,7 +111,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-60 bg-white/20 backdrop-blur-sm flex items-end sm:items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="fixed inset-0 z-60 bg-white/20 backdrop-blur-sm flex items-end sm:items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
       <div 
         ref={dialogRef}
         data-dialog-focus-root
@@ -125,7 +125,6 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
           backdropFilter: 'blur(18px) saturate(180%)',
           WebkitBackdropFilter: 'blur(18px) saturate(180%)',
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="relative flex flex-shrink-0 items-center justify-between bg-gradient-to-r from-orange-500/75 via-orange-400/68 to-amber-400/65 px-4 py-3 text-white shadow-[0_8px_24px_rgba(234,88,12,0.12)] backdrop-blur-xl border-b border-white/45 sm:px-5 sm:py-4 before:absolute before:inset-x-0 before:top-0 before:h-px before:bg-white/70">
@@ -208,17 +207,19 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                   {isSofia && msg.properties && msg.properties.length > 0 && (
                     <div className="grid grid-cols-1 gap-2 pt-1">
                       {msg.properties.map((prop) => (
-                        <div
+                        <button
                           key={prop.id}
+                          type="button"
+                          aria-label={`Ver detalhes de ${prop.title}`}
                           onClick={() => {
                             onSelectProperty(prop);
                             onClose();
                           }}
-                          className="flex items-center gap-3 p-2.5 rounded-2xl liquid-glass-button hover:border-orange-300 hover:shadow-md transition-all cursor-pointer group"
+                          className="flex w-full items-center gap-3 p-2.5 rounded-2xl text-left liquid-glass-button hover:border-orange-300 hover:shadow-md transition-all cursor-pointer group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
                         >
                           <img
                             src={prop.images[0]}
-                            alt={prop.title}
+                            alt=""
                             className="w-16 h-16 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition-transform"
                           />
                           <div className="flex-1 min-w-0">
@@ -245,7 +246,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                               </span>
                             </div>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}

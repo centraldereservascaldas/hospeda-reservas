@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Property, Reservation, SearchFilters, Currency } from './types';
 import { CalculatedPriceResponse } from './services/crcnBackendApi';
@@ -27,7 +27,6 @@ import {
   Briefcase, 
   Sparkles, 
   MapPin, 
-  SlidersHorizontal, 
   Globe, 
   ShieldCheck, 
   Search 
@@ -107,7 +106,7 @@ export default function App() {
             }));
           }
         }
-      } catch (e) { /* fallback */ }
+      } catch { /* fallback */ }
     }
     return [];
   });
@@ -150,7 +149,7 @@ export default function App() {
           const cleaned = parsed.filter((id: string) => !id.startsWith('prop-'));
           if (cleaned.length > 0) return cleaned;
         }
-      } catch (e) { /* fallback */ }
+      } catch { /* fallback */ }
     }
     return ['JQ08G', 'stays-lacqua-204'];
   });
@@ -160,6 +159,8 @@ export default function App() {
   const [showTotalWithTaxes, setShowTotalWithTaxes] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [currentView, setCurrentView] = useState<'explore' | 'trips' | 'wishlists' | 'host' | 'ownerAdmin'>('explore');
+  const currentViewRef = useRef(currentView);
+  currentViewRef.current = currentView;
   const [authCallbackNotice, setAuthCallbackNotice] = useState('');
   const [accountSession, setAccountSession] = useState<Session | null>(null);
   const [accountModalMode, setAccountModalMode] = useState<'login' | 'signup' | 'recovery' | null>(null);
@@ -310,7 +311,7 @@ export default function App() {
     if (!accountSession?.access_token) {
       setOwnerAccessStatus('none');
       setIsOwnerAdmin(false);
-      if (currentView === 'host' || currentView === 'ownerAdmin') setCurrentView('explore');
+      if (currentViewRef.current === 'host' || currentViewRef.current === 'ownerAdmin') setCurrentView('explore');
       return;
     }
     let cancelled = false;
@@ -336,12 +337,12 @@ export default function App() {
       .then((isAdmin) => {
         if (cancelled) return;
         setIsOwnerAdmin(isAdmin);
-        if (!isAdmin && currentView === 'ownerAdmin') setCurrentView('explore');
+        if (!isAdmin && currentViewRef.current === 'ownerAdmin') setCurrentView('explore');
       })
       .catch(() => {
         if (cancelled) return;
         setIsOwnerAdmin(false);
-        if (currentView === 'ownerAdmin') setCurrentView('explore');
+        if (currentViewRef.current === 'ownerAdmin') setCurrentView('explore');
       });
     return () => { cancelled = true; };
   }, [accountSession?.access_token]);
@@ -877,11 +878,11 @@ export default function App() {
             <div>
               <h4 className="font-bold text-neutral-900 mb-3">Principais Destinos & Parques</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="hover:underline">diRoma Acqua Park</a></li>
-                <li><a href="#" className="hover:underline">Hot Park & Praia do Cerrado</a></li>
-                <li><a href="#" className="hover:underline">L’acqua diRoma 24h</a></li>
-                <li><a href="#" className="hover:underline">Náutico Praia Clube (Lago Corumbá)</a></li>
-                <li><a href="#" className="hover:underline">Prive Diversão & Water Park</a></li>
+                <li>diRoma Acqua Park</li>
+                <li>Hot Park & Praia do Cerrado</li>
+                <li>L’acqua diRoma 24h</li>
+                <li>Náutico Praia Clube (Lago Corumbá)</li>
+                <li>Prive Diversão & Water Park</li>
               </ul>
             </div>
 
@@ -889,9 +890,9 @@ export default function App() {
               <h4 className="font-bold text-neutral-900 mb-3">Proprietários & Hospedagem</h4>
               <ul className="space-y-2">
                 <li><button onClick={() => setIsCreateListingOpen(true)} className="hover:underline text-left cursor-pointer">Cadastre seu Imóvel na Central</button></li>
-                <li><a href="#" className="hover:underline">Gestão de Flats em Caldas Novas</a></li>
-                <li><a href="#" className="hover:underline">Vantagens para Proprietários</a></li>
-                <li><a href="#" className="hover:underline">Regras de Condomínio e Pulseiras</a></li>
+                <li>Gestão de Flats em Caldas Novas</li>
+                <li>Vantagens para Proprietários</li>
+                <li>Regras de Condomínio e Pulseiras</li>
               </ul>
             </div>
 
@@ -913,9 +914,9 @@ export default function App() {
             <div className="flex items-center gap-2">
               <span>© {new Date().getFullYear()} Central de Reservas Caldas Novas. Todos os direitos reservados.</span>
               <span>•</span>
-              <a href="#" className="hover:underline">Privacidade</a>
+              <span>Privacidade</span>
               <span>•</span>
-              <a href="#" className="hover:underline">Termos</a>
+              <span>Termos</span>
             </div>
 
             <div className="flex items-center gap-4 font-semibold text-neutral-700">

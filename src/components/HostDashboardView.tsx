@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, ClipboardList, Home, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
 import { OwnerDashboardData } from '../services/crcnBackendApi';
 import { crcnBackendApi } from '../services/crcnBackendApi';
@@ -36,7 +36,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -49,9 +49,9 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken, month]);
 
-  useEffect(() => { void loadDashboard(); }, [accessToken, month]);
+  useEffect(() => { void loadDashboard(); }, [loadDashboard]);
 
   const confirmed = dashboard?.reservations.filter((reservation) => reservation.status === 'confirmed') || [];
   const upcoming = confirmed.filter((reservation) => reservation.checkOut >= new Date().toISOString().slice(0, 10));

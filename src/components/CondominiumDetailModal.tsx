@@ -60,7 +60,6 @@ export const CondominiumDetailModal: React.FC<CondominiumDetailModalProps> = ({ 
         role="dialog"
         aria-modal="true"
         aria-label={`Detalhes do condomínio ${condominium.name}`}
-        onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
       >
         <div className="liquid-glass-card mx-auto w-full max-w-5xl overflow-hidden rounded-3xl animate-in zoom-in-95 duration-200">
           <div className="sticky top-0 z-30 flex items-center justify-between border-b border-white/70 bg-white/45 px-5 py-3.5 backdrop-blur-2xl sm:px-7">
@@ -114,7 +113,7 @@ export const CondominiumDetailModal: React.FC<CondominiumDetailModalProps> = ({ 
       </div>
 
       {showGallery && imageCount > 0 && createPortal(
-        <div ref={galleryDialogRef} data-dialog-focus-root tabIndex={-1} className="fixed inset-0 z-[2147483647] flex flex-col items-center justify-center overflow-hidden bg-neutral-950/95 p-4 text-white backdrop-blur-xl" role="dialog" aria-modal="true" aria-label={`Galeria de fotos do condomínio ${condominium.name}`} onMouseDown={(event) => { if (event.target === event.currentTarget) setShowGallery(false); }}>
+        <div ref={galleryDialogRef} data-dialog-focus-root tabIndex={-1} className="fixed inset-0 z-[2147483647] flex flex-col items-center justify-center overflow-hidden bg-neutral-950/95 p-4 text-white backdrop-blur-xl" role="dialog" aria-modal="true" aria-label={`Galeria de fotos do condomínio ${condominium.name}`}>
           <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 py-4 sm:px-8">
             <div><h2 className="text-sm font-bold sm:text-base">{condominium.name}</h2><p className="mt-0.5 text-xs text-white/70">{photoIndex + 1} de {imageCount} fotos do condomínio</p></div>
             <button ref={galleryCloseButtonRef} type="button" onClick={() => setShowGallery(false)} aria-label="Fechar galeria" className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25"><X className="h-5 w-5" /></button>
