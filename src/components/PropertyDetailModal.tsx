@@ -29,6 +29,7 @@ import { formatCurrency, calculateNights } from '../utils/formatters';
 import { crcnBackendApi, CalculatedPriceResponse } from '../services/crcnBackendApi';
 import { isCalendarRangeAvailable } from '../utils/staysAvailability';
 import type { StaysCalendarDay } from '../utils/staysAvailability';
+import { useDialogFocus } from './useDialogFocus';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -97,14 +98,20 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [pets, setPets] = useState<number>(initialGuests.pets);
   const [isGuestSelectorOpen, setIsGuestSelectorOpen] = useState(false);
   const guestSelectorTriggerRef = useRef<HTMLButtonElement>(null);
+  const guestDialogCloseRef = useRef<HTMLButtonElement>(null);
+  const guestDialogRef = useDialogFocus(isGuestSelectorOpen, () => setIsGuestSelectorOpen(false), { initialFocusRef: guestDialogCloseRef });
   const [guestPopoverPosition, setGuestPopoverPosition] = useState({ top: 0, left: 0, width: 280 });
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  const dateDialogCloseRef = useRef<HTMLButtonElement>(null);
+  const dateDialogRef = useDialogFocus(isDatePickerOpen, () => setIsDatePickerOpen(false), { initialFocusRef: dateDialogCloseRef });
   const [activeDateField, setActiveDateField] = useState<'checkIn' | 'checkOut'>('checkIn');
   const [displayedMonth, setDisplayedMonth] = useState(() => {
     const date = new Date(`${defaultCheckIn}T12:00:00`);
     return new Date(date.getFullYear(), date.getMonth(), 1);
   });
   const [showAllPhotos, setShowAllPhotos] = useState(false);
+  const galleryCloseRef = useRef<HTMLButtonElement>(null);
+  const galleryDialogRef = useDialogFocus(showAllPhotos, () => setShowAllPhotos(false), { initialFocusRef: galleryCloseRef });
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
   const [staysPrice, setStaysPrice] = useState<CalculatedPriceResponse | null>(null);
@@ -1032,18 +1039,21 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         <>
           <div className="fixed inset-0 z-[70] bg-transparent" aria-hidden="true" onMouseDown={() => setIsGuestSelectorOpen(false)} />
           <div
+            ref={guestDialogRef}
+            data-dialog-focus-root
             role="dialog"
             aria-modal="true"
-            aria-label="Selecionar quantidade de hóspedes"
+            aria-labelledby="guest-selector-title"
+            tabIndex={-1}
             className="fixed z-[71] rounded-3xl border border-white/90 bg-white/95 p-5 shadow-2xl backdrop-blur-2xl"
             style={{ top: guestPopoverPosition.top, left: guestPopoverPosition.left, width: guestPopoverPosition.width }}
           >
             <div className="mb-3 flex items-center justify-between border-b border-neutral-100 pb-3">
               <div>
-                <h2 className="text-base font-bold text-neutral-900">Hóspedes</h2>
+                <h2 id="guest-selector-title" className="text-base font-bold text-neutral-900">Hóspedes</h2>
                 <p className="mt-0.5 text-[11px] text-neutral-500">Limite de {guestLimit} hóspede{guestLimit === 1 ? '' : 's'} na acomodação</p>
               </div>
-              <button type="button" onClick={() => setIsGuestSelectorOpen(false)} aria-label="Fechar seletor de hóspedes" className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-orange-50 hover:text-orange-700">
+              <button ref={guestDialogCloseRef} type="button" onClick={() => setIsGuestSelectorOpen(false)} aria-label="Fechar seletor de hóspedes" className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-orange-50 hover:text-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1062,19 +1072,22 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
       {isDatePickerOpen && createPortal(
         <div
+          ref={dateDialogRef}
+          data-dialog-focus-root
+          tabIndex={-1}
           className="fixed inset-0 z-[60] flex items-center justify-center bg-white/25 p-4 backdrop-blur-xl animate-in fade-in duration-150"
           role="dialog"
           aria-modal="true"
-          aria-label="Selecionar datas da hospedagem"
+          aria-labelledby="stay-dates-title"
           onMouseDown={(event) => { if (event.target === event.currentTarget) setIsDatePickerOpen(false); }}
         >
           <div className="w-full max-w-sm rounded-3xl border border-white/90 bg-white/95 p-5 shadow-2xl backdrop-blur-2xl" onMouseDown={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-neutral-900">Escolha as datas</h2>
+                <h2 id="stay-dates-title" className="text-lg font-bold text-neutral-900">Escolha as datas</h2>
                 <p className="mt-0.5 text-xs text-neutral-500">Selecione entrada e saída da hospedagem</p>
               </div>
-              <button type="button" onClick={() => setIsDatePickerOpen(false)} aria-label="Fechar calendário" className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-orange-50 hover:text-orange-700">
+              <button ref={dateDialogCloseRef} type="button" onClick={() => setIsDatePickerOpen(false)} aria-label="Fechar calendário" className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-orange-50 hover:text-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1151,18 +1164,22 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
       {showAllPhotos && property.images.length > 0 && createPortal(
         <div
+          ref={galleryDialogRef}
+          data-dialog-focus-root
+          tabIndex={-1}
           className="fixed inset-0 z-[2147483647] flex flex-col items-center justify-center overflow-hidden bg-white/95 p-4 backdrop-blur-2xl animate-in fade-in duration-200 sm:p-8"
           role="dialog"
           aria-modal="true"
-          aria-label={`Galeria de fotos de ${property.title}`}
+          aria-labelledby="property-gallery-title"
           onMouseDown={(event) => { if (event.target === event.currentTarget) setShowAllPhotos(false); }}
         >
           <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-5 py-4 text-neutral-900 sm:px-8">
             <div>
-              <h3 className="text-sm font-semibold sm:text-base">{property.title}</h3>
+              <h3 id="property-gallery-title" className="text-sm font-semibold sm:text-base">{property.title}</h3>
               <p className="mt-0.5 text-xs text-neutral-600">{activePhotoIndex + 1} de {property.images.length} fotos</p>
             </div>
             <button
+              ref={galleryCloseRef}
               type="button"
               onClick={() => setShowAllPhotos(false)}
               aria-label="Fechar galeria"
