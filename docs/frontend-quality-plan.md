@@ -4,16 +4,54 @@
 
 Aplicar as melhorias da auditoria do frontend por etapas pequenas e verificáveis, manter o Laravel e os contratos de API existentes intactos e deixar critérios de qualidade claros para novas features. Cada etapa deve ser revisada e validada antes de um commit local. Não fazer push, merge ou deploy sem autorização posterior.
 
-## Estado inicial conhecido
+## Baseline da auditoria
 
 - Frontend: React 19, TypeScript, Vite 6 e Tailwind CSS 4.
 - Backend Laravel coexistindo com serviços legados. Preservar `/api/*`, `server.ts` e as integrações existentes.
 - Hotspots observados: `src/App.tsx`, `src/components/PropertyDetailModal.tsx` e `src/components/StaysNetModal.tsx`.
-- O TypeScript está com `strict: false`; há usos de `any` em serviços e componentes.
-- Existem `package-lock.json` e `bun.lock`, enquanto o README instrui `npm ci`.
-- O build já reportou um chunk JavaScript de aproximadamente 777 kB e uma importação dinâmica ineficaz de `src/data/staysApartments.ts`.
+- O TypeScript partiu de `strict: false`; havia usos de `any` em serviços e componentes.
+- Havia `package-lock.json` e `bun.lock`, enquanto o README instruía `npm ci`.
+- O build partiu de um chunk JavaScript de aproximadamente 777 kB e uma importação dinâmica ineficaz de `src/data/staysApartments.ts`.
 - Classes `animate-in`, `fade-in`, `zoom-in-95` e `slide-in-from-bottom` foram implementadas em `src/index.css` no commit `b373211`. O build confirmou as regras geradas e o suporte a movimento reduzido.
 - Diversos modais não têm semântica de diálogo, associação completa de labels, nome em botões de ícone ou gerenciamento de foco consistente.
+
+## Progresso atual
+
+O trabalho é feito em commits locais pequenos, revisados e validados. A branch permanece sem push; a contagem abaixo é relativa ao estado de `origin/main` consultado nesta execução.
+
+| Fase | Estado | Evidência / pendência |
+|---|---|---|
+| 0 — padrão de diálogo | Em andamento | `useDialogFocus` e foco para os modais principais e subdiálogos. Ainda falta validar fluxos completos no navegador e revisar os popovers de `StaysSearchWidget`. |
+| 1 — acessibilidade | Em andamento | Busca, filtros, checkout, cadastro, conta, suporte, condomínio e detalhe de acomodação receberam melhorias. Fazer revisão final de controles sem nome, labels e teclado nos fluxos compostos. |
+| 2 — tipos e dependências | Concluída para o escopo frontend auditado | TypeScript estrito; npm é o único gerenciador; validação compartilhada de payloads do catálogo e calendário. Rever os avisos restantes e não confundir código legado do servidor Express com o escopo frontend. |
+| 3 — bundle e carregamento | Em andamento | Telas/modais e catálogo Stays são carregados sob demanda; primeira imagem do catálogo recebe prioridade. Chunk de entrada atual: cerca de 568 kB minificados / 161 kB gzip, ainda acima do aviso de 500 kB. Não alegar melhora de Web Vitals sem medição real. |
+| 4 — tokens e movimento | Parcialmente concluída | Tokens de foco, página e borda de vidro; suporte global a movimento reduzido. Aplicação visual dos tokens ainda precisa de revisão nas telas principais. |
+| 5 — decomposição dos hotspots | Pendente | Executar sequencialmente em `PropertyDetailModal.tsx`, `StaysNetModal.tsx` e `App.tsx`, sem alterar regras de negócio. |
+| 6 — lint, formatação, testes e CI | Base implementada | ESLint, Prettier, teste de teclado/foco e workflow GitHub Actions adicionados em `8a6e151`. `npm run lint` passa com 166 avisos herdados no momento do commit; a formatação está limitada para evitar reformatar todo o legado. Continuar reduzindo os avisos de forma incremental. |
+| 7 — convenções permanentes | Parcialmente concluída | Regras de qualidade foram adicionadas ao `AGENTS.md`; manter este plano atualizado com critérios e estado executável. |
+
+### Commits locais relevantes
+
+- `b373211` restaura animações de entrada e movimento reduzido.
+- `69e6ffd` cria este plano para pacotes delegáveis.
+- `e9a1439` padroniza npm e remove o lockfile excedente.
+- `aea3b0b` incorpora o checklist de qualidade ao guia de agentes.
+- `47faf2a` habilita checagem estrita de TypeScript.
+- `f0feb42` adiciona tokens de foco/página e movimento reduzido global.
+- `7fc033b`, `a81bc1f`, `32e064d`, `9f99250`, `5d7d4af` e `84d2cdc` implementam melhorias de foco e semântica nos diálogos.
+- `388b104` divide catálogo e telas secundárias do bundle inicial.
+- `03f5ba6` e `e5b6d2a` removem casts inseguros e validam dados Stays/API.
+- `068ee63` centraliza a borda dos componentes de vidro.
+- `ebeff73` prioriza a primeira imagem do catálogo.
+- `8a6e151` adiciona lint, formatação, teste de diálogos e CI.
+
+### Próximos pacotes
+
+1. Concluir a revisão de acessibilidade dos diálogos de calendário/hóspedes/seletores em `StaysSearchWidget.tsx` e garantir labels realmente associados aos controles.
+2. Revisar e reduzir os avisos acionáveis do ESLint, começando por avisos duplicados e interações sem teclado; manter mudanças isoladas por componente.
+3. Gerar relatório de composição do bundle antes de qualquer nova divisão manual; manter o warning de 500 kB documentado até comprovar redução segura.
+4. Refatorar os hotspots na ordem definida na Fase 5, com teste/build depois de cada extração.
+5. Fazer revisão visual e funcional das jornadas em desktop e viewport estreito quando o browser local estiver disponível; registrar limitações se o ambiente não permitir.
 
 ## Regras para execução e subagentes
 
