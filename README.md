@@ -24,9 +24,11 @@ O backend Express anterior permanece disponível durante a migração pelo coman
 
 ## Verificação
 
-- Frontend: `npm run build`, `npm test`, `npm run lint`
+- Frontend: `npm ci`, `npm run lint`, `npm run format:check`, `npm test`, `npm run build`
 - Backend: `php artisan test`, `./vendor/bin/pint --test`, `php artisan route:list --path=api`
 - Health check: `GET /api/health`
+
+`npm run lint` executa ESLint em `src/`, `tests/` e na configuração do Vite (incluindo regras de acessibilidade JSX e Hooks), além da verificação de tipos TypeScript. Regras de lint ainda não saneadas no legado são reportadas como avisos para permitir correção progressiva; violações das regras dos Hooks e erros de tipos falham a verificação. `npm test` também verifica contenção de foco, teclado, Escape e retorno do foco em diálogos. O workflow **Frontend quality** executa essas verificações em pushes para `main` e pull requests. Como a formatação Prettier ainda não foi aplicada ao legado, `npm run format:check` cobre somente os arquivos de tooling, documentação e o novo teste; formate os arquivos alterados com `npx prettier --write caminho/do/arquivo` até que a migração gradual permita ampliar essa checagem sem reescrever tudo de uma vez.
 
 ## Autenticação e dados
 

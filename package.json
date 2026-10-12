@@ -10,7 +10,8 @@
     "build": "tsc --noEmit -p tsconfig.frontend.json && vite build",
     "start": "vite preview --host 0.0.0.0",
     "test": "tsx --test tests/*.test.ts",
-    "lint": "tsc --noEmit -p tsconfig.frontend.json",
+    "lint": "eslint src tests vite.config.ts eslint.config.js && tsc --noEmit -p tsconfig.frontend.json",
+    "format:check": "prettier --check README.md package.json eslint.config.js .prettierrc.json .github/workflows/frontend-quality.yml tests/dialogFocus.test.ts",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
@@ -23,15 +24,24 @@
     "tsx": "^4.23.15"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/react": "^16.3.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
     "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.39.5",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "jsdom": "^30.1.2",
+    "prettier": "^3.9.10",
     "tailwindcss": "^4.0.0",
     "typescript": "~5.7.2",
+    "typescript-eslint": "^8.71.2",
     "vite": "^6.1.0"
   }
 }
