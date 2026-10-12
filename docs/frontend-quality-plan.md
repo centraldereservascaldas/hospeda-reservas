@@ -21,14 +21,18 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 
 | Fase | Estado | Evidência / pendência |
 |---|---|---|
-| 0 — padrão de diálogo | Em andamento | `useDialogFocus` e foco para os modais principais e subdiálogos. Ainda falta validar fluxos completos no navegador e revisar os popovers de `StaysSearchWidget`. |
-| 1 — acessibilidade | Em andamento | Busca, filtros, checkout, cadastro, conta, suporte, condomínio e detalhe de acomodação receberam melhorias. Fazer revisão final de controles sem nome, labels e teclado nos fluxos compostos. |
+| 0 — padrão de diálogo | Implementada; validação manual pendente | `useDialogFocus` atende aos modais principais e subdiálogos. Testes automatizados cobrem foco inicial, contenção de Tab, Escape e retorno do foco; revisar fluxos completos no navegador quando disponível. |
+| 1 — acessibilidade | Implementada; revisão visual pendente | Busca, filtros, checkout, cadastro, conta, suporte, condomínio, detalhe e cartões receberam melhorias de semântica, rótulos e teclado. Revisar visualmente os fluxos compostos em desktop e viewport estreito. |
 | 2 — tipos e dependências | Concluída para o escopo frontend auditado | TypeScript estrito; npm é o único gerenciador; validação compartilhada de payloads do catálogo e calendário. Rever os avisos restantes e não confundir código legado do servidor Express com o escopo frontend. |
-| 3 — bundle e carregamento | Em andamento | Telas/modais e catálogo Stays são carregados sob demanda; primeira imagem do catálogo recebe prioridade. Chunk de entrada atual: cerca de 568 kB minificados / 161 kB gzip, ainda acima do aviso de 500 kB. Não alegar melhora de Web Vitals sem medição real. |
-| 4 — tokens e movimento | Parcialmente concluída | Tokens de foco, página e borda de vidro; suporte global a movimento reduzido. Aplicação visual dos tokens ainda precisa de revisão nas telas principais. |
-| 5 — decomposição dos hotspots | Pendente | Executar sequencialmente em `PropertyDetailModal.tsx`, `StaysNetModal.tsx` e `App.tsx`, sem alterar regras de negócio. |
-| 6 — lint, formatação, testes e CI | Base implementada | ESLint, Prettier, teste de teclado/foco e workflow GitHub Actions adicionados em `8a6e151`. `npm run lint` passa com 166 avisos herdados no momento do commit; a formatação está limitada para evitar reformatar todo o legado. Continuar reduzindo os avisos de forma incremental. |
+| 3 — bundle e carregamento | Em andamento | Telas/modais e catálogo Stays são carregados sob demanda; primeira imagem do catálogo recebe prioridade. Build atual: chunk de entrada 570,21 kB minificados / 162,17 kB gzip, ainda acima do aviso de 500 kB. Gerar relatório de composição antes de novas divisões; não alegar melhora de Web Vitals sem medição real. |
+| 4 — tokens e movimento | Parcialmente concluída | Tokens de foco, página e borda de vidro; suporte global a movimento reduzido. Revisão visual de consistência nas telas principais continua pendente. |
+| 5 — decomposição dos hotspots | Em andamento | Extraído cálculo puro de preços/taxas de `PropertyDetailModal.tsx` para `src/utils/propertyPricing.ts`; agora coberto por testes. Continuar com seções apresentacionais e depois `StaysNetModal.tsx` e `App.tsx`, sem alterar regras de negócio. Um hotspot por vez. |
+| 6 — lint, formatação, testes e CI | Base implementada | ESLint, Prettier, testes de foco/diálogo e workflow GitHub Actions. No estado mais recente, `npm run lint` passa sem avisos, `npm test` passa (55/55), `npm run format:check` e `npm run build` passam. Formatação segue limitada para evitar reformatar o legado. |
 | 7 — convenções permanentes | Parcialmente concluída | Regras de qualidade foram adicionadas ao `AGENTS.md`; manter este plano atualizado com critérios e estado executável. |
+
+### Evidência de bundle (2026-10-12)
+
+Build reproduzido com sourcemaps em `/tmp/hospeda-reservas-bundle-report` (artefato temporário, fora do repositório): chunk inicial 570,26 kB minificado / 162,20 kB gzip. O mapa aponta React DOM (runtime), Supabase Auth e Supabase Storage/PostgREST entre as maiores contribuições. `App.tsx` consulta a sessão no início e checkout/conta também usam auth; um `import()` chamado no início só deslocaria código para outro arquivo, sem reduzir bytes transferidos. Não introduzir divisão manual do Supabase sem redesenhar e testar a jornada de inicialização de auth. `PropertyDetailModal.tsx` é cerca de 44,6 kB minificado no build atual e já é chunk carregado sob demanda; sua decomposição é prioritariamente manutenção, não redução do chunk inicial. A extração de `propertyPricing.ts` mantém o chunk inicial em 570,21 kB / 162,16 kB gzip.
 
 ### Commits locais relevantes
 
@@ -44,14 +48,13 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 - `068ee63` centraliza a borda dos componentes de vidro.
 - `ebeff73` prioriza a primeira imagem do catálogo.
 - `8a6e151` adiciona lint, formatação, teste de diálogos e CI.
+- `eded865` completa teclado de busca, popovers e cartões de acomodação; lint sem avisos.
 
 ### Próximos pacotes
 
-1. Concluir a revisão de acessibilidade dos diálogos de calendário/hóspedes/seletores em `StaysSearchWidget.tsx` e garantir labels realmente associados aos controles.
-2. Revisar e reduzir os avisos acionáveis do ESLint, começando por avisos duplicados e interações sem teclado; manter mudanças isoladas por componente.
-3. Gerar relatório de composição do bundle antes de qualquer nova divisão manual; manter o warning de 500 kB documentado até comprovar redução segura.
-4. Refatorar os hotspots na ordem definida na Fase 5, com teste/build depois de cada extração.
-5. Fazer revisão visual e funcional das jornadas em desktop e viewport estreito quando o browser local estiver disponível; registrar limitações se o ambiente não permitir.
+1. Continuar a decomposição incremental de `PropertyDetailModal.tsx`, priorizando seções apresentacionais de menor acoplamento antes de mover estado ou diálogos; acrescentar testes para invariantes de reserva antes de extrair o widget de reserva.
+2. Avaliar com evidência de execução se há uma arquitetura de sessão Supabase que possa ser carregada sob demanda sem bloquear callback OAuth, restauração de sessão ou checkout; se não houver, documentar o limite de transferência em vez de dividir artificialmente.
+3. Fazer revisão visual e funcional das jornadas em desktop e viewport estreito quando o browser local estiver disponível; registrar limitações se o ambiente não permitir.
 
 ## Regras para execução e subagentes
 
@@ -61,7 +64,7 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 4. Não adicionar dependências sem justificar necessidade, versão, manutenção e impacto no bundle. Atualizações de dependências precisam ser isoladas em commit próprio.
 5. Não alterar API, backend Laravel, autenticação, checkout, contratos de dados ou comportamento de reserva como efeito colateral de refatoração visual.
 6. Não criar mocks que escondam falhas de API. Estados de erro, carregamento, cancelamento e autenticação devem continuar explícitos.
-7. Cada pacote termina com diff revisado, validações executadas e resumo de arquivos/risco. Criar commits locais pequenos, com mensagem convencional. Push continua fora do escopo.
+7. Cada pacote termina com diff revisado, validações executadas e resumo de arquivos/risco. Criar commits locais pequenos, com mensagem convencional, conforme autorização do usuário. Push continua fora do escopo.
 
 ## Ordem de execução
 
@@ -176,11 +179,11 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 
 **Aceite:** instruções são específicas do repositório, consistentes com Laravel + React/Vite, executáveis por agentes e não contradizem comandos ou skills existentes.
 
-## Estratégia de commits
+## Estratégia de integração e versionamento
 
-- Um commit por pacote concluído, após revisão de diff e validação. Commits sugeridos: `fix(a11y): ...`, `chore(tooling): ...`, `perf(frontend): ...`, `refactor(frontend): ...`, `docs(frontend): ...`.
+- Cada pacote deve terminar com diff revisado e validação registrada antes de um commit local pequeno, convencional e isolado.
 - Não misturar correções de acessibilidade, alterações de dependência e refatorações de comportamento no mesmo commit.
-- Os commits ficam locais até revisão final e autorização explícita para push.
+- Não fazer push, merge ou deploy sem autorização explícita.
 - O commit `b373211` é uma etapa inicial concluída: animações de entrada e suporte a movimento reduzido.
 
 ## Verificações por pacote
