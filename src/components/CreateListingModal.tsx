@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { X, Plus, Sparkles, Check, Image as ImageIcon } from 'lucide-react';
 import { Property, Currency } from '../types';
 import { CATEGORIES } from '../data/mockProperties';
 import { formatCurrency } from '../utils/formatters';
+import { useDialogFocus } from './useDialogFocus';
 
 interface CreateListingModalProps {
   isOpen: boolean;
@@ -25,6 +26,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
   onAddProperty,
   currency,
 }) => {
+  const fieldId = useId();
+  const titleRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: titleRef });
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('waterpark');
@@ -143,14 +147,16 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-neutral-100 animate-in zoom-in-95 duration-200">
+        <div ref={dialogRef} data-dialog-focus-root role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`} tabIndex={-1} className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-neutral-100 animate-in zoom-in-95 duration-200">
           
           <div className="px-6 py-4 border-b border-neutral-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-orange-500" />
-              <h2 className="text-base font-bold text-neutral-900">Anunciar Nova Acomodação</h2>
+              <h2 id={`${fieldId}-title`} className="text-base font-bold text-neutral-900">Anunciar Nova Acomodação</h2>
             </div>
             <button
+              type="button"
+              aria-label="Fechar formulário de anúncio"
               onClick={onClose}
               className="w-8 h-8 rounded-full hover:bg-neutral-100 flex items-center justify-center text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
             >
@@ -162,10 +168,12 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
             
             {/* Title */}
             <div>
-              <label className="block text-xs font-bold text-neutral-900 mb-1">
+              <label htmlFor={`${fieldId}-listing-title`} className="block text-xs font-bold text-neutral-900 mb-1">
                 Título atrativo do anúncio *
               </label>
               <input
+                ref={titleRef}
+                id={`${fieldId}-listing-title`}
                 type="text"
                 required
                 value={title}
@@ -178,8 +186,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
             {/* Category & Location */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-xs font-bold text-neutral-900 mb-1">Categoria</label>
+                <label htmlFor={`${fieldId}-category`} className="block text-xs font-bold text-neutral-900 mb-1">Categoria</label>
                 <select
+                  id={`${fieldId}-category`}
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-neutral-300 focus:border-neutral-900 outline-none text-xs"
@@ -191,8 +200,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-neutral-900 mb-1">Cidade</label>
+                <label htmlFor={`${fieldId}-city`} className="block text-xs font-bold text-neutral-900 mb-1">Cidade</label>
                 <input
+                  id={`${fieldId}-city`}
                   type="text"
                   required
                   value={city}
@@ -202,8 +212,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-neutral-900 mb-1">Estado</label>
+                <label htmlFor={`${fieldId}-state`} className="block text-xs font-bold text-neutral-900 mb-1">Estado</label>
                 <input
+                  id={`${fieldId}-state`}
                   type="text"
                   required
                   value={state}
@@ -216,10 +227,11 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
             {/* Pricing */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-neutral-900 mb-1">
+                <label htmlFor={`${fieldId}-nightly-price`} className="block text-xs font-bold text-neutral-900 mb-1">
                   Preço por noite ({currency})
                 </label>
                 <input
+                  id={`${fieldId}-nightly-price`}
                   type="number"
                   min="50"
                   max="50000"
@@ -231,10 +243,11 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-neutral-900 mb-1">
+                <label htmlFor={`${fieldId}-cleaning-fee`} className="block text-xs font-bold text-neutral-900 mb-1">
                   Taxa de limpeza ({currency})
                 </label>
                 <input
+                  id={`${fieldId}-cleaning-fee`}
                   type="number"
                   min="0"
                   value={cleaningFee}
@@ -247,8 +260,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
             {/* Capacity Specs */}
             <div className="grid grid-cols-4 gap-2 text-center text-xs">
               <div className="p-2 border border-neutral-200 rounded-xl">
-                <span className="text-[10px] text-neutral-400 uppercase font-bold block">Quartos</span>
+                <label htmlFor={`${fieldId}-bedrooms`} className="text-[10px] text-neutral-600 uppercase font-bold block">Quartos</label>
                 <input
+                  id={`${fieldId}-bedrooms`}
                   type="number"
                   min="1"
                   max="20"
@@ -259,8 +273,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
               </div>
 
               <div className="p-2 border border-neutral-200 rounded-xl">
-                <span className="text-[10px] text-neutral-400 uppercase font-bold block">Camas</span>
+                <label htmlFor={`${fieldId}-beds`} className="text-[10px] text-neutral-600 uppercase font-bold block">Camas</label>
                 <input
+                  id={`${fieldId}-beds`}
                   type="number"
                   min="1"
                   max="30"
@@ -271,8 +286,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
               </div>
 
               <div className="p-2 border border-neutral-200 rounded-xl">
-                <span className="text-[10px] text-neutral-400 uppercase font-bold block">Banhos</span>
+                <label htmlFor={`${fieldId}-bathrooms`} className="text-[10px] text-neutral-600 uppercase font-bold block">Banhos</label>
                 <input
+                  id={`${fieldId}-bathrooms`}
                   type="number"
                   min="1"
                   max="20"
@@ -283,8 +299,9 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
               </div>
 
               <div className="p-2 border border-neutral-200 rounded-xl">
-                <span className="text-[10px] text-neutral-400 uppercase font-bold block">Hóspedes</span>
+                <label htmlFor={`${fieldId}-max-guests`} className="text-[10px] text-neutral-600 uppercase font-bold block">Hóspedes</label>
                 <input
+                  id={`${fieldId}-max-guests`}
                   type="number"
                   min="1"
                   max="30"
@@ -297,14 +314,16 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
             {/* Photos selection */}
             <div>
-              <label className="block text-xs font-bold text-neutral-900 mb-2">
+              <p id={`${fieldId}-photo-label`} className="block text-xs font-bold text-neutral-900 mb-2">
                 Foto principal da acomodação
-              </label>
-              <div className="grid grid-cols-5 gap-2 mb-3">
-                {PRESET_PHOTOS.map((preset, idx) => (
+              </p>
+              <div role="group" aria-labelledby={`${fieldId}-photo-label`} className="grid grid-cols-5 gap-2 mb-3">
+                {PRESET_PHOTOS.map((preset) => (
                   <button
-                    key={idx}
+                    key={preset.url}
                     type="button"
+                    aria-label={`Selecionar foto: ${preset.label}`}
+                    aria-pressed={selectedPhoto === preset.url && !customPhotoUrl}
                     onClick={() => {
                       setSelectedPhoto(preset.url);
                       setCustomPhotoUrl('');
@@ -326,6 +345,8 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
               </div>
 
               <input
+                id={`${fieldId}-custom-photo-url`}
+                aria-label="URL da foto principal personalizada"
                 type="url"
                 value={customPhotoUrl}
                 onChange={(e) => setCustomPhotoUrl(e.target.value)}
@@ -336,10 +357,11 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
             {/* Description */}
             <div>
-              <label className="block text-xs font-bold text-neutral-900 mb-1">
+              <label htmlFor={`${fieldId}-description`} className="block text-xs font-bold text-neutral-900 mb-1">
                 Descrição do espaço
               </label>
               <textarea
+                id={`${fieldId}-description`}
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
