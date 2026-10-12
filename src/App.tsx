@@ -7,7 +7,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Property, Reservation, SearchFilters, Currency } from './types';
 import { CalculatedPriceResponse } from './services/crcnBackendApi';
-import { STAYS_NET_APARTMENTS } from './data/staysApartments';
 import { CATEGORIES } from './data/mockProperties';
 import { staysApi } from './services/staysApi';
 import { matchesPropertyCategory } from './utils/propertyCategories';
@@ -15,20 +14,7 @@ import { Header } from './components/Header';
 import { CategoryBar } from './components/CategoryBar';
 import { PropertyCard } from './components/PropertyCard';
 import { CondominiumDirectory } from './components/CondominiumDirectory';
-import { InteractiveMap } from './components/InteractiveMap';
-import { PropertyDetailModal } from './components/PropertyDetailModal';
-import { CondominiumDetailModal } from './components/CondominiumDetailModal';
-import { CheckoutModal } from './components/CheckoutModal';
-import { GuestAccountModal } from './components/GuestAccountModal';
-import { SearchModal } from './components/SearchModal';
-import { FilterModal } from './components/FilterModal';
-import { TripsView } from './components/TripsView';
-import { WishlistsView } from './components/WishlistsView';
-import { HostDashboardView } from './components/HostDashboardView';
-import { OwnerAccessAdminView } from './components/OwnerAccessAdminView';
-import { CreateListingModal } from './components/CreateListingModal';
 import { StaysSearchWidget } from './components/StaysSearchWidget';
-import { SofiaAssistantModal } from './components/SofiaAssistantModal';
 import { LogoCRCN } from './components/LogoCRCN';
 import { crcnBackendApi } from './services/crcnBackendApi';
 import { initialAuthCallbackError, supabase } from './services/supabase';
@@ -46,6 +32,61 @@ import {
   ShieldCheck, 
   Search 
 } from 'lucide-react';
+
+const InteractiveMap = React.lazy(() => import('./components/InteractiveMap').then(({ InteractiveMap }) => ({ default: InteractiveMap })));
+const PropertyDetailModal = React.lazy(() => import('./components/PropertyDetailModal').then(({ PropertyDetailModal }) => ({ default: PropertyDetailModal })));
+const CondominiumDetailModal = React.lazy(() => import('./components/CondominiumDetailModal').then(({ CondominiumDetailModal }) => ({ default: CondominiumDetailModal })));
+const CheckoutModal = React.lazy(() => import('./components/CheckoutModal').then(({ CheckoutModal }) => ({ default: CheckoutModal })));
+const GuestAccountModal = React.lazy(() => import('./components/GuestAccountModal').then(({ GuestAccountModal }) => ({ default: GuestAccountModal })));
+const SearchModal = React.lazy(() => import('./components/SearchModal').then(({ SearchModal }) => ({ default: SearchModal })));
+const FilterModal = React.lazy(() => import('./components/FilterModal').then(({ FilterModal }) => ({ default: FilterModal })));
+const TripsView = React.lazy(() => import('./components/TripsView').then(({ TripsView }) => ({ default: TripsView })));
+const WishlistsView = React.lazy(() => import('./components/WishlistsView').then(({ WishlistsView }) => ({ default: WishlistsView })));
+const HostDashboardView = React.lazy(() => import('./components/HostDashboardView').then(({ HostDashboardView }) => ({ default: HostDashboardView })));
+const OwnerAccessAdminView = React.lazy(() => import('./components/OwnerAccessAdminView').then(({ OwnerAccessAdminView }) => ({ default: OwnerAccessAdminView })));
+const CreateListingModal = React.lazy(() => import('./components/CreateListingModal').then(({ CreateListingModal }) => ({ default: CreateListingModal })));
+const SofiaAssistantModal = React.lazy(() => import('./components/SofiaAssistantModal').then(({ SofiaAssistantModal }) => ({ default: SofiaAssistantModal })));
+
+class LazyFeatureBoundary extends React.Component<
+  { children: React.ReactNode; overlay?: boolean; visible?: boolean },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  render() {
+    const message = this.state.hasError
+      ? 'Não foi possível carregar esta parte da página.'
+      : 'Carregando…';
+    const content = (
+      <div role={this.state.hasError ? 'alert' : 'status'} className="rounded-2xl bg-white px-6 py-5 text-center shadow-lg">
+        <p className="font-semibold text-neutral-800">{message}</p>
+        {this.state.hasError && (
+          <button type="button" onClick={() => window.location.reload()} className="mt-3 rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500">
+            Recarregar página
+          </button>
+        )}
+      </div>
+    );
+    const fallback = this.props.overlay
+      ? <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">{content}</div>
+      : <div className="flex min-h-48 items-center justify-center p-6">{content}</div>;
+
+    if (this.state.hasError) return this.props.visible === false ? null : fallback;
+    return <React.Suspense fallback={fallback}>{this.props.children}</React.Suspense>;
+  }
+}
+
+const DeferredModal: React.FC<{ active: boolean; children: React.ReactNode }> = ({ active, children }) => {
+  const [hasOpened, setHasOpened] = useState(active);
+  useEffect(() => {
+    if (active) setHasOpened(true);
+  }, [active]);
+  return hasOpened ? <LazyFeatureBoundary overlay={active} visible={active}>{children}</LazyFeatureBoundary> : null;
+};
 
 export default function App() {
   // Persistent properties supplied by the reservations catalogue
@@ -68,14 +109,19 @@ export default function App() {
         }
       } catch (e) { /* fallback */ }
     }
-    return STAYS_NET_APARTMENTS;
+    return [];
   });
+
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogLoadError, setCatalogLoadError] = useState(false);
 
   const handlePullStaysApartments = async () => {
     try {
       const res = await staysApi.fetchListings();
       if (res.success && res.listings.length > 0) {
         setProperties(res.listings);
+        setCatalogLoading(false);
+        setCatalogLoadError(false);
         localStorage.setItem('hospeda_properties', JSON.stringify(res.listings));
         localStorage.setItem('hospeda_properties_source', 'stays-live');
       }
@@ -221,13 +267,27 @@ export default function App() {
 
   // Refresh accommodation catalog from the booking service
   useEffect(() => {
-    crcnBackendApi.getAccommodations().then((list) => {
-      if (list && list.length > 0) {
+    let cancelled = false;
+    void crcnBackendApi.getAccommodations().then(async (list) => {
+      if (cancelled) return;
+      if (list.length > 0) {
         setProperties(list);
         localStorage.setItem('hospeda_properties', JSON.stringify(list));
         localStorage.setItem('hospeda_properties_source', 'stays-live');
+        return;
       }
+
+      // The bundled catalogue is only needed when the API and synchronized
+      // cache have no listings. Keep it outside the initial application chunk.
+      const { STAYS_NET_APARTMENTS } = await import('./data/staysApartments');
+      if (!cancelled) setProperties((current) => current.length > 0 ? current : STAYS_NET_APARTMENTS);
+    }).catch((error) => {
+      console.warn('Unable to load accommodation catalogue:', error);
+      if (!cancelled) setCatalogLoadError(true);
+    }).finally(() => {
+      if (!cancelled) setCatalogLoading(false);
     });
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -655,7 +715,11 @@ export default function App() {
             {isCondominiumView ? (
               <CondominiumDirectory condominiums={condominiums} onSelectCondominium={setSelectedCondominium} />
             ) : viewMode === 'grid' ? (
-              filteredProperties.length === 0 ? (
+              catalogLoading && properties.length === 0 ? (
+                <div role="status" className="py-20 text-center text-sm font-semibold text-neutral-600">Carregando acomodações…</div>
+              ) : catalogLoadError && properties.length === 0 ? (
+                <div role="alert" className="py-20 text-center text-sm font-semibold text-neutral-700">Não foi possível carregar as acomodações. Recarregue a página para tentar novamente.</div>
+              ) : filteredProperties.length === 0 ? (
                 <div className="text-center py-20 max-w-md mx-auto space-y-4">
                   <div className="w-16 h-16 rounded-full bg-neutral-100 text-neutral-400 flex items-center justify-center mx-auto">
                     <Search className="w-8 h-8" />
@@ -689,12 +753,14 @@ export default function App() {
                 </div>
               )
             ) : (
+              <LazyFeatureBoundary>
               <InteractiveMap
                 properties={filteredProperties}
                 currency={currency}
                 onSelectProperty={handleSelectProperty}
                 selectedProperty={selectedProperty}
               />
+              </LazyFeatureBoundary>
             )}
             </div>
 
@@ -703,16 +769,19 @@ export default function App() {
 
         {/* TRIPS VIEW */}
         {currentView === 'trips' && (
+          <LazyFeatureBoundary>
           <TripsView
             reservations={reservations}
             currency={currency}
             onCancelReservation={handleCancelReservation}
             onExploreMore={() => setCurrentView('explore')}
           />
+          </LazyFeatureBoundary>
         )}
 
         {/* WISHLISTS VIEW */}
         {currentView === 'wishlists' && (
+          <LazyFeatureBoundary>
           <WishlistsView
             savedProperties={savedPropertiesList}
             currency={currency}
@@ -721,17 +790,22 @@ export default function App() {
             onExploreMore={() => setCurrentView('explore')}
             showTotalWithTaxes={showTotalWithTaxes}
           />
+          </LazyFeatureBoundary>
         )}
 
         {/* HOST DASHBOARD VIEW */}
         {currentView === 'host' && (
+          <LazyFeatureBoundary>
           <HostDashboardView
             accessToken={accountSession?.access_token || ''}
           />
+          </LazyFeatureBoundary>
         )}
 
         {currentView === 'ownerAdmin' && isOwnerAdmin && accountSession?.access_token && (
+          <LazyFeatureBoundary>
           <OwnerAccessAdminView accessToken={accountSession.access_token} />
+          </LazyFeatureBoundary>
         )}
       </main>
 
@@ -879,6 +953,7 @@ export default function App() {
       {/* ALL INTERACTIVE MODALS */}
       
       {/* 1. Property Detail Modal */}
+      <DeferredModal active={selectedProperty !== null}>
       <PropertyDetailModal
         property={selectedProperty}
         initialCheckIn={filters.checkIn}
@@ -893,13 +968,17 @@ export default function App() {
           setBookingPayload(bookingData);
         }}
       />
+      </DeferredModal>
 
+      <DeferredModal active={selectedCondominium !== null}>
       <CondominiumDetailModal
         condominium={selectedCondominium}
         onClose={() => setSelectedCondominium(null)}
       />
+      </DeferredModal>
 
       {/* 2. Sofia Concierge Assistant Modal */}
+      <DeferredModal active={isSofiaOpen}>
       <SofiaAssistantModal
         isOpen={isSofiaOpen}
         onClose={() => setIsSofiaOpen(false)}
@@ -923,22 +1002,28 @@ export default function App() {
           if (catalogEl) catalogEl.scrollIntoView({ behavior: 'smooth' });
         }}
       />
+      </DeferredModal>
 
       {/* 2. Checkout Modal */}
+      <DeferredModal active={bookingPayload !== null}>
       <CheckoutModal
         isOpen={!!bookingPayload}
         onClose={() => setBookingPayload(null)}
         bookingData={bookingPayload}
         currency={currency}
       />
+      </DeferredModal>
 
+      <DeferredModal active={accountModalMode !== null}>
       <GuestAccountModal
         isOpen={accountModalMode !== null}
         initialMode={accountModalMode || 'login'}
         onClose={() => setAccountModalMode(null)}
       />
+      </DeferredModal>
 
       {/* 3. Search Modal */}
+      <DeferredModal active={isSearchOpen}>
       <SearchModal
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
@@ -947,8 +1032,10 @@ export default function App() {
         onResetFilters={() => setFilters(defaultFilters)}
         onSearchInApp={handleStaysWidgetSearch}
       />
+      </DeferredModal>
 
       {/* 4. Filter Modal */}
+      <DeferredModal active={isFilterOpen}>
       <FilterModal
         isOpen={isFilterOpen}
         onClose={() => setIsFilterOpen(false)}
@@ -958,14 +1045,17 @@ export default function App() {
         currency={currency}
         matchingCount={filteredProperties.length}
       />
+      </DeferredModal>
 
       {/* 5. Create Listing Modal */}
+      <DeferredModal active={isCreateListingOpen}>
       <CreateListingModal
         isOpen={isCreateListingOpen}
         onClose={() => setIsCreateListingOpen(false)}
         onAddProperty={handleAddNewProperty}
         currency={currency}
       />
+      </DeferredModal>
 
     </div>
   );

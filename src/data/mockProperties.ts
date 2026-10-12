@@ -1,6 +1,3 @@
-import { Property } from '../types';
-import { STAYS_NET_APARTMENTS } from './staysApartments';
-
 export const CATEGORIES = [
   { id: 'all', label: 'Todos os espaços', icon: 'Sparkles' },
   { id: 'condominiums', label: 'Condomínios', icon: 'Building' },
@@ -12,9 +9,6 @@ export const CATEGORIES = [
   { id: 'pet_friendly', label: 'Aceita animais', icon: 'PawPrint' },
   { id: 'hot_tub', label: 'Com hidromassagem', icon: 'Sparkles' },
 ];
-
-// Authoritative accommodation catalogue (no mockups)
-export const INITIAL_PROPERTIES: Property[] = STAYS_NET_APARTMENTS;
 
 export const INITIAL_RESERVATIONS = [
   {
