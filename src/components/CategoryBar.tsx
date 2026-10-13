@@ -122,7 +122,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
           {/* Exibe apenas cartões inteiros; as setas alternam páginas sem cortar rótulos. */}
           <div className="flex min-w-0 flex-none items-center gap-2">
             {categoryPage > 0 && (
-              <button type="button" onClick={() => setCategoryPage((page) => Math.max(0, page - 1))} aria-label="Ver filtros anteriores" title="Ver filtros anteriores" className="liquid-glass-button flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/85 text-neutral-800 shadow-md transition hover:scale-105 hover:bg-white active:scale-95">
+              <button type="button" onClick={() => setCategoryPage((page) => Math.max(0, page - 1))} aria-label={`Ver filtros anteriores; página ${categoryPage + 1} de ${pageCount}`} title="Ver filtros anteriores" className="liquid-glass-button flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/85 text-neutral-800 shadow-md transition hover:scale-105 hover:bg-white active:scale-95">
                 <ChevronLeft className="h-4 w-4" />
               </button>
             )}
@@ -162,7 +162,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               <button
                 type="button"
                 onClick={() => setCategoryPage((page) => Math.min(pageCount - 1, page + 1))}
-                aria-label="Ver outros filtros"
+                aria-label={`Ver outros filtros; página ${categoryPage + 1} de ${pageCount}`}
                 title="Ver outros filtros"
                 className="liquid-glass-button flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/85 text-neutral-800 shadow-md transition hover:scale-105 hover:bg-white active:scale-95"
               >
@@ -177,6 +177,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             {/* Filter button in Crisp Glass */}
             <button
               onClick={onOpenFilters}
+              aria-label={activeFilterCount > 0 ? `Abrir filtros; ${activeFilterCount} ativos` : 'Abrir filtros'}
               className="flex items-center gap-2 px-2 py-2 sm:px-4 sm:py-2.5 rounded-2xl liquid-glass-button hover:bg-white border border-white/85 shadow-xs text-xs font-bold text-neutral-800 transition-all cursor-pointer hover:scale-105 active:scale-95"
             >
               <SlidersHorizontal className="w-3.5 h-3.5 text-neutral-700" />
@@ -214,6 +215,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             {/* Toggle Grid vs Map button */}
             <button
               onClick={() => setViewMode(viewMode === 'grid' ? 'map' : 'grid')}
+              aria-label={viewMode === 'grid' ? 'Ver mapa' : 'Ver lista'}
               className="flex items-center gap-2 px-2 py-2.5 sm:px-4 rounded-2xl liquid-glass-dark text-white text-xs font-bold shadow-md transition-all cursor-pointer hover:scale-105 active:scale-95"
             >
               {viewMode === 'grid' ? (
