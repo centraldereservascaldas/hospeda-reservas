@@ -509,3 +509,13 @@ Leitor de tela, OAuth com sessão autenticada e checkout sem concluir reserva co
 - [ ] Testes cobrem regras e interações que podem regredir; build/lint passam.
 - [ ] Impacto em busca, detalhe, autenticação, checkout e acessos de proprietário foi avaliado.
 - [ ] Diff e dependências foram revisados; nenhuma medição de performance é alegada sem evidência.
+
+## Atualização da auditoria — títulos públicos e estado vigente (2026-10-13)
+
+O código vigente passou a formatar títulos somente na apresentação: remove o prefixo de marca `CRCN -`, expande `Apto`/`Apt` para `Apartamento` e padroniza separadores. Os campos de origem continuam intactos para busca, IDs, integração Stays e reservas. A formatação cobre cards, detalhe e galeria, mapa, assistente, checkout e viagens. Commits locais: `34292a0` e `bb6da88`.
+
+Evidência: leitura GET somente leitura, via cliente Laravel existente, consultou 56 anúncios Stays. Para LG11J, o título público era `CRCN - Ecologic Ville - Apto 801 A`, enquanto o nome interno era `Ecologic Ville - 801 A`; outros anúncios usam nomes internos abreviados ou incluem observações operacionais, portanto eles não são uma fonte pública consistente para substituição em lote. Chromium local exibiu `Ecologic Ville – Apartamento 801 A` no card e como H1 do detalhe `LG11J`; detalhe continuou em diálogo nomeado e não foi iniciado checkout/reserva. Quatro testes cobrem prefixo, `Apto`, `Apt`, espaços e preservação do valor de origem. A suíte serial passou 185/185; o arquivo de validação de API que falhou em uma execução sob gates concorrentes passou isoladamente e na repetição serial. `npm run lint`, `npm run format:check`, build e `git diff --check` passaram. Build: JS inicial 365,57 kB / 108,92 kB gzip; CSS 107,37 / 15,78; Supabase 226,85 / 58,83; detalhe 51,67 / 13,85.
+
+Na mesma inspeção visual, a descrição live de LG11J continha o texto malformado “O apartamento de no edifício Ecologic Ville”. Isso é conteúdo da ficha Stays; não foi alterado automaticamente nem enviado à API. Requer revisão editorial no cadastro de origem antes de qualquer correção que modifique conteúdo externo.
+
+Estado vigente após `bb6da88`: `App.tsx` tem 280 linhas e `PropertyDetailModal.tsx` 412. A branch estava 158 commits à frente da referência local `origin/main`, não atualizada por fetch; `.DS_Store` segue não rastreado e fora dos commits. A autenticação real/sessão/checkout ainda depende de ambiente Supabase de QA; leitor de tela, contraste medido, walkthrough completo de teclado em viewport estreito, comparação visual pareada de movimento, inspeção final dos adaptadores e decisão sobre os handlers restantes de `App.tsx` seguem residuais. A auditoria permanece aberta. Sem push, merge ou deploy.

@@ -188,3 +188,11 @@ Os pacotes 1–4 são análise sem edição e podem ser distribuídos em paralel
 ## Modelo de despacho
 
 > Execute somente o Pacote N de `docs/frontend-quality-subagent-plan.md`. Leia as instruções e skills aplicáveis. Respeite os arquivos reservados e o estado compartilhado do Git. Para pacote de análise, não edite arquivos. Para pacote de implementação, faça apenas a mudança atribuída, rode as verificações do pacote, revise seu diff e retorne evidências, arquivos, comandos/resultados, riscos e dependências. Não faça commit, push, merge ou deploy.
+
+## Revalidação corrente — nomenclatura pública (2026-10-13)
+
+Commits de código `34292a0` e `bb6da88` adicionaram formatação de títulos na camada visual, sem modificar o título de origem usado pelos serviços: remove `CRCN -`, expande `Apto`/`Apt` e padroniza o separador. Amostra Stays de 56 anúncios mostrou que `internalName` não é substituto confiável do título público; para LG11J o detalhe agora apresenta `Ecologic Ville – Apartamento 801 A`. Chromium local confirmou o texto no card e no H1 do diálogo; nenhum checkout foi iniciado.
+
+Quatro testes cobrem prefixo, `Apto`, `Apt`, espaços e preservação do valor de origem. A suíte serial passou 185/185; o arquivo de validação de API que falhou em uma execução sob gates concorrentes passou isoladamente e na repetição serial. `npm run lint`, `npm run format:check`, `npm run build` (TypeScript + Vite) e `git diff --check` passaram. Artefatos atuais: JS inicial 365,57 kB / 108,92 kB gzip, CSS 107,37 / 15,78, Supabase 226,85 / 58,83, detalhe 51,67 / 13,85. Isso é tamanho de build, não Web Vitals. A descrição live de LG11J apresenta “O apartamento de no edifício Ecologic Ville”; registrar como pendência editorial no cadastro da Stays, sem mutação via frontend.
+
+No checkpoint `bb6da88`, `App.tsx` tem 280 linhas, `PropertyDetailModal.tsx` 412, a branch estava 158 commits acima de `origin/main` (referência local sem fetch) e `.DS_Store` não rastreado. Smoke Supabase autenticado, leitor de tela, contraste medido, walkthrough completo em tela estreita e movimento reduzido comparado lado a lado, revisão de adaptadores e decisão sobre handlers residuais de `App.tsx` continuam pendentes conforme o plano principal. Objetivo permanece ativo; sem push, merge ou deploy.
