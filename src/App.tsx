@@ -12,10 +12,10 @@ import { staysApi } from './services/staysApi';
 import { matchesPropertyCategory } from './utils/propertyCategories';
 import { Header } from './components/Header';
 import { CategoryBar } from './components/CategoryBar';
-import { PropertyCard } from './components/PropertyCard';
 import { CondominiumDirectory } from './components/CondominiumDirectory';
 import { StaysSearchWidget } from './components/StaysSearchWidget';
 import { ActiveSearchFilters } from './components/ActiveSearchFilters';
+import { PropertyCatalogGrid } from './components/PropertyCatalogGrid';
 import { LogoCRCN } from './components/LogoCRCN';
 import { crcnBackendApi } from './services/crcnBackendApi';
 import { getAuthCallbackError } from './utils/authCallback';
@@ -31,8 +31,7 @@ import {
   Briefcase, 
   Sparkles, 
   Globe, 
-  ShieldCheck, 
-  Search 
+  ShieldCheck,
 } from 'lucide-react';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
@@ -424,6 +423,11 @@ export default function App() {
 
   const condominiums = useMemo(() => buildCondominiumCatalog(properties), [properties]);
   const isCondominiumView = filters.category === 'condominiums';
+  const catalogStatus = catalogLoading && properties.length === 0
+    ? 'loading'
+    : catalogLoadError && properties.length === 0
+      ? 'error'
+      : 'ready';
 
   // Active filter count
   const activeFilterCount = useMemo(() => countActivePropertyFilters(filters), [filters]);
@@ -675,44 +679,16 @@ export default function App() {
             {isCondominiumView ? (
               <CondominiumDirectory condominiums={condominiums} onSelectCondominium={setSelectedCondominium} />
             ) : viewMode === 'grid' ? (
-              catalogLoading && properties.length === 0 ? (
-                <div role="status" className="py-20 text-center text-sm font-semibold text-neutral-600">Carregando acomodações…</div>
-              ) : catalogLoadError && properties.length === 0 ? (
-                <div role="alert" className="py-20 text-center text-sm font-semibold text-neutral-700">Não foi possível carregar as acomodações. Recarregue a página para tentar novamente.</div>
-              ) : filteredProperties.length === 0 ? (
-                <div className="text-center py-20 max-w-md mx-auto space-y-4">
-                  <div className="w-16 h-16 rounded-full bg-neutral-100 text-neutral-400 flex items-center justify-center mx-auto">
-                    <Search className="w-8 h-8" />
-                  </div>
-                  <h3 className="text-lg font-bold text-neutral-900">
-                    Nenhuma acomodação encontrada
-                  </h3>
-                  <p className="text-xs text-neutral-500">
-                    Tente ajustar ou remover alguns filtros como datas, comodidades ou faixa de preço para ver mais resultados.
-                  </p>
-                  <button
-                    onClick={() => setFilters(defaultFilters)}
-                    className="px-6 py-2.5 rounded-full bg-neutral-900 hover:bg-black text-white text-xs font-bold transition-all cursor-pointer"
-                  >
-                    Restaurar todas as acomodações
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-10">
-                  {filteredProperties.map((prop, index) => (
-                    <PropertyCard
-                      key={prop.id}
-                      property={prop}
-                      currency={currency}
-                      isSaved={savedPropertyIds.includes(prop.id)}
-                      onToggleSave={handleToggleSave}
-                      onSelectProperty={handleSelectProperty}
-                      showTotalWithTaxes={showTotalWithTaxes}
-                      prioritizeImage={index === 0}
-                    />
-                  ))}
-                </div>
-              )
+              <PropertyCatalogGrid
+                status={catalogStatus}
+                properties={filteredProperties}
+                currency={currency}
+                savedPropertyIds={savedPropertyIds}
+                showTotalWithTaxes={showTotalWithTaxes}
+                onToggleSave={handleToggleSave}
+                onSelectProperty={handleSelectProperty}
+                onResetFilters={() => setFilters(defaultFilters)}
+              />
             ) : (
               <LazyFeatureBoundary>
               <InteractiveMap
