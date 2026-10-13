@@ -10,15 +10,13 @@ import { CATEGORIES } from './data/mockProperties';
 import { matchesPropertyCategory } from './utils/propertyCategories';
 import { Header } from './components/Header';
 import { CategoryBar } from './components/search/CategoryBar';
-import { CondominiumDirectory } from './components/condominium/CondominiumDirectory';
-import { StaysSearchWidget } from './components/search/StaysSearchWidget';
-import { ActiveSearchFilters } from './components/search/ActiveSearchFilters';
-import { PropertyCatalogGrid } from './components/property/PropertyCatalogGrid';
 import { MobileBottomNavigation, resolveMobileNavigationTarget } from './components/MobileBottomNavigation';
 import type { MainView } from './components/MobileBottomNavigation';
 import { AppFooter } from './components/AppFooter';
 import { SofiaAssistantTrigger } from './components/assistant/SofiaAssistantTrigger';
 import { getAuthCallbackError } from './utils/authCallback';
+import { MainContentRouter } from './components/MainContentRouter';
+import { LazyFeatureBoundary } from './components/LazyFeatureBoundary';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
 import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
 import { useSearchUrlSync } from './hooks/useSearchUrlSync';
@@ -35,52 +33,14 @@ import { useSavedPropertyIds } from './hooks/useSavedPropertyIds';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
-const InteractiveMap = React.lazy(() => import('./components/location/InteractiveMap').then(({ InteractiveMap }) => ({ default: InteractiveMap })));
 const PropertyDetailModal = React.lazy(() => import('./components/property/PropertyDetailModal').then(({ PropertyDetailModal }) => ({ default: PropertyDetailModal })));
 const CondominiumDetailModal = React.lazy(() => import('./components/condominium/CondominiumDetailModal').then(({ CondominiumDetailModal }) => ({ default: CondominiumDetailModal })));
 const CheckoutModal = React.lazy(() => import('./components/booking/CheckoutModal').then(({ CheckoutModal }) => ({ default: CheckoutModal })));
 const GuestAccountModal = React.lazy(() => import('./components/account/GuestAccountModal').then(({ GuestAccountModal }) => ({ default: GuestAccountModal })));
 const SearchModal = React.lazy(() => import('./components/search/SearchModal').then(({ SearchModal }) => ({ default: SearchModal })));
 const FilterModal = React.lazy(() => import('./components/search/FilterModal').then(({ FilterModal }) => ({ default: FilterModal })));
-const TripsView = React.lazy(() => import('./components/booking/TripsView').then(({ TripsView }) => ({ default: TripsView })));
-const WishlistsView = React.lazy(() => import('./components/account/WishlistsView').then(({ WishlistsView }) => ({ default: WishlistsView })));
-const HostDashboardView = React.lazy(() => import('./components/owner/HostDashboardView').then(({ HostDashboardView }) => ({ default: HostDashboardView })));
-const OwnerAccessAdminView = React.lazy(() => import('./components/owner/OwnerAccessAdminView').then(({ OwnerAccessAdminView }) => ({ default: OwnerAccessAdminView })));
 const CreateListingModal = React.lazy(() => import('./components/owner/CreateListingModal').then(({ CreateListingModal }) => ({ default: CreateListingModal })));
 const SofiaAssistantModal = React.lazy(() => import('./components/assistant/SofiaAssistantModal').then(({ SofiaAssistantModal }) => ({ default: SofiaAssistantModal })));
-
-class LazyFeatureBoundary extends React.Component<
-  { children: React.ReactNode; overlay?: boolean; visible?: boolean },
-  { hasError: boolean }
-> {
-  state = { hasError: false };
-
-  static getDerivedStateFromError(): { hasError: boolean } {
-    return { hasError: true };
-  }
-
-  render() {
-    const message = this.state.hasError
-      ? 'Não foi possível carregar esta parte da página.'
-      : 'Carregando…';
-    const content = (
-      <div role={this.state.hasError ? 'alert' : 'status'} className="rounded-2xl bg-white px-6 py-5 text-center shadow-lg">
-        <p className="font-semibold text-neutral-800">{message}</p>
-        {this.state.hasError && (
-          <button type="button" onClick={() => window.location.reload()} className="mt-3 rounded-full bg-neutral-900 px-4 py-2 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500">
-            Recarregar página
-          </button>
-        )}
-      </div>
-    );
-    const fallback = this.props.overlay
-      ? <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">{content}</div>
-      : <div className="flex min-h-48 items-center justify-center p-6">{content}</div>;
-
-    if (this.state.hasError) return this.props.visible === false ? null : fallback;
-    return <React.Suspense fallback={fallback}>{this.props.children}</React.Suspense>;
-  }
-}
 
 const DeferredModal: React.FC<{ active: boolean; children: React.ReactNode }> = ({ active, children }) => {
   const [hasOpened, setHasOpened] = useState(active);
@@ -258,102 +218,35 @@ export default function App() {
         />
       )}
 
-      {/* Main Content Router */}
-      <main ref={catalogFocusRef} tabIndex={-1} className="flex-1 pb-24 sm:pb-12">
-        {/* EXPLORE VIEW */}
-        {currentView === 'explore' && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            
-            {/* Search accommodation and dates */}
-            {!isCondominiumView && <div className="mb-8">
-              <StaysSearchWidget
-                variant="hero"
-                currentFilters={filters}
-                onSearchInApp={handleStaysWidgetSearch}
-                onOpenAssistant={() => setIsSofiaOpen(true)}
-              />
-            </div>}
-
-            {!isCondominiumView && (
-              <ActiveSearchFilters
-                filters={filters}
-                activeFilterCount={activeFilterCount}
-                defaultFilters={defaultFilters}
-                onChange={setFilters}
-              />
-            )}
-
-            {/* View Mode: Grid or Interactive Map */}
-            <div id="stays-apartments-catalog" className="scroll-mt-24">
-            {isCondominiumView ? (
-              <CondominiumDirectory condominiums={condominiums} onSelectCondominium={setSelectedCondominium} />
-            ) : viewMode === 'grid' ? (
-              <PropertyCatalogGrid
-                status={catalogStatus}
-                properties={filteredProperties}
-                currency={currency}
-                savedPropertyIds={savedPropertyIds}
-                showTotalWithTaxes={showTotalWithTaxes}
-                onToggleSave={toggleSavedProperty}
-                onSelectProperty={handleSelectProperty}
-                onResetFilters={() => setFilters(defaultFilters)}
-              />
-            ) : (
-              <LazyFeatureBoundary>
-              <InteractiveMap
-                properties={filteredProperties}
-                currency={currency}
-                onSelectProperty={handleSelectProperty}
-                selectedProperty={selectedProperty}
-              />
-              </LazyFeatureBoundary>
-            )}
-            </div>
-
-          </div>
-        )}
-
-        {/* TRIPS VIEW */}
-        {currentView === 'trips' && (
-          <LazyFeatureBoundary>
-          <TripsView
-            reservations={reservations}
-            currency={currency}
-            onCancelReservation={handleCancelReservation}
-            onExploreMore={() => setCurrentView('explore')}
-          />
-          </LazyFeatureBoundary>
-        )}
-
-        {/* WISHLISTS VIEW */}
-        {currentView === 'wishlists' && (
-          <LazyFeatureBoundary>
-          <WishlistsView
-            savedProperties={savedPropertiesList}
-            currency={currency}
-            onToggleSave={toggleSavedProperty}
-            onSelectProperty={handleSelectProperty}
-            onExploreMore={() => setCurrentView('explore')}
-            showTotalWithTaxes={showTotalWithTaxes}
-          />
-          </LazyFeatureBoundary>
-        )}
-
-        {/* HOST DASHBOARD VIEW */}
-        {currentView === 'host' && (
-          <LazyFeatureBoundary>
-          <HostDashboardView
-            accessToken={accountSession?.access_token || ''}
-          />
-          </LazyFeatureBoundary>
-        )}
-
-        {currentView === 'ownerAdmin' && isOwnerAdmin && accountSession?.access_token && (
-          <LazyFeatureBoundary>
-          <OwnerAccessAdminView accessToken={accountSession.access_token} />
-          </LazyFeatureBoundary>
-        )}
-      </main>
+      <MainContentRouter
+        currentView={currentView}
+        catalogFocusRef={catalogFocusRef}
+        isCondominiumView={isCondominiumView}
+        viewMode={viewMode}
+        filters={filters}
+        activeFilterCount={activeFilterCount}
+        defaultFilters={defaultFilters}
+        currency={currency}
+        filteredProperties={filteredProperties}
+        catalogStatus={catalogStatus}
+        savedPropertyIds={savedPropertyIds}
+        savedProperties={savedPropertiesList}
+        showTotalWithTaxes={showTotalWithTaxes}
+        condominiums={condominiums}
+        reservations={reservations}
+        selectedProperty={selectedProperty}
+        accessToken={accountSession?.access_token}
+        isOwnerAdmin={isOwnerAdmin}
+        onFiltersChange={setFilters}
+        onSearchInApp={handleStaysWidgetSearch}
+        onOpenAssistant={() => setIsSofiaOpen(true)}
+        onSelectCondominium={setSelectedCondominium}
+        onToggleSave={toggleSavedProperty}
+        onSelectProperty={handleSelectProperty}
+        onResetFilters={() => setFilters(defaultFilters)}
+        onCancelReservation={handleCancelReservation}
+        onExploreMore={() => setCurrentView('explore')}
+      />
 
       <MobileBottomNavigation
         currentView={currentView}
