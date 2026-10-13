@@ -19,6 +19,10 @@ Aplicar as melhorias da auditoria do frontend por etapas pequenas e verificávei
 
 O trabalho é feito em commits locais pequenos, revisados e validados. A branch permanece sem push; a contagem abaixo é relativa ao estado de `origin/main` consultado nesta execução.
 
+### Continuação — 2026-10-13 (extração do rodapé)
+
+`AppFooter` agora concentra a apresentação do rodapé; `App.tsx` passa a fornecer apenas a moeda e o callback para abrir o cadastro de imóvel. O teste cobre esses dois contratos. `App.tsx` caiu de 950 para 879 linhas. Os gates passaram: 113/113 testes, lint/TypeScript, `format:check`, build, formatação dos planos e `git diff --check`. Build: JS inicial 358,05 kB / 107,14 kB gzip; CSS 107,04 kB / 15,70 kB; modal 48,54 kB / 12,84 kB gzip. O pequeno acréscimo de JS corresponde ao componente agora carregado na entrada e não é apresentado como melhoria de bundle. O commit registra esta etapa localmente; nenhuma operação remota foi feita.
+
 ### Revisão residual da goal — 2026-10-13
 
 O bloco abaixo registra o checkpoint anterior desta revisão; os números atuais desta continuação estão no checkpoint seguinte. A goal ativa continua sendo o registro de execução; não criar outra goal enquanto esta estiver ativa.
