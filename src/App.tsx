@@ -23,7 +23,8 @@ import { crcnBackendApi } from './services/crcnBackendApi';
 import { getAuthCallbackError } from './utils/authCallback';
 import { getSurpriseDateCandidates } from './utils/surpriseDates';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
-import { createDefaultSearchFilters, mergeSearchFiltersIntoUrl, parseSearchFilters } from './utils/searchUrlState';
+import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
+import { useSearchUrlSync } from './hooks/useSearchUrlSync';
 import { countActivePropertyFilters, filterPropertiesBySearchFilters } from './utils/propertySearchFilters';
 import { scrollIntoViewRespectingMotion } from './utils/motion';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
@@ -386,17 +387,7 @@ export default function App() {
   // Search & Filter State
   const [filters, setFilters] = useState<SearchFilters>(() => parseSearchFilters(window.location.search));
   const defaultFilters = createDefaultSearchFilters();
-
-  useEffect(() => {
-    const search = mergeSearchFiltersIntoUrl(window.location.search, filters);
-    const nextSearch = search ? `?${search}` : '';
-    if (nextSearch === window.location.search) return;
-    window.history.replaceState(
-      window.history.state,
-      '',
-      `${window.location.pathname}${nextSearch}${window.location.hash}`,
-    );
-  }, [filters]);
+  useSearchUrlSync(filters);
 
   // Toggle Save Property
   const handleToggleSave = (propertyId: string) => {

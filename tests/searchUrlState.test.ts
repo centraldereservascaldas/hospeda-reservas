@@ -90,3 +90,57 @@ test('ignores malformed dates and unsupported or out-of-range filter values', ()
   assert.deepEqual(filters.amenities, []);
   assert.equal(filters.superhostOnly, false);
 });
+
+test('syncs filter updates to the URL without dropping path, hash, or unrelated parameters', async () => {
+  const { JSDOM } = await import('jsdom');
+  const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
+    url: 'http://localhost/apartamento/JQ08G?utm_source=share#booking',
+  });
+  const original = {
+    window: globalThis.window,
+    document: globalThis.document,
+    HTMLElement: globalThis.HTMLElement,
+    Element: globalThis.Element,
+    Node: globalThis.Node,
+  };
+  Object.assign(globalThis, {
+    window: dom.window,
+    document: dom.window.document,
+    HTMLElement: dom.window.HTMLElement,
+    Element: dom.window.Element,
+    Node: dom.window.Node,
+  });
+
+  try {
+    const React = (await import('react')).default;
+    const { render, act } = await import('@testing-library/react');
+    const { useSearchUrlSync } = await import('../src/hooks/useSearchUrlSync.ts');
+    const initial = createDefaultSearchFilters();
+    const filters = {
+      ...initial,
+      checkIn: '2026-11-05',
+      checkOut: '2026-11-08',
+      guests: { adults: 2, children: 1, infants: 0, pets: 0 },
+    };
+    const Harness = ({ value }: { value: typeof initial }) => {
+      useSearchUrlSync(value);
+      return null;
+    };
+    const view = render(React.createElement(Harness, { value: initial }), {
+      container: document.getElementById('root')!,
+    });
+    await act(async () => view.rerender(React.createElement(Harness, { value: filters })));
+
+    const url = new URL(window.location.href);
+    assert.equal(url.pathname, '/apartamento/JQ08G');
+    assert.equal(url.hash, '#booking');
+    assert.equal(url.searchParams.get('utm_source'), 'share');
+    assert.equal(url.searchParams.get('from'), '2026-11-05');
+    assert.equal(url.searchParams.get('to'), '2026-11-08');
+    assert.equal(url.searchParams.get('guests'), '3');
+    view.unmount();
+  } finally {
+    Object.assign(globalThis, original);
+    dom.window.close();
+  }
+});
