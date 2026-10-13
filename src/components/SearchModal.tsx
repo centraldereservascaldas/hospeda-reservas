@@ -1,10 +1,10 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { 
-  X, 
-  Search, 
-  MapPin, 
-  Calendar as CalendarIcon, 
-  Plus, 
+import {
+  X,
+  Search,
+  MapPin,
+  Calendar as CalendarIcon,
+  Plus,
   Minus,
   Sparkles,
   ExternalLink,
@@ -39,9 +39,13 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 }) => {
   const fieldId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const tabListRef = useRef<HTMLDivElement>(null);
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
-  const focusRing = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600';
-  const [activeTab, setActiveTab] = useState<'destination' | 'dates' | 'guests' | 'stays_engine'>('destination');
+  const focusRing =
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600';
+  const [activeTab, setActiveTab] = useState<'destination' | 'dates' | 'guests' | 'stays_engine'>(
+    'destination',
+  );
   const [destination, setDestination] = useState(filters.destination);
   const [checkIn, setCheckIn] = useState(filters.checkIn);
   const [checkOut, setCheckOut] = useState(filters.checkOut);
@@ -49,6 +53,30 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [children, setChildren] = useState(filters.guests.children);
   const [infants, setInfants] = useState(filters.guests.infants);
   const [pets, setPets] = useState(filters.guests.pets);
+  const totalGuests = adults + children;
+  const tabs = [
+    { id: 'destination', label: 'Destino' },
+    { id: 'dates', label: 'Datas' },
+    { id: 'guests', label: `Hóspedes${totalGuests > 1 ? ` (${totalGuests})` : ''}` },
+    { id: 'stays_engine', label: 'Surpreenda-me' },
+  ] as const;
+
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const currentIndex = tabs.findIndex((tab) => tab.id === activeTab);
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? tabs.length - 1
+          : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    const nextTab = tabs[nextIndex]!;
+    setActiveTab(nextTab.id);
+    tabListRef.current
+      ?.querySelector<HTMLButtonElement>(`[data-search-tab="${nextTab.id}"]`)
+      ?.focus();
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -64,20 +92,49 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   if (!isOpen) return null;
 
   const popularDestinations = [
-    { name: 'Todos em Caldas Novas & Rio Quente', subtitle: 'Descubra resorts termais e flats', query: '' },
-    { name: 'Complexo diRoma & Acqua Park', subtitle: 'Lacqua, Exclusive, Piazza e ingressos', query: 'diRoma' },
-    { name: 'Rio Quente & Hot Park', subtitle: 'Parque das Fontes e águas a 42°C', query: 'Rio Quente' },
-    { name: 'Bairro do Turista', subtitle: 'Prive Riviera, Boulevard e centro gastronômico', query: 'Turista' },
-    { name: 'À beira do Lago Corumbá', subtitle: 'Chalés náuticos, passeios de lancha e pier', query: 'Corumbá' },
-    { name: 'Jardim Belvedere (L’acqua diRoma)', subtitle: 'Piscina de ondas e parque 24h', query: 'Belvedere' },
-    { name: 'Ecologic Ville & Furnas', subtitle: 'Resorts com bosque nativo e tranquilidade', query: 'Ecologic' },
+    {
+      name: 'Todos em Caldas Novas & Rio Quente',
+      subtitle: 'Descubra resorts termais e flats',
+      query: '',
+    },
+    {
+      name: 'Complexo diRoma & Acqua Park',
+      subtitle: 'Lacqua, Exclusive, Piazza e ingressos',
+      query: 'diRoma',
+    },
+    {
+      name: 'Rio Quente & Hot Park',
+      subtitle: 'Parque das Fontes e águas a 42°C',
+      query: 'Rio Quente',
+    },
+    {
+      name: 'Bairro do Turista',
+      subtitle: 'Prive Riviera, Boulevard e centro gastronômico',
+      query: 'Turista',
+    },
+    {
+      name: 'À beira do Lago Corumbá',
+      subtitle: 'Chalés náuticos, passeios de lancha e pier',
+      query: 'Corumbá',
+    },
+    {
+      name: 'Jardim Belvedere (L’acqua diRoma)',
+      subtitle: 'Piscina de ondas e parque 24h',
+      query: 'Belvedere',
+    },
+    {
+      name: 'Ecologic Ville & Furnas',
+      subtitle: 'Resorts com bosque nativo e tranquilidade',
+      query: 'Ecologic',
+    },
   ];
 
   const handleApply = () => {
     onApplyFilters({
       ...filters,
       destination,
-      destinationPropertyId: destination === filters.destination ? filters.destinationPropertyId : '',
+      destinationPropertyId:
+        destination === filters.destination ? filters.destinationPropertyId : '',
       checkIn,
       checkOut,
       guests: {
@@ -101,7 +158,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     onResetFilters();
   };
 
-  const totalGuests = adults + children;
   const brCheckIn = toBrDate(checkIn);
   const brCheckOut = toBrDate(checkOut);
   const externalStaysUrl = `https://www.centraldereservascaldas.com.br/pt/search?from=${encodeURIComponent(brCheckIn)}&to=${encodeURIComponent(brCheckOut)}&persons=${encodeURIComponent(Math.max(1, totalGuests))}&wpl=`;
@@ -117,38 +173,83 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         tabIndex={-1}
         className="w-full max-w-3xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl border border-neutral-200/90 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200"
       >
-        <h2 id={`${fieldId}-title`} className="sr-only">Buscar hospedagens</h2>
+        <h2 id={`${fieldId}-title`} className="sr-only">
+          Buscar hospedagens
+        </h2>
         {/* Header Tabs with Crisp Glass pills */}
         <div className="p-4 sm:p-5 border-b border-neutral-200 bg-white/95 backdrop-blur-md flex items-center justify-between">
-          <div className="flex flex-wrap items-center gap-1.5 bg-neutral-100 p-1.5 rounded-full text-xs font-semibold border border-neutral-200">
+          <div
+            ref={tabListRef}
+            role="tablist"
+            aria-label="Tipo de busca"
+            tabIndex={-1}
+            onKeyDown={handleTabKeyDown}
+            className="flex flex-wrap items-center gap-1.5 bg-neutral-100 p-1.5 rounded-full text-xs font-semibold border border-neutral-200"
+          >
             <button
+              type="button"
+              id={`${fieldId}-tab-destination`}
+              data-search-tab="destination"
+              role="tab"
+              aria-selected={activeTab === 'destination'}
+              aria-controls={`${fieldId}-tabpanel`}
+              tabIndex={activeTab === 'destination' ? 0 : -1}
               onClick={() => setActiveTab('destination')}
               className={`px-4 py-2 rounded-full transition-all cursor-pointer ${focusRing} ${
-                activeTab === 'destination' ? 'bg-white text-neutral-950 shadow-sm font-bold' : 'text-neutral-700 hover:text-neutral-950'
+                activeTab === 'destination'
+                  ? 'bg-white text-neutral-950 shadow-sm font-bold'
+                  : 'text-neutral-700 hover:text-neutral-950'
               }`}
             >
               Destino
             </button>
             <button
+              type="button"
+              id={`${fieldId}-tab-dates`}
+              data-search-tab="dates"
+              role="tab"
+              aria-selected={activeTab === 'dates'}
+              aria-controls={`${fieldId}-tabpanel`}
+              tabIndex={activeTab === 'dates' ? 0 : -1}
               onClick={() => setActiveTab('dates')}
               className={`px-4 py-2 rounded-full transition-all cursor-pointer ${focusRing} ${
-                activeTab === 'dates' ? 'bg-white text-neutral-950 shadow-sm font-bold' : 'text-neutral-700 hover:text-neutral-950'
+                activeTab === 'dates'
+                  ? 'bg-white text-neutral-950 shadow-sm font-bold'
+                  : 'text-neutral-700 hover:text-neutral-950'
               }`}
             >
               Datas
             </button>
             <button
+              type="button"
+              id={`${fieldId}-tab-guests`}
+              data-search-tab="guests"
+              role="tab"
+              aria-selected={activeTab === 'guests'}
+              aria-controls={`${fieldId}-tabpanel`}
+              tabIndex={activeTab === 'guests' ? 0 : -1}
               onClick={() => setActiveTab('guests')}
               className={`px-4 py-2 rounded-full transition-all cursor-pointer ${focusRing} ${
-                activeTab === 'guests' ? 'bg-white text-neutral-950 shadow-sm font-bold' : 'text-neutral-700 hover:text-neutral-950'
+                activeTab === 'guests'
+                  ? 'bg-white text-neutral-950 shadow-sm font-bold'
+                  : 'text-neutral-700 hover:text-neutral-950'
               }`}
             >
               Hóspedes {totalGuests > 1 ? `(${totalGuests})` : ''}
             </button>
             <button
+              type="button"
+              id={`${fieldId}-tab-stays_engine`}
+              data-search-tab="stays_engine"
+              role="tab"
+              aria-selected={activeTab === 'stays_engine'}
+              aria-controls={`${fieldId}-tabpanel`}
+              tabIndex={activeTab === 'stays_engine' ? 0 : -1}
               onClick={() => setActiveTab('stays_engine')}
               className={`px-4 py-2 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${focusRing} ${
-                activeTab === 'stays_engine' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm font-bold' : 'text-orange-800 hover:text-orange-950 font-bold'
+                activeTab === 'stays_engine'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm font-bold'
+                  : 'text-orange-800 hover:text-orange-950 font-bold'
               }`}
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -168,7 +269,13 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         </div>
 
         {/* Tab Body */}
-        <div className="p-6 overflow-y-auto max-h-[55vh]">
+        <div
+          id={`${fieldId}-tabpanel`}
+          role="tabpanel"
+          aria-labelledby={`${fieldId}-tab-${activeTab}`}
+          tabIndex={0}
+          className="p-6 overflow-y-auto max-h-[55vh]"
+        >
           {/* TAB: BOOKING SEARCH */}
           {activeTab === 'stays_engine' && (
             <div className="space-y-4">
@@ -193,7 +300,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           {activeTab === 'destination' && (
             <div className="space-y-6">
               <div>
-                <label htmlFor={`${fieldId}-destination`} className="block text-sm font-bold text-neutral-900 mb-2">
+                <label
+                  htmlFor={`${fieldId}-destination`}
+                  className="block text-sm font-bold text-neutral-900 mb-2"
+                >
                   Buscar por região, cidade ou nome do espaço
                 </label>
                 <div className="relative">
@@ -258,7 +368,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label htmlFor={`${fieldId}-check-in`} className="text-xs font-semibold text-neutral-600">
+                  <label
+                    htmlFor={`${fieldId}-check-in`}
+                    className="text-xs font-semibold text-neutral-600"
+                  >
                     Data de Check-in
                   </label>
                   <div className="relative">
@@ -274,7 +387,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label htmlFor={`${fieldId}-check-out`} className="text-xs font-semibold text-neutral-600">
+                  <label
+                    htmlFor={`${fieldId}-check-out`}
+                    className="text-xs font-semibold text-neutral-600"
+                  >
                     Data de Check-out
                   </label>
                   <div className="relative">
@@ -341,7 +457,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
-                  <span aria-live="polite" className="w-6 text-center font-bold text-sm text-neutral-900">{adults}</span>
+                  <span
+                    aria-live="polite"
+                    className="w-6 text-center font-bold text-sm text-neutral-900"
+                  >
+                    {adults}
+                  </span>
                   <button
                     type="button"
                     aria-label="Aumentar número de adultos"
@@ -369,7 +490,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
-                  <span aria-live="polite" className="w-6 text-center font-bold text-sm text-neutral-900">{children}</span>
+                  <span
+                    aria-live="polite"
+                    className="w-6 text-center font-bold text-sm text-neutral-900"
+                  >
+                    {children}
+                  </span>
                   <button
                     type="button"
                     aria-label="Aumentar número de crianças"
@@ -397,7 +523,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
-                  <span aria-live="polite" className="w-6 text-center font-bold text-sm text-neutral-900">{infants}</span>
+                  <span
+                    aria-live="polite"
+                    className="w-6 text-center font-bold text-sm text-neutral-900"
+                  >
+                    {infants}
+                  </span>
                   <button
                     type="button"
                     aria-label="Aumentar número de bebês"
@@ -425,7 +556,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
-                  <span aria-live="polite" className="w-6 text-center font-bold text-sm text-neutral-900">{pets}</span>
+                  <span
+                    aria-live="polite"
+                    className="w-6 text-center font-bold text-sm text-neutral-900"
+                  >
+                    {pets}
+                  </span>
                   <button
                     type="button"
                     aria-label="Aumentar número de animais de estimação"
@@ -470,7 +606,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             <span>Buscar hospedagens termais</span>
           </button>
         </div>
-
       </div>
     </div>
   );
