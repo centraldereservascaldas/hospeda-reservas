@@ -9,6 +9,7 @@ import type { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { CATEGORIES } from './data/mockProperties';
 import { matchesPropertyCategory } from './utils/propertyCategories';
 import { Header } from './components/Header';
+import { AuthCallbackNotice } from './components/account/AuthCallbackNotice';
 import { CategoryBar } from './components/search/CategoryBar';
 import { MobileBottomNavigation, resolveMobileNavigationTarget } from './components/MobileBottomNavigation';
 import type { MainView } from './components/MobileBottomNavigation';
@@ -165,10 +166,11 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 selection:bg-orange-500/20 selection:text-orange-950">
       {authCallbackNotice && (
-        <div role={initialAuthCallbackError ? 'alert' : 'status'} aria-live="polite" className={`fixed left-1/2 top-24 z-[120] flex w-[min(92vw,560px)] -translate-x-1/2 items-start gap-3 rounded-2xl border bg-white/95 px-5 py-4 text-sm font-semibold shadow-xl backdrop-blur-xl ${initialAuthCallbackError ? 'border-red-200 text-red-900' : 'border-emerald-200 text-emerald-900'}`}>
-          <span className="flex-1">{authCallbackNotice}</span>
-          <button type="button" aria-label="Fechar aviso" onClick={() => setAuthCallbackNotice('')} className="-mt-1 rounded-full px-2 py-1 text-lg leading-none text-emerald-800 hover:bg-emerald-100">×</button>
-        </div>
+        <AuthCallbackNotice
+          message={authCallbackNotice}
+          isError={Boolean(initialAuthCallbackError)}
+          onDismiss={() => setAuthCallbackNotice('')}
+        />
       )}
       
       {/* Main Header */}
