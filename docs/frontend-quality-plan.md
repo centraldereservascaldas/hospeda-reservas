@@ -35,6 +35,12 @@ O estado/efeitos do catálogo de acomodação foram isolados em `src/hooks/useAc
 
 Desde `90a89ef`, `main` estava 102 commits locais à frente de `origin/main`; o `.DS_Store` preexistente permanece fora do stage. `npm test` 125/125, `npm run lint` sem avisos (ESLint + TypeScript), `npm run format:check`, `npm run build` e `git diff --check` passaram. Build: entrada 358,37 kB / 107,13 kB gzip; CSS 107,04 / 15,70 kB; Supabase 226,85 / 58,83 kB; detalhe 49,38 / 13,05 kB. O delta de bundle é artefato pequeno, sem evidência de Web Vitals. Nenhuma checagem manual de navegador foi repetida nesta etapa; autenticação/checkout e as rotas Stays indisponíveis continuam com as limitações registradas acima.
 
+### Continuação — 2026-10-13 (roteamento de acomodação)
+
+`useAccommodationRouting` agora concentra a resolução do deep-link `/apartamento/:id`, seleção pelo ID interno ou `staysListingId`, lookup remoto quando o detalhe não está no catálogo, restauração de filtros/consulta em `popstate`, abertura da rota ao selecionar acomodação e fechamento para `/`. A query e o hash são preservados ao abrir/fechar. O estado permanece no `App`; o hook recebe os setters e a referência de busca restaurada, sem alterar formato de URL, `parseSearchFilters`, serviço Laravel ou payload. Três testes exercitam deep-link por Stays ID, lookup remoto, histórico, filtros e preservação de query/hash.
+
+Após `c811d54`, a suíte passou 128/128, lint/TypeScript sem avisos, `format:check`, build e `git diff --check`. `App.tsx` caiu de 798 para 737 linhas. Build: entrada JS 358,59 kB / 107,22 kB gzip; CSS 107,04 / 15,70 kB; Supabase 226,85 / 58,83 kB; detalhe 49,38 / 13,05 kB. Esses dados são tamanhos de artefato, não Web Vitals. A verificação do navegador permanece evidência do checkpoint anterior; esta etapa não repetiu smoke visual nem iniciou autenticação ou checkout.
+
 ### Continuação — 2026-10-13 (extração do rodapé)
 
 `AppFooter` agora concentra a apresentação do rodapé; `App.tsx` passa a fornecer apenas a moeda e o callback para abrir o cadastro de imóvel. O teste cobre esses dois contratos. `App.tsx` caiu de 950 para 879 linhas. Os gates passaram: 113/113 testes, lint/TypeScript, `format:check`, build, formatação dos planos e `git diff --check`. Build: JS inicial 358,05 kB / 107,14 kB gzip; CSS 107,04 kB / 15,70 kB; modal 48,54 kB / 12,84 kB gzip. O pequeno acréscimo de JS corresponde ao componente agora carregado na entrada e não é apresentado como melhoria de bundle. Etapa registrada localmente em `940fabc`; nenhuma operação remota foi feita.

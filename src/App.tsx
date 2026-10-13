@@ -29,6 +29,7 @@ import { countActivePropertyFilters, filterPropertiesBySearchFilters } from './u
 import { scrollIntoViewRespectingMotion } from './utils/motion';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { useAccommodationCatalog } from './hooks/useAccommodationCatalog';
+import { useAccommodationRouting } from './hooks/useAccommodationRouting';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
@@ -197,60 +198,6 @@ export default function App() {
     quote: CalculatedPriceResponse;
   } | null>(null);
 
-  // Deep-linking: sync URL /apartamento/:id with selectedProperty
-  useEffect(() => {
-    const parseUrlAndSelect = () => {
-      const match = window.location.pathname.match(/\/apartamento\/([a-zA-Z0-9_-]+)/);
-      if (match) {
-        const targetId = match[1];
-        const found = properties.find((p) => p.id === targetId || p.staysListingId === targetId);
-        if (found) {
-          setSelectedProperty(found);
-        } else {
-          crcnBackendApi.getAccommodationById(targetId).then((p) => {
-            if (p) setSelectedProperty(p);
-          });
-        }
-      }
-    };
-
-    parseUrlAndSelect();
-
-    const handlePopState = () => {
-      const restoredFilters = parseSearchFilters(window.location.search);
-      setFilters(restoredFilters);
-      const match = window.location.pathname.match(/\/apartamento\/([a-zA-Z0-9_-]+)/);
-      if (match) {
-        const targetId = match[1];
-        const found = properties.find((p) => p.id === targetId || p.staysListingId === targetId);
-        if (found) setSelectedProperty(found);
-      } else {
-        setSelectedProperty(null);
-        if (restoredFilters.checkIn && restoredFilters.checkOut) {
-          restoreSearchFromUrlRef.current(restoredFilters);
-        }
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [properties]);
-
-  const handleSelectProperty = (p: Property) => {
-    setSelectedProperty(p);
-    const slug = p.staysListingId || p.id;
-    if (window.location.pathname !== `/apartamento/${slug}`) {
-      window.history.pushState(null, '', `/apartamento/${slug}${window.location.search}${window.location.hash}`);
-    }
-  };
-
-  const handleClosePropertyDetail = () => {
-    setSelectedProperty(null);
-    if (window.location.pathname.startsWith('/apartamento/')) {
-      window.history.pushState(null, '', `/${window.location.search}${window.location.hash}`);
-    }
-  };
-
   useEffect(() => {
     if (!accountSession?.access_token) {
       setReservations([]);
@@ -311,6 +258,12 @@ export default function App() {
   const [filters, setFilters] = useState<SearchFilters>(() => parseSearchFilters(window.location.search));
   const defaultFilters = createDefaultSearchFilters();
   useSearchUrlSync(filters);
+  const { handleSelectProperty, handleClosePropertyDetail } = useAccommodationRouting({
+    properties,
+    setSelectedProperty,
+    setFilters,
+    restoreSearchFromUrlRef,
+  });
 
   // Toggle Save Property
   const handleToggleSave = (propertyId: string) => {
