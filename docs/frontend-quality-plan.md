@@ -39,6 +39,14 @@ O Laravel local respondeu HTTP 200 em `/api/stays/status` e `/api/accommodations
 
 As chaves públicas `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` estão definidas sem valor no `.env`; não registrei valores de credenciais. Assim, o backend/Stays está disponível, mas login, sessão real e checkout autenticado continuam sem configuração do cliente Supabase. Nenhum POST ou fluxo de reserva/pagamento foi iniciado.
 
+### Smoke de disponibilidade e estado de avaliações — 2026-10-13
+
+Repeti a consulta em Aquarius Flat Apto D 704 para 13–15/10/2026. O calendário GET via Laravel e proxy Vite retornou HTTP 200, `source=stays-live`, três dias disponíveis; a cotação calculada por POST retornou HTTP 200, duas noites, R$347. No browser, após a transição inicial de loading, o detalhe exibiu “Sincronizado”, preço de R$347 e CTA habilitado. O CTA não foi acionado. Isso confirma uma amostra de disponibilidade e preço, sem validar o catálogo inteiro nem checkout.
+
+A resposta do detalhe informou `reviewCount=0` e `reviews=[]`. O estado vazio sincronizado agora diz “Este anúncio ainda não tem avaliações publicadas.”; o estado sem sincronização usa mensagem neutra de indisponibilidade. O ajuste está no commit de código `3023933`, coberto por três testes de estado. Não havia corpus de avaliações reais para validar sua renderização.
+
+O gate completo após a alteração passou: 181/181 testes, lint/TypeScript, `format:check` e build. Os artefatos mantiveram o baseline: JS inicial 365,39 kB/108,86 kB gzip; CSS 107,37/15,78; Supabase 226,85/58,83; detalhe 51,65/13,84. Tamanhos são medidas do bundle, não Web Vitals. `git diff --check` passou antes do commit. A documentação será registrada em commit local separado; sem push, merge ou deploy.
+
 ### Checkpoint histórico — composição dos overlays (2026-10-13)
 
 Os oito modais de detalhe de imóvel, condomínio, Sofia, checkout, conta, busca, filtros e criação de anúncio foram movidos para `src/components/AppOverlayLayer.tsx`. O componente pai continua dono dos estados, handlers de roteamento e guardas; a camada recebe valores/callbacks explicitamente. Os imports lazy e wrappers `DeferredModal` continuam por modal. O teste novo comprova que nenhum diálogo monta inicialmente e que abrir/fechar busca mantém o callback esperado. `App.tsx` caiu de 354 para 294 linhas; `AppOverlayLayer` tem 202 linhas. Isso remove JSX de composição do hotspot, mas ainda deixa handlers de estado/roteamento em `App.tsx`; a decomposição não está completa.
