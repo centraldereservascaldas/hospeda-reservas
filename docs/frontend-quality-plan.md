@@ -21,7 +21,11 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 
 ### Continuação — 2026-10-13 (extração do rodapé)
 
-`AppFooter` agora concentra a apresentação do rodapé; `App.tsx` passa a fornecer apenas a moeda e o callback para abrir o cadastro de imóvel. O teste cobre esses dois contratos. `App.tsx` caiu de 950 para 879 linhas. Os gates passaram: 113/113 testes, lint/TypeScript, `format:check`, build, formatação dos planos e `git diff --check`. Build: JS inicial 358,05 kB / 107,14 kB gzip; CSS 107,04 kB / 15,70 kB; modal 48,54 kB / 12,84 kB gzip. O pequeno acréscimo de JS corresponde ao componente agora carregado na entrada e não é apresentado como melhoria de bundle. O commit registra esta etapa localmente; nenhuma operação remota foi feita.
+`AppFooter` agora concentra a apresentação do rodapé; `App.tsx` passa a fornecer apenas a moeda e o callback para abrir o cadastro de imóvel. O teste cobre esses dois contratos. `App.tsx` caiu de 950 para 879 linhas. Os gates passaram: 113/113 testes, lint/TypeScript, `format:check`, build, formatação dos planos e `git diff --check`. Build: JS inicial 358,05 kB / 107,14 kB gzip; CSS 107,04 kB / 15,70 kB; modal 48,54 kB / 12,84 kB gzip. O pequeno acréscimo de JS corresponde ao componente agora carregado na entrada e não é apresentado como melhoria de bundle. Etapa registrada localmente em `940fabc`; nenhuma operação remota foi feita.
+
+### Continuação — 2026-10-13 (acionador da Sofia)
+
+O botão flutuante foi extraído para `SofiaAssistantTrigger`; estado de abertura e o modal permanecem em `App.tsx`. O componente mantém nome acessível e `type="button"`; teste confirma nome e callback. `App.tsx` passa a 1010 linhas (a formatação revelou também linhas longas herdadas, por isso a contagem bruta não é comparável diretamente com a anterior de 879). `npm test` passou 114/114; lint/TypeScript, `format:check`, build e `git diff --check` passaram após remover import não usado. Build: JS inicial 358,12 kB / 107,11 kB gzip; CSS 107,04 kB / 15,70 kB; modal 48,54 kB / 12,85 kB gzip. Diferenças pequenas de gzip não são interpretadas como otimização. Commit local pendente neste checkpoint.
 
 ### Revisão residual da goal — 2026-10-13
 
