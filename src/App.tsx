@@ -21,6 +21,7 @@ import { getAuthCallbackError } from './utils/authCallback';
 import { getSurpriseDateCandidates } from './utils/surpriseDates';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
 import { createDefaultSearchFilters, mergeSearchFiltersIntoUrl, parseSearchFilters } from './utils/searchUrlState';
+import { countActivePropertyFilters, filterPropertiesBySearchFilters } from './utils/propertySearchFilters';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { 
   Compass, 
@@ -409,74 +410,7 @@ export default function App() {
 
   // Filter Properties Logic
   const filteredProperties = useMemo(() => {
-    return properties.filter((prop) => {
-      // Category filter
-      if (!matchesPropertyCategory(prop, filters.category)) {
-        return false;
-      }
-
-      // Destination filter
-      if (filters.destinationPropertyId && prop.staysPropertyId !== filters.destinationPropertyId) {
-        return false;
-      }
-      if (filters.destination.trim()) {
-        const destLower = filters.destination.toLowerCase();
-        const matchesCity = prop.location.city.toLowerCase().includes(destLower);
-        const matchesState = prop.location.state.toLowerCase().includes(destLower);
-        const matchesTitle = prop.title.toLowerCase().includes(destLower);
-        const matchesNeighborhood = prop.location.neighborhood.toLowerCase().includes(destLower);
-        const matchesComplex = (prop.complexName || '').toLowerCase().includes(destLower);
-        if (!matchesCity && !matchesState && !matchesTitle && !matchesNeighborhood && !matchesComplex) {
-          return false;
-        }
-      }
-
-      // Guest capacity
-      const requestedGuests = filters.guests.adults + filters.guests.children;
-      if (requestedGuests > prop.maxGuests) {
-        return false;
-      }
-
-      // Price filter
-      if (prop.pricePerNight < filters.minPrice || prop.pricePerNight > filters.maxPrice) {
-        return false;
-      }
-
-      // Property type filter
-      if (filters.propertyTypes.length > 0 && !filters.propertyTypes.includes(prop.propertyType)) {
-        return false;
-      }
-
-      // Bedrooms
-      if (filters.minBedrooms > 0 && prop.bedrooms < filters.minBedrooms) {
-        return false;
-      }
-
-      // Bathrooms
-      if (filters.minBaths > 0 && prop.bathrooms < filters.minBaths) {
-        return false;
-      }
-
-      // Superhost only
-      if (filters.superhostOnly && !prop.isSuperhost) {
-        return false;
-      }
-
-      // Instant book only
-      if (filters.instantBookOnly && !prop.instantBook) {
-        return false;
-      }
-
-      // Amenities filter (all requested amenities must match)
-      if (filters.amenities.length > 0) {
-        const hasAllAmenities = filters.amenities.every((amenity) =>
-          prop.amenities.some((a) => a.toLowerCase().includes(amenity.toLowerCase()))
-        );
-        if (!hasAllAmenities) return false;
-      }
-
-      return true;
-    });
+    return filterPropertiesBySearchFilters(properties, filters);
   }, [properties, filters]);
 
   const availableCategories = useMemo(() =>
@@ -491,17 +425,7 @@ export default function App() {
   const isCondominiumView = filters.category === 'condominiums';
 
   // Active filter count
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.minPrice > 0 || filters.maxPrice < 5000) count++;
-    if (filters.propertyTypes.length > 0) count++;
-    if (filters.amenities.length > 0) count += filters.amenities.length;
-    if (filters.minBedrooms > 0) count++;
-    if (filters.minBaths > 0) count++;
-    if (filters.superhostOnly) count++;
-    if (filters.instantBookOnly) count++;
-    return count;
-  }, [filters]);
+  const activeFilterCount = useMemo(() => countActivePropertyFilters(filters), [filters]);
 
   // Handlers
   const handleAddNewProperty = (newProp: Property) => {
