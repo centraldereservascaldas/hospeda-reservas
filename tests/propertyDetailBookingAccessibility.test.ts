@@ -54,7 +54,10 @@ test('booking calendar names full dates and exposes the active date field', asyn
       ).find((button) => button.textContent?.includes('Disponibilidade indisponível'));
       assert.ok(unavailableBooking);
       assert.equal(unavailableBooking.disabled, true);
+      assert.match(unavailableBooking.className, /disabled:text-neutral-700/);
+      assert.match(unavailableBooking.className, /disabled:from-neutral-200/);
     });
+    assert.match(container.textContent || '', /Valores indisponíveis/);
 
     const [checkIn, checkOut] = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[aria-controls="stay-dates-dialog"]'),

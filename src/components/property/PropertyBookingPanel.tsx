@@ -149,7 +149,7 @@ export function PropertyBookingPanel({
           isCalculatingPrice ||
           !selectedRangeAvailable
         }
-        className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 border border-white/30 backdrop-blur-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 border border-white/30 backdrop-blur-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:from-neutral-200 disabled:via-neutral-200 disabled:to-neutral-200 disabled:text-neutral-700 disabled:shadow-none disabled:border-neutral-300 disabled:hover:scale-100 disabled:cursor-not-allowed"
       >
         <span>
           {isCalculatingPrice
