@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test, { afterEach } from 'node:test';
+import type { RefObject } from 'react';
 import { JSDOM } from 'jsdom';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
@@ -87,6 +88,57 @@ test('contains keyboard focus and returns focus to the opener after Escape', () 
   fireEvent.keyDown(document, { key: 'Escape' });
   assert.equal(document.querySelector('[role="dialog"]'), null, 'Escape closes the dialog');
   assert.equal(document.activeElement, opener, 'closing restores focus to the opener');
+});
+
+test('returns focus to the page landmark when a deep-linked dialog has no opener', () => {
+  function Dialog({
+    onClose,
+    returnFocusRef,
+  }: {
+    onClose: () => void;
+    returnFocusRef: RefObject<HTMLElement | null>;
+  }) {
+    const dialogRef = useDialogFocus(true, onClose, { returnFocusRef });
+    return React.createElement(
+      'div',
+      {
+        ref: dialogRef,
+        role: 'dialog',
+        'aria-modal': 'true',
+        'data-dialog-focus-root': true,
+        tabIndex: -1,
+      },
+      React.createElement('button', { type: 'button' }, 'Close details'),
+    );
+  }
+
+  function Harness() {
+    const [isOpen, setIsOpen] = React.useState(true);
+    const returnFocusRef = React.useRef<HTMLElement>(null);
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement('main', { ref: returnFocusRef, tabIndex: -1 }, 'Accommodation catalog'),
+      isOpen
+        ? React.createElement(Dialog, {
+            onClose: () => setIsOpen(false),
+            returnFocusRef,
+          })
+        : null,
+    );
+  }
+
+  render(React.createElement(Harness));
+  const closeButton = Array.from(document.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Close details',
+  )!;
+
+  fireEvent.keyDown(closeButton, { key: 'Escape' });
+
+  const catalog = document.querySelector('main');
+  assert.equal(document.querySelector('[role="dialog"]'), null);
+  assert.ok(catalog);
+  assert.equal(document.activeElement, catalog);
 });
 
 test('includes marked portals in the dialog tab loop without letting their Escape close the dialog', () => {

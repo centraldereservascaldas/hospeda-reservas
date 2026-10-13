@@ -38,6 +38,7 @@ interface PropertyDetailModalProps {
   initialCheckOut: string;
   initialGuests: { adults: number; children: number; infants: number; pets: number };
   onClose: () => void;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
   currency: Currency;
   isSaved: boolean;
   onToggleSave: (id: string) => void;
@@ -61,13 +62,17 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   initialCheckOut,
   initialGuests,
   onClose,
+  returnFocusRef,
   currency,
   isSaved,
   onToggleSave,
   onStartBooking,
 }) => {
   const detailCloseRef = useRef<HTMLButtonElement>(null);
-  const detailDialogRef = useDialogFocus(property !== null, onClose, { initialFocusRef: detailCloseRef });
+  const detailDialogRef = useDialogFocus(property !== null, onClose, {
+    initialFocusRef: detailCloseRef,
+    returnFocusRef,
+  });
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const propertyId = property?.id;

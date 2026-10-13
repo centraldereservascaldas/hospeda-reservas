@@ -32,6 +32,7 @@ function isInDialogOrPortal(dialog: HTMLElement, target: EventTarget | null): bo
 
 interface DialogFocusOptions {
   initialFocusRef?: RefObject<HTMLElement | null>;
+  returnFocusRef?: RefObject<HTMLElement | null>;
   closeOnEscape?: boolean;
 }
 
@@ -45,6 +46,7 @@ export function useDialogFocus(
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const initialFocusRef = options.initialFocusRef;
+  const returnFocusRef = options.returnFocusRef;
   const closeOnEscape = options.closeOnEscape ?? true;
 
   useEffect(() => {
@@ -52,6 +54,7 @@ export function useDialogFocus(
     if (!isOpen || !dialog) return;
 
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const returnFocusTarget = returnFocusRef?.current;
     openDialogs.push(dialog);
     const initialFocus = initialFocusRef?.current ?? focusableElements(dialog)[0] ?? dialog;
     initialFocus.focus();
@@ -99,9 +102,13 @@ export function useDialogFocus(
       document.removeEventListener('focusin', handleFocusIn);
       const index = openDialogs.lastIndexOf(dialog);
       if (index !== -1) openDialogs.splice(index, 1);
-      if (opener?.isConnected) opener.focus();
+      if (opener?.isConnected && opener !== document.body) {
+        opener.focus();
+      } else {
+        returnFocusTarget?.focus();
+      }
     };
-  }, [isOpen, initialFocusRef, closeOnEscape]);
+  }, [isOpen, initialFocusRef, returnFocusRef, closeOnEscape]);
 
   return dialogRef;
 }

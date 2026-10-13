@@ -228,6 +228,7 @@ export default function App() {
   const [isCreateListingOpen, setIsCreateListingOpen] = useState(false);
   const [isSofiaOpen, setIsSofiaOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const catalogFocusRef = useRef<HTMLElement>(null);
   const [selectedCondominium, setSelectedCondominium] = useState<CondominiumSummary | null>(null);
   const initialLocationRef = useRef(`${window.location.pathname}${window.location.search}${window.location.hash}`);
   const initialUrlSearchHandledRef = useRef(false);
@@ -641,7 +642,7 @@ export default function App() {
       )}
 
       {/* Main Content Router */}
-      <main className="flex-1 pb-24 sm:pb-12">
+      <main ref={catalogFocusRef} tabIndex={-1} className="flex-1 pb-24 sm:pb-12">
         {/* EXPLORE VIEW */}
         {currentView === 'explore' && (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -846,6 +847,7 @@ export default function App() {
         initialCheckOut={filters.checkOut}
         initialGuests={filters.guests}
         onClose={handleClosePropertyDetail}
+        returnFocusRef={catalogFocusRef}
         currency={currency}
         isSaved={selectedProperty ? savedPropertyIds.includes(selectedProperty.id) : false}
         onToggleSave={handleToggleSave}
