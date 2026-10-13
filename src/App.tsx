@@ -16,7 +16,7 @@ import { CondominiumDirectory } from './components/CondominiumDirectory';
 import { StaysSearchWidget } from './components/StaysSearchWidget';
 import { ActiveSearchFilters } from './components/ActiveSearchFilters';
 import { PropertyCatalogGrid } from './components/property/PropertyCatalogGrid';
-import { MobileBottomNavigation } from './components/MobileBottomNavigation';
+import { MobileBottomNavigation, resolveMobileNavigationTarget } from './components/MobileBottomNavigation';
 import type { MainView } from './components/MobileBottomNavigation';
 import { AppFooter } from './components/AppFooter';
 import { SofiaAssistantTrigger } from './components/SofiaAssistantTrigger';
@@ -735,7 +735,7 @@ export default function App() {
 
       <MobileBottomNavigation
         currentView={currentView}
-        onNavigate={(view) => view === 'host' ? handleSetCurrentView(view) : setCurrentView(view)}
+        onNavigate={(view) => setCurrentView(resolveMobileNavigationTarget(view, ownerAccessStatus === 'approved'))}
         showHost={ownerAccessStatus === 'approved'}
         hasSavedProperties={savedPropertyIds.length > 0}
         hasConfirmedReservations={reservations.some((reservation) => reservation.status === 'confirmed')}

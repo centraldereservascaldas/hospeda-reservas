@@ -2,6 +2,13 @@ import { Briefcase, Compass, Heart, Sparkles } from 'lucide-react';
 
 export type MainView = 'explore' | 'trips' | 'wishlists' | 'host' | 'ownerAdmin';
 
+export function resolveMobileNavigationTarget(
+  view: MainView,
+  ownerAccessApproved: boolean,
+): MainView {
+  return view === 'host' && !ownerAccessApproved ? 'explore' : view;
+}
+
 type MobileBottomNavigationProps = {
   currentView: MainView;
   onNavigate: (view: MainView) => void;

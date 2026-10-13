@@ -14,7 +14,8 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup } = await import('@testing-library/react');
-const { MobileBottomNavigation } = await import('../src/components/MobileBottomNavigation.tsx');
+const { MobileBottomNavigation, resolveMobileNavigationTarget } =
+  await import('../src/components/MobileBottomNavigation.tsx');
 
 afterEach(() => {
   cleanup();
@@ -61,4 +62,11 @@ test('mobile navigation displays the owner destination when access is approved',
   );
 
   assert.equal(getByRole('button', { name: 'Proprietário' }).getAttribute('aria-current'), 'page');
+});
+
+test('mobile navigation keeps the owner route gated by approved access', () => {
+  assert.equal(resolveMobileNavigationTarget('host', true), 'host');
+  assert.equal(resolveMobileNavigationTarget('host', false), 'explore');
+  assert.equal(resolveMobileNavigationTarget('trips', false), 'trips');
+  assert.equal(resolveMobileNavigationTarget('wishlists', false), 'wishlists');
 });
