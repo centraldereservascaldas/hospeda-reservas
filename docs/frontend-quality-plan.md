@@ -27,6 +27,10 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 
 O botão flutuante foi extraído para `SofiaAssistantTrigger`; estado de abertura e o modal permanecem em `App.tsx`. O componente mantém nome acessível e `type="button"`; teste confirma nome e callback. `App.tsx` passa a 1010 linhas (a formatação revelou também linhas longas herdadas, por isso a contagem bruta não é comparável diretamente com a anterior de 879). `npm test` passou 114/114; lint/TypeScript, `format:check`, build e `git diff --check` passaram após remover import não usado. Build: JS inicial 358,12 kB / 107,11 kB gzip; CSS 107,04 kB / 15,70 kB; modal 48,54 kB / 12,85 kB gzip. Diferenças pequenas de gzip não são interpretadas como otimização. Commit local pendente neste checkpoint.
 
+### Continuação — 2026-10-13 (disponibilidade do detalhe)
+
+As leituras de calendário e cotação foram movidas para `usePropertyAvailability`, sem alterar método, endpoint, payload, guarda de respostas obsoletas ou bloqueio de checkout. Mensagens vindas do carregamento ficam no hook; mensagens de seleção inválida continuam no modal. Teste do hook confirma ID Stays, janela de calendário de 90 dias, datas/hóspedes da cotação e estado explícito sem dados ao vivo. `PropertyDetailModal.tsx` caiu de 429 para 392 linhas sem reformatar o arquivo inteiro. Gates passaram: 115/115 testes, lint/TypeScript, format check, build e `git diff --check`. Build: JS inicial 358,12 kB / 107,10 kB gzip; CSS 107,04 / 15,70; modal 48,92 / 12,93 kB gzip. O chunk cresceu 0,38 kB gzip pelo hook; objetivo é separar responsabilidade, sem alegar ganho de desempenho. Não houve smoke test autenticado nem compra/reserva.
+
 ### Revisão residual da goal — 2026-10-13
 
 O bloco abaixo registra o checkpoint anterior desta revisão; os números atuais desta continuação estão no checkpoint seguinte. A goal ativa continua sendo o registro de execução; não criar outra goal enquanto esta estiver ativa.

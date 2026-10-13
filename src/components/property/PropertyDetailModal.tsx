@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { calculateNights } from '../../utils/formatters';
-import { crcnBackendApi, CalculatedPriceResponse } from '../../services/crcnBackendApi';
+import type { CalculatedPriceResponse } from '../../services/crcnBackendApi';
 import { isCalendarRangeAvailable } from '../../utils/staysAvailability';
 import type { StaysCalendarDay } from '../../utils/staysAvailability';
 import { calculatePropertyPricing } from '../../utils/propertyPricing';
@@ -25,6 +25,7 @@ import { PropertyDetailHeader } from './PropertyDetailHeader';
 import { PropertyPhotoGrid } from './PropertyPhotoGrid';
 import { PropertyDetailActions } from './PropertyDetailActions';
 import { useDialogFocus } from '../useDialogFocus';
+import { usePropertyAvailability } from './usePropertyAvailability';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -91,11 +92,14 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [staysPrice, setStaysPrice] = useState<CalculatedPriceResponse | null>(null);
-  const [calendarDays, setCalendarDays] = useState<StaysCalendarDay[]>([]);
-  const [calendarAvailable, setCalendarAvailable] = useState(false);
-  const [calendarMessage, setCalendarMessage] = useState('');
-  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
+  const [calendarInteractionMessage, setCalendarInteractionMessage] = useState('');
+  const { staysPrice, calendarDays, calendarAvailable, calendarMessage: availabilityMessage, isCalculatingPrice } = usePropertyAvailability({
+    property,
+    checkIn,
+    checkOut,
+    guests: adults + children,
+    todayIso,
+  });
 
   useEffect(() => {
     if (!propertyId) return;
@@ -147,51 +151,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     setIsGuestSelectorOpen(true);
   };
 
-  // Refresh the current occupancy window independently from the selected quote.
-  useEffect(() => {
-    if (!property) return;
-    let isMounted = true;
-
-    // Load the current occupancy window from the server, never from local simulation.
-    const calendarStart = checkIn || todayIso;
-    const calendarEnd = new Date(new Date(`${calendarStart}T12:00:00`).getTime() + 90 * 86400000).toISOString().slice(0, 10);
-    setCalendarAvailable(false);
-    setCalendarMessage('Atualizando disponibilidade...');
-    crcnBackendApi.getAccommodationCalendar(property.staysListingId || property.id, calendarStart, calendarEnd).then((days) => {
-      if (isMounted) {
-        setCalendarDays(days);
-        setCalendarAvailable(days.length > 0);
-        setCalendarMessage(days.length > 0 ? '' : 'Não foi possível confirmar a disponibilidade. Tente novamente mais tarde.');
-      }
-    });
-
-    return () => { isMounted = false; };
-  }, [property, checkIn, todayIso]);
-
-  // Requote whenever guests or the selected stay changes.
-  useEffect(() => {
-    if (!property) return;
-    let isMounted = true;
-    setIsCalculatingPrice(true);
-    setStaysPrice(null);
-    crcnBackendApi.calculatePrice({
-      listingId: property.staysListingId || property.id,
-      from: checkIn,
-      to: checkOut,
-      guests: adults + children,
-    }).then((res) => {
-      if (isMounted) {
-        setStaysPrice(res);
-        setIsCalculatingPrice(false);
-      }
-    }).catch(() => {
-      if (isMounted) setIsCalculatingPrice(false);
-    });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [property, checkIn, checkOut, adults, children]);
 
   if (!property) return null;
 
@@ -218,12 +177,14 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     if (activeDateField === 'checkIn') {
       setCheckIn(dateValue);
       if (checkOut && dateValue >= checkOut) setCheckOut('');
+      setCalendarInteractionMessage('');
       setActiveDateField('checkOut');
       return;
     }
     if (dateValue <= checkIn) {
       setCheckIn(dateValue);
       setCheckOut('');
+      setCalendarInteractionMessage('');
       setActiveDateField('checkOut');
       return;
     }
@@ -235,20 +196,22 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     if (!checkIn || (checkIn && checkOut)) {
       setCheckIn(day.date);
       setCheckOut('');
+      setCalendarInteractionMessage('');
       return;
     }
 
     if (day.date > checkIn) {
       if (isCalendarRangeAvailable(calendarDays, checkIn, day.date)) {
         setCheckOut(day.date);
-        setCalendarMessage('');
+        setCalendarInteractionMessage('');
       } else {
-        setCalendarMessage('O período inclui uma data indisponível ou não atende à estadia mínima. Selecione outras datas.');
+        setCalendarInteractionMessage('O período inclui uma data indisponível ou não atende à estadia mínima. Selecione outras datas.');
       }
       return;
     }
 
     setCheckIn(day.date);
+    setCalendarInteractionMessage('');
   };
   const handleShare = () => {
     navigator.clipboard?.writeText(window.location.href);
@@ -337,7 +300,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                 <PropertyAvailabilityStrip
                   calendarDays={calendarDays}
                   calendarAvailable={calendarAvailable}
-                  calendarMessage={calendarMessage}
+                  calendarMessage={calendarInteractionMessage || availabilityMessage}
                   checkIn={checkIn}
                   checkOut={checkOut}
                   baseNightlyRate={property.pricePerNight}
