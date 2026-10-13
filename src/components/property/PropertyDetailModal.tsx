@@ -26,6 +26,7 @@ import { PropertyPhotoGrid } from './PropertyPhotoGrid';
 import { PropertyDetailActions } from './PropertyDetailActions';
 import { useDialogFocus } from '../useDialogFocus';
 import { usePropertyAvailability } from './usePropertyAvailability';
+import { selectAvailabilityDay } from '../../utils/propertyDateSelection';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -193,25 +194,10 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   };
 
   const selectCalendarDay = (day: StaysCalendarDay) => {
-    if (!checkIn || (checkIn && checkOut)) {
-      setCheckIn(day.date);
-      setCheckOut('');
-      setCalendarInteractionMessage('');
-      return;
-    }
-
-    if (day.date > checkIn) {
-      if (isCalendarRangeAvailable(calendarDays, checkIn, day.date)) {
-        setCheckOut(day.date);
-        setCalendarInteractionMessage('');
-      } else {
-        setCalendarInteractionMessage('O período inclui uma data indisponível ou não atende à estadia mínima. Selecione outras datas.');
-      }
-      return;
-    }
-
-    setCheckIn(day.date);
-    setCalendarInteractionMessage('');
+    const selection = selectAvailabilityDay(calendarDays, checkIn, checkOut, day);
+    setCheckIn(selection.checkIn);
+    setCheckOut(selection.checkOut);
+    setCalendarInteractionMessage(selection.message);
   };
   const handleShare = () => {
     navigator.clipboard?.writeText(window.location.href);
