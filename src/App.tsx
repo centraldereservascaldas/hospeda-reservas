@@ -5,7 +5,7 @@
 
 import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import { Property, Reservation, SearchFilters, Currency } from './types';
+import { Property, SearchFilters, Currency } from './types';
 import { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { CATEGORIES } from './data/mockProperties';
 import { matchesPropertyCategory } from './utils/propertyCategories';
@@ -30,6 +30,7 @@ import { scrollIntoViewRespectingMotion } from './utils/motion';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { useAccommodationCatalog } from './hooks/useAccommodationCatalog';
 import { useAccommodationRouting } from './hooks/useAccommodationRouting';
+import { useAccountWorkspaceData } from './hooks/useAccountWorkspaceData';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
@@ -92,9 +93,6 @@ export default function App() {
   const { properties, setProperties, catalogLoading, catalogLoadError } =
     useAccommodationCatalog();
 
-  // Persistent Reservations State
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-
   // Persistent saved accommodation IDs
   const [savedPropertyIds, setSavedPropertyIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('hospeda_wishlist');
@@ -120,9 +118,18 @@ export default function App() {
   const [authCallbackNotice, setAuthCallbackNotice] = useState('');
   const [accountSession, setAccountSession] = useState<Session | null>(null);
   const [accountModalMode, setAccountModalMode] = useState<'login' | 'signup' | 'recovery' | null>(null);
-  const [ownerAccessStatus, setOwnerAccessStatus] = useState<'loading' | 'unavailable' | 'none' | 'pending' | 'approved' | 'suspended'>('none');
   const [ownerRequestLoading, setOwnerRequestLoading] = useState(false);
-  const [isOwnerAdmin, setIsOwnerAdmin] = useState(false);
+  const {
+    reservations,
+    setReservations,
+    ownerAccessStatus,
+    setOwnerAccessStatus,
+    isOwnerAdmin,
+  } = useAccountWorkspaceData({
+    accessToken: accountSession?.access_token,
+    currentViewRef,
+    setCurrentView,
+  });
 
   useEffect(() => {
     const authHash = new URLSearchParams(window.location.hash.slice(1));
@@ -197,58 +204,6 @@ export default function App() {
     discount: number;
     quote: CalculatedPriceResponse;
   } | null>(null);
-
-  useEffect(() => {
-    if (!accountSession?.access_token) {
-      setReservations([]);
-      return;
-    }
-    let cancelled = false;
-    void crcnBackendApi.getMyReservations(accountSession.access_token)
-      .then((items) => { if (!cancelled) setReservations(items); })
-      .catch((error) => { if (!cancelled) { setReservations([]); console.warn('Unable to load guest reservations:', error); } });
-    return () => { cancelled = true; };
-  }, [accountSession?.access_token]);
-
-  useEffect(() => {
-    if (!accountSession?.access_token) {
-      setOwnerAccessStatus('none');
-      setIsOwnerAdmin(false);
-      if (currentViewRef.current === 'host' || currentViewRef.current === 'ownerAdmin') setCurrentView('explore');
-      return;
-    }
-    let cancelled = false;
-    setOwnerAccessStatus('loading');
-    void crcnBackendApi.getOwnerAccess(accountSession.access_token)
-      .then((status) => { if (!cancelled) setOwnerAccessStatus(status); })
-      .catch((error) => {
-        if (!cancelled) {
-          setOwnerAccessStatus('unavailable');
-          console.warn('Unable to verify owner access:', error);
-        }
-      });
-    return () => { cancelled = true; };
-  }, [accountSession?.access_token]);
-
-  useEffect(() => {
-    if (!accountSession?.access_token) {
-      setIsOwnerAdmin(false);
-      return;
-    }
-    let cancelled = false;
-    void crcnBackendApi.getOwnerAdminStatus(accountSession.access_token)
-      .then((isAdmin) => {
-        if (cancelled) return;
-        setIsOwnerAdmin(isAdmin);
-        if (!isAdmin && currentViewRef.current === 'ownerAdmin') setCurrentView('explore');
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setIsOwnerAdmin(false);
-        if (currentViewRef.current === 'ownerAdmin') setCurrentView('explore');
-      });
-    return () => { cancelled = true; };
-  }, [accountSession?.access_token]);
 
   useEffect(() => {
     localStorage.setItem('hospeda_wishlist', JSON.stringify(savedPropertyIds));
