@@ -29,6 +29,12 @@ No Chromium local, o deep link `/pt/apartment/LG07J/crcn-casa-com-piscina?from=2
 
 A validação visual de viewport estreito não foi repetida porque a mudança de código da etapa só moveu cálculos derivados para um hook e preservou as props. Leitor de tela, percurso integral de teclado em 320/375 CSS px, contraste manual, comparação visual de movimento e smoke autenticado continuam pendentes conforme os checkpoints anteriores.
 
+### Validação de metadados externos opcionais — 2026-10-13
+
+A revisão de `isProperty` encontrou propriedades opcionais ainda não verificadas que eram usadas como strings/flags: `complexName`/`complexDescription` no agrupamento de condomínios, `staysSynced`/`reviewsSynced` na interface e campos opcionais de avaliações (`authorAvatar`, `source`, `publicationStatus`). A validação agora rejeita tipos/enums inválidos antes de os dados entrarem no catálogo; teste regressivo cobre cada campo e confirma review válido. `format:check` passou a incluir `src/utils/apiValidation.ts`.
+
+A leitura local Laravel do catálogo retornou 56 itens `stays-live`, e todos passaram o validador atualizado (`invalid=0`). O commit `f1999c1` passou 173/173 testes, lint/TypeScript, `format:check`, build e `git diff --check`. O JS inicial passou de 363,09 kB / 108,19 kB gzip para 363,69 / 108,30; CSS 107,37 / 15,78, Supabase 226,85 / 58,83 e detalhe 51,65 / 13,84. A variação é tamanho de artefato, não Web Vitals. A branch estava 145 commits à frente da referência local não atualizada; `.DS_Store` segue fora do Git. Nenhum contrato, auth ou fluxo de reserva foi alterado.
+
 ### Checkpoint histórico — revisão Stays, descrição e auditoria visual (2026-10-13)
 
 #### Continuação da auditoria — 2026-10-13 (link de busca, calendário e autenticação)
