@@ -15,7 +15,7 @@ Object.assign(globalThis, {
 const React = (await import('react')).default;
 const { render, cleanup, fireEvent } = await import('@testing-library/react');
 const { PropertyAvailabilityStrip } =
-  await import('../src/components/PropertyAvailabilityStrip.tsx');
+  await import('../src/components/property/PropertyAvailabilityStrip.tsx');
 
 afterEach(() => {
   cleanup();

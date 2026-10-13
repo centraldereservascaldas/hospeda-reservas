@@ -1,5 +1,5 @@
 import { BedDouble, Sparkles } from 'lucide-react';
-import type { Property } from '../types';
+import type { Property } from '../../types';
 import { HostAvatar } from './HostAvatar';
 
 interface PropertyOverviewSectionProps {

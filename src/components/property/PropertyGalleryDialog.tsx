@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useDialogFocus } from './useDialogFocus';
+import { useDialogFocus } from '../useDialogFocus';
 
 interface PropertyGalleryDialogProps {
   propertyTitle: string;

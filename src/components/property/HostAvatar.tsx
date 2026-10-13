@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { LogoCRCN } from './LogoCRCN';
+import { LogoCRCN } from '../LogoCRCN';
 
 interface HostAvatarProps {
   src?: string;

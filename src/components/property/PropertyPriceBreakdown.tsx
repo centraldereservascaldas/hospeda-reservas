@@ -1,8 +1,8 @@
-import type { Currency, Property } from '../types';
-import type { CalculatedPriceResponse } from '../services/crcnBackendApi';
-import { formatCurrency } from '../utils/formatters';
-import { getPropertyFeeAmount, getPropertyFeeLabel } from '../utils/propertyPricing';
-import type { calculatePropertyPricing } from '../utils/propertyPricing';
+import type { Currency, Property } from '../../types';
+import type { CalculatedPriceResponse } from '../../services/crcnBackendApi';
+import { formatCurrency } from '../../utils/formatters';
+import { getPropertyFeeAmount, getPropertyFeeLabel } from '../../utils/propertyPricing';
+import type { calculatePropertyPricing } from '../../utils/propertyPricing';
 
 interface PropertyPriceBreakdownProps {
   property: Pick<Property, 'pricePerNight'>;

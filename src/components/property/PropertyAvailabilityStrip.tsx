@@ -1,5 +1,5 @@
-import { formatCurrency } from '../utils/formatters';
-import type { StaysCalendarDay } from '../utils/staysAvailability';
+import { formatCurrency } from '../../utils/formatters';
+import type { StaysCalendarDay } from '../../utils/staysAvailability';
 
 interface PropertyAvailabilityStripProps {
   calendarDays: StaysCalendarDay[];

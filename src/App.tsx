@@ -15,7 +15,7 @@ import { CategoryBar } from './components/CategoryBar';
 import { CondominiumDirectory } from './components/CondominiumDirectory';
 import { StaysSearchWidget } from './components/StaysSearchWidget';
 import { ActiveSearchFilters } from './components/ActiveSearchFilters';
-import { PropertyCatalogGrid } from './components/PropertyCatalogGrid';
+import { PropertyCatalogGrid } from './components/property/PropertyCatalogGrid';
 import { MobileBottomNavigation } from './components/MobileBottomNavigation';
 import type { MainView } from './components/MobileBottomNavigation';
 import { LogoCRCN } from './components/LogoCRCN';
@@ -36,7 +36,7 @@ import {
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
 const InteractiveMap = React.lazy(() => import('./components/InteractiveMap').then(({ InteractiveMap }) => ({ default: InteractiveMap })));
-const PropertyDetailModal = React.lazy(() => import('./components/PropertyDetailModal').then(({ PropertyDetailModal }) => ({ default: PropertyDetailModal })));
+const PropertyDetailModal = React.lazy(() => import('./components/property/PropertyDetailModal').then(({ PropertyDetailModal }) => ({ default: PropertyDetailModal })));
 const CondominiumDetailModal = React.lazy(() => import('./components/CondominiumDetailModal').then(({ CondominiumDetailModal }) => ({ default: CondominiumDetailModal })));
 const CheckoutModal = React.lazy(() => import('./components/CheckoutModal').then(({ CheckoutModal }) => ({ default: CheckoutModal })));
 const GuestAccountModal = React.lazy(() => import('./components/GuestAccountModal').then(({ GuestAccountModal }) => ({ default: GuestAccountModal })));

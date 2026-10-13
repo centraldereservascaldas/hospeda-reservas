@@ -1,6 +1,6 @@
 import React from 'react';
 import { Clock } from 'lucide-react';
-import type { Property } from '../types';
+import type { Property } from '../../types';
 import { HostAvatar } from './HostAvatar';
 
 interface PropertyHostSectionProps {

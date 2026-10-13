@@ -1,7 +1,7 @@
 import React from 'react';
 import { MapPin } from 'lucide-react';
-import type { Property } from '../types';
-import { getPropertyMapLinks } from '../utils/propertyLocation';
+import type { Property } from '../../types';
+import { getPropertyMapLinks } from '../../utils/propertyLocation';
 
 interface PropertyLocationSectionProps {
   title: string;

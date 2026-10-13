@@ -8,7 +8,7 @@ Aplicar as melhorias da auditoria do frontend por etapas pequenas e verificávei
 
 - Frontend: React 19, TypeScript, Vite 6 e Tailwind CSS 4.
 - Backend Laravel coexistindo com serviços legados. Preservar `/api/*`, `server.ts` e as integrações existentes.
-- Hotspots observados: `src/App.tsx` e `src/components/PropertyDetailModal.tsx`. O antigo `StaysNetModal.tsx` foi removido após confirmar que não tinha nenhum consumidor.
+- Hotspots observados: `src/App.tsx` e `src/components/property/PropertyDetailModal.tsx`. O antigo `StaysNetModal.tsx` foi removido após confirmar que não tinha nenhum consumidor.
 - O TypeScript partiu de `strict: false`; havia usos de `any` em serviços e componentes.
 - Havia `package-lock.json` e `bun.lock`, enquanto o README instruía `npm ci`.
 - O build partiu de um chunk JavaScript de aproximadamente 777 kB e uma importação dinâmica ineficaz de `src/data/staysApartments.ts`.
@@ -19,6 +19,22 @@ Aplicar as melhorias da auditoria do frontend por etapas pequenas e verificávei
 
 O trabalho é feito em commits locais pequenos, revisados e validados. A branch permanece sem push; a contagem abaixo é relativa ao estado de `origin/main` consultado nesta execução.
 
+### Revisão residual da goal — 2026-10-13
+
+Estado confirmado antes desta rodada: `main` limpa em `0f206ef`, 80 commits locais à frente de `origin/main`; 97 testes; JS inicial 352,72 kB / 105,86 kB gzip; `PropertyDetailModal.tsx` com 758 linhas e `App.tsx` com 957. A goal ativa continua sendo o registro de execução; não criar outra goal enquanto esta estiver ativa.
+
+| Área | Falta fazer | Evidência / condição de encerramento |
+|---|---|---|
+| Decomposição | Separar diálogos de hóspedes e datas do modal, depois avaliar cortes pequenos em `App.tsx`. | Implementar por responsabilidade com teste de teclado/foco; preservar calendário, cotação e invariantes do payload de reserva. |
+| Acessibilidade manual | Repetir jornadas desktop e viewport estreito em busca/filtros, conta, detalhe e navegação; verificar com leitor de tela quando disponível. | Registrar controles, anúncios, foco e overflow observados. A inspeção de 571 × 910 px não substitui desktop nem leitor de tela. |
+| Autenticação e checkout | Verificar callback OAuth, restauração de sessão e navegação até antes de criar reserva/pagar. | Exige ambiente autenticado disponível; não usar cartão, criar reserva ou iniciar pagamento. Se indisponível, reportar dependência e impacto. |
+| Stays ao vivo | Confirmar endpoint/acesso de calendário e cálculo de preço. | Em 2026-10-13, ambos os caminhos documentados retornaram 404 diretamente à Stays, embora resorts e detalhe funcionem. Não declarar disponibilidade ou preço ao vivo até confirmar a rota/acesso. |
+| Visual e movimento | Revisar consistência dos tokens e transições próprias em telas representativas com movimento reduzido ligado/desligado. | Distinguir revisão estática/automatizada de inspeção visual; não afirmar Web Vitals sem medição de navegador. |
+| Convenções e dados | Comparar checklist, instruções e CI; verificar fronteiras restantes que ainda consumam JSON externo sem validação. | Alinhar `AGENTS.md`, `README.md` e planos com evidência atual; registrar escopo explícito da validação de payloads. |
+| Organização de componentes | Migrar o domínio de acomodação para `src/components/property/` em passos por domínio, preservando componentes compartilhados fora dele. | A primeira migração moveu cartões, catálogo, detalhe e subcomponentes do imóvel; imports, testes e lista incremental do Prettier foram atualizados. Rever os demais domínios somente em etapas com benefício claro. |
+
+Essa revisão não encontrou motivo para alterar dependências ou contratos. Os itens dependentes de acesso externo devem terminar com evidência da tentativa e decisão necessária, não com uma alegação de conclusão técnica.
+
 | Fase | Estado | Evidência / pendência |
 |---|---|---|
 | 0 — padrão de diálogo | Implementada; validação manual parcial | Testes automatizados cobrem foco inicial, contenção de Tab, Escape, retorno do foco e controles em portais fora do DOM do diálogo. Em Chromium local, detalhes e diálogos aninhados de hóspedes, datas e galeria abriram com nome/foco esperados; Escape fechou a camada superior e restaurou foco ao acionador. Outros fluxos seguem pendentes. |
@@ -26,13 +42,13 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 | 2 — tipos e dependências | Concluída para o escopo auditado | TypeScript estrito agora checa frontend, `server.ts` e testes via `tsconfig.json`; declaração local mínima tipa o uso existente de jsdom. npm é o único gerenciador; payloads externos seguem validados, incluindo agora o formato, datas, status e números da resposta do dashboard Laravel de proprietário. |
 | 3 — bundle e carregamento | Em andamento; chunk inicial medido e jornada de auth pendente | Telas/modais, catálogo Stays e SDK Supabase estão em chunks separados. Build atual (2026-10-13): chunk JS inicial 352,72 kB / 105,86 kB gzip e CSS 105,46 kB / 15,55 kB gzip; chunk Supabase 226,85 kB / 58,83 kB gzip. A validação de preço acrescentou 1,16 kB / 0,19 kB gzip, e a validação da lista de reservas mais 1,47 kB / 0,28 kB gzip. A validação ISO é compartilhada com o painel de proprietário. O SDK continua sendo solicitado de forma assíncrona no início para restaurar a sessão. A divisão reduz o chunk inicial, mas não os bytes totais quando auth baixa logo após a renderização. Sem medição de navegador não alegar ganho de LCP/Web Vitals; validar callback OAuth, restauração de sessão e checkout no navegador antes de encerrar a fase. |
 | 4 — tokens e movimento | Parcialmente concluída | Tokens de foco, página e borda de vidro; suporte global a movimento reduzido. Rolagens acionadas pela aplicação usam comportamento automático quando `prefers-reduced-motion` está ativo, incluindo Sofia, busca e avaliações. A preferência agora desativa por completo animações decorativas (incluindo ping, pulse e spin), minimiza transições e força rolagem automática; teste de regressão valida essas regras. Revisão visual de consistência e inventário das transições próprias nas telas principais continuam pendentes. |
-| 5 — decomposição dos hotspots | Em andamento | Extraídos cálculo de preços/taxas, avaliações, comodidades, regras/políticas, localização/mapa, perfil do anfitrião, avatar, resumo/destaques/descrições/acomodações, detalhamento de preço, calendário compacto acessível e agora galeria como diálogo próprio de `PropertyDetailModal.tsx`. A galeria mantém navegação por teclado, foco e retorno ao acionador, cobertos por teste. A filtragem pura e a contagem de filtros estão em utilitário testado; os controles de filtros ativos foram extraídos de `App.tsx` com remoção de destino nomeada e teste; a grade de catálogo foi separada com estados de carregamento, erro, vazio e resultados. Auth, busca, reserva e diálogos de hóspedes/datas seguem no modal, agora com 758 linhas. `StaysNetModal.tsx` foi removido por não ter consumidor; `StaysSearchWidget` continua ativo no app e na busca. Próximo: revisar os diálogos restantes do modal antes de decompor outros grupos de responsabilidades de `App.tsx`, sem alterar regras de negócio. |
-| 6 — lint, formatação, testes e CI | Base implementada; cobertura incremental | ESLint, Prettier, testes de foco/diálogo e workflow GitHub Actions. Em 2026-10-13, `npm run lint`, `npm test` (97/97), `npm run format:check` e `npm run build` passam; testes cobrem validação do dashboard Laravel, preço/reservas, calendário acessível, galeria com foco/teclas, filtros do catálogo, navegação mobile e movimento reduzido. Formatação segue limitada para evitar reformatar o legado. O chunk principal está abaixo do limite de aviso de 500 kB; o chunk Supabase é carregado separadamente. |
+| 5 — decomposição dos hotspots | Em andamento | Extraídos cálculo de preços/taxas, avaliações, comodidades, regras/políticas, localização/mapa, perfil do anfitrião, avatar, resumo/destaques/descrições/acomodações, detalhamento de preço, calendário compacto acessível, galeria e agora o diálogo de hóspedes de `PropertyDetailModal.tsx`. O seletor extraído preserva limite de ocupação e estado no pai; teste cobre alteração da contagem, Escape e retorno de foco. O arquivo caiu de 758 para 714 linhas. O diálogo de datas e os fluxos de busca/reserva continuam no modal; depois avaliar decomposições pequenas em `App.tsx`. `StaysNetModal.tsx` foi removido por não ter consumidor; `StaysSearchWidget` segue ativo. |
+| 6 — lint, formatação, testes e CI | Base implementada; cobertura incremental | ESLint, Prettier, testes de foco/diálogo e workflow GitHub Actions. Nesta etapa, `npm run lint`, `npm test` (98/98), `npm run format:check`, `npm run build` e `git diff --check` passaram em 2026-10-13. Testes cobrem validação do dashboard Laravel, preço/reservas, calendários, galeria e seletor de hóspedes com foco/teclas, filtros, navegação mobile e movimento reduzido. Formatação segue limitada para evitar reformatar o legado. O chunk inicial é 352,73 kB / 105,86 kB gzip; modal lazy 46,77 kB / 12,39 kB gzip; Supabase 226,85 kB / 58,83 kB gzip. |
 | 7 — convenções permanentes | Parcialmente concluída | `AGENTS.md` direciona para este plano e descreve critérios de acessibilidade, tipos, tokens, movimento, API, imagens e testes; README documenta comandos e CI. Falta auditoria final de consistência dos dois guias com este plano e o plano operacional, além de conferir como o checklist será aplicado na próxima feature real. |
 
 ### Baseline do estado atual (2026-10-13)
 
-Build reproduzido neste estado com `npm run build`: JS inicial 352,72 kB / 105,86 kB gzip; CSS 105,46 kB / 15,55 kB gzip; chunk Supabase 226,85 kB / 58,83 kB gzip; chunk `PropertyDetailModal` 46,49 kB / 12,23 kB gzip. A suíte contém 97 testes e as verificações `npm run lint`, `npm test` (97/97), `npm run format:check` e `npm run build` passaram em 2026-10-13. As camadas de preço e reservas validam o JSON antes de expor respostas tipadas à interface. Esses tamanhos são artefatos de build, não métricas de Web Vitals. O smoke de OAuth, restauração de sessão e checkout ainda depende de validar a jornada em navegador com ambiente autenticado; não realizar reserva nem pagamento.
+Build reproduzido após a extração do diálogo de hóspedes com `npm run build`: JS inicial 352,73 kB / 105,87 kB gzip; CSS 105,46 kB / 15,55 kB gzip; chunk Supabase 226,85 kB / 58,83 kB gzip; chunk `PropertyDetailModal` 46,77 kB / 12,39 kB gzip. A suíte contém 98 testes; `npm run lint`, `npm test` (98/98), `npm run format:check`, `npm run build` e `git diff --check` passaram em 2026-10-13. As camadas de preço e reservas validam o JSON antes de expor respostas tipadas à interface. Esses tamanhos são artefatos de build, não métricas de Web Vitals. O smoke de OAuth, restauração de sessão e checkout ainda depende de validar a jornada em navegador com ambiente autenticado; não realizar reserva nem pagamento.
 
 ### Evidência de bundle (2026-10-12)
 
@@ -119,7 +135,7 @@ Leitor de tela, OAuth com sessão autenticada e checkout sem concluir reserva co
 
 **Pacote C — Stays e detalhes de acomodação**
 
-- Responsável por `src/components/PropertyDetailModal.tsx`.
+- Responsável por `src/components/property/PropertyDetailModal.tsx`.
 - Aplicar padrão aos diálogos e subdiálogos existentes, incluindo galeria, datas, hóspedes e mensagens de status; corrigir rótulos e botões de ícone.
 - Preservar contratos da Stays API, navegação de calendário, cotação e comportamento de disponibilidade.
 

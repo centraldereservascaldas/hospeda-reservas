@@ -14,7 +14,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, cleanup, fireEvent, screen } = await import('@testing-library/react');
-const { PropertyCatalogGrid } = await import('../src/components/PropertyCatalogGrid.tsx');
+const { PropertyCatalogGrid } = await import('../src/components/property/PropertyCatalogGrid.tsx');
 const { STAYS_NET_APARTMENTS } = await import('../src/data/staysApartments.ts');
 
 afterEach(() => {

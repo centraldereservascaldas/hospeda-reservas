@@ -20,7 +20,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup } = await import('@testing-library/react');
-const { PropertyDetailModal } = await import('../src/components/PropertyDetailModal.tsx');
+const { PropertyDetailModal } = await import('../src/components/property/PropertyDetailModal.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
 afterEach(() => {
@@ -135,6 +135,54 @@ test('photo gallery supports keyboard navigation and returns focus to its opener
       null,
     );
     assert.equal(document.activeElement, galleryTrigger);
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
+});
+
+test('guest selector enforces occupancy limits and returns focus to its opener', async () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalCalculatePrice = crcnBackendApi.calculatePrice;
+  crcnBackendApi.getAccommodationCalendar = async () => [];
+  crcnBackendApi.calculatePrice = async () => null;
+  try {
+    const { container, getByRole, queryByRole } = render(
+      React.createElement(PropertyDetailModal, {
+        property: STAYS_NET_APARTMENTS[0]!,
+        initialCheckIn: '2026-11-11',
+        initialCheckOut: '2026-11-15',
+        initialGuests: { adults: 2, children: 0, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking: () => {},
+      }),
+    );
+    const guestTrigger = getByRole('button', { name: /Hóspedes/ });
+    guestTrigger.focus();
+    fireEvent.click(guestTrigger);
+
+    const guestDialog = getByRole('dialog', { name: 'Hóspedes' });
+    const addAdults = getByRole('button', { name: 'Adicionar: Adultos' }) as HTMLButtonElement;
+    assert.equal(
+      document.activeElement,
+      getByRole('button', { name: 'Fechar seletor de hóspedes' }),
+    );
+    assert.equal(addAdults.disabled, false);
+    fireEvent.click(addAdults);
+    assert.equal(guestDialog.querySelector('[aria-live="polite"]')?.textContent, '3');
+
+    fireEvent.keyDown(getByRole('button', { name: 'Fechar seletor de hóspedes' }), {
+      key: 'Escape',
+    });
+    assert.equal(queryByRole('dialog', { name: 'Hóspedes' }), null);
+    assert.equal(document.activeElement, guestTrigger);
+    assert.equal(
+      container.querySelector('[aria-labelledby="property-detail-title"]')?.getAttribute('role'),
+      'dialog',
+    );
   } finally {
     crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
     crcnBackendApi.calculatePrice = originalCalculatePrice;

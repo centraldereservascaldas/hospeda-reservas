@@ -1,7 +1,7 @@
 import React from 'react';
 import { Star } from 'lucide-react';
-import type { Property, Review } from '../types';
-import { summarizeReviewCategories } from '../utils/propertyReviews';
+import type { Property, Review } from '../../types';
+import { summarizeReviewCategories } from '../../utils/propertyReviews';
 
 interface PropertyReviewsSectionProps {
   property: Pick<Property, 'rating' | 'reviewCount' | 'reviewsSynced'>;

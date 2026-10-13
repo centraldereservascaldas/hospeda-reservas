@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react';
-import type { Currency, Property } from '../types';
+import type { Currency, Property } from '../../types';
 import { PropertyCard } from './PropertyCard';
 
 type PropertyCatalogStatus = 'loading' | 'error' | 'ready';

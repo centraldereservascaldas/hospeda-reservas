@@ -1,26 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  X, 
-  Star, 
-  Heart, 
-  Share2, 
-  Medal, 
-  Calendar as CalendarIcon, 
-  Sparkles, 
-  ChevronRight, 
+import {
+  X,
+  Star,
+  Heart,
+  Share2,
+  Medal,
+  Calendar as CalendarIcon,
+  Sparkles,
+  ChevronRight,
   Maximize2,
   ChevronDown,
   ChevronLeft,
 } from 'lucide-react';
-import { Property, Currency } from '../types';
-import { formatCurrency, calculateNights } from '../utils/formatters';
-import { crcnBackendApi, CalculatedPriceResponse } from '../services/crcnBackendApi';
-import { isCalendarRangeAvailable } from '../utils/staysAvailability';
-import type { StaysCalendarDay } from '../utils/staysAvailability';
-import { calculatePropertyPricing } from '../utils/propertyPricing';
-import { getSyncedPropertyReviews } from '../utils/propertyReviews';
-import { scrollIntoViewRespectingMotion } from '../utils/motion';
+import { Property, Currency } from '../../types';
+import { formatCurrency, calculateNights } from '../../utils/formatters';
+import { crcnBackendApi, CalculatedPriceResponse } from '../../services/crcnBackendApi';
+import { isCalendarRangeAvailable } from '../../utils/staysAvailability';
+import type { StaysCalendarDay } from '../../utils/staysAvailability';
+import { calculatePropertyPricing } from '../../utils/propertyPricing';
+import { getSyncedPropertyReviews } from '../../utils/propertyReviews';
+import { scrollIntoViewRespectingMotion } from '../../utils/motion';
 import { PropertyReviewsSection } from './PropertyReviewsSection';
 import { PropertyAmenitiesSection } from './PropertyAmenitiesSection';
 import { PropertyPoliciesSection } from './PropertyPoliciesSection';
@@ -30,7 +30,8 @@ import { PropertyOverviewSection } from './PropertyOverviewSection';
 import { PropertyPriceBreakdown } from './PropertyPriceBreakdown';
 import { PropertyAvailabilityStrip } from './PropertyAvailabilityStrip';
 import { PropertyGalleryDialog } from './PropertyGalleryDialog';
-import { useDialogFocus } from './useDialogFocus';
+import { PropertyGuestSelectorDialog } from './PropertyGuestSelectorDialog';
+import { useDialogFocus } from '../useDialogFocus';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -82,8 +83,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [pets, setPets] = useState<number>(initialGuests.pets);
   const [isGuestSelectorOpen, setIsGuestSelectorOpen] = useState(false);
   const guestSelectorTriggerRef = useRef<HTMLButtonElement>(null);
-  const guestDialogCloseRef = useRef<HTMLButtonElement>(null);
-  const guestDialogRef = useDialogFocus(isGuestSelectorOpen, () => setIsGuestSelectorOpen(false), { initialFocusRef: guestDialogCloseRef });
   const [guestPopoverPosition, setGuestPopoverPosition] = useState({ top: 0, left: 0, width: 280 });
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const dateDialogCloseRef = useRef<HTMLButtonElement>(null);
@@ -276,26 +275,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
     setCheckIn(day.date);
   };
-  const guestCounter = (
-    label: string,
-    value: number,
-    minimum: number,
-    maximum: number,
-    setValue: React.Dispatch<React.SetStateAction<number>>,
-  ) => {
-    const safeMaximum = Math.max(minimum, maximum);
-    return (
-      <div className="flex items-center justify-between gap-4 py-1">
-        <span className="text-sm font-medium text-neutral-800">{label}</span>
-        <div className="flex items-center gap-3">
-          <button type="button" disabled={value <= minimum} aria-label={`Remover: ${label}`} onClick={() => setValue((count) => Math.max(minimum, count - 1))} className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-lg text-neutral-700 transition hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-35">−</button>
-          <span aria-live="polite" className="w-5 text-center text-sm font-bold text-neutral-900">{value}</span>
-          <button type="button" disabled={value >= safeMaximum} aria-label={`Adicionar: ${label}`} onClick={() => setValue((count) => Math.min(safeMaximum, count + 1))} className="flex h-9 w-9 items-center justify-center rounded-full border border-neutral-300 text-lg text-neutral-700 transition hover:border-orange-400 hover:bg-orange-50 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-35">+</button>
-        </div>
-      </div>
-    );
-  };
-
   const handleShare = () => {
     navigator.clipboard?.writeText(window.location.href);
     setCopiedLink(true);
@@ -328,11 +307,11 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       aria-labelledby="property-detail-title"
       className="fixed inset-0 z-50 overflow-y-auto bg-white/25 backdrop-blur-xl animate-in fade-in duration-200"
     >
-      <div 
+      <div
         className="min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start"
       >
         <div className="relative w-full max-w-5xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-neutral-200/90 animate-in zoom-in-95 duration-200">
-          
+
           {/* Top Bar Navigation Crisp Glass */}
           <div className="sticky top-0 z-30 px-6 py-4 bg-white/95 backdrop-blur-xl border-b border-neutral-200 flex items-center justify-between">
             <button
@@ -369,7 +348,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           </div>
 
           <div className="p-6 sm:p-10 space-y-8">
-            
+
             {/* Title & Metadata */}
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -420,7 +399,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             {/* Photo Grid Gallery (Airbnb 5-photo layout) */}
             <div className="relative rounded-2xl overflow-hidden shadow-xs">
               <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-2 h-[340px] sm:h-[460px]">
-                
+
                 {/* Main large photo */}
                 <button
                   type="button"
@@ -467,10 +446,10 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
             {/* Main content grid: 2 cols on desktop */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-              
+
               {/* Left Column: Details, Host, Amenities, Sleeping */}
               <div className="lg:col-span-2 space-y-8 divide-y divide-neutral-100">
-                
+
                 <PropertyOverviewSection property={property} />
 
                 <PropertyAmenitiesSection
@@ -496,7 +475,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               {/* Right Column: Sticky Booking Widget in Liquid Glass */}
               <div className="lg:col-span-1">
                 <div className="sticky top-24 bg-white/70 backdrop-blur-2xl rounded-3xl p-6 border border-white/90 shadow-[0_16px_40px_-10px_rgba(0,0,0,0.1)] space-y-4">
-                  
+
                   {/* Price Header */}
                   <div className="flex items-baseline justify-between">
                     <div>
@@ -610,41 +589,18 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         </div>
       </div>
 
-      {/* Centered lightbox gallery */}
-      {isGuestSelectorOpen && createPortal(
-        <>
-          <div className="fixed inset-0 z-[70] bg-transparent" aria-hidden="true" onMouseDown={() => setIsGuestSelectorOpen(false)} />
-          <div
-            ref={guestDialogRef}
-            data-dialog-focus-root
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="guest-selector-title"
-            tabIndex={-1}
-            className="fixed z-[71] rounded-3xl border border-white/90 bg-white/95 p-5 shadow-2xl backdrop-blur-2xl"
-            style={{ top: guestPopoverPosition.top, left: guestPopoverPosition.left, width: guestPopoverPosition.width }}
-          >
-            <div className="mb-3 flex items-center justify-between border-b border-neutral-100 pb-3">
-              <div>
-                <h2 id="guest-selector-title" className="text-base font-bold text-neutral-900">Hóspedes</h2>
-                <p className="mt-0.5 text-[11px] text-neutral-500">Limite de {guestLimit} hóspede{guestLimit === 1 ? '' : 's'} na acomodação</p>
-              </div>
-              <button ref={guestDialogCloseRef} type="button" onClick={() => setIsGuestSelectorOpen(false)} aria-label="Fechar seletor de hóspedes" className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-100 text-neutral-700 transition hover:bg-orange-50 hover:text-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="divide-y divide-neutral-100">
-              {guestCounter('Adultos', adults, 1, guestLimit - children, setAdults)}
-              {guestCounter('Crianças (2–12 anos)', children, 0, guestLimit - adults, setChildren)}
-              {guestCounter('Bebês (até 2 anos)', infants, 0, 5, setInfants)}
-            </div>
-            <div className="mt-3 border-t border-neutral-100 pt-3 text-right">
-              <button type="button" onClick={() => setIsGuestSelectorOpen(false)} className="rounded-full bg-orange-50 px-4 py-2 text-xs font-bold text-orange-800 transition hover:bg-orange-100">Aplicar</button>
-            </div>
-          </div>
-        </>,
-        document.body,
-      )}
+      <PropertyGuestSelectorDialog
+        isOpen={isGuestSelectorOpen}
+        position={guestPopoverPosition}
+        guestLimit={guestLimit}
+        adults={adults}
+        children={children}
+        infants={infants}
+        onAdultsChange={setAdults}
+        onChildrenChange={setChildren}
+        onInfantsChange={setInfants}
+        onClose={() => setIsGuestSelectorOpen(false)}
+      />
 
       {isDatePickerOpen && createPortal(
         <div

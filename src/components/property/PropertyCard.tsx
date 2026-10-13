@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Heart, Star, Sparkles } from 'lucide-react';
-import { Property, Currency } from '../types';
-import { formatCurrency } from '../utils/formatters';
+import { Property, Currency } from '../../types';
+import { formatCurrency } from '../../utils/formatters';
 
 interface PropertyCardProps {
   property: Property;
@@ -70,7 +70,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
       <div className="relative z-10 flex flex-col pointer-events-none">
       {/* Photo Carousel Container */}
       <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-neutral-100/60 border border-white/80 shadow-2xs group-hover:shadow-md transition-all duration-300">
-        
+
         {/* Images */}
         <img
           src={currentImage}
