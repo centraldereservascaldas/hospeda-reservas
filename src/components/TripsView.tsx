@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Reservation, Currency } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { useDialogFocus } from './useDialogFocus';
 import { 
   Calendar, 
   MapPin, 
@@ -29,6 +30,19 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
   const [cancellationError, setCancellationError] = useState('');
+  const voucherCloseButtonRef = useRef<HTMLButtonElement>(null);
+  const keepTripButtonRef = useRef<HTMLButtonElement>(null);
+  const voucherDialogRef = useDialogFocus(!!selectedVoucher, () => setSelectedVoucher(null), {
+    initialFocusRef: voucherCloseButtonRef,
+  });
+  const cancellationDialogRef = useDialogFocus(!!cancellingId, () => {
+    if (!isSubmittingCancellation) {
+      setCancellingId(null);
+      setCancellationError('');
+    }
+  }, {
+    initialFocusRef: keepTripButtonRef,
+  });
 
   const activeReservations = reservations.filter((r) => r.status === 'confirmed');
   const cancelledReservations = reservations.filter((r) => r.status === 'cancelled');
@@ -190,16 +204,27 @@ export const TripsView: React.FC<TripsViewProps> = ({
       {/* Voucher Modal */}
       {selectedVoucher && (
         <div className="fixed inset-0 z-50 bg-neutral-950/70 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 border border-neutral-200/90 shadow-2xl animate-in zoom-in-95 duration-150">
+          <div
+            ref={voucherDialogRef}
+            data-dialog-focus-root
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-dialog-title"
+            tabIndex={-1}
+            className="bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 border border-neutral-200/90 shadow-2xl animate-in zoom-in-95 duration-150"
+          >
             <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
               <div className="flex items-center gap-2">
                 <Ticket className="w-5 h-5 text-orange-500" />
                 <div>
-                  <h3 className="font-extrabold text-sm text-neutral-950 leading-tight">Voucher Oficial de Hospedagem</h3>
+                  <h3 id="voucher-dialog-title" className="font-extrabold text-sm text-neutral-950 leading-tight">Voucher Oficial de Hospedagem</h3>
                   <p className="text-[10px] text-orange-700 font-bold">Central de Reservas Caldas Novas</p>
                 </div>
               </div>
               <button
+                ref={voucherCloseButtonRef}
+                type="button"
+                aria-label="Fechar voucher"
                 onClick={() => setSelectedVoucher(null)}
                 className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 flex items-center justify-center text-neutral-600 hover:text-neutral-950 cursor-pointer shadow-xs"
               >
@@ -270,14 +295,23 @@ export const TripsView: React.FC<TripsViewProps> = ({
       {/* Cancellation Confirmation Modal */}
       {cancellingId && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-neutral-100 shadow-2xl animate-in zoom-in-95 duration-150">
+          <div
+            ref={cancellationDialogRef}
+            data-dialog-focus-root
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-reservation-title"
+            aria-describedby="cancel-reservation-description"
+            tabIndex={-1}
+            className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-neutral-100 shadow-2xl animate-in zoom-in-95 duration-150"
+          >
             <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mx-auto border border-orange-200/80">
               <AlertCircle className="w-6 h-6" />
             </div>
 
             <div className="text-center">
-              <h3 className="font-bold text-base text-neutral-900">Deseja cancelar esta reserva?</h3>
-              <p className="text-xs text-neutral-500 mt-1">
+              <h3 id="cancel-reservation-title" className="font-bold text-base text-neutral-900">Deseja cancelar esta reserva?</h3>
+              <p id="cancel-reservation-description" className="text-xs text-neutral-500 mt-1">
                 O pedido será enviado ao sistema de reservas. Reembolso e eventuais cobranças seguem as condições da sua reserva. Reservas feitas por Airbnb, Booking ou outro canal devem ser canceladas no próprio canal.
               </p>
             </div>
@@ -286,6 +320,8 @@ export const TripsView: React.FC<TripsViewProps> = ({
 
             <div className="flex gap-3 pt-2">
               <button
+                ref={keepTripButtonRef}
+                type="button"
                 disabled={isSubmittingCancellation}
                 onClick={() => { setCancellingId(null); setCancellationError(''); }}
                 className="flex-1 py-2.5 rounded-full border border-neutral-300 font-semibold text-xs text-neutral-700 hover:bg-neutral-50 cursor-pointer"
@@ -293,6 +329,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                 Manter viagem
               </button>
               <button
+                type="button"
                 disabled={isSubmittingCancellation}
                 onClick={async () => {
                   setIsSubmittingCancellation(true);
