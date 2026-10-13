@@ -21,7 +21,7 @@ Object.assign(globalThis, {
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 const { PropertyDetailModal } = await import('../src/components/property/PropertyDetailModal.tsx');
-const { formatPropertyDescription } =
+const { formatPropertyDescription, PropertyOverviewSection } =
   await import('../src/components/property/PropertyOverviewSection.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
@@ -38,6 +38,16 @@ test('property description formatter separates Stays sections and amenity bullet
   assert.match(formatted, /Suíte 1 com:\n• Cama de casal\n• Ventilador/);
   assert.match(formatted, /Suíte 2 com:\n• Cama de solteiro/);
   assert.match(formatted, /Restrições\n• Proibido fumar\./);
+});
+
+test('detail overview omits the highlights spacing wrapper when live data has no highlights', () => {
+  const property = { ...STAYS_NET_APARTMENTS[0]!, highlights: [] };
+  const { container, getByRole } = render(
+    React.createElement(PropertyOverviewSection, { property }),
+  );
+
+  assert.ok(getByRole('heading', { name: 'Sobre este espaço' }));
+  assert.equal(container.querySelector('.pt-6.pb-2.space-y-4'), null);
 });
 
 test('detail close control keeps its minimum touch target in narrow layouts', () => {

@@ -98,19 +98,21 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
       </div>
 
       {/* Highlights */}
-      <div className="pt-6 pb-2 space-y-4">
-        {property.highlights.map((highlight, index) => (
-          <div key={index} className="flex items-start gap-4">
-            <div className="w-8 h-8 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Sparkles className="w-4 h-4" />
+      {property.highlights.length > 0 && (
+        <div className="pt-6 pb-2 space-y-4">
+          {property.highlights.map((highlight, index) => (
+            <div key={index} className="flex items-start gap-4">
+              <div className="w-8 h-8 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-neutral-900">{highlight.title}</p>
+                <p className="text-xs text-neutral-500">{highlight.description}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-bold text-neutral-900">{highlight.title}</p>
-              <p className="text-xs text-neutral-500">{highlight.description}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Descriptions */}
       {property.description.trim() && (
