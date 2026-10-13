@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { X, Check } from 'lucide-react';
 import { SearchFilters, Currency } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -57,6 +57,32 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   const [minBaths, setMinBaths] = useState(filters.minBaths);
   const [superhostOnly, setSuperhostOnly] = useState(filters.superhostOnly);
   const [instantBookOnly, setInstantBookOnly] = useState(filters.instantBookOnly);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+  const propertyTypesKey = filters.propertyTypes.join('\u0000');
+  const amenitiesKey = filters.amenities.join('\u0000');
+
+  useEffect(() => {
+    const currentFilters = filtersRef.current;
+    setMinPrice(currentFilters.minPrice);
+    setMaxPrice(currentFilters.maxPrice);
+    setSelectedTypes(currentFilters.propertyTypes);
+    setSelectedAmenities(currentFilters.amenities);
+    setMinBedrooms(currentFilters.minBedrooms);
+    setMinBaths(currentFilters.minBaths);
+    setSuperhostOnly(currentFilters.superhostOnly);
+    setInstantBookOnly(currentFilters.instantBookOnly);
+  }, [
+    filters.minPrice,
+    filters.maxPrice,
+    propertyTypesKey,
+    amenitiesKey,
+    filters.minBedrooms,
+    filters.minBaths,
+    filters.superhostOnly,
+    filters.instantBookOnly,
+    isOpen,
+  ]);
 
   if (!isOpen) return null;
 
