@@ -1,4 +1,5 @@
 import type { Property } from '../types';
+import type { CalculatedPriceResponse } from '../services/crcnBackendApi';
 import type { StaysCalendarDay } from './staysAvailability';
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -81,3 +82,39 @@ export const isStaysCalendarDay = (value: unknown): value is StaysCalendarDay =>
   (value.closedToArrival === undefined || typeof value.closedToArrival === 'boolean') &&
   (value.closedToDeparture === undefined || typeof value.closedToDeparture === 'boolean') &&
   (value.prices === undefined || (Array.isArray(value.prices) && value.prices.every(isStaysCalendarPrice)));
+
+const isStringRecord = (value: unknown): value is Record<string, string> =>
+  isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
+
+const isFiniteNumberRecord = (value: unknown): value is Record<string, number> =>
+  isRecord(value) && Object.values(value).every(isFiniteNumber);
+
+const isPriceFee = (value: unknown): boolean =>
+  isRecord(value) &&
+  (value._id === undefined || typeof value._id === 'string') &&
+  (value.internalName === undefined || typeof value.internalName === 'string') &&
+  (value._mstitle === undefined || isStringRecord(value._mstitle)) &&
+  (value._mcval === undefined || isFiniteNumberRecord(value._mcval));
+
+export const isCalculatedPriceResponse = (value: unknown): value is CalculatedPriceResponse =>
+  isRecord(value) &&
+  value.success === true &&
+  typeof value.listingId === 'string' && value.listingId.trim() !== '' &&
+  (value.staysListingId === undefined || typeof value.staysListingId === 'string') &&
+  isFiniteNumber(value.nights) && Number.isInteger(value.nights) && value.nights > 0 &&
+  isFiniteNumber(value.dailyRate) &&
+  isFiniteNumber(value.baseTotal) &&
+  isFiniteNumber(value.cleaningFee) &&
+  isFiniteNumber(value.serviceFee) &&
+  isFiniteNumber(value.discount) &&
+  isFiniteNumber(value.total) &&
+  typeof value.currency === 'string' && value.currency.trim() !== '' &&
+  (value.feesIncluded === undefined || typeof value.feesIncluded === 'boolean') &&
+  (value.cleaningIncluded === undefined || typeof value.cleaningIncluded === 'boolean') &&
+  (value.fees === undefined || (Array.isArray(value.fees) && value.fees.every(isPriceFee))) &&
+  (value.source === undefined || typeof value.source === 'string') &&
+  isRecord(value.breakdown) &&
+  typeof value.breakdown.dailyRateText === 'string' &&
+  typeof value.breakdown.cleaningFeeText === 'string' &&
+  typeof value.breakdown.serviceFeeText === 'string' &&
+  typeof value.breakdown.totalText === 'string';

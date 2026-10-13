@@ -1,6 +1,12 @@
 import type { Property, Reservation } from '../types';
 import type { StaysCalendarDay } from '../utils/staysAvailability';
-import { isFiniteNumber, isProperty, isRecord, isStaysCalendarDay } from '../utils/apiValidation';
+import {
+  isCalculatedPriceResponse,
+  isFiniteNumber,
+  isProperty,
+  isRecord,
+  isStaysCalendarDay,
+} from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
 
 export interface SearchAccommodationsParams {
@@ -268,7 +274,11 @@ class CrcnBackendApiService {
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
+      const json: unknown = await res.json();
+      if (!isCalculatedPriceResponse(json)) {
+        throw new Error('A resposta de preço retornou dados inválidos.');
+      }
+      return json;
     } catch (err) {
       console.warn('Error calculating price on backend:', err);
       return null;
