@@ -36,6 +36,8 @@ O backend Express anterior permanece disponível durante a migração pelo coman
 
 `npm run lint` executa ESLint em `src/`, `tests/` e na configuração do Vite (incluindo regras de acessibilidade JSX e Hooks), além da verificação de tipos TypeScript. Regras de lint ainda não saneadas no legado são reportadas como avisos para permitir correção progressiva; violações das regras dos Hooks e erros de tipos falham a verificação. `npm test` também verifica contenção de foco, teclado, Escape e retorno do foco em diálogos. O workflow **Frontend quality** executa essas verificações em pushes para `main` e pull requests. Como a formatação Prettier ainda não foi aplicada ao legado, `npm run format:check` cobre o tooling e uma lista progressiva de testes e componentes extraídos; formate arquivos novos ou alterados fora dessa lista com `npx prettier --write caminho/do/arquivo`, sem reformatar o legado em massa.
 
+Use o checklist de novas features e o plano de auditoria em [`docs/frontend-quality-plan.md`](docs/frontend-quality-plan.md); o despacho operacional para subagents está em [`docs/frontend-quality-subagent-plan.md`](docs/frontend-quality-subagent-plan.md).
+
 ## Autenticação e dados
 
 O navegador usa apenas `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. O middleware valida cada bearer token no Supabase Auth. Laravel grava o vínculo `guest_profiles` e os pedidos de acesso `owner_access`; não há FK para `auth.users`, pois a identidade continua externa. `SUPABASE_SERVICE_ROLE_KEY`, credenciais Stays e chave OpenAI são exclusivamente server-side.

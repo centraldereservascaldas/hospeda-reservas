@@ -1,6 +1,9 @@
 import type { OwnerDashboardData } from '../services/crcnBackendApi';
 import { isFiniteNumber, isIsoDate, isRecord } from './apiValidation';
 
+const getNightsBetween = (checkIn: string, checkOut: string): number =>
+  (Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86_400_000;
+
 const isOwnerProperty = (value: unknown): boolean =>
   isRecord(value) &&
   typeof value.staysListingId === 'string' &&
@@ -20,6 +23,7 @@ const isOwnerReservation = (value: unknown): boolean =>
   isIsoDate(value.checkIn) &&
   isIsoDate(value.checkOut) &&
   value.checkOut > value.checkIn &&
+  value.nights === getNightsBetween(value.checkIn, value.checkOut) &&
   (value.status === 'confirmed' ||
     value.status === 'cancelled' ||
     value.status === 'blocked' ||

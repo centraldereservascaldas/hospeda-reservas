@@ -69,4 +69,11 @@ test('rejects incomplete, invalid-date, and non-finite owner dashboard data', ()
     }),
     false,
   );
+  assert.equal(
+    isOwnerDashboardData({
+      ...dashboard,
+      reservations: [{ ...dashboard.reservations[0], nights: 3 }],
+    }),
+    false,
+  );
 });
