@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Property, Reservation, SearchFilters, Currency } from './types';
 import { CalculatedPriceResponse } from './services/crcnBackendApi';
@@ -20,6 +20,7 @@ import { crcnBackendApi } from './services/crcnBackendApi';
 import { initialAuthCallbackError, supabase } from './services/supabase';
 import { getSurpriseDateCandidates } from './utils/surpriseDates';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
+import { createDefaultSearchFilters, mergeSearchFiltersIntoUrl, parseSearchFilters } from './utils/searchUrlState';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { 
   Compass, 
@@ -204,6 +205,9 @@ export default function App() {
   const [isSofiaOpen, setIsSofiaOpen] = useState(false);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [selectedCondominium, setSelectedCondominium] = useState<CondominiumSummary | null>(null);
+  const initialLocationRef = useRef(`${window.location.pathname}${window.location.search}${window.location.hash}`);
+  const initialUrlSearchHandledRef = useRef(false);
+  const restoreSearchFromUrlRef = useRef<(filters: SearchFilters) => void>(() => {});
   const [bookingPayload, setBookingPayload] = useState<{
     property: Property;
     checkIn: string;
@@ -237,6 +241,8 @@ export default function App() {
     parseUrlAndSelect();
 
     const handlePopState = () => {
+      const restoredFilters = parseSearchFilters(window.location.search);
+      setFilters(restoredFilters);
       const match = window.location.pathname.match(/\/apartamento\/([a-zA-Z0-9_-]+)/);
       if (match) {
         const targetId = match[1];
@@ -244,6 +250,9 @@ export default function App() {
         if (found) setSelectedProperty(found);
       } else {
         setSelectedProperty(null);
+        if (restoredFilters.checkIn && restoredFilters.checkOut) {
+          restoreSearchFromUrlRef.current(restoredFilters);
+        }
       }
     };
 
@@ -255,14 +264,14 @@ export default function App() {
     setSelectedProperty(p);
     const slug = p.staysListingId || p.id;
     if (window.location.pathname !== `/apartamento/${slug}`) {
-      window.history.pushState(null, '', `/apartamento/${slug}`);
+      window.history.pushState(null, '', `/apartamento/${slug}${window.location.search}${window.location.hash}`);
     }
   };
 
   const handleClosePropertyDetail = () => {
     setSelectedProperty(null);
     if (window.location.pathname.startsWith('/apartamento/')) {
-      window.history.pushState(null, '', '/');
+      window.history.pushState(null, '', `/${window.location.search}${window.location.hash}`);
     }
   };
 
@@ -352,23 +361,19 @@ export default function App() {
   }, [savedPropertyIds]);
 
   // Search & Filter State
-  const defaultFilters: SearchFilters = {
-    destination: '',
-    checkIn: '',
-    checkOut: '',
-    guests: { adults: 1, children: 0, infants: 0, pets: 0 },
-    category: 'all',
-    minPrice: 0,
-    maxPrice: 5000,
-    propertyTypes: [],
-    amenities: [],
-    minBedrooms: 0,
-    minBaths: 0,
-    superhostOnly: false,
-    instantBookOnly: false,
-  };
+  const [filters, setFilters] = useState<SearchFilters>(() => parseSearchFilters(window.location.search));
+  const defaultFilters = createDefaultSearchFilters();
 
-  const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
+  useEffect(() => {
+    const search = mergeSearchFiltersIntoUrl(window.location.search, filters);
+    const nextSearch = search ? `?${search}` : '';
+    if (nextSearch === window.location.search) return;
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${nextSearch}${window.location.hash}`,
+    );
+  }, [filters]);
 
   // Toggle Save Property
   const handleToggleSave = (propertyId: string) => {
@@ -520,7 +525,7 @@ export default function App() {
     setCurrentView(view);
   };
 
-  const handleStaysWidgetSearch = async (searchParams: {
+  const handleStaysWidgetSearch = useCallback(async (searchParams: {
     checkIn: string;
     checkOut: string;
     persons: number;
@@ -603,7 +608,35 @@ export default function App() {
     if (catalogEl) {
       catalogEl.scrollIntoView({ behavior: 'smooth' });
     }
+  }, []);
+
+  restoreSearchFromUrlRef.current = (restoredFilters) => {
+    void handleStaysWidgetSearch({
+      checkIn: restoredFilters.checkIn,
+      checkOut: restoredFilters.checkOut,
+      persons: restoredFilters.guests.adults + restoredFilters.guests.children,
+      destination: restoredFilters.destination,
+      propertyId: restoredFilters.destinationPropertyId,
+    });
   };
+
+  useEffect(() => {
+    if (initialUrlSearchHandledRef.current) return;
+    initialUrlSearchHandledRef.current = true;
+
+    const initialUrl = new URL(initialLocationRef.current, window.location.origin);
+    if (initialUrl.pathname.startsWith('/apartamento/')) return;
+    const initialFilters = parseSearchFilters(initialUrl.search);
+    if (!initialFilters.checkIn || !initialFilters.checkOut) return;
+
+    void handleStaysWidgetSearch({
+      checkIn: initialFilters.checkIn,
+      checkOut: initialFilters.checkOut,
+      persons: initialFilters.guests.adults + initialFilters.guests.children,
+      destination: initialFilters.destination,
+      propertyId: initialFilters.destinationPropertyId,
+    });
+  }, [handleStaysWidgetSearch]);
 
   const savedPropertiesList = useMemo(() => {
     return properties.filter((p) => savedPropertyIds.includes(p.id));
