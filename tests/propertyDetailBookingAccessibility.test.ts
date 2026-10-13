@@ -168,6 +168,18 @@ test('photo gallery supports keyboard navigation and returns focus to its opener
       name: `Mostrar todas as ${property.images.length} fotos`,
     });
     assert.ok(property.images.length > 1);
+    const secondPhotoTrigger = getByRole('button', {
+      name: `Ampliar foto 2 de ${property.title}`,
+    });
+    secondPhotoTrigger.focus();
+    fireEvent.click(secondPhotoTrigger);
+    const secondPhotoDialog = container.ownerDocument.querySelector<HTMLElement>(
+      '[aria-labelledby="property-gallery-title"]',
+    );
+    assert.match(secondPhotoDialog?.textContent || '', /2 de \d+ fotos/);
+    fireEvent.keyDown(getByRole('button', { name: 'Fechar galeria' }), { key: 'Escape' });
+    assert.equal(document.activeElement, secondPhotoTrigger);
+
     galleryTrigger.focus();
     fireEvent.click(galleryTrigger);
 

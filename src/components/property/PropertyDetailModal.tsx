@@ -3,7 +3,6 @@ import {
   X,
   Heart,
   Share2,
-  Maximize2,
 } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { calculateNights } from '../../utils/formatters';
@@ -25,6 +24,7 @@ import { PropertyGalleryDialog } from './PropertyGalleryDialog';
 import { PropertyGuestSelectorDialog } from './PropertyGuestSelectorDialog';
 import { PropertyDatePickerDialog } from './PropertyDatePickerDialog';
 import { PropertyDetailHeader } from './PropertyDetailHeader';
+import { PropertyPhotoGrid } from './PropertyPhotoGrid';
 import { useDialogFocus } from '../useDialogFocus';
 
 interface PropertyDetailModalProps {
@@ -331,53 +331,11 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               onShowReviews={scrollToReviews}
             />
 
-            {/* Photo Grid Gallery (Airbnb 5-photo layout) */}
-            <div className="relative rounded-2xl overflow-hidden shadow-xs">
-              <div className="grid grid-cols-1 md:grid-cols-4 md:grid-rows-2 gap-2 h-[340px] sm:h-[460px]">
-
-                {/* Main large photo */}
-                <button
-                  type="button"
-                  aria-label={`Ampliar foto principal de ${property.title}`}
-                  className="md:col-span-2 md:row-span-2 relative overflow-hidden group cursor-pointer border-0 p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
-                  onClick={() => openPhotoGallery(0)}
-                >
-                  <img
-                    src={property.images[0]}
-                    alt=""
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
-                </button>
-
-                {/* 4 smaller photos */}
-                {property.images.slice(1, 5).map((img, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    aria-label={`Ampliar foto ${i + 2} de ${property.title}`}
-                    className="relative overflow-hidden group cursor-pointer hidden md:block border-0 p-0 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
-                    onClick={() => openPhotoGallery(i + 1)}
-                  >
-                    <img
-                      src={img}
-                      alt=""
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors" />
-                  </button>
-                ))}
-              </div>
-
-              {/* View all photos button */}
-              <button
-                onClick={() => openPhotoGallery(0)}
-                className="absolute bottom-4 right-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-white/95 hover:bg-white text-xs font-bold text-neutral-900 shadow-md border border-neutral-200 transition-all cursor-pointer hover:scale-105"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span>Mostrar todas as {property.images.length} fotos</span>
-              </button>
-            </div>
+            <PropertyPhotoGrid
+              propertyTitle={property.title}
+              images={property.images}
+              onOpenGallery={openPhotoGallery}
+            />
 
             {/* Main content grid: 2 cols on desktop */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
