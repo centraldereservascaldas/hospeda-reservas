@@ -187,6 +187,12 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, labelId, val
                   type="button"
                   disabled={!isCurrentMonth || isBeforeMinimum}
                   onClick={() => { onChange(dateValue); onClose(); triggerRef.current?.focus(); }}
+                aria-label={date.toLocaleDateString('pt-BR', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })}
                   aria-pressed={isSelected}
                   data-calendar-day
                   className={`aspect-square rounded-xl text-xs font-semibold transition-all disabled:cursor-not-allowed ${
