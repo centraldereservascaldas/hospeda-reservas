@@ -16,6 +16,8 @@ import { CondominiumDirectory } from './components/CondominiumDirectory';
 import { StaysSearchWidget } from './components/StaysSearchWidget';
 import { ActiveSearchFilters } from './components/ActiveSearchFilters';
 import { PropertyCatalogGrid } from './components/PropertyCatalogGrid';
+import { MobileBottomNavigation } from './components/MobileBottomNavigation';
+import type { MainView } from './components/MobileBottomNavigation';
 import { LogoCRCN } from './components/LogoCRCN';
 import { crcnBackendApi } from './services/crcnBackendApi';
 import { getAuthCallbackError } from './utils/authCallback';
@@ -26,9 +28,6 @@ import { countActivePropertyFilters, filterPropertiesBySearchFilters } from './u
 import { scrollIntoViewRespectingMotion } from './utils/motion';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { 
-  Compass, 
-  Heart, 
-  Briefcase, 
   Sparkles, 
   Globe, 
   ShieldCheck,
@@ -162,7 +161,7 @@ export default function App() {
   const [currency, setCurrency] = useState<Currency>('BRL');
   const [showTotalWithTaxes, setShowTotalWithTaxes] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
-  const [currentView, setCurrentView] = useState<'explore' | 'trips' | 'wishlists' | 'host' | 'ownerAdmin'>('explore');
+  const [currentView, setCurrentView] = useState<MainView>('explore');
   const currentViewRef = useRef(currentView);
   currentViewRef.current = currentView;
   const [authCallbackNotice, setAuthCallbackNotice] = useState('');
@@ -746,54 +745,13 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Bottom Navigation Bar for Mobile with Liquid Glass */}
-      <nav className="sm:hidden fixed bottom-3 left-4 right-4 z-40 bg-white/75 backdrop-blur-2xl border border-white/80 rounded-3xl px-6 py-2.5 flex items-center justify-between shadow-[0_12px_36px_rgba(249,115,22,0.15)]">
-        <button
-          onClick={() => setCurrentView('explore')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-bold cursor-pointer transition-all ${
-            currentView === 'explore' ? 'text-orange-600 scale-105' : 'text-neutral-500'
-          }`}
-        >
-          <Compass className="w-5 h-5" />
-          <span>Explorar</span>
-        </button>
-
-        <button
-          onClick={() => setCurrentView('wishlists')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-bold cursor-pointer transition-all relative ${
-            currentView === 'wishlists' ? 'text-orange-600 scale-105' : 'text-neutral-500'
-          }`}
-        >
-          <Heart className="w-5 h-5" />
-          <span>Favoritos</span>
-          {savedPropertyIds.length > 0 && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
-          )}
-        </button>
-
-        <button
-          onClick={() => setCurrentView('trips')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-bold cursor-pointer transition-all relative ${
-            currentView === 'trips' ? 'text-orange-600 scale-105' : 'text-neutral-500'
-          }`}
-        >
-          <Briefcase className="w-5 h-5" />
-          <span>Reservas</span>
-          {reservations.filter((r) => r.status === 'confirmed').length > 0 && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
-          )}
-        </button>
-
-        {ownerAccessStatus === 'approved' && <button
-          onClick={() => handleSetCurrentView('host')}
-          className={`flex flex-col items-center gap-1 text-[10px] font-bold cursor-pointer transition-all ${
-            currentView === 'host' ? 'text-orange-600 scale-105' : 'text-neutral-500'
-          }`}
-        >
-          <Sparkles className="w-5 h-5" />
-          <span>Proprietário</span>
-        </button>}
-      </nav>
+      <MobileBottomNavigation
+        currentView={currentView}
+        onNavigate={(view) => view === 'host' ? handleSetCurrentView(view) : setCurrentView(view)}
+        showHost={ownerAccessStatus === 'approved'}
+        hasSavedProperties={savedPropertyIds.length > 0}
+        hasConfirmedReservations={reservations.some((reservation) => reservation.status === 'confirmed')}
+      />
 
       {/* Footer in Liquid Glass */}
       <footer className="border-t border-white/60 bg-white/40 backdrop-blur-2xl text-xs text-neutral-600 hidden sm:block">
