@@ -73,3 +73,26 @@ test('date picker announces full dates and restores focus on Escape and selectio
     crcnBackendApi.getResorts = originalGetResorts;
   }
 });
+
+test('exposes the Sofia assistant shortcut in the mobile search heading', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  crcnBackendApi.getResorts = async () => [];
+  let opened = 0;
+  try {
+    const { getByRole } = render(
+      React.createElement(StaysSearchWidget, {
+        onSearchInApp: () => {},
+        onOpenAssistant: () => {
+          opened += 1;
+        },
+      }),
+    );
+
+    const shortcut = getByRole('button', { name: 'Falar com Sofia, concierge virtual' });
+    assert.match(shortcut.className, /sm:hidden/);
+    fireEvent.click(shortcut);
+    assert.equal(opened, 1);
+  } finally {
+    crcnBackendApi.getResorts = originalGetResorts;
+  }
+});

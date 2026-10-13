@@ -40,3 +40,15 @@ test('Sofia trigger includes its visible text in its accessible name and opens t
   fireEvent.click(trigger);
   assert.equal(openCalls, 1);
 });
+
+test('can hide the floating mobile trigger when an inline assistant shortcut is present', () => {
+  const { container } = render(
+    React.createElement(SofiaAssistantTrigger, {
+      onOpen: () => {},
+      showMobileFloating: false,
+    }),
+  );
+
+  assert.match(container.firstElementChild?.className || '', /hidden/);
+  assert.match(container.firstElementChild?.className || '', /sm:block/);
+});

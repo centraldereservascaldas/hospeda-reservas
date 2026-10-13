@@ -23,6 +23,29 @@ const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/r
 const { PropertyDetailModal } = await import('../src/components/property/PropertyDetailModal.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
+test('detail close control keeps its minimum touch target in narrow layouts', () => {
+  const { getByRole } = render(
+    React.createElement(PropertyDetailModal, {
+      property: STAYS_NET_APARTMENTS[0]!,
+      initialCheckIn: '2026-11-11',
+      initialCheckOut: '2026-11-15',
+      initialGuests: { adults: 2, children: 0, infants: 0, pets: 0 },
+      onClose: () => {},
+      currency: 'BRL',
+      isSaved: false,
+      onToggleSave: () => {},
+      onStartBooking: () => {},
+    }),
+  );
+
+  const closeButton = getByRole('button', {
+    name: 'Fechar detalhes da acomodação',
+  });
+  assert.match(closeButton.className, /h-9/);
+  assert.match(closeButton.className, /w-9/);
+  assert.match(closeButton.className, /shrink-0/);
+});
+
 const liveQuote = {
   success: true,
   listingId: 'JQ08G',

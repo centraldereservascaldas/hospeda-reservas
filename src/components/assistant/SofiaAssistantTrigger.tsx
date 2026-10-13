@@ -3,11 +3,17 @@ import { LogoCRCN } from '../LogoCRCN';
 
 interface SofiaAssistantTriggerProps {
   onOpen: () => void;
+  showMobileFloating?: boolean;
 }
 
-export function SofiaAssistantTrigger({ onOpen }: SofiaAssistantTriggerProps) {
+export function SofiaAssistantTrigger({
+  onOpen,
+  showMobileFloating = true,
+}: SofiaAssistantTriggerProps) {
   return (
-    <div className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40">
+    <div
+      className={`fixed bottom-20 right-4 z-40 sm:bottom-6 sm:right-6 ${showMobileFloating ? 'block' : 'hidden'} sm:block`}
+    >
       <button
         type="button"
         onClick={onOpen}

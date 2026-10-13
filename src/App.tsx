@@ -270,6 +270,7 @@ export default function App() {
                 variant="hero"
                 currentFilters={filters}
                 onSearchInApp={handleStaysWidgetSearch}
+                onOpenAssistant={() => setIsSofiaOpen(true)}
               />
             </div>}
 
@@ -364,7 +365,10 @@ export default function App() {
 
       <AppFooter currency={currency} onCreateListing={() => setIsCreateListingOpen(true)} />
 
-      <SofiaAssistantTrigger onOpen={() => setIsSofiaOpen(true)} />
+      <SofiaAssistantTrigger
+        onOpen={() => setIsSofiaOpen(true)}
+        showMobileFloating={currentView !== 'explore' || isCondominiumView}
+      />
 
       {/* ALL INTERACTIVE MODALS */}
       

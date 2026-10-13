@@ -27,6 +27,7 @@ interface StaysSearchWidgetProps {
   surpriseMe?: boolean;
   variant?: 'hero' | 'compact' | 'modal';
   className?: string;
+  onOpenAssistant?: () => void;
 }
 
 // Convert YYYY-MM-DD to DD/MM/YYYY
@@ -400,6 +401,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   currentFilters,
   surpriseMe = false,
   className = '',
+  onOpenAssistant,
 }) => {
   // Dates in ISO format YYYY-MM-DD for native input
   const today = isoDate(new Date());
@@ -475,14 +477,25 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   return (
     <div className={`w-full transition-all ${className}`}>
       {/* Container in Liquid Glass */}
-      <div className="relative rounded-3xl liquid-glass-card border border-white/85 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.07)] p-5 sm:p-7">
+      <div className="relative rounded-3xl liquid-glass-card border border-white/85 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.07)] p-4 sm:p-7">
         
         {/* Search widget heading */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5 pb-3.5 border-b border-white/60">
-          <div className="flex items-center gap-2 text-xs sm:text-sm text-neutral-800 font-bold">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-5 pb-3 border-b border-white/60 sm:pb-3.5">
+          <div className="flex flex-1 items-center gap-2 text-xs sm:text-sm text-neutral-800 font-bold">
             <Sparkles className="w-4 h-4 text-orange-500 flex-shrink-0" />
             <span>{surpriseMe ? 'Vamos escolher uma data especial e encontrar boas opções para você' : 'Encontre sua hospedagem em Caldas Novas por data e condomínio'}</span>
           </div>
+          {onOpenAssistant && (
+            <button
+              type="button"
+              onClick={onOpenAssistant}
+              aria-label="Falar com Sofia, concierge virtual"
+              className="sm:hidden inline-flex min-h-10 flex-shrink-0 items-center gap-2 rounded-full border border-orange-200 bg-white/80 px-3 text-xs font-bold text-orange-800 shadow-sm"
+            >
+              <Sparkles className="h-4 w-4 text-orange-600" aria-hidden="true" />
+              Sofia
+            </button>
+          )}
         </div>
 
         {/* 
@@ -492,7 +505,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
           role="search"
           id="widgetStaysSearchForm"
           onSubmit={handleSubmit}
-          className="space-y-4"
+          className="space-y-3 sm:space-y-4"
         >
           {/* Stays widget required placement token */}
           <input type="hidden" name="wpl" value="" />
@@ -627,7 +640,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
                 type="submit"
-                className="w-full sm:w-auto px-8 py-3.5 rounded-2xl liquid-glass-accent text-white font-extrabold text-sm shadow-md shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2.5"
+                className="w-full whitespace-nowrap sm:w-auto px-2 sm:px-8 py-3 sm:py-3.5 rounded-2xl liquid-glass-accent text-white font-extrabold text-sm shadow-md shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2.5"
               >
                 {surpriseMe ? <Sparkles className="w-4 h-4 stroke-[2.5]" /> : <Search className="w-4 h-4 stroke-[2.5]" />}
                 <span>{surpriseMe ? 'Surpreenda-me' : 'Pesquisar Disponibilidade'}</span>

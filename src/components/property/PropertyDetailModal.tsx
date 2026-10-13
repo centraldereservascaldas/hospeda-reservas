@@ -243,7 +243,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               type="button"
               onClick={onClose}
               aria-label="Fechar detalhes da acomodação"
-              className="w-9 h-9 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 backdrop-blur-md flex items-center justify-center text-neutral-700 hover:text-neutral-950 shadow-2xs transition-all cursor-pointer hover:scale-105"
+              className="h-9 w-9 shrink-0 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 backdrop-blur-md flex items-center justify-center text-neutral-700 hover:text-neutral-950 shadow-2xs transition-all cursor-pointer hover:scale-105"
             >
               <X className="w-5 h-5" />
             </button>
