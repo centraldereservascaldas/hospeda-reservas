@@ -53,6 +53,10 @@ class AccommodationApiTest extends TestCase
                 'id' => 'live-listing',
                 '_mstitle' => ['pt_BR' => 'Anúncio live'],
                 '_t_mainImageMeta' => ['url' => 'https://crcn.stays.net/image.jpg'],
+                '_t_imagesMeta' => [
+                    ['_id' => 'cover', 'url' => 'https://crcn.stays.net/image.jpg'],
+                    ['_id' => 'gallery', 'url' => 'https://crcn.stays.net/gallery.jpg'],
+                ],
             ]], 200),
         ]);
 
@@ -60,7 +64,28 @@ class AccommodationApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('0._id', 'live-listing')
             ->assertJsonPath('0.amenities', [])
-            ->assertJsonPath('0.images.0', 'https://crcn.stays.net/image.jpg');
+            ->assertJsonPath('0.images.0', 'https://crcn.stays.net/image.jpg')
+            ->assertJsonPath('0.images.1', 'https://crcn.stays.net/gallery.jpg')
+            ->assertJsonCount(2, '0.images');
+    }
+
+    public function test_live_listing_does_not_mix_local_fixture_by_business_id(): void
+    {
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(['*' => Http::response([[
+            '_id' => 'object-live-1',
+            'id' => 'different-live-id',
+            'code' => 'JQ08G',
+            '_mstitle' => ['pt_BR' => 'Título fornecido pela Stays'],
+            '_t_mainImageMeta' => ['url' => 'https://crcn.stays.net/live.jpg'],
+        ]], 200)]);
+
+        $this->getJson('/api/accommodations')
+            ->assertOk()
+            ->assertJsonPath('data.0.title', 'Título fornecido pela Stays')
+            ->assertJsonPath('data.0.description', '')
+            ->assertJsonPath('data.0.pricePerNight', 0)
+            ->assertJsonPath('data.0.images.0', 'https://crcn.stays.net/live.jpg');
     }
 
     public function test_dated_live_search_maps_stays_result_and_quote(): void

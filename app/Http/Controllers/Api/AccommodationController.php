@@ -61,6 +61,12 @@ class AccommodationController extends Controller
         $detail = $this->stays->get('/content/listings/'.rawurlencode($id));
         if ($detail !== null) {
             $existing = $this->mapListing($detail, $fallback);
+            $images = collect($detail['_t_imagesMeta'] ?? [])->map(fn ($image) => is_array($image) ? ($image['url'] ?? $image['src'] ?? null) : $image)
+                ->filter(fn ($image): bool => is_string($image) && $image !== '')
+                ->unique()->values()->all();
+            if ($images !== []) {
+                $existing['images'] = $images;
+            }
         }
         if ($existing === null) {
             return response()->json(['success' => false, 'message' => 'Acomodação não encontrada na base Stays.'], 404);
@@ -287,25 +293,46 @@ class AccommodationController extends Controller
 
             return array_intersect($listingIds, $catalogIds) !== [];
         }) ?? [];
+        $hasMatchingCatalogEntry = $existing !== [] && ($existing['staysListingId'] ?? null) === ($listing['id'] ?? $listing['code'] ?? null);
+        if (! $hasMatchingCatalogEntry) {
+            $existing = [];
+        }
         $location = $existing['location'] ?? [];
-        $images = collect([$listing['_t_mainImageMeta']['url'] ?? null, ...($listing['images'] ?? [])])->filter()->unique()->values()->all();
+        $address = $listing['address'] ?? [];
+        $latLng = $listing['latLng'] ?? [];
+        $subtype = strtolower((string) ($listing['subtype'] ?? ''));
+        $propertyType = match ($subtype) {
+            'private_room', 'private-room', 'room' => 'private_room',
+            'cabin' => 'cabin',
+            'villa' => 'villa',
+            default => 'entire_place',
+        };
+        $gallery = collect($listing['_t_imagesMeta'] ?? [])->map(fn ($image) => is_array($image) ? ($image['url'] ?? $image['src'] ?? null) : $image);
+        $images = collect([$listing['_t_mainImageMeta']['url'] ?? null, ...$gallery->all(), ...($listing['images'] ?? [])])
+            ->filter(fn ($image): bool => is_string($image) && $image !== '')
+            ->unique()->values()->all();
 
         return array_replace_recursive($existing, [
-            'id' => $id, 'staysListingId' => $id, 'staysSynced' => true,
-            'title' => $this->localized($listing['_mstitle'] ?? null) ?: ($listing['internalName'] ?? $existing['title'] ?? 'Apartamento Central de Reservas'),
-            'subtitle' => $this->localized($listing['_t_typeMeta']['_mstitle'] ?? null) ?: ($existing['subtitle'] ?? 'Caldas Novas - GO'),
-            'description' => strip_tags($this->localized($listing['_msdesc'] ?? $listing['description'] ?? null) ?: ($existing['description'] ?? '')),
+            'id' => $id, 'staysListingId' => (string) ($listing['id'] ?? $listing['code'] ?? $id), 'staysListingObjectId' => (string) ($listing['_id'] ?? ''), 'staysPropertyId' => (string) ($listing['_idproperty'] ?? ''), 'staysSynced' => true,
+            'title' => $this->localized($listing['_mstitle'] ?? null) ?: ($listing['internalName'] ?? 'Apartamento Central de Reservas'),
+            'subtitle' => $this->localized($listing['_t_typeMeta']['_mstitle'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['subtitle'] ?? '') : ''),
+            'description' => strip_tags($this->localized($listing['_msdesc'] ?? $listing['description'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['description'] ?? '') : '')),
+            'category' => (string) (collect($listing['listingCategories'] ?? [])->first() ?? 'accommodation'),
+            'propertyType' => $propertyType,
             'location' => [
-                'city' => $listing['address']['city'] ?? $location['city'] ?? 'Caldas Novas', 'state' => $listing['address']['state'] ?? $location['state'] ?? 'GO',
-                'country' => $location['country'] ?? 'Brasil', 'neighborhood' => $listing['address']['region'] ?? $listing['address']['neighborhood'] ?? $location['neighborhood'] ?? '',
-                'address' => $listing['address']['street'] ?? $location['address'] ?? '', 'lat' => $listing['latLng']['lat'] ?? $location['lat'] ?? -17.74, 'lng' => $listing['latLng']['lng'] ?? $location['lng'] ?? -48.62,
+                'city' => $address['city'] ?? $location['city'] ?? '', 'state' => $address['state'] ?? $address['stateCode'] ?? $location['state'] ?? '',
+                'country' => ($address['countryCode'] ?? null) === 'BR' ? 'Brasil' : ($location['country'] ?? ''), 'neighborhood' => $address['region'] ?? $address['neighborhood'] ?? $location['neighborhood'] ?? '',
+                'address' => trim(implode(', ', array_filter([$address['street'] ?? null, $address['streetNumber'] ?? null]))), 'lat' => $latLng['_f_lat'] ?? $latLng['lat'] ?? $location['lat'] ?? 0, 'lng' => $latLng['_f_lng'] ?? $latLng['lng'] ?? $location['lng'] ?? 0,
             ],
-            'pricePerNight' => $listing['dailyRate'] ?? $listing['price'] ?? $existing['pricePerNight'] ?? 0,
-            'cleaningFee' => $listing['cleaningFee'] ?? $existing['cleaningFee'] ?? 0,
-            'instantBook' => $listing['instantBooking'] ?? $existing['instantBook'] ?? false,
-            'images' => $images ?: ($existing['images'] ?? []), 'bedrooms' => $listing['_i_rooms'] ?? $existing['bedrooms'] ?? 0,
-            'beds' => $listing['_i_beds'] ?? $existing['beds'] ?? 0, 'bathrooms' => $listing['_f_bathrooms'] ?? $existing['bathrooms'] ?? 1,
-            'maxGuests' => $listing['_i_maxGuests'] ?? $existing['maxGuests'] ?? 1,
+            'pricePerNight' => $listing['dailyRate'] ?? $listing['price'] ?? 0,
+            'cleaningFee' => $listing['cleaningFee'] ?? 0, 'serviceFeeRate' => 0,
+            'rating' => 0, 'reviewCount' => 0, 'isSuperhost' => false, 'isGuestFavorite' => false,
+            'instantBook' => $listing['instantBooking'] ?? false,
+            'images' => $images, 'bedrooms' => $listing['_i_rooms'] ?? 0,
+            'beds' => $listing['_i_beds'] ?? 0, 'bathrooms' => $listing['_f_bathrooms'] ?? 0,
+            'maxGuests' => max(1, (int) ($listing['_i_maxGuests'] ?? 1)),
+            'listingAmenities' => $hasMatchingCatalogEntry ? ($existing['listingAmenities'] ?? []) : [], 'propertyAmenities' => $hasMatchingCatalogEntry ? ($existing['propertyAmenities'] ?? []) : [],
+            'amenities' => [], 'highlights' => [], 'sleepingArrangements' => [], 'rules' => [], 'host' => ['name' => '', 'avatar' => '', 'joinedYear' => 0, 'isSuperhost' => false, 'responseTime' => '', 'responseRate' => '', 'bio' => ''], 'reviews' => [],
         ]);
     }
 

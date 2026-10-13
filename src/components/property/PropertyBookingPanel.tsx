@@ -63,10 +63,16 @@ export function PropertyBookingPanel({
     <div className="sticky top-24 bg-white/70 backdrop-blur-2xl rounded-3xl p-6 border border-white/90 shadow-[0_16px_40px_-10px_rgba(0,0,0,0.1)] space-y-4">
       <div className="flex items-baseline justify-between">
         <div>
-          <span className="text-2xl font-black text-neutral-900">
-            {formatCurrency(staysPrice?.dailyRate ?? property.pricePerNight, currency)}
-          </span>
-          <span className="ml-1 text-xs text-neutral-500">/ noite</span>
+          {staysPrice || property.pricePerNight > 0 ? (
+            <>
+              <span className="text-2xl font-black text-neutral-900">
+                {formatCurrency(staysPrice?.dailyRate ?? property.pricePerNight, currency)}
+              </span>
+              <span className="ml-1 text-xs text-neutral-500">/ noite</span>
+            </>
+          ) : (
+            <span className="text-lg font-bold text-neutral-900">Consulte valores</span>
+          )}
         </div>
 
         {hasReviews && (

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createDefaultSearchFilters,
+  getAccommodationIdFromPath,
   mergeSearchFiltersIntoUrl,
   parseSearchFilters,
   serializeSearchFilters,
@@ -37,6 +38,17 @@ test('accepts Stays date aliases and a total guest count without composition', (
   assert.equal(filters.checkIn, '2026-12-01');
   assert.equal(filters.checkOut, '2026-12-04');
   assert.deepEqual(filters.guests, { adults: 4, children: 0, infants: 0, pets: 0 });
+});
+
+test('accepts Stays persons parameter and its localized apartment route', () => {
+  const filters = parseSearchFilters('?from=2027-03-01&to=2027-03-05&persons=10');
+
+  assert.equal(filters.checkIn, '2027-03-01');
+  assert.equal(filters.checkOut, '2027-03-05');
+  assert.deepEqual(filters.guests, { adults: 10, children: 0, infants: 0, pets: 0 });
+  assert.equal(getAccommodationIdFromPath('/pt/apartment/LG07J/crcn-casa-com-piscina'), 'LG07J');
+  assert.equal(getAccommodationIdFromPath('/apartamento/LG02J'), 'LG02J');
+  assert.equal(getAccommodationIdFromPath('/pt/search'), null);
 });
 
 test('serializes non-default search state and round-trips it', () => {

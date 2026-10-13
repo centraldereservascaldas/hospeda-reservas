@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Property, SearchFilters } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
-import { parseSearchFilters } from '../utils/searchUrlState';
+import { getAccommodationIdFromPath, parseSearchFilters } from '../utils/searchUrlState';
 
 interface UseAccommodationRoutingOptions {
   properties: Property[];
@@ -17,16 +17,32 @@ export function useAccommodationRouting({
   setFilters,
   restoreSearchFromUrlRef,
 }: UseAccommodationRoutingOptions) {
+  const refreshSelectedProperty = useCallback(
+    (property: Property) => {
+      const propertyId = property.id;
+      const staysListingId = property.staysListingId || property.id;
+
+      void crcnBackendApi.getAccommodationById(staysListingId).then((detail) => {
+        if (!detail) return;
+        setSelectedProperty((current) =>
+          current?.id === propertyId ? { ...current, ...detail } : current,
+        );
+      });
+    },
+    [setSelectedProperty],
+  );
+
   useEffect(() => {
     const parseUrlAndSelect = () => {
-      const match = window.location.pathname.match(/\/apartamento\/([a-zA-Z0-9_-]+)/);
-      if (match) {
-        const targetId = match[1];
+      const targetId = getAccommodationIdFromPath(window.location.pathname);
+      if (targetId) {
+        setFilters(parseSearchFilters(window.location.search));
         const found = properties.find(
           (property) => property.id === targetId || property.staysListingId === targetId,
         );
         if (found) {
           setSelectedProperty(found);
+          refreshSelectedProperty(found);
         } else {
           crcnBackendApi.getAccommodationById(targetId).then((property) => {
             if (property) setSelectedProperty(property);
@@ -40,13 +56,15 @@ export function useAccommodationRouting({
     const handlePopState = () => {
       const restoredFilters = parseSearchFilters(window.location.search);
       setFilters(restoredFilters);
-      const match = window.location.pathname.match(/\/apartamento\/([a-zA-Z0-9_-]+)/);
-      if (match) {
-        const targetId = match[1];
+      const targetId = getAccommodationIdFromPath(window.location.pathname);
+      if (targetId) {
         const found = properties.find(
           (property) => property.id === targetId || property.staysListingId === targetId,
         );
-        if (found) setSelectedProperty(found);
+        if (found) {
+          setSelectedProperty(found);
+          refreshSelectedProperty(found);
+        }
       } else {
         setSelectedProperty(null);
         if (restoredFilters.checkIn && restoredFilters.checkOut) {
@@ -57,10 +75,17 @@ export function useAccommodationRouting({
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [properties, restoreSearchFromUrlRef, setFilters, setSelectedProperty]);
+  }, [
+    properties,
+    refreshSelectedProperty,
+    restoreSearchFromUrlRef,
+    setFilters,
+    setSelectedProperty,
+  ]);
 
   const handleSelectProperty = (property: Property) => {
     setSelectedProperty(property);
+    refreshSelectedProperty(property);
     const slug = property.staysListingId || property.id;
     if (window.location.pathname !== `/apartamento/${slug}`) {
       window.history.pushState(
@@ -73,7 +98,7 @@ export function useAccommodationRouting({
 
   const handleClosePropertyDetail = () => {
     setSelectedProperty(null);
-    if (window.location.pathname.startsWith('/apartamento/')) {
+    if (getAccommodationIdFromPath(window.location.pathname)) {
       window.history.pushState(null, '', `/${window.location.search}${window.location.hash}`);
     }
   };

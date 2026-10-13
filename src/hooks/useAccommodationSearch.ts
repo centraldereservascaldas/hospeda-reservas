@@ -5,7 +5,7 @@ import { crcnBackendApi } from '../services/crcnBackendApi';
 import type { SearchAccommodationsParams } from '../services/crcnBackendApi';
 import { getSurpriseDateCandidates } from '../utils/surpriseDates';
 import type { SurpriseDateOption } from '../utils/surpriseDates';
-import { parseSearchFilters } from '../utils/searchUrlState';
+import { getAccommodationIdFromPath, parseSearchFilters } from '../utils/searchUrlState';
 import { scrollIntoViewRespectingMotion } from '../utils/motion';
 
 type SearchResultProperty = Property & { calculatedPrice?: { totalAmount?: number } };
@@ -181,7 +181,7 @@ export function useAccommodationSearch({
     initialUrlSearchHandledRef.current = true;
 
     const initialUrl = new URL(initialLocationRef.current, window.location.origin);
-    if (initialUrl.pathname.startsWith('/apartamento/')) return;
+    if (getAccommodationIdFromPath(initialUrl.pathname)) return;
     const initialFilters = parseSearchFilters(initialUrl.search);
     if (!initialFilters.checkIn || !initialFilters.checkOut) return;
 

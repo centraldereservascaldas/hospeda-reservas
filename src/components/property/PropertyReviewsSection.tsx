@@ -4,7 +4,7 @@ import type { Property, Review } from '../../types';
 import { summarizeReviewCategories } from '../../utils/propertyReviews';
 
 interface PropertyReviewsSectionProps {
-  property: Pick<Property, 'rating' | 'reviewCount' | 'reviewsSynced'>;
+  property: Pick<Property, 'rating' | 'reviewCount' | 'reviewsSynced' | 'staysSynced'>;
   reviews: Review[];
 }
 
@@ -20,6 +20,8 @@ export const PropertyReviewsSection: React.FC<PropertyReviewsSectionProps> = ({
   reviews,
 }) => {
   const reviewCategories = summarizeReviewCategories(reviews);
+
+  if (reviews.length === 0 && property.reviewsSynced && property.staysSynced) return null;
 
   return (
     <section

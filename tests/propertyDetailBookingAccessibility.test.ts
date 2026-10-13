@@ -21,7 +21,24 @@ Object.assign(globalThis, {
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 const { PropertyDetailModal } = await import('../src/components/property/PropertyDetailModal.tsx');
+const { formatPropertyDescription } =
+  await import('../src/components/property/PropertyOverviewSection.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
+
+test('property description formatter separates Stays sections and amenity bullets', () => {
+  const formatted = formatPropertyDescription(
+    'Descrição inicial.Quarto:- Cama de casal- Ar CondicionadoSala:- Sofá solteiro↓ Itens não Inclusos:✗ Refeições✗ Transfer. Este condomínio tem regras. Localização:- CentroEste é um exemplo.Suíte 1 com: • Cama de casal • VentiladorSuíte 2 com: • Cama de solteiroRestrições: • Proibido fumar.',
+  );
+
+  assert.match(formatted, /Descrição inicial\.\n\nQuarto:\n• Cama de casal\n• Ar Condicionado/);
+  assert.match(formatted, /Sala:\n• Sofá solteiro/);
+  assert.match(formatted, /Itens não Inclusos\n+• ✗ Refeições\n• ✗ Transfer/);
+  assert.match(formatted, /Transfer\.\n\nEste condomínio tem regras\./);
+  assert.match(formatted, /Centro\n\nEste é um exemplo\./);
+  assert.match(formatted, /Suíte 1 com:\n• Cama de casal\n• Ventilador/);
+  assert.match(formatted, /Suíte 2 com:\n• Cama de solteiro/);
+  assert.match(formatted, /Restrições\n• Proibido fumar\./);
+});
 
 test('detail close control keeps its minimum touch target in narrow layouts', () => {
   const { getByRole } = render(

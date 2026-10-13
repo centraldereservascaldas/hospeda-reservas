@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  X,
-} from 'lucide-react';
+import { X } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { calculateNights } from '../../utils/formatters';
 import type { CalculatedPriceResponse } from '../../services/crcnBackendApi';
@@ -73,7 +71,11 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const propertyId = property?.id;
   const defaultCheckIn = initialCheckIn || todayIso;
-  const defaultCheckOut = initialCheckOut || new Date(new Date(`${defaultCheckIn}T12:00:00`).getTime() + 2 * 86400000).toISOString().slice(0, 10);
+  const defaultCheckOut =
+    initialCheckOut ||
+    new Date(new Date(`${defaultCheckIn}T12:00:00`).getTime() + 2 * 86400000)
+      .toISOString()
+      .slice(0, 10);
   // Booking state
   const [checkIn, setCheckIn] = useState<string>(defaultCheckIn);
   const [checkOut, setCheckOut] = useState<string>(defaultCheckOut);
@@ -94,7 +96,14 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
   const [calendarInteractionMessage, setCalendarInteractionMessage] = useState('');
-  const { staysPrice, calendarDays, calendarAvailable, calendarMessage: availabilityMessage, isLoadingCalendar, isCalculatingPrice } = usePropertyAvailability({
+  const {
+    staysPrice,
+    calendarDays,
+    calendarAvailable,
+    calendarMessage: availabilityMessage,
+    isLoadingCalendar,
+    isCalculatingPrice,
+  } = usePropertyAvailability({
     property,
     checkIn,
     checkOut,
@@ -106,9 +115,12 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     if (!propertyId) return;
     const nextCheckIn = initialCheckIn || todayIso;
     const requestedCheckOut = initialCheckOut;
-    const nextCheckOut = requestedCheckOut > nextCheckIn
-      ? requestedCheckOut
-      : new Date(new Date(`${nextCheckIn}T12:00:00`).getTime() + 2 * 86400000).toISOString().slice(0, 10);
+    const nextCheckOut =
+      requestedCheckOut > nextCheckIn
+        ? requestedCheckOut
+        : new Date(new Date(`${nextCheckIn}T12:00:00`).getTime() + 2 * 86400000)
+            .toISOString()
+            .slice(0, 10);
     setCheckIn(nextCheckIn);
     setCheckOut(nextCheckOut);
     setAdults(initialGuests.adults || 2);
@@ -116,7 +128,16 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     setInfants(initialGuests.infants);
     setPets(initialGuests.pets);
     setDisplayedMonth(new Date(`${nextCheckIn}T12:00:00`));
-  }, [propertyId, todayIso, initialCheckIn, initialCheckOut, initialGuests.adults, initialGuests.children, initialGuests.infants, initialGuests.pets]);
+  }, [
+    propertyId,
+    todayIso,
+    initialCheckIn,
+    initialCheckOut,
+    initialGuests.adults,
+    initialGuests.children,
+    initialGuests.infants,
+    initialGuests.pets,
+  ]);
 
   const openPhotoGallery = (index = 0) => {
     setActivePhotoIndex(index);
@@ -125,7 +146,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
   const openDatePicker = (field: 'checkIn' | 'checkOut') => {
     setActiveDateField(field);
-    const selectedDate = field === 'checkIn' ? checkIn : (checkOut || checkIn);
+    const selectedDate = field === 'checkIn' ? checkIn : checkOut || checkIn;
     const date = new Date(`${selectedDate}T12:00:00`);
     setDisplayedMonth(new Date(date.getFullYear(), date.getMonth(), 1));
     setIsDatePickerOpen(true);
@@ -141,17 +162,17 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       const bounds = trigger.getBoundingClientRect();
       const popoverHeight = 300;
       const popoverWidth = Math.min(320, Math.max(280, bounds.width), window.innerWidth - 24);
-      const top = window.innerHeight - bounds.bottom >= popoverHeight + 16
-        ? bounds.bottom + 8
-        : bounds.top >= popoverHeight + 16
-          ? bounds.top - popoverHeight - 8
-          : Math.max(12, (window.innerHeight - popoverHeight) / 2);
+      const top =
+        window.innerHeight - bounds.bottom >= popoverHeight + 16
+          ? bounds.bottom + 8
+          : bounds.top >= popoverHeight + 16
+            ? bounds.top - popoverHeight - 8
+            : Math.max(12, (window.innerHeight - popoverHeight) / 2);
       const left = Math.min(Math.max(12, bounds.left), window.innerWidth - popoverWidth - 12);
       setGuestPopoverPosition({ top, left, width: popoverWidth });
     }
     setIsGuestSelectorOpen(true);
   };
-
 
   if (!property) return null;
 
@@ -163,16 +184,18 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   };
 
   const nights = calculateNights(checkIn, checkOut);
-  const { baseSubtotal, discount, cleaningFee, serviceFee, totalAmount, visibleFees } = calculatePropertyPricing({
-    nightlyRate: property.pricePerNight,
-    cleaningFee: property.cleaningFee,
-    serviceFeeRate: property.serviceFeeRate,
-    nights,
-    quote: staysPrice,
-  });
+  const { baseSubtotal, discount, cleaningFee, serviceFee, totalAmount, visibleFees } =
+    calculatePropertyPricing({
+      nightlyRate: property.pricePerNight,
+      cleaningFee: property.cleaningFee,
+      serviceFeeRate: property.serviceFeeRate,
+      nights,
+      quote: staysPrice,
+    });
   const totalGuests = adults + children;
   const guestLimit = Math.max(1, Number(property.maxGuests) || 1);
-  const selectedRangeAvailable = calendarAvailable && isCalendarRangeAvailable(calendarDays, checkIn, checkOut);
+  const selectedRangeAvailable =
+    calendarAvailable && isCalendarRangeAvailable(calendarDays, checkIn, checkOut);
   const chooseDate = (date: Date) => {
     const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     if (activeDateField === 'checkIn') {
@@ -206,7 +229,13 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   };
 
   const handleProceedBooking = () => {
-    if (!staysPrice || staysPrice.source !== 'stays-live' || isCalculatingPrice || !selectedRangeAvailable) return;
+    if (
+      !staysPrice ||
+      staysPrice.source !== 'stays-live' ||
+      isCalculatingPrice ||
+      !selectedRangeAvailable
+    )
+      return;
     onStartBooking({
       property,
       checkIn,
@@ -231,11 +260,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       aria-labelledby="property-detail-title"
       className="fixed inset-0 z-50 overflow-y-auto bg-white/25 backdrop-blur-xl animate-in fade-in duration-200"
     >
-      <div
-        className="min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start"
-      >
+      <div className="min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start">
         <div className="relative w-full max-w-5xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-neutral-200/90 animate-in zoom-in-95 duration-200">
-
           {/* Top Bar Navigation Crisp Glass */}
           <div className="sticky top-0 z-30 px-6 py-4 bg-white/95 backdrop-blur-xl border-b border-neutral-200 flex items-center justify-between">
             <button
@@ -257,7 +283,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           </div>
 
           <div className="p-6 sm:p-10 space-y-8">
-
             <PropertyDetailHeader
               property={property}
               hasReviews={hasReviews}
@@ -272,15 +297,14 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
             {/* Main content grid: 2 cols on desktop */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-
               {/* Left Column: Details, Host, Amenities, Sleeping */}
               <div className="lg:col-span-2 space-y-8 divide-y divide-neutral-100">
-
                 <PropertyOverviewSection property={property} />
 
                 <PropertyAmenitiesSection
                   listingAmenities={property.listingAmenities}
                   propertyAmenities={property.propertyAmenities}
+                  staysSynced={property.staysSynced}
                 />
 
                 <PropertyAvailabilityStrip
@@ -296,7 +320,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
                 <PropertyLocationSection title={property.title} location={property.location} />
                 <PropertyHostSection host={property.host} />
-
               </div>
 
               {/* Right Column: Booking */}
@@ -319,22 +342,31 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   staysPrice={staysPrice}
                   isCalculatingPrice={isCalculatingPrice}
                   selectedRangeAvailable={selectedRangeAvailable}
-                  pricing={{ baseSubtotal, discount, cleaningFee, serviceFee, totalAmount, visibleFees }}
+                  pricing={{
+                    baseSubtotal,
+                    discount,
+                    cleaningFee,
+                    serviceFee,
+                    totalAmount,
+                    visibleFees,
+                  }}
                   onProceedBooking={handleProceedBooking}
                 />
               </div>
-
             </div>
 
             <PropertyReviewsSection
-              property={{ rating: property.rating, reviewCount: property.reviewCount, reviewsSynced: property.reviewsSynced }}
+              property={{
+                rating: property.rating,
+                reviewCount: property.reviewCount,
+                reviewsSynced: property.reviewsSynced,
+                staysSynced: property.staysSynced,
+              }}
               reviews={staysReviews}
             />
 
             <PropertyPoliciesSection rules={property.rules} />
-
           </div>
-
         </div>
       </div>
 
@@ -373,7 +405,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         setActivePhotoIndex={setActivePhotoIndex}
         onClose={() => setShowAllPhotos(false)}
       />
-
     </div>
   );
 };

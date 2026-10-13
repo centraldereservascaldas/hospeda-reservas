@@ -4,6 +4,7 @@ import { Check, Home, Waves } from 'lucide-react';
 interface PropertyAmenitiesSectionProps {
   listingAmenities?: string[];
   propertyAmenities?: string[];
+  staysSynced?: boolean;
 }
 
 const defaultListingAmenities = [
@@ -29,9 +30,19 @@ const defaultPropertyAmenities = [
 export const PropertyAmenitiesSection: React.FC<PropertyAmenitiesSectionProps> = ({
   listingAmenities,
   propertyAmenities,
+  staysSynced = false,
 }) => {
-  const apartmentAmenities = listingAmenities?.length ? listingAmenities : defaultListingAmenities;
-  const condoAmenities = propertyAmenities?.length ? propertyAmenities : defaultPropertyAmenities;
+  const apartmentAmenities = listingAmenities?.length
+    ? listingAmenities
+    : staysSynced
+      ? []
+      : defaultListingAmenities;
+  const condoAmenities = propertyAmenities?.length
+    ? propertyAmenities
+    : staysSynced
+      ? []
+      : defaultPropertyAmenities;
+  if (apartmentAmenities.length === 0 && condoAmenities.length === 0) return null;
 
   return (
     <section aria-labelledby="property-amenities-title" className="pt-6 space-y-6">

@@ -38,21 +38,25 @@ export function PropertyDetailHeader({
             <span>•</span>
           </>
         )}
-        <button
-          type="button"
-          onClick={onShowReviews}
-          className="underline font-medium text-neutral-600 hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-sm"
-          aria-label={
-            hasReviews
-              ? `Ver ${property.reviewCount} avaliações dos hóspedes`
-              : 'Ver seção de avaliações dos hóspedes'
-          }
-        >
-          {hasReviews
-            ? `${property.reviewCount} avaliações dos hóspedes`
-            : 'Avaliações dos hóspedes'}
-        </button>
-        <span>•</span>
+        {(hasReviews || !property.staysSynced || !property.reviewsSynced) && (
+          <>
+            <button
+              type="button"
+              onClick={onShowReviews}
+              className="underline font-medium text-neutral-600 hover:text-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 rounded-sm"
+              aria-label={
+                hasReviews
+                  ? `Ver ${property.reviewCount} avaliações dos hóspedes`
+                  : 'Ver seção de avaliações dos hóspedes'
+              }
+            >
+              {hasReviews
+                ? `${property.reviewCount} avaliações dos hóspedes`
+                : 'Avaliações dos hóspedes'}
+            </button>
+            <span>•</span>
+          </>
+        )}
         {property.isSuperhost && (
           <>
             <div className="flex items-center gap-1 font-semibold text-orange-600">

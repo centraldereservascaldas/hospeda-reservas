@@ -6,7 +6,54 @@ interface PropertyOverviewSectionProps {
   property: Property;
 }
 
+const descriptionSectionLabels = [
+  'Itens não Inclusos',
+  'Aluguel de roupa de cama e banho',
+  'Documentação',
+  'Manutenção do apartamento',
+  'Regimento interno',
+  'Localização',
+  'Multa de Limpeza',
+  'Multa de CHECKOUT',
+  'Solicite antecipadamente',
+  'Estacionamento',
+  'Restrições',
+  'Chaves da casa',
+];
+
+export function formatPropertyDescription(description: string): string {
+  return description
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<\/(?:p|div|li|h[1-6]|ul|ol)>/gi, '\n')
+    .replace(/<li\b[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/(Quarto|Sala|Cozinha)\s*:-/g, '\n\n$1:\n• ')
+    .replace(
+      /(Suíte \d+ com|Quarto \d+ com|Sala com|Cozinha com|Estacionamento|Restrições|Chaves da casa)\s*:/g,
+      '\n\n$1:\n',
+    )
+    .replace(/↓\s*/g, '\n\n')
+    .replace(new RegExp(`(${descriptionSectionLabels.join('|')})\\s*:?`, 'g'), '\n\n$1\n')
+    .replace(/\s*•\s*/g, '\n• ')
+    .replace(/-\s*(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ0-9])/g, '\n• ')
+    .replace(/([✗✓])\s*/g, '\n• $1 ')
+    .replace(
+      /([a-záéíóúâêôãõç])(?=(?:Este condomínio|Este é um|Solicite antecipadamente|Os valores são))/g,
+      '$1\n\n',
+    )
+    .replace(/([.!?])[ \t]*(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/g, '$1\n\n')
+    .replace(/•[ \t]+/g, '• ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function PropertyOverviewSection({ property }: PropertyOverviewSectionProps) {
+  const descriptionBlocks = formatPropertyDescription(property.description)
+    .split(/\n\n+/)
+    .filter(Boolean);
+
   return (
     <>
       {/* Space Summary */}
@@ -20,11 +67,13 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
             </p>
           </div>
 
-          <HostAvatar
-            src={property.host.avatar}
-            alt={property.host.name}
-            className="ring-2 ring-orange-500/20 shadow-md"
-          />
+          {property.host.name.trim() && (
+            <HostAvatar
+              src={property.host.avatar}
+              alt={property.host.name}
+              className="ring-2 ring-orange-500/20 shadow-md"
+            />
+          )}
         </div>
 
         {property.isGuestFavorite && (
@@ -64,12 +113,29 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
       </div>
 
       {/* Descriptions */}
-      <div className="pt-6">
-        <h3 className="text-lg font-bold text-neutral-900 mb-3">Sobre este espaço</h3>
-        <p className="text-sm text-neutral-700 leading-relaxed whitespace-pre-line">
-          {property.description}
-        </p>
-      </div>
+      {property.description.trim() && (
+        <div className="pt-6">
+          <h3 className="text-lg font-bold text-neutral-900 mb-3">Sobre este espaço</h3>
+          <div className="space-y-3 text-sm text-neutral-700 leading-relaxed">
+            {descriptionBlocks.map((block, index) => {
+              const isSectionHeading =
+                /^(?:Quarto|Sala|Cozinha|Suíte \d+ com|Quarto \d+ com|Sala com|Cozinha com|Itens não Inclusos|Aluguel de roupa de cama e banho|Documentação|Manutenção do apartamento|Regimento interno|Localização|Multa de Limpeza|Multa de CHECKOUT|Solicite antecipadamente|Estacionamento|Restrições|Chaves da casa):?$/.test(
+                  block,
+                );
+
+              return isSectionHeading ? (
+                <h4 key={`${block}-${index}`} className="font-semibold text-neutral-900">
+                  {block.replace(/:$/, '')}
+                </h4>
+              ) : (
+                <p key={`${block}-${index}`} className="whitespace-pre-line">
+                  {block}
+                </p>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {property.complexDescription?.trim() && (
         <div className="pt-6">
@@ -83,21 +149,23 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
       )}
 
       {/* Sleeping arrangements */}
-      <div className="pt-6">
-        <h3 className="text-lg font-bold text-neutral-900 mb-4">Onde você vai dormir</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {property.sleepingArrangements.map((room, index) => (
-            <div
-              key={index}
-              className="p-4 rounded-2xl border border-neutral-200/90 bg-white/80 shadow-2xs"
-            >
-              <BedDouble className="w-6 h-6 text-orange-600 mb-3" />
-              <p className="font-extrabold text-xs text-neutral-900">{room.roomName}</p>
-              <p className="text-[11px] text-neutral-600 font-medium mt-1">{room.bedType}</p>
-            </div>
-          ))}
+      {property.sleepingArrangements.length > 0 && (
+        <div className="pt-6">
+          <h3 className="text-lg font-bold text-neutral-900 mb-4">Onde você vai dormir</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {property.sleepingArrangements.map((room, index) => (
+              <div
+                key={index}
+                className="p-4 rounded-2xl border border-neutral-200/90 bg-white/80 shadow-2xs"
+              >
+                <BedDouble className="w-6 h-6 text-orange-600 mb-3" />
+                <p className="font-extrabold text-xs text-neutral-900">{room.roomName}</p>
+                <p className="text-[11px] text-neutral-600 font-medium mt-1">{room.bedType}</p>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }

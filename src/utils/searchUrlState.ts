@@ -28,6 +28,7 @@ const SEARCH_PARAMETER_KEYS = [
   'checkin',
   'checkout',
   'guests',
+  'persons',
   'adults',
   'children',
   'infants',
@@ -108,7 +109,7 @@ export function parseSearchFilters(search: string): SearchFilters {
     filters.checkOut = checkOut;
   }
 
-  const guestsParam = params.get('guests');
+  const guestsParam = firstValue(params, 'persons', 'guests');
   const totalGuests = guestsParam === null ? null : parseInteger(guestsParam, -1, 1, 17);
   const adultsParam = params.get('adults');
   const childrenParam = params.get('children');
@@ -146,6 +147,10 @@ export function parseSearchFilters(search: string): SearchFilters {
   filters.instantBookOnly = parseBoolean(params.get('instantBook'));
 
   return filters;
+}
+
+export function getAccommodationIdFromPath(pathname: string): string | null {
+  return pathname.match(/\/(?:apartamento|apartment)\/([a-zA-Z0-9_-]+)(?:\/|$)/)?.[1] ?? null;
 }
 
 export function serializeSearchFilters(filters: SearchFilters): string {
