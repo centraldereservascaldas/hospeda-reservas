@@ -84,3 +84,44 @@ test('property availability hook requests the Stays id and represents failed liv
     crcnBackendApi.calculatePrice = originalCalculatePrice;
   }
 });
+
+test('property availability hook clears loading and exposes an error when the calendar request rejects', async () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalCalculatePrice = crcnBackendApi.calculatePrice;
+  const property = STAYS_NET_APARTMENTS[0]!;
+  crcnBackendApi.getAccommodationCalendar = async () => {
+    throw new Error('calendar unavailable');
+  };
+  crcnBackendApi.calculatePrice = async () => null;
+
+  function Probe() {
+    const result = usePropertyAvailability({
+      property,
+      checkIn: '2026-11-11',
+      checkOut: '2026-11-15',
+      guests: 3,
+      todayIso: '2026-10-13',
+    });
+    return React.createElement(
+      'div',
+      null,
+      JSON.stringify({
+        calendarAvailable: result.calendarAvailable,
+        calendarMessage: result.calendarMessage,
+        isLoadingCalendar: result.isLoadingCalendar,
+      }),
+    );
+  }
+
+  try {
+    const { container } = render(React.createElement(Probe));
+    await waitFor(() => {
+      assert.match(container.textContent || '', /Não foi possível confirmar a disponibilidade/);
+      assert.match(container.textContent || '', /"isLoadingCalendar":false/);
+      assert.match(container.textContent || '', /"calendarAvailable":false/);
+    });
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
+});

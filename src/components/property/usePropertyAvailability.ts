@@ -56,6 +56,15 @@ export function usePropertyAvailability({
             ? ''
             : 'Não foi possível confirmar a disponibilidade. Tente novamente mais tarde.',
         );
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setCalendarDays([]);
+        setCalendarAvailable(false);
+        setIsLoadingCalendar(false);
+        setCalendarMessage(
+          'Não foi possível confirmar a disponibilidade. Tente novamente mais tarde.',
+        );
       });
 
     return () => {

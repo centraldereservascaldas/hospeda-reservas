@@ -51,6 +51,27 @@ test('returns validated reservation records from the authenticated API', async (
   }
 });
 
+test('clears unsafe accommodation image URLs in authenticated reservations', async () => {
+  const originalFetch = globalThis.fetch;
+  setReservationsResponse({
+    success: true,
+    data: [
+      { ...reservation, propertyImage: 'javascript:alert(1)' },
+      { ...reservation, id: 'reservation-2', propertyImage: 'https://example.test/safe.jpg' },
+    ],
+  });
+
+  try {
+    const reservations = await crcnBackendApi.getMyReservations('test-token');
+    assert.deepEqual(
+      reservations.map((item) => item.propertyImage),
+      ['', 'https://example.test/safe.jpg'],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('rejects malformed reservation data instead of casting it to the UI type', async () => {
   const originalFetch = globalThis.fetch;
   setReservationsResponse({

@@ -48,6 +48,10 @@
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+
+  .category-filter-track {
+    will-change: auto;
+  }
 }
 
 @layer utilities {

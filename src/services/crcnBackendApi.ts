@@ -15,7 +15,7 @@ import {
   isStaysCalendarDay,
 } from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
-import { sanitizePropertyMedia } from '../utils/propertyMedia';
+import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
 
 export interface SearchAccommodationsParams {
   from?: string;
@@ -488,7 +488,10 @@ class CrcnBackendApiService {
     if (!Array.isArray(json.data) || !json.data.every(isReservation)) {
       throw new Error('A API retornou dados inválidos para reservas.');
     }
-    return json.data;
+    return json.data.map((reservation) => ({
+      ...reservation,
+      propertyImage: isSafeMediaUrl(reservation.propertyImage) ? reservation.propertyImage : '',
+    }));
   }
 
   public async cancelMyReservation(reservationId: string, accessToken: string): Promise<void> {
@@ -566,7 +569,17 @@ class CrcnBackendApiService {
     if (!isOwnerDashboardData(json)) {
       throw new Error('A API retornou dados inválidos para o painel de proprietário.');
     }
-    return json;
+    return {
+      ...json,
+      properties: json.properties.map((property) => ({
+        ...property,
+        image: isSafeMediaUrl(property.image) ? property.image : '',
+      })),
+      reservations: json.reservations.map((reservation) => ({
+        ...reservation,
+        propertyImage: isSafeMediaUrl(reservation.propertyImage) ? reservation.propertyImage : '',
+      })),
+    };
   }
 
   public async getOwnerAdminStatus(accessToken: string): Promise<boolean> {
