@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Property, SearchFilters, Currency } from './types';
 import { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { CATEGORIES } from './data/mockProperties';
@@ -20,7 +20,6 @@ import { AppFooter } from './components/AppFooter';
 import { SofiaAssistantTrigger } from './components/SofiaAssistantTrigger';
 import { crcnBackendApi } from './services/crcnBackendApi';
 import { getAuthCallbackError } from './utils/authCallback';
-import { getSurpriseDateCandidates } from './utils/surpriseDates';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
 import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
 import { useSearchUrlSync } from './hooks/useSearchUrlSync';
@@ -31,6 +30,7 @@ import { useAccommodationCatalog } from './hooks/useAccommodationCatalog';
 import { useAccommodationRouting } from './hooks/useAccommodationRouting';
 import { useAccountWorkspaceData } from './hooks/useAccountWorkspaceData';
 import { useSupabaseSession } from './hooks/useSupabaseSession';
+import { useAccommodationSearch } from './hooks/useAccommodationSearch';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
@@ -142,8 +142,6 @@ export default function App() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const catalogFocusRef = useRef<HTMLElement>(null);
   const [selectedCondominium, setSelectedCondominium] = useState<CondominiumSummary | null>(null);
-  const initialLocationRef = useRef(`${window.location.pathname}${window.location.search}${window.location.hash}`);
-  const initialUrlSearchHandledRef = useRef(false);
   const restoreSearchFromUrlRef = useRef<(filters: SearchFilters) => void>(() => {});
   const [bookingPayload, setBookingPayload] = useState<{
     property: Property;
@@ -251,121 +249,11 @@ export default function App() {
     setCurrentView(view);
   };
 
-  const handleStaysWidgetSearch = useCallback(async (searchParams: {
-    checkIn: string;
-    checkOut: string;
-    persons: number;
-    guests?: SearchFilters['guests'];
-    destination?: string;
-    propertyId?: string;
-    surpriseMe?: boolean;
-  }) => {
-    let searchedProperties: Array<Property & { calculatedPrice?: { totalAmount?: number } }> | null = null;
-    setFilters((prev) => ({
-      ...prev,
-      ...(searchParams.surpriseMe ? {} : { checkIn: searchParams.checkIn, checkOut: searchParams.checkOut }),
-      destination: searchParams.surpriseMe ? '' : searchParams.destination || '',
-      destinationPropertyId: searchParams.surpriseMe ? '' : searchParams.propertyId || '',
-      guests: searchParams.guests ?? {
-        adults: searchParams.persons,
-        children: 0,
-        infants: 0,
-        pets: 0,
-      },
-    }));
-
-    const dateOptions = searchParams.surpriseMe
-      ? getSurpriseDateCandidates().slice(0, 3)
-      : [{ checkIn: searchParams.checkIn, checkOut: searchParams.checkOut, occasion: '', kind: 'holiday' as const, weight: 1 }];
-    let selectedDateOption: (typeof dateOptions)[number] | null = null;
-
-    // For surprise searches, try a few weighted seasonal/event dates in order.
-    // Every option still requires a live availability result and official quote.
-    for (const dateOption of dateOptions) {
-      try {
-        const searchRes = await crcnBackendApi.searchAccommodations({
-          from: dateOption.checkIn,
-          to: dateOption.checkOut,
-          guests: searchParams.persons,
-          destination: searchParams.destination,
-          propertyId: searchParams.propertyId,
-        });
-        const results = searchRes?.data || [];
-        if (searchParams.surpriseMe) {
-          const confirmedQuotes = results.filter((property) => Number(property.calculatedPrice?.totalAmount) > 0);
-          if (confirmedQuotes.length) {
-            searchedProperties = confirmedQuotes;
-            selectedDateOption = dateOption;
-            break;
-          }
-        } else {
-          searchedProperties = results;
-          break;
-        }
-      } catch (e) {
-        console.warn('Backend search error:', e);
-      }
-    }
-
-    if (searchParams.surpriseMe) {
-      const quoted = (searchedProperties || []).filter((property) => Number(property.calculatedPrice?.totalAmount) > 0);
-      const score = (property: Property & { calculatedPrice?: { totalAmount?: number } }) =>
-        (Number(property.rating) || 0) * 10
-        + Math.log10((Number(property.reviewCount) || 0) + 1) * 3
-        + (property.isGuestFavorite ? 5 : 0)
-        + (property.isSuperhost ? 2 : 0);
-      const topCandidates = [...quoted].sort((a, b) =>
-        score(b) - score(a) || Number(a.calculatedPrice?.totalAmount) - Number(b.calculatedPrice?.totalAmount)
-      ).slice(0, 10);
-      const randomizedCandidates = [...topCandidates];
-      for (let index = randomizedCandidates.length - 1; index > 0; index -= 1) {
-        const swapIndex = Math.floor(Math.random() * (index + 1));
-        [randomizedCandidates[index], randomizedCandidates[swapIndex]] = [randomizedCandidates[swapIndex], randomizedCandidates[index]];
-      }
-      const chosenProperties = randomizedCandidates.slice(0, 5);
-      setProperties(chosenProperties);
-      if (chosenProperties.length) {
-        const suggestedDates = selectedDateOption!;
-        setFilters((prev) => ({ ...prev, checkIn: suggestedDates.checkIn, checkOut: suggestedDates.checkOut }));
-      }
-    } else {
-      if (searchedProperties) setProperties(searchedProperties);
-    }
-    const catalogEl = document.getElementById('stays-apartments-catalog');
-    if (catalogEl) {
-      scrollIntoViewRespectingMotion(catalogEl);
-    }
-  }, [setProperties]);
-
-  restoreSearchFromUrlRef.current = (restoredFilters) => {
-    void handleStaysWidgetSearch({
-      checkIn: restoredFilters.checkIn,
-      checkOut: restoredFilters.checkOut,
-      persons: restoredFilters.guests.adults + restoredFilters.guests.children,
-      guests: restoredFilters.guests,
-      destination: restoredFilters.destination,
-      propertyId: restoredFilters.destinationPropertyId,
-    });
-  };
-
-  useEffect(() => {
-    if (initialUrlSearchHandledRef.current) return;
-    initialUrlSearchHandledRef.current = true;
-
-    const initialUrl = new URL(initialLocationRef.current, window.location.origin);
-    if (initialUrl.pathname.startsWith('/apartamento/')) return;
-    const initialFilters = parseSearchFilters(initialUrl.search);
-    if (!initialFilters.checkIn || !initialFilters.checkOut) return;
-
-    void handleStaysWidgetSearch({
-      checkIn: initialFilters.checkIn,
-      checkOut: initialFilters.checkOut,
-      persons: initialFilters.guests.adults + initialFilters.guests.children,
-      guests: initialFilters.guests,
-      destination: initialFilters.destination,
-      propertyId: initialFilters.destinationPropertyId,
-    });
-  }, [handleStaysWidgetSearch]);
+  const { handleStaysWidgetSearch } = useAccommodationSearch({
+    setProperties,
+    setFilters,
+    restoreSearchFromUrlRef,
+  });
 
   const savedPropertiesList = useMemo(() => {
     return properties.filter((p) => savedPropertyIds.includes(p.id));
