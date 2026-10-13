@@ -82,6 +82,19 @@ test('property validation enforces semantic title, rating, and coordinate bounds
   assert.equal(isProperty({ ...property, rating: 5.1 }), false);
   assert.equal(isProperty({ ...property, location: { ...property.location, lat: 91 } }), false);
   assert.equal(isProperty({ ...property, location: { ...property.location, lng: -181 } }), false);
+  const review = {
+    id: 'review-1',
+    authorName: 'Hóspede',
+    rating: 5,
+    date: '2026-10-01',
+    comment: '',
+    categories: { cleanliness: 5 },
+  };
+  assert.equal(isProperty({ ...property, reviews: [{ ...review, rating: 5.1 }] }), false);
+  assert.equal(
+    isProperty({ ...property, reviews: [{ ...review, categories: { cleanliness: 5.1 } }] }),
+    false,
+  );
 });
 
 test('validates owner access status values returned by the authenticated API', async () => {

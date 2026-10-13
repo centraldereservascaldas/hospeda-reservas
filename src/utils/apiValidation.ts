@@ -121,15 +121,18 @@ const isSleepingArrangement = (value: unknown): value is Property['sleepingArran
   typeof value.bedType === 'string' &&
   typeof value.icon === 'string';
 
+const isReviewRating = (value: unknown): value is number =>
+  isFiniteNumber(value) && value >= 0 && value <= 5;
+
 const isReview = (value: unknown): value is Property['reviews'][number] => {
   if (!isRecord(value) || !isRecord(value.categories)) return false;
   return (
     typeof value.id === 'string' &&
     typeof value.authorName === 'string' &&
-    isFiniteNumber(value.rating) &&
+    isReviewRating(value.rating) &&
     typeof value.date === 'string' &&
     typeof value.comment === 'string' &&
-    Object.values(value.categories).every((score) => score === undefined || isFiniteNumber(score))
+    Object.values(value.categories).every((score) => score === undefined || isReviewRating(score))
   );
 };
 
