@@ -1,6 +1,7 @@
 import type { Property, Reservation } from '../types';
 import type { StaysCalendarDay } from '../utils/staysAvailability';
 import { isFiniteNumber, isProperty, isRecord, isStaysCalendarDay } from '../utils/apiValidation';
+import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
 
 export interface SearchAccommodationsParams {
   from?: string;
@@ -347,9 +348,14 @@ class CrcnBackendApiService {
     const res = await fetch(`/api/owner/dashboard?${query}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    const json = await res.json();
-    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível carregar o painel de proprietário.');
-    return json as OwnerDashboardData;
+    const json: unknown = await res.json();
+    if (!res.ok || !isRecord(json) || json.success !== true) {
+      throw new Error(isRecord(json) && typeof json.message === 'string' ? json.message : 'Não foi possível carregar o painel de proprietário.');
+    }
+    if (!isOwnerDashboardData(json)) {
+      throw new Error('A API retornou dados inválidos para o painel de proprietário.');
+    }
+    return json;
   }
 
   public async getOwnerAdminStatus(accessToken: string): Promise<boolean> {
