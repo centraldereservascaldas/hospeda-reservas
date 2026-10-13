@@ -3,19 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { Property, SearchFilters, Currency } from './types';
-import type { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { Header } from './components/Header';
 import { AuthCallbackNotice } from './components/account/AuthCallbackNotice';
 import { CategoryBar } from './components/search/CategoryBar';
-import { MobileBottomNavigation, resolveMobileNavigationTarget } from './components/MobileBottomNavigation';
+import {
+  MobileBottomNavigation,
+  resolveMobileNavigationTarget,
+} from './components/MobileBottomNavigation';
 import type { MainView } from './components/MobileBottomNavigation';
 import { AppFooter } from './components/AppFooter';
 import { SofiaAssistantTrigger } from './components/assistant/SofiaAssistantTrigger';
 import { getAuthCallbackError } from './utils/authCallback';
 import { MainContentRouter } from './components/MainContentRouter';
-import { DeferredModal } from './components/DeferredModal';
+import { AppOverlayLayer } from './components/AppOverlayLayer';
+import type { AppOverlayBookingPayload } from './components/AppOverlayLayer';
 import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
 import { useSearchUrlSync } from './hooks/useSearchUrlSync';
 import { scrollIntoViewRespectingMotion } from './utils/motion';
@@ -31,18 +34,8 @@ import { useSavedPropertyIds } from './hooks/useSavedPropertyIds';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
-const PropertyDetailModal = React.lazy(() => import('./components/property/PropertyDetailModal').then(({ PropertyDetailModal }) => ({ default: PropertyDetailModal })));
-const CondominiumDetailModal = React.lazy(() => import('./components/condominium/CondominiumDetailModal').then(({ CondominiumDetailModal }) => ({ default: CondominiumDetailModal })));
-const CheckoutModal = React.lazy(() => import('./components/booking/CheckoutModal').then(({ CheckoutModal }) => ({ default: CheckoutModal })));
-const GuestAccountModal = React.lazy(() => import('./components/account/GuestAccountModal').then(({ GuestAccountModal }) => ({ default: GuestAccountModal })));
-const SearchModal = React.lazy(() => import('./components/search/SearchModal').then(({ SearchModal }) => ({ default: SearchModal })));
-const FilterModal = React.lazy(() => import('./components/search/FilterModal').then(({ FilterModal }) => ({ default: FilterModal })));
-const CreateListingModal = React.lazy(() => import('./components/owner/CreateListingModal').then(({ CreateListingModal }) => ({ default: CreateListingModal })));
-const SofiaAssistantModal = React.lazy(() => import('./components/assistant/SofiaAssistantModal').then(({ SofiaAssistantModal }) => ({ default: SofiaAssistantModal })));
-
 export default function App() {
-  const { properties, setProperties, catalogLoading, catalogLoadError } =
-    useAccommodationCatalog();
+  const { properties, setProperties, catalogLoading, catalogLoadError } = useAccommodationCatalog();
 
   const { savedPropertyIds, toggleSavedProperty } = useSavedPropertyIds();
 
@@ -60,7 +53,9 @@ export default function App() {
     authCallbackNotice,
     setAuthCallbackNotice,
   } = useSupabaseSession({
-    isConfigured: Boolean(import.meta.env.VITE_SUPABASE_URL?.trim() && import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()),
+    isConfigured: Boolean(
+      import.meta.env.VITE_SUPABASE_URL?.trim() && import.meta.env.VITE_SUPABASE_ANON_KEY?.trim(),
+    ),
     initialHash: window.location.hash,
     initialAuthCallbackError,
   });
@@ -96,21 +91,12 @@ export default function App() {
   const catalogFocusRef = useRef<HTMLElement>(null);
   const [selectedCondominium, setSelectedCondominium] = useState<CondominiumSummary | null>(null);
   const restoreSearchFromUrlRef = useRef<(filters: SearchFilters) => void>(() => {});
-  const [bookingPayload, setBookingPayload] = useState<{
-    property: Property;
-    checkIn: string;
-    checkOut: string;
-    guests: { adults: number; children: number; infants: number; pets: number };
-    nights: number;
-    totalAmount: number;
-    cleaningFee: number;
-    serviceFee: number;
-    discount: number;
-    quote: CalculatedPriceResponse;
-  } | null>(null);
+  const [bookingPayload, setBookingPayload] = useState<AppOverlayBookingPayload | null>(null);
 
   // Search & Filter State
-  const [filters, setFilters] = useState<SearchFilters>(() => parseSearchFilters(window.location.search));
+  const [filters, setFilters] = useState<SearchFilters>(() =>
+    parseSearchFilters(window.location.search),
+  );
   const defaultFilters = createDefaultSearchFilters();
   useSearchUrlSync(filters);
   const { handleSelectProperty, handleClosePropertyDetail } = useAccommodationRouting({
@@ -147,6 +133,26 @@ export default function App() {
     restoreSearchFromUrlRef,
   });
 
+  const handleStartBooking = (bookingData: AppOverlayBookingPayload) => {
+    handleClosePropertyDetail();
+    setBookingPayload(bookingData);
+  };
+
+  const handleAssistantApplyFilters = (suggested: { destination?: string; guests?: number }) => {
+    if (suggested.destination) {
+      setFilters((prev) => ({ ...prev, destination: suggested.destination! }));
+    }
+    if (suggested.guests) {
+      setFilters((prev) => ({
+        ...prev,
+        guests: { ...prev.guests, adults: suggested.guests! },
+      }));
+    }
+    setIsSofiaOpen(false);
+    const catalogEl = document.getElementById('stays-apartments-catalog');
+    if (catalogEl) scrollIntoViewRespectingMotion(catalogEl);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 selection:bg-orange-500/20 selection:text-orange-950">
       {authCallbackNotice && (
@@ -156,7 +162,7 @@ export default function App() {
           onDismiss={() => setAuthCallbackNotice('')}
         />
       )}
-      
+
       {/* Main Header */}
       <Header
         onOpenSearch={() => setIsSearchOpen(true)}
@@ -166,7 +172,11 @@ export default function App() {
         setCurrency={setCurrency}
         tripsCount={reservations.filter((r) => r.status === 'confirmed').length}
         searchSummaryText={filters.destination || undefined}
-        accountName={String(accountSession?.user.user_metadata?.full_name || accountSession?.user.user_metadata?.name || '')}
+        accountName={String(
+          accountSession?.user.user_metadata?.full_name ||
+            accountSession?.user.user_metadata?.name ||
+            '',
+        )}
         accountEmail={accountSession?.user.email || ''}
         isAccountConnected={Boolean(accountSession?.user.email_confirmed_at)}
         onOpenAccount={setAccountModalMode}
@@ -228,10 +238,14 @@ export default function App() {
 
       <MobileBottomNavigation
         currentView={currentView}
-        onNavigate={(view) => setCurrentView(resolveMobileNavigationTarget(view, ownerAccessStatus === 'approved'))}
+        onNavigate={(view) =>
+          setCurrentView(resolveMobileNavigationTarget(view, ownerAccessStatus === 'approved'))
+        }
         showHost={ownerAccessStatus === 'approved'}
         hasSavedProperties={savedPropertyIds.length > 0}
-        hasConfirmedReservations={reservations.some((reservation) => reservation.status === 'confirmed')}
+        hasConfirmedReservations={reservations.some(
+          (reservation) => reservation.status === 'confirmed',
+        )}
       />
 
       <AppFooter currency={currency} onCreateListing={() => setIsCreateListingOpen(true)} />
@@ -241,114 +255,40 @@ export default function App() {
         showMobileFloating={currentView !== 'explore' || isCondominiumView}
       />
 
-      {/* ALL INTERACTIVE MODALS */}
-      
-      {/* 1. Property Detail Modal */}
-      <DeferredModal active={selectedProperty !== null}>
-      <PropertyDetailModal
-        property={selectedProperty}
-        initialCheckIn={filters.checkIn}
-        initialCheckOut={filters.checkOut}
-        initialGuests={filters.guests}
-        onClose={handleClosePropertyDetail}
-        returnFocusRef={catalogFocusRef}
+      <AppOverlayLayer
         currency={currency}
-        isSaved={selectedProperty ? savedPropertyIds.includes(selectedProperty.id) : false}
-        onToggleSave={toggleSavedProperty}
-        onStartBooking={(bookingData) => {
-          handleClosePropertyDetail();
-          setBookingPayload(bookingData);
-        }}
-      />
-      </DeferredModal>
-
-      <DeferredModal active={selectedCondominium !== null}>
-      <CondominiumDetailModal
-        condominium={selectedCondominium}
-        onClose={() => setSelectedCondominium(null)}
-      />
-      </DeferredModal>
-
-      {/* 2. Sofia Concierge Assistant Modal */}
-      <DeferredModal active={isSofiaOpen}>
-      <SofiaAssistantModal
-        isOpen={isSofiaOpen}
-        onClose={() => setIsSofiaOpen(false)}
-        currency={currency}
-        onSelectProperty={(p) => {
-          setIsSofiaOpen(false);
-          handleSelectProperty(p);
-        }}
-        onApplyFilters={(suggested) => {
-          if (suggested.destination) {
-            setFilters((prev) => ({ ...prev, destination: suggested.destination! }));
-          }
-          if (suggested.guests) {
-            setFilters((prev) => ({
-              ...prev,
-              guests: { ...prev.guests, adults: suggested.guests! },
-            }));
-          }
-          setIsSofiaOpen(false);
-          const catalogEl = document.getElementById('stays-apartments-catalog');
-          if (catalogEl) scrollIntoViewRespectingMotion(catalogEl);
-        }}
-      />
-      </DeferredModal>
-
-      {/* 2. Checkout Modal */}
-      <DeferredModal active={bookingPayload !== null}>
-      <CheckoutModal
-        isOpen={!!bookingPayload}
-        onClose={() => setBookingPayload(null)}
-        bookingData={bookingPayload}
-        currency={currency}
-      />
-      </DeferredModal>
-
-      <DeferredModal active={accountModalMode !== null}>
-      <GuestAccountModal
-        isOpen={accountModalMode !== null}
-        initialMode={accountModalMode || 'login'}
-        onClose={() => setAccountModalMode(null)}
-      />
-      </DeferredModal>
-
-      {/* 3. Search Modal */}
-      <DeferredModal active={isSearchOpen}>
-      <SearchModal
-        isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
         filters={filters}
-        onApplyFilters={(newFilters) => setFilters(newFilters)}
-        onResetFilters={() => setFilters(defaultFilters)}
+        defaultFilters={defaultFilters}
+        setFilters={setFilters}
+        selectedProperty={selectedProperty}
+        selectedCondominium={selectedCondominium}
+        bookingPayload={bookingPayload}
+        accountModalMode={accountModalMode}
+        savedPropertyIds={savedPropertyIds}
+        catalogFocusRef={catalogFocusRef}
+        filteredPropertiesCount={filteredProperties.length}
+        isSofiaOpen={isSofiaOpen}
+        isSearchOpen={isSearchOpen}
+        isFilterOpen={isFilterOpen}
+        isCreateListingOpen={isCreateListingOpen}
+        onClosePropertyDetail={handleClosePropertyDetail}
+        onStartBooking={handleStartBooking}
+        onToggleSave={toggleSavedProperty}
+        onCloseCondominium={() => setSelectedCondominium(null)}
+        onCloseSofia={() => setIsSofiaOpen(false)}
+        onSelectPropertyFromSofia={(property) => {
+          setIsSofiaOpen(false);
+          handleSelectProperty(property);
+        }}
+        onApplySofiaFilters={handleAssistantApplyFilters}
+        onCloseCheckout={() => setBookingPayload(null)}
+        onCloseAccount={() => setAccountModalMode(null)}
+        onCloseSearch={() => setIsSearchOpen(false)}
+        onCloseFilter={() => setIsFilterOpen(false)}
+        onCloseCreateListing={() => setIsCreateListingOpen(false)}
+        onAddProperty={handleAddNewProperty}
         onSearchInApp={handleStaysWidgetSearch}
       />
-      </DeferredModal>
-
-      {/* 4. Filter Modal */}
-      <DeferredModal active={isFilterOpen}>
-      <FilterModal
-        isOpen={isFilterOpen}
-        onClose={() => setIsFilterOpen(false)}
-        filters={filters}
-        onApplyFilters={(newFilters) => setFilters(newFilters)}
-        onResetFilters={() => setFilters(defaultFilters)}
-        currency={currency}
-        matchingCount={filteredProperties.length}
-      />
-      </DeferredModal>
-
-      {/* 5. Create Listing Modal */}
-      <DeferredModal active={isCreateListingOpen}>
-      <CreateListingModal
-        isOpen={isCreateListingOpen}
-        onClose={() => setIsCreateListingOpen(false)}
-        onAddProperty={handleAddNewProperty}
-        currency={currency}
-      />
-      </DeferredModal>
-
     </div>
   );
 }
