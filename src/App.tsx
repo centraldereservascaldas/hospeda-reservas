@@ -4,7 +4,6 @@
  */
 
 import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
-import type { Session } from '@supabase/supabase-js';
 import { Property, SearchFilters, Currency } from './types';
 import { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { CATEGORIES } from './data/mockProperties';
@@ -31,6 +30,7 @@ import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { useAccommodationCatalog } from './hooks/useAccommodationCatalog';
 import { useAccommodationRouting } from './hooks/useAccommodationRouting';
 import { useAccountWorkspaceData } from './hooks/useAccountWorkspaceData';
+import { useSupabaseSession } from './hooks/useSupabaseSession';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
@@ -115,71 +115,24 @@ export default function App() {
   const [currentView, setCurrentView] = useState<MainView>('explore');
   const currentViewRef = useRef(currentView);
   currentViewRef.current = currentView;
-  const [authCallbackNotice, setAuthCallbackNotice] = useState('');
-  const [accountSession, setAccountSession] = useState<Session | null>(null);
-  const [accountModalMode, setAccountModalMode] = useState<'login' | 'signup' | 'recovery' | null>(null);
   const [ownerRequestLoading, setOwnerRequestLoading] = useState(false);
   const {
-    reservations,
-    setReservations,
-    ownerAccessStatus,
-    setOwnerAccessStatus,
-    isOwnerAdmin,
-  } = useAccountWorkspaceData({
-    accessToken: accountSession?.access_token,
-    currentViewRef,
-    setCurrentView,
+    accountSession,
+    accountModalMode,
+    setAccountModalMode,
+    authCallbackNotice,
+    setAuthCallbackNotice,
+  } = useSupabaseSession({
+    isConfigured: Boolean(import.meta.env.VITE_SUPABASE_URL?.trim() && import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()),
+    initialHash: window.location.hash,
+    initialAuthCallbackError,
   });
-
-  useEffect(() => {
-    const authHash = new URLSearchParams(window.location.hash.slice(1));
-    if (authHash.get('type') === 'recovery') setAccountModalMode('recovery');
-    if (initialAuthCallbackError) {
-      setAuthCallbackNotice(`Não foi possível confirmar o e-mail: ${initialAuthCallbackError}`);
-    }
-    if (!import.meta.env.VITE_SUPABASE_URL?.trim() || !import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()) return;
-
-    let isMounted = true;
-    let unsubscribeAuth: (() => void) | undefined;
-
-    const handleConfirmedSession = (session: import('@supabase/supabase-js').Session | null) => {
-      if (!isMounted) return;
-      if (localStorage.getItem('hospeda_pending_email_confirmation') !== 'true') return;
-      if (!session?.user.email_confirmed_at) return;
-      localStorage.removeItem('hospeda_pending_email_confirmation');
-      setAuthCallbackNotice('E-mail confirmado! Volte à reserva e entre na sua conta para continuar.');
-    };
-
-    const bootstrapTimer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const { supabase } = await import('./services/supabase');
-          if (!isMounted || !supabase) return;
-          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (!isMounted) return;
-            setAccountSession(session);
-            if (event === 'PASSWORD_RECOVERY') setAccountModalMode('recovery');
-            if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-              handleConfirmedSession(session);
-            }
-          });
-          unsubscribeAuth = () => subscription.unsubscribe();
-          const { data } = await supabase.auth.getSession();
-          if (!isMounted) return;
-          setAccountSession(data.session);
-          handleConfirmedSession(data.session);
-        } catch {
-          if (isMounted) setAuthCallbackNotice('Não foi possível verificar sua sessão. Tente atualizar a página.');
-        }
-      })();
-    }, 0);
-
-    return () => {
-      isMounted = false;
-      window.clearTimeout(bootstrapTimer);
-      unsubscribeAuth?.();
-    };
-  }, []);
+  const { reservations, setReservations, ownerAccessStatus, setOwnerAccessStatus, isOwnerAdmin } =
+    useAccountWorkspaceData({
+      accessToken: accountSession?.access_token,
+      currentViewRef,
+      setCurrentView,
+    });
 
   // Modals & Active selections
   const [isSearchOpen, setIsSearchOpen] = useState(false);

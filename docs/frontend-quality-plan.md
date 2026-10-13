@@ -19,6 +19,12 @@ Aplicar as melhorias da auditoria do frontend por etapas pequenas e verificávei
 
 O trabalho é feito em commits locais pequenos, revisados e validados. A branch permanece sem push; a contagem abaixo é relativa ao estado de `origin/main` consultado nesta execução.
 
+### Continuação — 2026-10-13 (bootstrap de sessão Supabase)
+
+O bootstrap Supabase saiu do `App.tsx` para `src/hooks/useSupabaseSession.ts`. O hook preserva o carregamento dinâmico do cliente, restauração de sessão, callback OAuth de recuperação, aviso de confirmação de e-mail, propagação de sessão e unsubscribe no unmount. O loader injetável permite testar esses comportamentos com cliente simulado, sem credenciais nem chamadas externas. Quatro testes cobrem sessão/listener/recuperação/confirmação, falha na restauração, configuração ausente e limpeza do listener. O `App.tsx` agora tem 652 linhas.
+
+Validações: `npm test` 134/134, `npm run lint` (ESLint + TypeScript), `npm run format:check`, `npm run build` e `git diff --check` passaram. Build: JS inicial 359,03 kB / 107,39 kB gzip; CSS 107,04 / 15,70 kB; chunk Supabase 226,85 / 58,83 kB; detalhe 49,38 / 13,05 kB. O aumento de 0,31 kB no JS inicial é pequeno e não comprova mudança de performance; Web Vitals não foram medidos. Os testes de auth usam cliente simulado: OAuth real, sessão persistida, checkout autenticado, leitor de tela e revisão visual continuam pendentes. Nenhuma reserva ou pagamento foi enviado. Mudanças ainda não commitadas neste checkpoint; `.DS_Store` preexistente permanece fora do stage.
+
 ### Estado atual — 2026-10-13 (navegação e mapa dos hotspots)
 
 HEAD de referência antes deste checkpoint: `8d4cc91`, `main` 101 commits locais à frente de `origin/main`; worktree sem alterações rastreadas e com `.DS_Store` não rastreado preexistente, preservado. O novo teste do detalhe elevou a suíte a 120/120. A navegação móvel agora expõe `resolveMobileNavigationTarget`, testado para proprietário aprovado/pendente e para rotas de reservas/favoritos; `App.tsx` delega a decisão de rota ao componente existente. Não muda o estado de autenticação, as rotas ou o gate: a rota `host` é renderizada pelo mesmo callback apenas quando `ownerAccessStatus === 'approved'`.
