@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { Reservation, Currency } from '../types';
-import { formatCurrency } from '../utils/formatters';
-import { useDialogFocus } from './useDialogFocus';
+import { Reservation, Currency } from '../../types';
+import { formatCurrency } from '../../utils/formatters';
+import { useDialogFocus } from '../useDialogFocus';
 import { 
   Calendar, 
   MapPin, 

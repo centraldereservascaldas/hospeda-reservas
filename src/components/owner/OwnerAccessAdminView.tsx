@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Check, LoaderCircle, RefreshCw, Search, ShieldCheck, UserRoundCheck } from 'lucide-react';
-import { crcnBackendApi, OwnerAccessRequest, StaysOwnerSummary } from '../services/crcnBackendApi';
+import { crcnBackendApi, OwnerAccessRequest, StaysOwnerSummary } from '../../services/crcnBackendApi';
 
 interface OwnerAccessAdminViewProps {
   accessToken: string;

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, ClipboardList, Home, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
-import { OwnerDashboardData } from '../services/crcnBackendApi';
-import { crcnBackendApi } from '../services/crcnBackendApi';
+import { OwnerDashboardData } from '../../services/crcnBackendApi';
+import { crcnBackendApi } from '../../services/crcnBackendApi';
 
 type DashboardSection = 'overview' | 'properties' | 'reservations' | 'calendar' | 'accounting';
 

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Building, ChevronLeft, ChevronRight, Images, MapPin, X } from 'lucide-react';
-import type { CondominiumSummary } from '../utils/condominiumCatalog';
-import { useDialogFocus } from './useDialogFocus';
+import type { CondominiumSummary } from '../../utils/condominiumCatalog';
+import { useDialogFocus } from '../useDialogFocus';
 
 interface CondominiumDetailModalProps {
   condominium: CondominiumSummary | null;

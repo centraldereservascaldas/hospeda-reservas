@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, LogIn, UserPlus, ShieldCheck, ArrowLeft } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
-import { supabase, supabaseConfigured } from '../services/supabase';
-import { crcnBackendApi } from '../services/crcnBackendApi';
-import { useDialogFocus } from './useDialogFocus';
+import { supabase, supabaseConfigured } from '../../services/supabase';
+import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { useDialogFocus } from '../useDialogFocus';
 
 interface GuestAccountModalProps {
   isOpen: boolean;

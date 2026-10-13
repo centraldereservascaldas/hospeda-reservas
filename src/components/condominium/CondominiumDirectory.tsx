@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Building, ChevronLeft, ChevronRight, Images, MapPin } from 'lucide-react';
-import type { CondominiumSummary } from '../utils/condominiumCatalog';
+import type { CondominiumSummary } from '../../utils/condominiumCatalog';
 
 interface CondominiumDirectoryProps {
   condominiums: CondominiumSummary[];

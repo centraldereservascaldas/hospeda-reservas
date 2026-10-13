@@ -14,7 +14,8 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup } = await import('@testing-library/react');
-const { SofiaAssistantTrigger } = await import('../src/components/SofiaAssistantTrigger.tsx');
+const { SofiaAssistantTrigger } =
+  await import('../src/components/assistant/SofiaAssistantTrigger.tsx');
 
 afterEach(() => {
   cleanup();

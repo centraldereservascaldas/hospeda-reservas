@@ -6,12 +6,12 @@ import {
   ChevronRight, 
   Filter
 } from 'lucide-react';
-import { Property, Currency } from '../types';
-import { crcnBackendApi } from '../services/crcnBackendApi';
-import { formatCurrency } from '../utils/formatters';
-import { scrollIntoViewRespectingMotion } from '../utils/motion';
-import { LogoCRCN } from './LogoCRCN';
-import { useDialogFocus } from './useDialogFocus';
+import { Property, Currency } from '../../types';
+import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { formatCurrency } from '../../utils/formatters';
+import { scrollIntoViewRespectingMotion } from '../../utils/motion';
+import { LogoCRCN } from '../LogoCRCN';
+import { useDialogFocus } from '../useDialogFocus';
 
 interface ChatMessage {
   id: string;

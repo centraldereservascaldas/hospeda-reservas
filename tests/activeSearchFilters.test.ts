@@ -14,7 +14,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, cleanup, fireEvent, screen } = await import('@testing-library/react');
-const { ActiveSearchFilters } = await import('../src/components/ActiveSearchFilters.tsx');
+const { ActiveSearchFilters } = await import('../src/components/search/ActiveSearchFilters.tsx');
 const { createDefaultSearchFilters } = await import('../src/utils/searchUrlState.ts');
 
 afterEach(() => {

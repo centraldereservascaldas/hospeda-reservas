@@ -19,7 +19,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup } = await import('@testing-library/react');
-const { CategoryBar } = await import('../src/components/CategoryBar.tsx');
+const { CategoryBar } = await import('../src/components/search/CategoryBar.tsx');
 
 afterEach(() => {
   cleanup();

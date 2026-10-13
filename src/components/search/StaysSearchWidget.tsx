@@ -11,8 +11,8 @@ import {
   ChevronRight,
   ChevronDown,
 } from 'lucide-react';
-import { SearchFilters } from '../types';
-import { crcnBackendApi } from '../services/crcnBackendApi';
+import { SearchFilters } from '../../types';
+import { crcnBackendApi } from '../../services/crcnBackendApi';
 
 interface StaysSearchWidgetProps {
   onSearchInApp: (searchParams: {

@@ -9,15 +9,15 @@ import type { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { CATEGORIES } from './data/mockProperties';
 import { matchesPropertyCategory } from './utils/propertyCategories';
 import { Header } from './components/Header';
-import { CategoryBar } from './components/CategoryBar';
-import { CondominiumDirectory } from './components/CondominiumDirectory';
-import { StaysSearchWidget } from './components/StaysSearchWidget';
-import { ActiveSearchFilters } from './components/ActiveSearchFilters';
+import { CategoryBar } from './components/search/CategoryBar';
+import { CondominiumDirectory } from './components/condominium/CondominiumDirectory';
+import { StaysSearchWidget } from './components/search/StaysSearchWidget';
+import { ActiveSearchFilters } from './components/search/ActiveSearchFilters';
 import { PropertyCatalogGrid } from './components/property/PropertyCatalogGrid';
 import { MobileBottomNavigation, resolveMobileNavigationTarget } from './components/MobileBottomNavigation';
 import type { MainView } from './components/MobileBottomNavigation';
 import { AppFooter } from './components/AppFooter';
-import { SofiaAssistantTrigger } from './components/SofiaAssistantTrigger';
+import { SofiaAssistantTrigger } from './components/assistant/SofiaAssistantTrigger';
 import { getAuthCallbackError } from './utils/authCallback';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
 import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
@@ -35,19 +35,19 @@ import { useSavedPropertyIds } from './hooks/useSavedPropertyIds';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
-const InteractiveMap = React.lazy(() => import('./components/InteractiveMap').then(({ InteractiveMap }) => ({ default: InteractiveMap })));
+const InteractiveMap = React.lazy(() => import('./components/location/InteractiveMap').then(({ InteractiveMap }) => ({ default: InteractiveMap })));
 const PropertyDetailModal = React.lazy(() => import('./components/property/PropertyDetailModal').then(({ PropertyDetailModal }) => ({ default: PropertyDetailModal })));
-const CondominiumDetailModal = React.lazy(() => import('./components/CondominiumDetailModal').then(({ CondominiumDetailModal }) => ({ default: CondominiumDetailModal })));
-const CheckoutModal = React.lazy(() => import('./components/CheckoutModal').then(({ CheckoutModal }) => ({ default: CheckoutModal })));
-const GuestAccountModal = React.lazy(() => import('./components/GuestAccountModal').then(({ GuestAccountModal }) => ({ default: GuestAccountModal })));
-const SearchModal = React.lazy(() => import('./components/SearchModal').then(({ SearchModal }) => ({ default: SearchModal })));
-const FilterModal = React.lazy(() => import('./components/FilterModal').then(({ FilterModal }) => ({ default: FilterModal })));
-const TripsView = React.lazy(() => import('./components/TripsView').then(({ TripsView }) => ({ default: TripsView })));
-const WishlistsView = React.lazy(() => import('./components/WishlistsView').then(({ WishlistsView }) => ({ default: WishlistsView })));
-const HostDashboardView = React.lazy(() => import('./components/HostDashboardView').then(({ HostDashboardView }) => ({ default: HostDashboardView })));
-const OwnerAccessAdminView = React.lazy(() => import('./components/OwnerAccessAdminView').then(({ OwnerAccessAdminView }) => ({ default: OwnerAccessAdminView })));
-const CreateListingModal = React.lazy(() => import('./components/CreateListingModal').then(({ CreateListingModal }) => ({ default: CreateListingModal })));
-const SofiaAssistantModal = React.lazy(() => import('./components/SofiaAssistantModal').then(({ SofiaAssistantModal }) => ({ default: SofiaAssistantModal })));
+const CondominiumDetailModal = React.lazy(() => import('./components/condominium/CondominiumDetailModal').then(({ CondominiumDetailModal }) => ({ default: CondominiumDetailModal })));
+const CheckoutModal = React.lazy(() => import('./components/booking/CheckoutModal').then(({ CheckoutModal }) => ({ default: CheckoutModal })));
+const GuestAccountModal = React.lazy(() => import('./components/account/GuestAccountModal').then(({ GuestAccountModal }) => ({ default: GuestAccountModal })));
+const SearchModal = React.lazy(() => import('./components/search/SearchModal').then(({ SearchModal }) => ({ default: SearchModal })));
+const FilterModal = React.lazy(() => import('./components/search/FilterModal').then(({ FilterModal }) => ({ default: FilterModal })));
+const TripsView = React.lazy(() => import('./components/booking/TripsView').then(({ TripsView }) => ({ default: TripsView })));
+const WishlistsView = React.lazy(() => import('./components/account/WishlistsView').then(({ WishlistsView }) => ({ default: WishlistsView })));
+const HostDashboardView = React.lazy(() => import('./components/owner/HostDashboardView').then(({ HostDashboardView }) => ({ default: HostDashboardView })));
+const OwnerAccessAdminView = React.lazy(() => import('./components/owner/OwnerAccessAdminView').then(({ OwnerAccessAdminView }) => ({ default: OwnerAccessAdminView })));
+const CreateListingModal = React.lazy(() => import('./components/owner/CreateListingModal').then(({ CreateListingModal }) => ({ default: CreateListingModal })));
+const SofiaAssistantModal = React.lazy(() => import('./components/assistant/SofiaAssistantModal').then(({ SofiaAssistantModal }) => ({ default: SofiaAssistantModal })));
 
 class LazyFeatureBoundary extends React.Component<
   { children: React.ReactNode; overlay?: boolean; visible?: boolean },

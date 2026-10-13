@@ -14,7 +14,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup } = await import('@testing-library/react');
-const { TripsView } = await import('../src/components/TripsView.tsx');
+const { TripsView } = await import('../src/components/booking/TripsView.tsx');
 
 afterEach(() => {
   cleanup();

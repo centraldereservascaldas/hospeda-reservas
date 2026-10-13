@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react';
-import { LogoCRCN } from './LogoCRCN';
+import { LogoCRCN } from '../LogoCRCN';
 
 interface SofiaAssistantTriggerProps {
   onOpen: () => void;

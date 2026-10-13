@@ -9,9 +9,9 @@ import {
   Sparkles,
   ExternalLink,
 } from 'lucide-react';
-import { SearchFilters } from '../types';
+import { SearchFilters } from '../../types';
 import { StaysSearchWidget, toBrDate } from './StaysSearchWidget';
-import { useDialogFocus } from './useDialogFocus';
+import { useDialogFocus } from '../useDialogFocus';
 
 interface SearchModalProps {
   isOpen: boolean;

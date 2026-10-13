@@ -1,5 +1,5 @@
 import { MapPin } from 'lucide-react';
-import type { SearchFilters } from '../types';
+import type { SearchFilters } from '../../types';
 
 interface ActiveSearchFiltersProps {
   filters: SearchFilters;

@@ -11,7 +11,9 @@ Aplicação de reservas com frontend React 19, TypeScript, Vite 6 e Tailwind CSS
 ## Organização do frontend
 
 - Componentes do domínio de acomodação ficam em `src/components/property/`, incluindo cartão, catálogo, detalhe e suas seções/diálogos.
-- Componentes ainda compartilhados ou de outros domínios permanecem em `src/components/` até que uma migração por domínio traga benefício claro.
+- Busca e filtros ficam em `src/components/search/`; condomínio e localização em `src/components/condominium/` e `src/components/location/`.
+- Reservas/viagens, conta, proprietário e Sofia ficam em `src/components/booking/`, `account/`, `owner/` e `assistant/`.
+- O diretório `src/components/` fica para elementos de layout realmente compartilhados, como cabeçalho, rodapé, navegação mobile e o hook de foco de diálogos.
 - Imports apontam para os arquivos do domínio; não criar arquivos barrel apenas para reexportar componentes.
 
 ## Configuração local

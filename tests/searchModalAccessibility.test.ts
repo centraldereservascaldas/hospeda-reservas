@@ -19,7 +19,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup, within } = await import('@testing-library/react');
-const { SearchModal } = await import('../src/components/SearchModal.tsx');
+const { SearchModal } = await import('../src/components/search/SearchModal.tsx');
 const { createDefaultSearchFilters } = await import('../src/utils/searchUrlState.ts');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 const originalGetResorts = crcnBackendApi.getResorts;

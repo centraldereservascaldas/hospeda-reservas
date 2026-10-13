@@ -14,7 +14,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup } = await import('@testing-library/react');
-const { HostDashboardView } = await import('../src/components/HostDashboardView.tsx');
+const { HostDashboardView } = await import('../src/components/owner/HostDashboardView.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
 afterEach(() => {

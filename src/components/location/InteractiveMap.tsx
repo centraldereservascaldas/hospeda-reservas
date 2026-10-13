@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Property, Currency } from '../types';
-import { formatCurrency } from '../utils/formatters';
+import { Property, Currency } from '../../types';
+import { formatCurrency } from '../../utils/formatters';
 import { MapPin, Minus, Plus, Star, X, LocateFixed, ExternalLink } from 'lucide-react';
 
 interface InteractiveMapProps {

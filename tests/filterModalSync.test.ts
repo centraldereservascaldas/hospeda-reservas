@@ -14,7 +14,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, cleanup } = await import('@testing-library/react');
-const { FilterModal } = await import('../src/components/FilterModal.tsx');
+const { FilterModal } = await import('../src/components/search/FilterModal.tsx');
 const { createDefaultSearchFilters } = await import('../src/utils/searchUrlState.ts');
 
 afterEach(() => {

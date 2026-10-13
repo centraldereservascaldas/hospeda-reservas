@@ -1,8 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { X, Check } from 'lucide-react';
-import { SearchFilters, Currency } from '../types';
-import { formatCurrency } from '../utils/formatters';
-import { useDialogFocus } from './useDialogFocus';
+import { SearchFilters, Currency } from '../../types';
+import { formatCurrency } from '../../utils/formatters';
+import { useDialogFocus } from '../useDialogFocus';
 
 interface FilterModalProps {
   isOpen: boolean;

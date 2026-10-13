@@ -1,15 +1,15 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { X, ChevronLeft, ShieldCheck } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
-import { Property, Currency } from '../types';
-import { formatCurrency } from '../utils/formatters';
+import { Property, Currency } from '../../types';
+import { formatCurrency } from '../../utils/formatters';
 import {
   crcnBackendApi,
   CalculatedPriceResponse,
   CheckoutQuoteUpdate,
-} from '../services/crcnBackendApi';
-import { supabase, supabaseConfigured } from '../services/supabase';
-import { useDialogFocus } from './useDialogFocus';
+} from '../../services/crcnBackendApi';
+import { supabase, supabaseConfigured } from '../../services/supabase';
+import { useDialogFocus } from '../useDialogFocus';
 
 interface CheckoutModalProps {
   isOpen: boolean;

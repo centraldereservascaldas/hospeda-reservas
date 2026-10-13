@@ -22,7 +22,7 @@ Object.defineProperty(dom.window.HTMLElement.prototype, 'scrollIntoView', {
 
 const React = (await import('react')).default;
 const { render, cleanup } = await import('@testing-library/react');
-const { SofiaAssistantModal } = await import('../src/components/SofiaAssistantModal.tsx');
+const { SofiaAssistantModal } = await import('../src/components/assistant/SofiaAssistantModal.tsx');
 
 afterEach(() => {
   cleanup();

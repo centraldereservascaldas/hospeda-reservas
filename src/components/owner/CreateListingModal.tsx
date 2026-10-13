@@ -1,8 +1,8 @@
 import React, { useId, useRef, useState } from 'react';
 import { X, Sparkles, Check } from 'lucide-react';
-import { Property, Currency } from '../types';
-import { CATEGORIES } from '../data/mockProperties';
-import { useDialogFocus } from './useDialogFocus';
+import { Property, Currency } from '../../types';
+import { CATEGORIES } from '../../data/mockProperties';
+import { useDialogFocus } from '../useDialogFocus';
 
 interface CreateListingModalProps {
   isOpen: boolean;

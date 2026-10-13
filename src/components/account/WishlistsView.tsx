@@ -1,6 +1,6 @@
 import React from 'react';
-import { Property, Currency } from '../types';
-import { PropertyCard } from './property/PropertyCard';
+import { Property, Currency } from '../../types';
+import { PropertyCard } from '../property/PropertyCard';
 import { Heart, Compass } from 'lucide-react';
 
 interface WishlistsViewProps {

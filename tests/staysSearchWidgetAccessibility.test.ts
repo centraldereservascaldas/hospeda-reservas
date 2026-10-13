@@ -19,7 +19,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
-const { StaysSearchWidget } = await import('../src/components/StaysSearchWidget.tsx');
+const { StaysSearchWidget } = await import('../src/components/search/StaysSearchWidget.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
 afterEach(() => {
