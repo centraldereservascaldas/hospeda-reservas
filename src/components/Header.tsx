@@ -93,6 +93,12 @@ export const Header: React.FC<HeaderProps> = ({
 
   useEffect(() => {
     if (!isUserMenuOpen) return;
+    const handleMenuKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setIsUserMenuOpen(false);
+      accountButtonRef.current?.focus();
+    };
     const updatePosition = () => {
       const rect = accountButtonRef.current?.getBoundingClientRect();
       if (rect) {
@@ -101,9 +107,11 @@ export const Header: React.FC<HeaderProps> = ({
     };
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
+    document.addEventListener('keydown', handleMenuKeyDown);
     return () => {
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
+      document.removeEventListener('keydown', handleMenuKeyDown);
     };
   }, [isUserMenuOpen]);
 
@@ -196,12 +204,16 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="relative flex-shrink-0" ref={menuRef}>
               <button
                 ref={accountButtonRef}
+                type="button"
                 onClick={toggleAccountMenu}
                 className={`flex items-center gap-2 pl-2 sm:pl-2.5 pr-2.5 sm:pr-3 py-1 sm:py-1.5 rounded-full bg-white/95 hover:bg-white backdrop-blur-xl border border-neutral-300/90 shadow-xs hover:shadow-md transition-all cursor-pointer flex-shrink-0 ${
                   isUserMenuOpen ? 'ring-2 ring-orange-500/40 border-orange-400' : ''
                 }`}
                 title="Minha Conta"
                 aria-label="Minha Conta"
+                aria-haspopup="true"
+                aria-expanded={isUserMenuOpen}
+                aria-controls="account-menu-panel"
               >
                 <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-neutral-900 to-neutral-800 text-white flex items-center justify-center text-xs font-semibold relative shadow-xs flex-shrink-0">
                   <User className="w-4 h-4" />
@@ -226,7 +238,7 @@ export const Header: React.FC<HeaderProps> = ({
                   />
 
                   {/* Minha Conta Panel with high-legibility frosted blur effect and crisp contrast */}
-                  <div ref={accountMenuRef} style={{ top: accountMenuPosition.top, right: accountMenuPosition.right }} className="fixed w-72 max-w-[calc(100vw-1.5rem)] max-h-[min(75vh,36rem)] overflow-y-auto overscroll-contain bg-white/96 backdrop-blur-3xl rounded-2xl shadow-2xl border border-neutral-200/90 py-2.5 z-[9999] text-xs animate-in fade-in zoom-in-95 duration-150 ring-1 ring-black/10">
+                  <div id="account-menu-panel" ref={accountMenuRef} role="group" aria-label="Opções da conta" style={{ top: accountMenuPosition.top, right: accountMenuPosition.right }} className="fixed w-72 max-w-[calc(100vw-1.5rem)] max-h-[min(75vh,36rem)] overflow-y-auto overscroll-contain bg-white/96 backdrop-blur-3xl rounded-2xl shadow-2xl border border-neutral-200/90 py-2.5 z-[9999] text-xs animate-in fade-in zoom-in-95 duration-150 ring-1 ring-black/10">
                     <div className="px-4 py-3 border-b border-neutral-200/80 bg-neutral-50/90 backdrop-blur-md">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[10px] font-black uppercase tracking-wider text-orange-600 bg-orange-100/90 px-2 py-0.5 rounded-full border border-orange-200 flex-shrink-0">
