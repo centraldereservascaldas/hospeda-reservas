@@ -538,7 +538,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                         type="button"
                         onClick={() => openDatePicker('checkIn')}
                         aria-haspopup="dialog"
-                        aria-expanded={isDatePickerOpen}
+                        aria-controls="stay-dates-dialog"
+                        aria-expanded={isDatePickerOpen && activeDateField === 'checkIn'}
                         className="flex min-h-16 w-full items-center justify-between gap-2 p-2.5 text-left transition-colors hover:bg-orange-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500"
                       >
                         <span>
@@ -551,7 +552,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                         type="button"
                         onClick={() => openDatePicker('checkOut')}
                         aria-haspopup="dialog"
-                        aria-expanded={isDatePickerOpen}
+                        aria-controls="stay-dates-dialog"
+                        aria-expanded={isDatePickerOpen && activeDateField === 'checkOut'}
                         className="flex min-h-16 w-full items-center justify-between gap-2 p-2.5 text-left transition-colors hover:bg-orange-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500"
                       >
                         <span>
@@ -664,6 +666,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         <div
           ref={dateDialogRef}
           data-dialog-focus-root
+          id="stay-dates-dialog"
           tabIndex={-1}
           className="fixed inset-0 z-[60] flex items-center justify-center bg-white/25 p-4 backdrop-blur-xl animate-in fade-in duration-150"
           role="dialog"
@@ -682,11 +685,11 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             </div>
 
             <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl bg-orange-50/70 p-1.5">
-              <button type="button" onClick={() => setActiveDateField('checkIn')} className={`rounded-xl px-3 py-2 text-left transition ${activeDateField === 'checkIn' ? 'bg-white text-orange-800 shadow-sm ring-1 ring-orange-100' : 'text-neutral-600 hover:bg-white/60'}`}>
+              <button type="button" aria-pressed={activeDateField === 'checkIn'} onClick={() => setActiveDateField('checkIn')} className={`rounded-xl px-3 py-2 text-left transition ${activeDateField === 'checkIn' ? 'bg-white text-orange-800 shadow-sm ring-1 ring-orange-100' : 'text-neutral-600 hover:bg-white/60'}`}>
                 <span className="block text-[10px] font-bold uppercase tracking-wide">Check-in</span>
                 <span className="mt-0.5 block text-xs font-semibold">{formatDateLabel(checkIn)}</span>
               </button>
-              <button type="button" onClick={() => setActiveDateField('checkOut')} className={`rounded-xl px-3 py-2 text-left transition ${activeDateField === 'checkOut' ? 'bg-white text-orange-800 shadow-sm ring-1 ring-orange-100' : 'text-neutral-600 hover:bg-white/60'}`}>
+              <button type="button" aria-pressed={activeDateField === 'checkOut'} onClick={() => setActiveDateField('checkOut')} className={`rounded-xl px-3 py-2 text-left transition ${activeDateField === 'checkOut' ? 'bg-white text-orange-800 shadow-sm ring-1 ring-orange-100' : 'text-neutral-600 hover:bg-white/60'}`}>
                 <span className="block text-[10px] font-bold uppercase tracking-wide">Check-out</span>
                 <span className="mt-0.5 block text-xs font-semibold">{formatDateLabel(checkOut)}</span>
               </button>
@@ -728,6 +731,12 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                     key={dateValue}
                     type="button"
                     disabled={isDisabled}
+                    aria-label={date.toLocaleDateString('pt-BR', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })}
                     aria-pressed={isSelected}
                     onClick={() => chooseDate(date)}
                     className={`h-10 rounded-xl text-xs font-semibold transition ${
