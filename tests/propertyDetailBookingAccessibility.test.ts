@@ -19,7 +19,7 @@ Object.assign(globalThis, {
 });
 
 const React = (await import('react')).default;
-const { render, fireEvent, cleanup } = await import('@testing-library/react');
+const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 const { PropertyDetailModal } = await import('../src/components/property/PropertyDetailModal.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
@@ -48,11 +48,20 @@ test('booking calendar names full dates and exposes the active date field', asyn
       }),
     );
 
+    await waitFor(() => {
+      const unavailableBooking = Array.from(
+        container.querySelectorAll<HTMLButtonElement>('button'),
+      ).find((button) => button.textContent?.includes('Disponibilidade indisponível'));
+      assert.ok(unavailableBooking);
+      assert.equal(unavailableBooking.disabled, true);
+    });
+
     const [checkIn, checkOut] = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[aria-controls="stay-dates-dialog"]'),
     );
     assert.ok(checkIn);
     assert.ok(checkOut);
+    assert.equal(checkIn.getAttribute('aria-haspopup'), 'dialog');
     document.body.style.overflow = 'auto';
     checkIn.focus();
     fireEvent.click(checkIn);
