@@ -31,6 +31,7 @@ import { useAccountWorkspaceData } from './hooks/useAccountWorkspaceData';
 import { useSupabaseSession } from './hooks/useSupabaseSession';
 import { useAccommodationSearch } from './hooks/useAccommodationSearch';
 import { useAccountActions } from './hooks/useAccountActions';
+import { readSavedPropertyIds } from './utils/savedPropertyIds';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
@@ -94,19 +95,9 @@ export default function App() {
     useAccommodationCatalog();
 
   // Persistent saved accommodation IDs
-  const [savedPropertyIds, setSavedPropertyIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('hospeda_wishlist');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const cleaned = parsed.filter((id: string) => !id.startsWith('prop-'));
-          if (cleaned.length > 0) return cleaned;
-        }
-      } catch { /* fallback */ }
-    }
-    return ['JQ08G', 'stays-lacqua-204'];
-  });
+  const [savedPropertyIds, setSavedPropertyIds] = useState<string[]>(() =>
+    readSavedPropertyIds(localStorage.getItem('hospeda_wishlist')),
+  );
 
   // Currency & Display preferences
   const [currency, setCurrency] = useState<Currency>('BRL');
