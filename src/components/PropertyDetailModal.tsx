@@ -27,6 +27,7 @@ import { PropertyLocationSection } from './PropertyLocationSection';
 import { PropertyHostSection } from './PropertyHostSection';
 import { PropertyOverviewSection } from './PropertyOverviewSection';
 import { PropertyPriceBreakdown } from './PropertyPriceBreakdown';
+import { PropertyAvailabilityStrip } from './PropertyAvailabilityStrip';
 import { useDialogFocus } from './useDialogFocus';
 
 interface PropertyDetailModalProps {
@@ -269,6 +270,26 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     setCheckOut(dateValue);
     setIsDatePickerOpen(false);
   };
+
+  const selectCalendarDay = (day: StaysCalendarDay) => {
+    if (!checkIn || (checkIn && checkOut)) {
+      setCheckIn(day.date);
+      setCheckOut('');
+      return;
+    }
+
+    if (day.date > checkIn) {
+      if (isCalendarRangeAvailable(calendarDays, checkIn, day.date)) {
+        setCheckOut(day.date);
+        setCalendarMessage('');
+      } else {
+        setCalendarMessage('O período inclui uma data indisponível ou não atende à estadia mínima. Selecione outras datas.');
+      }
+      return;
+    }
+
+    setCheckIn(day.date);
+  };
   const guestCounter = (
     label: string,
     value: number,
@@ -471,82 +492,15 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   propertyAmenities={property.propertyAmenities}
                 />
 
-                {/* Airbnb Style Availability & Daily Price Calendar */}
-                <div className="pt-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-neutral-900">
-                        Calendário de Disponibilidade & Diárias
-                      </h3>
-                      <p className="text-xs text-neutral-500 mt-0.5">
-                        Consulte os valores por noite e selecione as datas desejadas.
-                      </p>
-                    </div>
-                    <span className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${calendarAvailable ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}>
-                      <span className={`w-2 h-2 rounded-full ${calendarAvailable ? 'bg-emerald-500' : 'bg-amber-500'} ${calendarAvailable ? 'animate-pulse' : ''}`} />
-                      {calendarAvailable ? 'Sincronizado' : 'Indisponível'}
-                    </span>
-                  </div>
-
-                  {/* Rolling Days Strip / Mini Grid */}
-                  <div className="p-4 rounded-2xl border border-neutral-200 bg-neutral-50/70">
-                    <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 text-center text-xs">
-                      {calendarDays.slice(0, 14).map((d, i) => {
-                        const isSelectedIn = d.date === checkIn;
-                        const isSelectedOut = d.date === checkOut;
-                        const isInRange = d.date > checkIn && d.date < checkOut;
-                        const isAvailable = Number(d.avail) > 0 && !d.closedToArrival;
-                        const canSelectAsCheckOut = Boolean(checkIn && !checkOut && d.date > checkIn);
-                        const dayPrice = d.prices?.[0]?._mcval?.BRL || property.pricePerNight;
-
-                        return (
-                          <button
-                            key={i}
-                            type="button"
-                            disabled={!isAvailable && !canSelectAsCheckOut}
-                            onClick={() => {
-                              if (!checkIn || (checkIn && checkOut)) {
-                                setCheckIn(d.date);
-                                setCheckOut('');
-                              } else if (d.date > checkIn) {
-                                if (isCalendarRangeAvailable(calendarDays, checkIn, d.date)) {
-                                  setCheckOut(d.date);
-                                  setCalendarMessage('');
-                                } else {
-                                  setCalendarMessage('O período inclui uma data indisponível ou não atende à estadia mínima. Selecione outras datas.');
-                                }
-                              } else {
-                                setCheckIn(d.date);
-                              }
-                            }}
-                            className={`p-2 rounded-xl transition-all flex flex-col items-center justify-center cursor-pointer ${
-                              isSelectedIn || isSelectedOut
-                                ? 'bg-orange-600 text-white font-black shadow-md scale-105'
-                                : isInRange
-                                ? 'bg-orange-100 text-orange-950 font-bold'
-                                : isAvailable || canSelectAsCheckOut
-                                ? 'bg-white hover:bg-orange-50 border border-neutral-200/80 text-neutral-800'
-                                : 'bg-neutral-100/50 text-neutral-300 line-through cursor-not-allowed'
-                            }`}
-                          >
-                            <span className="text-[10px] font-bold opacity-80">
-                              {new Date(d.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'narrow' })}
-                            </span>
-                            <span className="text-xs font-black my-0.5">
-                              {d.date.split('-')[2]}
-                            </span>
-                            <span className={`text-[9px] font-bold ${
-                              isSelectedIn || isSelectedOut ? 'text-orange-100' : 'text-orange-600'
-                            }`}>
-                              R$ {dayPrice}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  {calendarMessage && <p className="mt-2 text-xs text-amber-700" role="status">{calendarMessage}</p>}
-                </div>
+                <PropertyAvailabilityStrip
+                  calendarDays={calendarDays}
+                  calendarAvailable={calendarAvailable}
+                  calendarMessage={calendarMessage}
+                  checkIn={checkIn}
+                  checkOut={checkOut}
+                  baseNightlyRate={property.pricePerNight}
+                  onSelectDay={selectCalendarDay}
+                />
 
                 <PropertyLocationSection title={property.title} location={property.location} />
                 <PropertyHostSection host={property.host} />
