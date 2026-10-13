@@ -144,14 +144,23 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
               <button
                 key={idx}
                 type="button"
-                className={`pointer-events-auto h-1.5 rounded-full transition-all duration-300 ${
+                className={`pointer-events-auto flex h-6 min-w-6 items-center justify-center rounded-full transition-all duration-300 ${
                   idx === currentImageIndex
-                    ? 'w-5 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]'
-                    : 'w-1.5 bg-white/70'
+                    ? 'w-8 bg-transparent'
+                    : 'w-6 bg-transparent'
                 }`}
                 aria-label={`Mostrar foto ${idx + 1}`}
                 onClick={(event) => { event.stopPropagation(); goToImage(idx); }}
-              />
+              >
+                <span
+                  aria-hidden="true"
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    idx === currentImageIndex
+                      ? 'w-5 bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]'
+                      : 'w-1.5 bg-white/70'
+                  }`}
+                />
+              </button>
             ))}
           </div>
         )}

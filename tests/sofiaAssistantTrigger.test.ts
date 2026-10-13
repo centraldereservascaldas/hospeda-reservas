@@ -22,7 +22,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-test('Sofia trigger has an accessible name and opens the assistant', () => {
+test('Sofia trigger includes its visible text in its accessible name and opens the assistant', () => {
   let openCalls = 0;
   const { getByRole } = render(
     React.createElement(SofiaAssistantTrigger, {
@@ -32,7 +32,10 @@ test('Sofia trigger has an accessible name and opens the assistant', () => {
     }),
   );
 
-  const trigger = getByRole('button', { name: 'Falar com Sofia, concierge virtual' });
+  const trigger = getByRole('button', {
+    name: /Sofia • Concierge IA.*Tire dúvidas sobre os resorts/,
+  });
+  assert.match(trigger.textContent || '', /Sofia • Concierge IA/);
   assert.equal(trigger.getAttribute('type'), 'button');
   fireEvent.click(trigger);
   assert.equal(openCalls, 1);

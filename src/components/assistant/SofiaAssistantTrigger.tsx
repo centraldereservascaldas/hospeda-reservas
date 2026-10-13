@@ -12,7 +12,6 @@ export function SofiaAssistantTrigger({ onOpen }: SofiaAssistantTriggerProps) {
         type="button"
         onClick={onOpen}
         className="group flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-br from-orange-500/75 via-amber-400/70 to-orange-500/75 backdrop-blur-2xl text-white font-black text-xs shadow-[0_8px_26px_rgba(234,88,12,0.24),inset_0_1.5px_2px_rgba(255,255,255,0.8),inset_0_-1px_2px_rgba(255,255,255,0.25)] border border-white/85 ring-1 ring-white/30 hover:from-orange-500/85 hover:via-amber-400/80 hover:to-orange-500/85 hover:scale-105 active:scale-95 transition-all cursor-pointer"
-        aria-label="Falar com Sofia, concierge virtual"
       >
         <div className="relative flex h-8 w-8 flex-shrink-0 items-center justify-center">
           <LogoCRCN

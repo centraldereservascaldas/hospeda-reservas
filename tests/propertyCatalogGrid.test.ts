@@ -71,3 +71,17 @@ test('renders a catalog grid for matching accommodations', () => {
 
   assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' }));
 });
+
+test('renders gallery selectors with touch-sized hit areas', () => {
+  render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [{ ...STAYS_NET_APARTMENTS[0]!, images: ['one.jpg', 'two.jpg'] }],
+    }),
+  );
+
+  const selector = screen.getByRole('button', { name: 'Mostrar foto 2' });
+  assert.match(selector.className, /h-6/);
+  assert.match(selector.className, /min-w-6/);
+});
