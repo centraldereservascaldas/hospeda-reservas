@@ -3,7 +3,11 @@ import { X, ChevronLeft, ShieldCheck } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { Property, Currency } from '../types';
 import { formatCurrency } from '../utils/formatters';
-import { crcnBackendApi, CalculatedPriceResponse } from '../services/crcnBackendApi';
+import {
+  crcnBackendApi,
+  CalculatedPriceResponse,
+  CheckoutQuoteUpdate,
+} from '../services/crcnBackendApi';
 import { supabase, supabaseConfigured } from '../services/supabase';
 import { useDialogFocus } from './useDialogFocus';
 
@@ -50,9 +54,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const [currentQuote, setCurrentQuote] = useState<CalculatedPriceResponse | null>(bookingData?.quote || null);
+  const [changedQuote, setChangedQuote] = useState<CheckoutQuoteUpdate | null>(null);
 
   useEffect(() => {
     setCurrentQuote(bookingData?.quote || null);
+    setChangedQuote(null);
     setCheckoutError('');
   }, [bookingData]);
 
@@ -176,13 +182,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         guests,
         quoteTotal: currentQuote.total,
       }, latestSession.session.access_token);
-      if (response?.code === 'quote_changed' && response.quote) {
-        setCurrentQuote(response.quote);
-        setCheckoutError(`${response.message || 'O preço foi atualizado.'} Confira o novo total antes de continuar.`);
-      } else if (response?.success && response.redirectUrl) {
+      if (response?.success === false && response.code === 'quote_changed' && response.quote) {
+        setChangedQuote(response.quote);
+        setCheckoutError(
+          `${response.message || 'O preço foi atualizado.'} Volte ao detalhe para atualizar e confirmar a cotação completa antes de continuar.`,
+        );
+      } else if (response?.success === true) {
         window.location.assign(response.redirectUrl);
       } else {
-        setCheckoutError(response?.message || 'Não foi possível iniciar o checkout seguro. Tente novamente.');
+        setCheckoutError(
+          response && !response.success && response.message
+            ? response.message
+            : 'Não foi possível iniciar o checkout seguro. Tente novamente.',
+        );
       }
     } catch (error) {
       setCheckoutError(error instanceof Error ? error.message : 'Falha de comunicação ao revalidar sua reserva. Nenhuma reserva foi confirmada. Tente novamente.');
@@ -334,11 +346,23 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {/* Submit Button */}
                 <div className="pt-2">
                   <button
-                    disabled={isProcessing || !currentQuote || currentQuote.source !== 'stays-live' || !session || !isStaysSynced}
+                    disabled={
+                      isProcessing ||
+                      Boolean(changedQuote) ||
+                      !currentQuote ||
+                      currentQuote.source !== 'stays-live' ||
+                      !session ||
+                      !isStaysSynced
+                    }
                     onClick={handleFinalizeBooking}
                     className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    {isProcessing ? (
+                    {changedQuote ? (
+                      <>
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Atualize a cotação no detalhe antes de continuar</span>
+                      </>
+                    ) : isProcessing ? (
                       <span>Revalidando disponibilidade e preço...</span>
                     ) : !session ? (
                       <><ShieldCheck className="w-4 h-4" /><span>Entre ou crie uma conta para reservar</span></>
@@ -351,6 +375,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </>
                     )}
                   </button>
+                  {changedQuote && (
+                    <div
+                      role="status"
+                      className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950"
+                    >
+                      <p className="font-bold">Nova cotação Stays recebida</p>
+                      <p className="mt-1">
+                        {changedQuote.nights} noites · {formatCurrency(changedQuote.total, currency)}
+                        {' '}no total. Volte ao detalhe para revisar taxas e atualizar a cotação antes
+                        de continuar.
+                      </p>
+                    </div>
+                  )}
                   {checkoutError && <p role="alert" className="text-center text-xs font-semibold text-red-700 mt-2">{checkoutError}</p>}
                   <p className="text-center text-[10px] text-neutral-400 mt-2">
                     A reserva só estará confirmada após a conclusão do pagamento.

@@ -8,6 +8,12 @@ Aplicação de reservas com frontend React 19, TypeScript, Vite 6 e Tailwind CSS
 - Composer 2+
 - Node.js 20+
 
+## Organização do frontend
+
+- Componentes do domínio de acomodação ficam em `src/components/property/`, incluindo cartão, catálogo, detalhe e suas seções/diálogos.
+- Componentes ainda compartilhados ou de outros domínios permanecem em `src/components/` até que uma migração por domínio traga benefício claro.
+- Imports apontam para os arquivos do domínio; não criar arquivos barrel apenas para reexportar componentes.
+
 ## Configuração local
 
 1. `composer install`

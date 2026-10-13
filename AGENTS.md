@@ -22,6 +22,8 @@
 ## Qualidade do frontend
 
 - Siga o plano de melhorias em `docs/frontend-quality-plan.md` para mudanças da auditoria; preserve os contratos da API Laravel e o fluxo de checkout hospedado.
+- Agrupe componentes por domínio quando houver uma família coesa, como `src/components/property/`; mantenha no diretório compartilhado apenas componentes usados por domínios distintos e migre outras famílias em etapas próprias.
+- Prefira imports diretos. Crie um arquivo barrel somente quando houver necessidade concreta de uma API pública do módulo.
 - Use `npm` e `package-lock.json` para instalar dependências. Não gere outro lockfile.
 - Prefira tipos explícitos para props, serviços e respostas; valide dados externos antes de usá-los na interface e evite novos `any`.
 - Associe labels aos campos, dê nomes acessíveis a botões com ícone e mantenha o foco visível para teclado.
@@ -51,6 +53,7 @@
 This application is a Laravel application running on PHP 8.5. Always use the APIs that match the installed major version of each package — do not assume a version.
 
 Before relying on a package's API, confirm its installed version:
+
 - PHP packages: run `composer show --direct` to list direct dependencies with versions, or `composer show <vendor/package>` for a single package.
 - JS packages: check `package.json` for the installed versions.
 

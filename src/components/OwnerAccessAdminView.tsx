@@ -134,7 +134,7 @@ const OwnerRequestCard: React.FC<{
           <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-neutral-200 bg-white/90 p-1">
             {owners.map((owner) => (
               <button key={owner.id} type="button" onClick={() => setSelectedOwnerId(owner.id)} className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition ${selectedOwnerId === owner.id ? 'bg-orange-50 ring-1 ring-orange-300' : 'hover:bg-neutral-50'}`}>
-                <span className="min-w-0"><span className="block truncate text-sm font-bold text-neutral-800">{owner.name}</span><span className="block truncate text-[11px] text-neutral-500">ID {owner.id} · {owner.propertyCount} imóvel(is)</span></span>
+                <span className="min-w-0"><span className="block truncate text-sm font-bold text-neutral-800">{owner.name}</span><span className="block truncate text-[11px] text-neutral-500">ID {owner.id} · {owner.propertyCount === undefined ? 'Quantidade de imóveis indisponível' : `${owner.propertyCount} imóvel(is)`}</span></span>
                 {selectedOwnerId === owner.id && <Check className="h-4 w-4 shrink-0 text-orange-600" />}
               </button>
             ))}

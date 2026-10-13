@@ -53,10 +53,13 @@ test('booking calendar names full dates and exposes the active date field', asyn
     );
     assert.ok(checkIn);
     assert.ok(checkOut);
+    document.body.style.overflow = 'auto';
     checkIn.focus();
     fireEvent.click(checkIn);
 
     const calendar = getByRole('dialog', { name: 'Escolha as datas' });
+    assert.equal(document.activeElement, getByRole('button', { name: 'Fechar calendário' }));
+    assert.equal(document.body.style.overflow, 'hidden');
     const dateFieldButtons = Array.from(
       calendar.querySelectorAll<HTMLButtonElement>('button'),
     ).filter(
@@ -87,6 +90,7 @@ test('booking calendar names full dates and exposes the active date field', asyn
     fireEvent.click(checkoutDate);
     assert.equal(queryByRole('dialog', { name: 'Escolha as datas' }), null);
     assert.equal(document.activeElement, checkIn);
+    assert.equal(document.body.style.overflow, 'auto');
   } finally {
     crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
     crcnBackendApi.calculatePrice = originalCalculatePrice;
