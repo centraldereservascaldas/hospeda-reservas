@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
-  Heart,
-  Share2,
 } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { calculateNights } from '../../utils/formatters';
@@ -25,6 +23,7 @@ import { PropertyGuestSelectorDialog } from './PropertyGuestSelectorDialog';
 import { PropertyDatePickerDialog } from './PropertyDatePickerDialog';
 import { PropertyDetailHeader } from './PropertyDetailHeader';
 import { PropertyPhotoGrid } from './PropertyPhotoGrid';
+import { PropertyDetailActions } from './PropertyDetailActions';
 import { useDialogFocus } from '../useDialogFocus';
 
 interface PropertyDetailModalProps {
@@ -300,27 +299,12 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/60 hover:bg-white border border-white/80 backdrop-blur-md text-xs font-bold text-neutral-700 shadow-2xs transition-all cursor-pointer hover:scale-105"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>{copiedLink ? 'Link copiado!' : 'Compartilhar'}</span>
-              </button>
-
-              <button
-                onClick={() => onToggleSave(property.id)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/60 hover:bg-white border border-white/80 backdrop-blur-md text-xs font-bold text-neutral-700 shadow-2xs transition-all cursor-pointer hover:scale-105"
-              >
-                <Heart
-                  className={`w-4 h-4 transition-colors ${
-                    isSaved ? 'fill-orange-500 text-orange-500' : 'text-neutral-700'
-                  }`}
-                />
-                <span>{isSaved ? 'Salvo' : 'Salvar'}</span>
-              </button>
-            </div>
+            <PropertyDetailActions
+              isSaved={isSaved}
+              copiedLink={copiedLink}
+              onShare={handleShare}
+              onToggleSave={() => onToggleSave(property.id)}
+            />
           </div>
 
           <div className="p-6 sm:p-10 space-y-8">
