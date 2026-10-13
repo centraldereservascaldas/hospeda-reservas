@@ -129,9 +129,18 @@ const isReview = (value: unknown): value is Property['reviews'][number] => {
   return (
     typeof value.id === 'string' &&
     typeof value.authorName === 'string' &&
+    (value.authorAvatar === undefined || typeof value.authorAvatar === 'string') &&
     isReviewRating(value.rating) &&
     typeof value.date === 'string' &&
     typeof value.comment === 'string' &&
+    (value.source === undefined ||
+      value.source === 'airbnb' ||
+      value.source === 'bookingcom' ||
+      value.source === 'expedia' ||
+      value.source === 'internal') &&
+    (value.publicationStatus === undefined ||
+      value.publicationStatus === 'published' ||
+      value.publicationStatus === 'not-published') &&
     Object.values(value.categories).every((score) => score === undefined || isReviewRating(score))
   );
 };
@@ -169,6 +178,9 @@ export const isProperty = (value: unknown): value is Property => {
   return (
     typeof value.id === 'string' &&
     value.id.trim() !== '' &&
+    (value.staysPropertyId === undefined || typeof value.staysPropertyId === 'string') &&
+    (value.complexName === undefined || typeof value.complexName === 'string') &&
+    (value.complexDescription === undefined || typeof value.complexDescription === 'string') &&
     typeof value.title === 'string' &&
     value.title.trim() !== '' &&
     typeof value.subtitle === 'string' &&
@@ -200,6 +212,8 @@ export const isProperty = (value: unknown): value is Property => {
     typeof value.isSuperhost === 'boolean' &&
     typeof value.isGuestFavorite === 'boolean' &&
     typeof value.instantBook === 'boolean' &&
+    (value.staysSynced === undefined || typeof value.staysSynced === 'boolean') &&
+    (value.reviewsSynced === undefined || typeof value.reviewsSynced === 'boolean') &&
     isStringArray(value.images) &&
     isNonNegativeNumber(value.bedrooms) &&
     isNonNegativeNumber(value.beds) &&

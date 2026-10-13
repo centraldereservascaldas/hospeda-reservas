@@ -132,6 +132,38 @@ test('property validation enforces semantic title, rating, and coordinate bounds
   );
 });
 
+test('property validation rejects malformed optional metadata and review enums', () => {
+  const property = STAYS_NET_APARTMENTS[0]!;
+  const review = {
+    id: 'review-1',
+    authorName: 'Hóspede',
+    rating: 5,
+    date: '2026-10-01',
+    comment: '',
+    categories: {},
+  };
+  const invalidProperties = [
+    { ...property, complexName: 42 },
+    { ...property, complexDescription: false },
+    { ...property, staysSynced: 'true' },
+    { ...property, reviewsSynced: 1 },
+    { ...property, reviews: [{ ...review, authorAvatar: 42 }] },
+    { ...property, reviews: [{ ...review, source: 'unknown-channel' }] },
+    { ...property, reviews: [{ ...review, publicationStatus: 'pending' }] },
+  ];
+
+  for (const invalidProperty of invalidProperties) {
+    assert.equal(isProperty(invalidProperty), false);
+  }
+  assert.equal(
+    isProperty({
+      ...property,
+      reviews: [{ ...review, source: 'airbnb', publicationStatus: 'published' }],
+    }),
+    true,
+  );
+});
+
 test('validates owner access status values returned by the authenticated API', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
