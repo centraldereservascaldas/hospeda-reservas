@@ -31,7 +31,7 @@ import { useAccountWorkspaceData } from './hooks/useAccountWorkspaceData';
 import { useSupabaseSession } from './hooks/useSupabaseSession';
 import { useAccommodationSearch } from './hooks/useAccommodationSearch';
 import { useAccountActions } from './hooks/useAccountActions';
-import { readSavedPropertyIds } from './utils/savedPropertyIds';
+import { useSavedPropertyIds } from './hooks/useSavedPropertyIds';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
@@ -94,10 +94,7 @@ export default function App() {
   const { properties, setProperties, catalogLoading, catalogLoadError } =
     useAccommodationCatalog();
 
-  // Persistent saved accommodation IDs
-  const [savedPropertyIds, setSavedPropertyIds] = useState<string[]>(() =>
-    readSavedPropertyIds(localStorage.getItem('hospeda_wishlist')),
-  );
+  const { savedPropertyIds, toggleSavedProperty } = useSavedPropertyIds();
 
   // Currency & Display preferences
   const [currency, setCurrency] = useState<Currency>('BRL');
@@ -162,10 +159,6 @@ export default function App() {
     quote: CalculatedPriceResponse;
   } | null>(null);
 
-  useEffect(() => {
-    localStorage.setItem('hospeda_wishlist', JSON.stringify(savedPropertyIds));
-  }, [savedPropertyIds]);
-
   // Search & Filter State
   const [filters, setFilters] = useState<SearchFilters>(() => parseSearchFilters(window.location.search));
   const defaultFilters = createDefaultSearchFilters();
@@ -178,14 +171,6 @@ export default function App() {
   });
 
   // Toggle Save Property
-  const handleToggleSave = (propertyId: string) => {
-    if (savedPropertyIds.includes(propertyId)) {
-      setSavedPropertyIds(savedPropertyIds.filter((id) => id !== propertyId));
-    } else {
-      setSavedPropertyIds([...savedPropertyIds, propertyId]);
-    }
-  };
-
   // Filter Properties Logic
   const filteredProperties = useMemo(() => {
     return filterPropertiesBySearchFilters(properties, filters);
@@ -308,7 +293,7 @@ export default function App() {
                 currency={currency}
                 savedPropertyIds={savedPropertyIds}
                 showTotalWithTaxes={showTotalWithTaxes}
-                onToggleSave={handleToggleSave}
+                onToggleSave={toggleSavedProperty}
                 onSelectProperty={handleSelectProperty}
                 onResetFilters={() => setFilters(defaultFilters)}
               />
@@ -345,7 +330,7 @@ export default function App() {
           <WishlistsView
             savedProperties={savedPropertiesList}
             currency={currency}
-            onToggleSave={handleToggleSave}
+            onToggleSave={toggleSavedProperty}
             onSelectProperty={handleSelectProperty}
             onExploreMore={() => setCurrentView('explore')}
             showTotalWithTaxes={showTotalWithTaxes}
@@ -394,7 +379,7 @@ export default function App() {
         returnFocusRef={catalogFocusRef}
         currency={currency}
         isSaved={selectedProperty ? savedPropertyIds.includes(selectedProperty.id) : false}
-        onToggleSave={handleToggleSave}
+        onToggleSave={toggleSavedProperty}
         onStartBooking={(bookingData) => {
           handleClosePropertyDetail();
           setBookingPayload(bookingData);
