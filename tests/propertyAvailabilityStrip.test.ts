@@ -31,6 +31,7 @@ test('provides full accessible dates and selected state for availability days', 
         { date: '2026-11-13', avail: 1 },
       ],
       calendarAvailable: true,
+      isLoading: false,
       calendarMessage: '',
       checkIn: '2026-11-11',
       checkOut: '2026-11-13',
@@ -60,6 +61,7 @@ test('delegates a chosen available day to the reservation flow', () => {
     React.createElement(PropertyAvailabilityStrip, {
       calendarDays: [{ date: '2026-11-11', avail: 1 }],
       calendarAvailable: true,
+      isLoading: false,
       calendarMessage: '',
       checkIn: '',
       checkOut: '',
@@ -72,4 +74,25 @@ test('delegates a chosen available day to the reservation flow', () => {
   assert.ok(dayButton);
   fireEvent.click(dayButton!);
   assert.deepEqual(selectedDays, ['2026-11-11']);
+});
+
+test('announces calendar loading and names the availability region', () => {
+  const { getByRole } = render(
+    React.createElement(PropertyAvailabilityStrip, {
+      calendarDays: [],
+      calendarAvailable: false,
+      isLoading: true,
+      calendarMessage: 'Atualizando disponibilidade...',
+      checkIn: '',
+      checkOut: '',
+      baseNightlyRate: 800,
+      onSelectDay: () => {},
+    }),
+  );
+
+  assert.equal(
+    getByRole('region', { name: 'Calendário de disponibilidade' }).getAttribute('aria-busy'),
+    'true',
+  );
+  assert.ok(getByRole('status', { name: '' }));
 });

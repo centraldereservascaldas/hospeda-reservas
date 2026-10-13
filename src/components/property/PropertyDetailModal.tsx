@@ -93,7 +93,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [copiedLink, setCopiedLink] = useState(false);
   const [calendarInteractionMessage, setCalendarInteractionMessage] = useState('');
-  const { staysPrice, calendarDays, calendarAvailable, calendarMessage: availabilityMessage, isCalculatingPrice } = usePropertyAvailability({
+  const { staysPrice, calendarDays, calendarAvailable, calendarMessage: availabilityMessage, isLoadingCalendar, isCalculatingPrice } = usePropertyAvailability({
     property,
     checkIn,
     checkOut,
@@ -300,6 +300,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                 <PropertyAvailabilityStrip
                   calendarDays={calendarDays}
                   calendarAvailable={calendarAvailable}
+                  isLoading={isLoadingCalendar}
                   calendarMessage={calendarInteractionMessage || availabilityMessage}
                   checkIn={checkIn}
                   checkOut={checkOut}

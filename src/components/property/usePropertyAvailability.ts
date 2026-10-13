@@ -23,6 +23,7 @@ export function usePropertyAvailability({
   const [calendarDays, setCalendarDays] = useState<StaysCalendarDay[]>([]);
   const [calendarAvailable, setCalendarAvailable] = useState(false);
   const [calendarMessage, setCalendarMessage] = useState('');
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
   const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export function usePropertyAvailability({
       setCalendarDays([]);
       setCalendarAvailable(false);
       setCalendarMessage('');
+      setIsLoadingCalendar(false);
       return;
     }
 
@@ -41,12 +43,14 @@ export function usePropertyAvailability({
 
     setCalendarAvailable(false);
     setCalendarMessage('Atualizando disponibilidade...');
+    setIsLoadingCalendar(true);
     crcnBackendApi
       .getAccommodationCalendar(property.staysListingId || property.id, calendarStart, calendarEnd)
       .then((days) => {
         if (!isMounted) return;
         setCalendarDays(days);
         setCalendarAvailable(days.length > 0);
+        setIsLoadingCalendar(false);
         setCalendarMessage(
           days.length > 0
             ? ''
@@ -95,6 +99,7 @@ export function usePropertyAvailability({
     calendarDays,
     calendarAvailable,
     calendarMessage,
+    isLoadingCalendar,
     isCalculatingPrice,
   };
 }

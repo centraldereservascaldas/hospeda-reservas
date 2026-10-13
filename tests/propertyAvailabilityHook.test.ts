@@ -54,6 +54,7 @@ test('property availability hook requests the Stays id and represents failed liv
         calendarAvailable: result.calendarAvailable,
         calendarMessage: result.calendarMessage,
         isCalculatingPrice: result.isCalculatingPrice,
+        isLoadingCalendar: result.isLoadingCalendar,
         staysPrice: result.staysPrice,
       }),
     );
@@ -64,6 +65,7 @@ test('property availability hook requests the Stays id and represents failed liv
     await waitFor(() => {
       assert.match(container.textContent || '', /Não foi possível confirmar a disponibilidade/);
       assert.match(container.textContent || '', /"isCalculatingPrice":false/);
+      assert.match(container.textContent || '', /"isLoadingCalendar":false/);
     });
     assert.deepEqual(calendarRequests, [
       [property.staysListingId || property.id, '2026-11-11', '2027-02-09'],

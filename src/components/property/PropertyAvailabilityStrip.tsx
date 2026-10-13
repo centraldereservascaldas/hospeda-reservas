@@ -4,6 +4,7 @@ import type { StaysCalendarDay } from '../../utils/staysAvailability';
 interface PropertyAvailabilityStripProps {
   calendarDays: StaysCalendarDay[];
   calendarAvailable: boolean;
+  isLoading: boolean;
   calendarMessage: string;
   checkIn: string;
   checkOut: string;
@@ -14,6 +15,7 @@ interface PropertyAvailabilityStripProps {
 export function PropertyAvailabilityStrip({
   calendarDays,
   calendarAvailable,
+  isLoading,
   calendarMessage,
   checkIn,
   checkOut,
@@ -41,7 +43,12 @@ export function PropertyAvailabilityStrip({
         </span>
       </div>
 
-      <div className="p-4 rounded-2xl border border-neutral-200 bg-neutral-50/70">
+      <div
+        role="region"
+        aria-label="Calendário de disponibilidade"
+        aria-busy={isLoading}
+        className="p-4 rounded-2xl border border-neutral-200 bg-neutral-50/70"
+      >
         <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 text-center text-xs">
           {calendarDays.slice(0, 14).map((day) => {
             const isSelectedIn = day.date === checkIn;
@@ -89,7 +96,12 @@ export function PropertyAvailabilityStrip({
           })}
         </div>
       </div>
-      {calendarMessage && (
+      {isLoading && (
+        <p className="mt-2 text-xs text-neutral-600" role="status">
+          Atualizando disponibilidade...
+        </p>
+      )}
+      {calendarMessage && !isLoading && (
         <p className="mt-2 text-xs text-amber-700" role="status">
           {calendarMessage}
         </p>
