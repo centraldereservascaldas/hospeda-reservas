@@ -52,7 +52,8 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: inputRef });
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    messagesEndRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
   };
 
   useEffect(() => {
@@ -157,7 +158,14 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
         </div>
 
         {/* Messages Body */}
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-white/10 backdrop-blur-sm p-3 sm:p-5">
+        <div
+          role="log"
+          aria-label="Conversa com Sofia"
+          aria-live="polite"
+          aria-relevant="additions text"
+          aria-atomic="false"
+          className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-white/10 backdrop-blur-sm p-3 sm:p-5"
+        >
           {messages.map((msg) => {
             const isSofia = msg.sender === 'sofia';
             return (
@@ -280,6 +288,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
           <input
             ref={inputRef}
             type="text"
+            aria-label="Mensagem para Sofia"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Pergunte sobre condomínios, regras de bebidas, ingressos..."
@@ -288,6 +297,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
 
           <button
             type="submit"
+            aria-label="Enviar mensagem para Sofia"
             disabled={!inputValue.trim() || isLoading}
             className="liquid-glass-accent p-3 rounded-2xl text-white font-bold shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:hover:scale-100 flex-shrink-0"
           >
