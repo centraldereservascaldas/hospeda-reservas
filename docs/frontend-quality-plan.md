@@ -25,7 +25,13 @@ As ações restantes de overlay foram extraídas de `App.tsx` para `src/hooks/us
 
 Quatro testes cobrem merge de filtros sem apagar datas, seleção após fechar Sofia, entrega do payload sem chamar checkout e prepend funcional no catálogo. `npm run lint`, `npm run format:check`, build e `git diff --check` passaram; suíte serial passou 178/178. Uma primeira rodada paralela reportou erro de carregamento de um arquivo; o arquivo isolado passou 14/14 e repetição serial completa passou 178/178, sem falha reproduzível. Build: JS inicial 365,39 kB / 108,86 kB gzip; CSS 107,37 / 15,78; Supabase 226,85 / 58,83; detalhe 51,65 / 13,84. Entrada cresceu 0,60 kB / 0,14 kB gzip ante o checkpoint anterior; são tamanhos de artefato, sem inferência de Web Vitals. Sem alterações em contratos Laravel/Express/Stays, autenticação, reserva ou checkout; nenhum checkout, reserva ou pagamento foi iniciado.
 
-Antes dos commits desta etapa, `HEAD=8edf608`, 149 commits acima da referência local `origin/main` (sem fetch). `.DS_Store` permanece preexistente e fora do stage. Header, navegação e closures simples de fechar modais ainda compõem `App.tsx`; verificar se justificam extração adicional, sem abstrações artificiais.
+Os commits locais desta etapa são `1f677c4` (código) e `6869c62` (documentação). Estado revalidado: `HEAD=6869c62`, 151 commits acima da referência local `origin/main` (sem fetch), sem alterações rastreadas pendentes; `.DS_Store` continua preexistente e não rastreado. Header, navegação e closures simples de fechar modais ainda compõem `App.tsx`; verificar se justificam extração adicional, sem abstrações artificiais.
+
+### Auditoria de detalhe em browser — 2026-10-13
+
+No Chromium local, a rota `/apartamento/LG02J` abriu o detalhe de Aquarius Flat Apto B 301. A consulta DOM confirmou viewport 1600×900 CSS px, documento sem overflow horizontal, diálogo com `role=dialog`, `aria-modal=true` e nome associado ao título. Abrindo o detalhe pelo cartão, 40 Tabs permaneceram dentro do diálogo; Escape fechou e devolveu foco ao botão “Ver detalhes de Aquarius Flat Apto B 301”. Uma abertura deep link anterior sem cartão devolveu foco ao landmark principal. No momento da captura, calendário/cotação ainda mostravam loading e avaliações exibiam estado de indisponibilidade da API; nenhuma ação de reserva/checkout foi acionada.
+
+O browser automatizado compartilhado estava ocupado, então não foi possível configurar 320/375 CSS px nem emular `prefers-reduced-motion` nesta rodada. A preferência observada era `no-preference`. Leitor de tela, contraste medido e comparação visual normal/reduzida permanecem pendentes. Este check atualiza evidência de teclado em desktop, mas não substitui os viewports estreitos e walkthroughs completos anteriores.
 
 ### Checkpoint histórico — composição dos overlays (2026-10-13)
 
