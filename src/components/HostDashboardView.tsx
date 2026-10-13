@@ -106,7 +106,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
 
       <nav className="flex gap-2 overflow-x-auto rounded-2xl border border-white/80 bg-white/55 p-2 backdrop-blur-xl" aria-label="Seções do painel do proprietário">
         {tabs.map((tab) => (
-          <button key={tab.id} type="button" onClick={() => setSection(tab.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:text-sm ${section === tab.id ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20' : 'text-neutral-700 hover:bg-white/90'}`}>
+          <button key={tab.id} type="button" aria-current={section === tab.id ? 'page' : undefined} onClick={() => setSection(tab.id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition sm:text-sm ${section === tab.id ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20' : 'text-neutral-700 hover:bg-white/90'}`}>
             {tab.icon}{tab.label}
           </button>
         ))}
@@ -115,7 +115,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
       {error && <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-900 sm:flex-row sm:items-center sm:justify-between"><span>{error}</span><button type="button" onClick={() => void loadDashboard()} className="inline-flex items-center gap-2 self-start rounded-xl border border-rose-200 bg-white px-3 py-2 font-bold"><RefreshCw className="h-4 w-4" /> Tentar novamente</button></div>}
 
       {loading ? (
-        <div className="flex min-h-64 items-center justify-center rounded-3xl border border-white/70 bg-white/55 text-sm font-semibold text-neutral-600 backdrop-blur-xl"><LoaderCircle className="mr-2 h-5 w-5 animate-spin text-orange-600" />Carregando dados da Stays…</div>
+        <div role="status" aria-live="polite" className="flex min-h-64 items-center justify-center rounded-3xl border border-white/70 bg-white/55 text-sm font-semibold text-neutral-600 backdrop-blur-xl"><LoaderCircle aria-hidden="true" className="mr-2 h-5 w-5 animate-spin text-orange-600" />Carregando dados da Stays…</div>
       ) : dashboard && (
         <>
           {section === 'overview' && <>
