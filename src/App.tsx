@@ -3,11 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Property, SearchFilters, Currency } from './types';
 import type { CalculatedPriceResponse } from './services/crcnBackendApi';
-import { CATEGORIES } from './data/mockProperties';
-import { matchesPropertyCategory } from './utils/propertyCategories';
 import { Header } from './components/Header';
 import { AuthCallbackNotice } from './components/account/AuthCallbackNotice';
 import { CategoryBar } from './components/search/CategoryBar';
@@ -18,13 +16,12 @@ import { SofiaAssistantTrigger } from './components/assistant/SofiaAssistantTrig
 import { getAuthCallbackError } from './utils/authCallback';
 import { MainContentRouter } from './components/MainContentRouter';
 import { DeferredModal } from './components/DeferredModal';
-import { buildCondominiumCatalog } from './utils/condominiumCatalog';
 import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
 import { useSearchUrlSync } from './hooks/useSearchUrlSync';
-import { countActivePropertyFilters, filterPropertiesBySearchFilters } from './utils/propertySearchFilters';
 import { scrollIntoViewRespectingMotion } from './utils/motion';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { useAccommodationCatalog } from './hooks/useAccommodationCatalog';
+import { useExploreCatalogViewModel } from './hooks/useExploreCatalogViewModel';
 import { useAccommodationRouting } from './hooks/useAccommodationRouting';
 import { useAccountWorkspaceData } from './hooks/useAccountWorkspaceData';
 import { useSupabaseSession } from './hooks/useSupabaseSession';
@@ -123,30 +120,21 @@ export default function App() {
     restoreSearchFromUrlRef,
   });
 
-  // Toggle Save Property
-  // Filter Properties Logic
-  const filteredProperties = useMemo(() => {
-    return filterPropertiesBySearchFilters(properties, filters);
-  }, [properties, filters]);
-
-  const availableCategories = useMemo(() =>
-    CATEGORIES.filter((category) => category.id === 'all'
-      || category.id === 'condominiums'
-      || category.id === 'pools_24h'
-      || category.id === filters.category
-      || properties.some((property) => matchesPropertyCategory(property, category.id))),
-  [properties, filters.category]);
-
-  const condominiums = useMemo(() => buildCondominiumCatalog(properties), [properties]);
-  const isCondominiumView = filters.category === 'condominiums';
-  const catalogStatus = catalogLoading && properties.length === 0
-    ? 'loading'
-    : catalogLoadError && properties.length === 0
-      ? 'error'
-      : 'ready';
-
-  // Active filter count
-  const activeFilterCount = useMemo(() => countActivePropertyFilters(filters), [filters]);
+  const {
+    filteredProperties,
+    availableCategories,
+    condominiums,
+    isCondominiumView,
+    catalogStatus,
+    activeFilterCount,
+    savedPropertiesList,
+  } = useExploreCatalogViewModel({
+    properties,
+    filters,
+    savedPropertyIds,
+    catalogLoading,
+    catalogLoadError,
+  });
 
   // Handlers
   const handleAddNewProperty = (newProp: Property) => {
@@ -158,10 +146,6 @@ export default function App() {
     setFilters,
     restoreSearchFromUrlRef,
   });
-
-  const savedPropertiesList = useMemo(() => {
-    return properties.filter((p) => savedPropertyIds.includes(p.id));
-  }, [properties, savedPropertyIds]);
 
   return (
     <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 selection:bg-orange-500/20 selection:text-orange-950">
