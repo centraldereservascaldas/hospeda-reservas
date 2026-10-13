@@ -20,6 +20,7 @@ import { isCalendarRangeAvailable } from '../utils/staysAvailability';
 import type { StaysCalendarDay } from '../utils/staysAvailability';
 import { calculatePropertyPricing } from '../utils/propertyPricing';
 import { getSyncedPropertyReviews } from '../utils/propertyReviews';
+import { scrollIntoViewRespectingMotion } from '../utils/motion';
 import { PropertyReviewsSection } from './PropertyReviewsSection';
 import { PropertyAmenitiesSection } from './PropertyAmenitiesSection';
 import { PropertyPoliciesSection } from './PropertyPoliciesSection';
@@ -227,7 +228,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const staysReviews = getSyncedPropertyReviews(property);
   const hasReviews = staysReviews.length > 0;
   const scrollToReviews = () => {
-    document.getElementById('property-reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const reviewsSection = document.getElementById('property-reviews');
+    if (reviewsSection) scrollIntoViewRespectingMotion(reviewsSection, { block: 'start' });
   };
 
   const nights = calculateNights(checkIn, checkOut);

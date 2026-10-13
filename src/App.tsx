@@ -22,6 +22,7 @@ import { getSurpriseDateCandidates } from './utils/surpriseDates';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
 import { createDefaultSearchFilters, mergeSearchFiltersIntoUrl, parseSearchFilters } from './utils/searchUrlState';
 import { countActivePropertyFilters, filterPropertiesBySearchFilters } from './utils/propertySearchFilters';
+import { scrollIntoViewRespectingMotion } from './utils/motion';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { 
   Compass, 
@@ -554,7 +555,7 @@ export default function App() {
     }
     const catalogEl = document.getElementById('stays-apartments-catalog');
     if (catalogEl) {
-      catalogEl.scrollIntoView({ behavior: 'smooth' });
+      scrollIntoViewRespectingMotion(catalogEl);
     }
   }, []);
 
@@ -985,7 +986,7 @@ export default function App() {
           }
           setIsSofiaOpen(false);
           const catalogEl = document.getElementById('stays-apartments-catalog');
-          if (catalogEl) catalogEl.scrollIntoView({ behavior: 'smooth' });
+          if (catalogEl) scrollIntoViewRespectingMotion(catalogEl);
         }}
       />
       </DeferredModal>

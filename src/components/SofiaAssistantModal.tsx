@@ -9,6 +9,7 @@ import {
 import { Property, Currency } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
 import { formatCurrency } from '../utils/formatters';
+import { scrollIntoViewRespectingMotion } from '../utils/motion';
 import { LogoCRCN } from './LogoCRCN';
 import { useDialogFocus } from './useDialogFocus';
 
@@ -52,8 +53,8 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: inputRef });
 
   const scrollToBottom = () => {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    messagesEndRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
+    const messagesEnd = messagesEndRef.current;
+    if (messagesEnd) scrollIntoViewRespectingMotion(messagesEnd);
   };
 
   useEffect(() => {
