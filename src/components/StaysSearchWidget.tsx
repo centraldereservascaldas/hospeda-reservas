@@ -145,6 +145,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({ label, labelId, val
       {isOpen && createPortal(
         <div
           ref={popoverRef}
+          data-dialog-focus-portal
           role="dialog"
           aria-label={`Calendário de ${label.toLowerCase()}`}
           className="fixed z-[1000] rounded-3xl border border-white/90 bg-white/80 p-4 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl"
@@ -317,6 +318,7 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
       {isOpen && createPortal(
         <div
           ref={menuRef}
+          data-dialog-focus-portal
           role="group"
           aria-label="Opções de filtro"
           className="fixed z-[1000] overflow-hidden rounded-2xl border border-white/90 bg-white/78 p-2 text-neutral-800 shadow-[0_18px_55px_-16px_rgba(15,23,42,0.24)] backdrop-blur-2xl"

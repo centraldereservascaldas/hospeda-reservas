@@ -12,10 +12,22 @@ const focusableSelector = [
 const openDialogs: HTMLElement[] = [];
 
 function focusableElements(dialog: HTMLElement): HTMLElement[] {
-  return Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector)).filter((element) => {
+  const elements = [
+    ...dialog.querySelectorAll<HTMLElement>(focusableSelector),
+    ...Array.from(document.querySelectorAll<HTMLElement>('[data-dialog-focus-portal]')).flatMap(
+      (portal) => Array.from(portal.querySelectorAll<HTMLElement>(focusableSelector)),
+    ),
+  ];
+  return elements.filter((element) => {
     const style = window.getComputedStyle(element);
     return !element.hidden && style.visibility !== 'hidden' && style.display !== 'none' && element.tabIndex >= 0;
   });
+}
+
+function isInDialogOrPortal(dialog: HTMLElement, target: EventTarget | null): boolean {
+  if (!(target instanceof Node)) return false;
+  if (dialog.contains(target)) return true;
+  return target instanceof Element && !!target.closest('[data-dialog-focus-portal]');
 }
 
 interface DialogFocusOptions {
@@ -52,13 +64,14 @@ export function useDialogFocus(
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!isTopDialog() || isInAnotherDialog(event.target)) return;
       if (event.key === 'Escape' && closeOnEscape) {
+        if (event.target instanceof Element && event.target.closest('[data-dialog-focus-portal]')) return;
         if (hasNestedDialog()) return;
         event.preventDefault();
         event.stopPropagation();
         onCloseRef.current();
         return;
       }
-      if (event.key !== 'Tab') return;
+      if (event.key !== 'Tab' || !isInDialogOrPortal(dialog, event.target)) return;
 
       const focusable = focusableElements(dialog);
       if (focusable.length === 0) {
@@ -66,20 +79,16 @@ export function useDialogFocus(
         dialog.focus();
         return;
       }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (event.shiftKey && (active === first || !dialog.contains(active))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
-        event.preventDefault();
-        first.focus();
-      }
+      event.preventDefault();
+      const activeIndex = focusable.indexOf(document.activeElement as HTMLElement);
+      const direction = event.shiftKey ? -1 : 1;
+      const startIndex = activeIndex === -1 ? (event.shiftKey ? 0 : -1) : activeIndex;
+      const nextIndex = (startIndex + direction + focusable.length) % focusable.length;
+      focusable[nextIndex].focus();
     };
 
     const handleFocusIn = (event: FocusEvent) => {
-      if (!isTopDialog() || dialog.contains(event.target as Node) || isInAnotherDialog(event.target)) return;
+      if (!isTopDialog() || isInDialogOrPortal(dialog, event.target) || isInAnotherDialog(event.target)) return;
       (focusableElements(dialog)[0] ?? dialog).focus();
     };
 
