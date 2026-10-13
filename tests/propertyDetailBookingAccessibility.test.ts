@@ -106,6 +106,41 @@ test('booking calendar names full dates and exposes the active date field', asyn
   }
 });
 
+test('property detail header exposes its title and sends review activation to the reviews section', async () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalCalculatePrice = crcnBackendApi.calculatePrice;
+  crcnBackendApi.getAccommodationCalendar = async () => [];
+  crcnBackendApi.calculatePrice = async () => null;
+  try {
+    let didScroll = false;
+    const { getByRole } = render(
+      React.createElement(PropertyDetailModal, {
+        property: STAYS_NET_APARTMENTS[0]!,
+        initialCheckIn: '2026-11-11',
+        initialCheckOut: '2026-11-15',
+        initialGuests: { adults: 2, children: 0, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking: () => {},
+      }),
+    );
+    const reviews = document.getElementById('property-reviews');
+    assert.ok(reviews);
+    reviews.scrollIntoView = () => {
+      didScroll = true;
+    };
+    const title = getByRole('heading', { level: 1, name: STAYS_NET_APARTMENTS[0]!.title });
+    assert.ok(title);
+    fireEvent.click(getByRole('button', { name: /avaliações dos hóspedes/i }));
+    assert.equal(didScroll, true);
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
+});
+
 test('photo gallery supports keyboard navigation and returns focus to its opener', async () => {
   const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
   const originalCalculatePrice = crcnBackendApi.calculatePrice;
