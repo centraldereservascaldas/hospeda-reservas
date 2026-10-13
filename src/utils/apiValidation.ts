@@ -163,7 +163,9 @@ export const isProperty = (value: unknown): value is Property => {
       ));
   return (
     typeof value.id === 'string' &&
+    value.id.trim() !== '' &&
     typeof value.title === 'string' &&
+    value.title.trim() !== '' &&
     typeof value.subtitle === 'string' &&
     typeof value.description === 'string' &&
     typeof value.category === 'string' &&
@@ -177,11 +179,17 @@ export const isProperty = (value: unknown): value is Property => {
     typeof value.location.neighborhood === 'string' &&
     typeof value.location.address === 'string' &&
     isFiniteNumber(value.location.lat) &&
+    value.location.lat >= -90 &&
+    value.location.lat <= 90 &&
     isFiniteNumber(value.location.lng) &&
+    value.location.lng >= -180 &&
+    value.location.lng <= 180 &&
     isNonNegativeNumber(value.pricePerNight) &&
     isNonNegativeNumber(value.cleaningFee) &&
     isNonNegativeNumber(value.serviceFeeRate) &&
     isFiniteNumber(value.rating) &&
+    value.rating >= 0 &&
+    value.rating <= 5 &&
     isNonNegativeNumber(value.reviewCount) &&
     Number.isInteger(value.reviewCount) &&
     typeof value.isSuperhost === 'boolean' &&
@@ -305,12 +313,15 @@ export const isReservation = (value: unknown): value is Reservation =>
   isFiniteNumber(value.nights) &&
   Number.isInteger(value.nights) &&
   value.nights >= 1 &&
+  value.nights ===
+    (Date.parse(`${value.checkOut}T00:00:00.000Z`) - Date.parse(`${value.checkIn}T00:00:00.000Z`)) /
+      86400000 &&
   isReservationGuests(value.guests) &&
-  isFiniteNumber(value.pricePerNight) &&
-  isFiniteNumber(value.cleaningFee) &&
-  isFiniteNumber(value.serviceFee) &&
-  isFiniteNumber(value.discount) &&
-  isFiniteNumber(value.totalAmount) &&
+  isNonNegativeNumber(value.pricePerNight) &&
+  isNonNegativeNumber(value.cleaningFee) &&
+  isNonNegativeNumber(value.serviceFee) &&
+  isNonNegativeNumber(value.discount) &&
+  isNonNegativeNumber(value.totalAmount) &&
   (value.paymentMethod === 'pix' ||
     value.paymentMethod === 'credit_card' ||
     value.paymentMethod === 'apple_pay') &&

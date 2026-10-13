@@ -125,6 +125,16 @@ const isSuggestedFilters = (
   (value.to === undefined || isIsoDate(value.to)) &&
   (value.from === undefined || value.to === undefined || value.to > value.from);
 
+const getStayNights = (from: string, to: string): number => {
+  if (!isIsoDate(from) || !isIsoDate(to) || to <= from) return -1;
+  return (Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86400000;
+};
+
+const matchesRequestedListing = (quote: CheckoutQuoteUpdate, listingId: string): boolean =>
+  quote.staysListingId !== undefined
+    ? quote.staysListingId === listingId
+    : quote.listingId === listingId;
+
 export type OwnerAccessStatus = 'none' | 'pending' | 'approved' | 'suspended';
 
 export interface OwnerAccessRequest {
@@ -425,6 +435,13 @@ class CrcnBackendApiService {
           json.code === 'quote_changed' && isCheckoutQuoteUpdate(json.quote)
             ? json.quote
             : undefined;
+        if (
+          json.code === 'quote_changed' &&
+          (!quote ||
+            !matchesRequestedListing(quote, payload.listingId) ||
+            quote.nights !== getStayNights(payload.from, payload.to))
+        )
+          return null;
         return {
           success: false as const,
           ...(typeof json.code === 'string' ? { code: json.code } : {}),
@@ -437,7 +454,9 @@ class CrcnBackendApiService {
         json.status !== 'checkout_pending' ||
         !isSafeStaysCheckoutUrl(json.checkoutUrl) ||
         !isSafeStaysCheckoutUrl(json.redirectUrl) ||
-        !quote
+        !quote ||
+        !matchesRequestedListing(quote, payload.listingId) ||
+        quote.nights !== getStayNights(payload.from, payload.to)
       )
         return null;
       return {

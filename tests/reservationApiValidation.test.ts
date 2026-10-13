@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { crcnBackendApi } from '../src/services/crcnBackendApi.ts';
+import { isProperty, isReservation } from '../src/utils/apiValidation.ts';
+import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
 
 const reservation = {
   id: 'reservation-1',
@@ -64,6 +66,22 @@ test('rejects malformed reservation data instead of casting it to the UI type', 
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('reservation validation rejects date-night mismatches and negative amounts', () => {
+  assert.equal(isReservation({ ...reservation, nights: 3 }), false);
+  assert.equal(isReservation({ ...reservation, totalAmount: -850 }), false);
+  assert.equal(isReservation({ ...reservation, pricePerNight: -350 }), false);
+  assert.equal(isReservation(reservation), true);
+});
+
+test('property validation enforces semantic title, rating, and coordinate bounds', () => {
+  const property = STAYS_NET_APARTMENTS[0]!;
+  assert.equal(isProperty(property), true);
+  assert.equal(isProperty({ ...property, title: '  ' }), false);
+  assert.equal(isProperty({ ...property, rating: 5.1 }), false);
+  assert.equal(isProperty({ ...property, location: { ...property.location, lat: 91 } }), false);
+  assert.equal(isProperty({ ...property, location: { ...property.location, lng: -181 } }), false);
 });
 
 test('validates owner access status values returned by the authenticated API', async () => {
@@ -295,6 +313,88 @@ test('validates the remaining backend response boundaries', async () => {
     const sofia = await crcnBackendApi.chatWithSofia('Oi');
     assert.equal(sofia.success, false);
     assert.deepEqual(sofia.matchedProperties, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('checkout rejects quotes for another listing or stay length', async () => {
+  const originalFetch = globalThis.fetch;
+  const payload = {
+    listingId: 'JQ08G',
+    from: '2026-10-13',
+    to: '2026-10-15',
+    guests: { adults: 1, children: 0, infants: 0, pets: 0 },
+    quoteTotal: 850,
+  };
+  const quote = {
+    listingId: 'property-internal-id',
+    staysListingId: 'OTHER',
+    nights: 2,
+    dailyRate: 350,
+    baseTotal: 700,
+    cleaningFee: 150,
+    serviceFee: 0,
+    discount: 0,
+    total: 850,
+    currency: 'BRL',
+    source: 'stays-live',
+  };
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        success: true,
+        status: 'checkout_pending',
+        checkoutUrl: 'https://crcn.stays.net/checkout/abc',
+        redirectUrl: 'https://crcn.stays.net/checkout/abc',
+        quote,
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+
+  try {
+    assert.equal(await crcnBackendApi.createCheckout(payload, 'test-token'), null);
+
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          status: 'checkout_pending',
+          checkoutUrl: 'https://crcn.stays.net/checkout/abc',
+          redirectUrl: 'https://crcn.stays.net/checkout/abc',
+          quote: { ...quote, staysListingId: 'JQ08G', nights: 1 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    assert.equal(await crcnBackendApi.createCheckout(payload, 'test-token'), null);
+
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          status: 'checkout_pending',
+          checkoutUrl: 'https://crcn.stays.net/checkout/abc',
+          redirectUrl: 'https://crcn.stays.net/checkout/abc',
+          quote: { ...quote, staysListingId: 'JQ08G', nights: 2 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    const validMappedQuote = await crcnBackendApi.createCheckout(payload, 'test-token');
+    assert.equal(validMappedQuote?.success, true);
+
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          success: false,
+          code: 'quote_changed',
+          quote: { ...quote, staysListingId: 'OTHER' },
+        }),
+        {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    assert.equal(await crcnBackendApi.createCheckout(payload, 'test-token'), null);
   } finally {
     globalThis.fetch = originalFetch;
   }
