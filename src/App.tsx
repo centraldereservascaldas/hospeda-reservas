@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Property, SearchFilters, Currency } from './types';
 import type { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { CATEGORIES } from './data/mockProperties';
@@ -16,7 +16,7 @@ import { AppFooter } from './components/AppFooter';
 import { SofiaAssistantTrigger } from './components/assistant/SofiaAssistantTrigger';
 import { getAuthCallbackError } from './utils/authCallback';
 import { MainContentRouter } from './components/MainContentRouter';
-import { LazyFeatureBoundary } from './components/LazyFeatureBoundary';
+import { DeferredModal } from './components/DeferredModal';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
 import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
 import { useSearchUrlSync } from './hooks/useSearchUrlSync';
@@ -41,14 +41,6 @@ const SearchModal = React.lazy(() => import('./components/search/SearchModal').t
 const FilterModal = React.lazy(() => import('./components/search/FilterModal').then(({ FilterModal }) => ({ default: FilterModal })));
 const CreateListingModal = React.lazy(() => import('./components/owner/CreateListingModal').then(({ CreateListingModal }) => ({ default: CreateListingModal })));
 const SofiaAssistantModal = React.lazy(() => import('./components/assistant/SofiaAssistantModal').then(({ SofiaAssistantModal }) => ({ default: SofiaAssistantModal })));
-
-const DeferredModal: React.FC<{ active: boolean; children: React.ReactNode }> = ({ active, children }) => {
-  const [hasOpened, setHasOpened] = useState(active);
-  useEffect(() => {
-    if (active) setHasOpened(true);
-  }, [active]);
-  return hasOpened ? <LazyFeatureBoundary overlay={active} visible={active}>{children}</LazyFeatureBoundary> : null;
-};
 
 export default function App() {
   const { properties, setProperties, catalogLoading, catalogLoadError } =
