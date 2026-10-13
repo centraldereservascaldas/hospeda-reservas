@@ -552,6 +552,7 @@ export default function App() {
     checkIn: string;
     checkOut: string;
     persons: number;
+    guests?: SearchFilters['guests'];
     destination?: string;
     propertyId?: string;
     surpriseMe?: boolean;
@@ -562,7 +563,7 @@ export default function App() {
       ...(searchParams.surpriseMe ? {} : { checkIn: searchParams.checkIn, checkOut: searchParams.checkOut }),
       destination: searchParams.surpriseMe ? '' : searchParams.destination || '',
       destinationPropertyId: searchParams.surpriseMe ? '' : searchParams.propertyId || '',
-      guests: {
+      guests: searchParams.guests ?? {
         adults: searchParams.persons,
         children: 0,
         infants: 0,
@@ -638,6 +639,7 @@ export default function App() {
       checkIn: restoredFilters.checkIn,
       checkOut: restoredFilters.checkOut,
       persons: restoredFilters.guests.adults + restoredFilters.guests.children,
+      guests: restoredFilters.guests,
       destination: restoredFilters.destination,
       propertyId: restoredFilters.destinationPropertyId,
     });
@@ -656,6 +658,7 @@ export default function App() {
       checkIn: initialFilters.checkIn,
       checkOut: initialFilters.checkOut,
       persons: initialFilters.guests.adults + initialFilters.guests.children,
+      guests: initialFilters.guests,
       destination: initialFilters.destination,
       propertyId: initialFilters.destinationPropertyId,
     });
