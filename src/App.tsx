@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Property, SearchFilters, Currency } from './types';
-import { CalculatedPriceResponse } from './services/crcnBackendApi';
+import type { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { CATEGORIES } from './data/mockProperties';
 import { matchesPropertyCategory } from './utils/propertyCategories';
 import { Header } from './components/Header';
@@ -18,7 +18,6 @@ import { MobileBottomNavigation, resolveMobileNavigationTarget } from './compone
 import type { MainView } from './components/MobileBottomNavigation';
 import { AppFooter } from './components/AppFooter';
 import { SofiaAssistantTrigger } from './components/SofiaAssistantTrigger';
-import { crcnBackendApi } from './services/crcnBackendApi';
 import { getAuthCallbackError } from './utils/authCallback';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
 import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
@@ -31,6 +30,7 @@ import { useAccommodationRouting } from './hooks/useAccommodationRouting';
 import { useAccountWorkspaceData } from './hooks/useAccountWorkspaceData';
 import { useSupabaseSession } from './hooks/useSupabaseSession';
 import { useAccommodationSearch } from './hooks/useAccommodationSearch';
+import { useAccountActions } from './hooks/useAccountActions';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
@@ -115,7 +115,6 @@ export default function App() {
   const [currentView, setCurrentView] = useState<MainView>('explore');
   const currentViewRef = useRef(currentView);
   currentViewRef.current = currentView;
-  const [ownerRequestLoading, setOwnerRequestLoading] = useState(false);
   const {
     accountSession,
     accountModalMode,
@@ -133,6 +132,22 @@ export default function App() {
       currentViewRef,
       setCurrentView,
     });
+  const {
+    ownerRequestLoading,
+    handleCancelReservation,
+    handleRequestOwnerAccess,
+    handleSetCurrentView,
+    handleSignOut,
+  } = useAccountActions({
+    accessToken: accountSession?.access_token,
+    ownerAccessStatus,
+    isOwnerAdmin,
+    setReservations,
+    setOwnerAccessStatus,
+    setAccountModalMode,
+    setAuthCallbackNotice,
+    setCurrentView,
+  });
 
   // Modals & Active selections
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -209,46 +224,6 @@ export default function App() {
     setProperties([newProp, ...properties]);
   };
 
-  const handleCancelReservation = async (reservationId: string) => {
-    if (!accountSession?.access_token) throw new Error('Entre na sua conta para solicitar o cancelamento.');
-    await crcnBackendApi.cancelMyReservation(reservationId, accountSession.access_token);
-    setReservations((current) => current.map((reservation) =>
-      reservation.id === reservationId ? { ...reservation, status: 'cancelled' } : reservation
-    ));
-    try {
-      const refreshed = await crcnBackendApi.getMyReservations(accountSession.access_token);
-      setReservations(refreshed.map((reservation) =>
-        reservation.id === reservationId ? { ...reservation, status: 'cancelled' } : reservation
-      ));
-    } catch {
-      // Stays has already confirmed the cancellation; keep that confirmed status visible.
-    }
-  };
-
-  const handleRequestOwnerAccess = async () => {
-    if (!accountSession?.access_token) {
-      setAccountModalMode('login');
-      return;
-    }
-    setOwnerRequestLoading(true);
-    try {
-      const status = await crcnBackendApi.requestOwnerAccess(accountSession.access_token);
-      setOwnerAccessStatus(status);
-      if (status === 'pending') setAuthCallbackNotice('Solicitação de acesso ao painel de proprietário enviada para análise.');
-    } catch (error) {
-      setAuthCallbackNotice(error instanceof Error ? error.message : 'Não foi possível solicitar acesso ao painel.');
-      setOwnerAccessStatus('unavailable');
-    } finally {
-      setOwnerRequestLoading(false);
-    }
-  };
-
-  const handleSetCurrentView = (view: 'explore' | 'trips' | 'wishlists' | 'host' | 'ownerAdmin') => {
-    if (view === 'host' && ownerAccessStatus !== 'approved') return;
-    if (view === 'ownerAdmin' && !isOwnerAdmin) return;
-    setCurrentView(view);
-  };
-
   const { handleStaysWidgetSearch } = useAccommodationSearch({
     setProperties,
     setFilters,
@@ -281,12 +256,7 @@ export default function App() {
         accountEmail={accountSession?.user.email || ''}
         isAccountConnected={Boolean(accountSession?.user.email_confirmed_at)}
         onOpenAccount={setAccountModalMode}
-        onSignOut={async () => {
-          const { supabase } = await import('./services/supabase');
-          if (!supabase) throw new Error('Serviço de autenticação indisponível.');
-          const { error } = await supabase.auth.signOut();
-          if (error) throw error;
-        }}
+        onSignOut={handleSignOut}
         ownerAccessStatus={ownerAccessStatus}
         ownerRequestLoading={ownerRequestLoading}
         onRequestOwnerAccess={handleRequestOwnerAccess}
