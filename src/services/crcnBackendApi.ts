@@ -5,6 +5,7 @@ import {
   isFiniteNumber,
   isProperty,
   isRecord,
+  isReservation,
   isStaysCalendarDay,
 } from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
@@ -320,9 +321,18 @@ class CrcnBackendApiService {
     const res = await fetch('/api/my-reservations', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    const json = await res.json();
-    if (!res.ok || !json.success) throw new Error(json.message || 'Não foi possível carregar suas reservas.');
-    return Array.isArray(json.data) ? json.data as Reservation[] : [];
+    const json: unknown = await res.json();
+    if (!res.ok || !isRecord(json) || json.success !== true) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível carregar suas reservas.',
+      );
+    }
+    if (!Array.isArray(json.data) || !json.data.every(isReservation)) {
+      throw new Error('A API retornou dados inválidos para reservas.');
+    }
+    return json.data;
   }
 
   public async cancelMyReservation(reservationId: string, accessToken: string): Promise<void> {

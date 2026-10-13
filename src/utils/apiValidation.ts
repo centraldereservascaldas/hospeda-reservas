@@ -1,4 +1,4 @@
-import type { Property } from '../types';
+import type { Property, Reservation } from '../types';
 import type { CalculatedPriceResponse } from '../services/crcnBackendApi';
 import type { StaysCalendarDay } from './staysAvailability';
 
@@ -118,3 +118,53 @@ export const isCalculatedPriceResponse = (value: unknown): value is CalculatedPr
   typeof value.breakdown.cleaningFeeText === 'string' &&
   typeof value.breakdown.serviceFeeText === 'string' &&
   typeof value.breakdown.totalText === 'string';
+
+export const isIsoDate = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+};
+
+const isReservationGuests = (value: unknown): value is Reservation['guests'] =>
+  isRecord(value) &&
+  isFiniteNumber(value.adults) && Number.isInteger(value.adults) && value.adults >= 1 &&
+  isFiniteNumber(value.children) && Number.isInteger(value.children) && value.children >= 0 &&
+  isFiniteNumber(value.infants) && Number.isInteger(value.infants) && value.infants >= 0 &&
+  isFiniteNumber(value.pets) && Number.isInteger(value.pets) && value.pets >= 0;
+
+export const isReservation = (value: unknown): value is Reservation =>
+  isRecord(value) &&
+  typeof value.id === 'string' && value.id.trim() !== '' &&
+  typeof value.code === 'string' &&
+  typeof value.propertyId === 'string' &&
+  typeof value.propertyTitle === 'string' &&
+  typeof value.propertyLocation === 'string' &&
+  typeof value.propertyImage === 'string' &&
+  isIsoDate(value.checkIn) &&
+  isIsoDate(value.checkOut) && value.checkOut > value.checkIn &&
+  isFiniteNumber(value.nights) && Number.isInteger(value.nights) && value.nights >= 1 &&
+  isReservationGuests(value.guests) &&
+  isFiniteNumber(value.pricePerNight) &&
+  isFiniteNumber(value.cleaningFee) &&
+  isFiniteNumber(value.serviceFee) &&
+  isFiniteNumber(value.discount) &&
+  isFiniteNumber(value.totalAmount) &&
+  (value.paymentMethod === 'pix' ||
+    value.paymentMethod === 'credit_card' ||
+    value.paymentMethod === 'apple_pay') &&
+  (value.status === 'confirmed' || value.status === 'cancelled' || value.status === 'completed') &&
+  typeof value.createdAt === 'string' &&
+  typeof value.hostName === 'string' &&
+  typeof value.guestName === 'string' &&
+  typeof value.guestEmail === 'string' &&
+  typeof value.guestPhone === 'string' &&
+  (value.installments === undefined ||
+    (isFiniteNumber(value.installments) &&
+      Number.isInteger(value.installments) &&
+      value.installments >= 1)) &&
+  (value.staysReservationId === undefined || typeof value.staysReservationId === 'string') &&
+  (value.staysLocator === undefined || typeof value.staysLocator === 'string') &&
+  (value.staysSyncStatus === undefined ||
+    value.staysSyncStatus === 'synced' ||
+    value.staysSyncStatus === 'pending' ||
+    value.staysSyncStatus === 'offline');
