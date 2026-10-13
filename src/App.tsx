@@ -15,6 +15,7 @@ import { CategoryBar } from './components/CategoryBar';
 import { PropertyCard } from './components/PropertyCard';
 import { CondominiumDirectory } from './components/CondominiumDirectory';
 import { StaysSearchWidget } from './components/StaysSearchWidget';
+import { ActiveSearchFilters } from './components/ActiveSearchFilters';
 import { LogoCRCN } from './components/LogoCRCN';
 import { crcnBackendApi } from './services/crcnBackendApi';
 import { getAuthCallbackError } from './utils/authCallback';
@@ -29,7 +30,6 @@ import {
   Heart, 
   Briefcase, 
   Sparkles, 
-  MapPin, 
   Globe, 
   ShieldCheck, 
   Search 
@@ -661,39 +661,13 @@ export default function App() {
               />
             </div>}
 
-            {/* Filter pills if active */}
-            {!isCondominiumView && (filters.destination || activeFilterCount > 0) && (
-              <div className="mb-6 flex flex-wrap items-center gap-2 text-xs">
-                <span className="font-extrabold text-neutral-800">Filtros ativos:</span>
-                {filters.destination && (
-                  <span className="px-3 py-1.5 rounded-full liquid-glass-pill text-neutral-900 font-bold border border-white/80 shadow-xs flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-orange-500" />
-                    <span>{filters.destination}</span>
-                    <button
-                      onClick={() => setFilters({ ...filters, destination: '' })}
-                      className="text-neutral-400 hover:text-neutral-900 ml-1 font-bold"
-                    >
-                      ×
-                    </button>
-                  </span>
-                )}
-                {filters.superhostOnly && (
-                  <span className="px-3 py-1.5 rounded-full liquid-glass-pill text-neutral-900 font-bold border border-white/80 shadow-xs">
-                    Apenas Superhost
-                  </span>
-                )}
-                {filters.instantBookOnly && (
-                  <span className="px-3 py-1.5 rounded-full liquid-glass-pill text-neutral-900 font-bold border border-white/80 shadow-xs">
-                    Reserva Imediata
-                  </span>
-                )}
-                <button
-                  onClick={() => setFilters(defaultFilters)}
-                  className="text-orange-700 font-extrabold underline hover:text-orange-800 cursor-pointer ml-2"
-                >
-                  Limpar todos os filtros
-                </button>
-              </div>
+            {!isCondominiumView && (
+              <ActiveSearchFilters
+                filters={filters}
+                activeFilterCount={activeFilterCount}
+                defaultFilters={defaultFilters}
+                onChange={setFilters}
+              />
             )}
 
             {/* View Mode: Grid or Interactive Map */}
