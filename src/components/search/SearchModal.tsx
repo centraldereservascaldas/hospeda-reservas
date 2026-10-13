@@ -248,7 +248,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               onClick={() => setActiveTab('stays_engine')}
               className={`px-4 py-2 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${focusRing} ${
                 activeTab === 'stays_engine'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm font-bold'
+                  ? 'bg-gradient-to-r from-orange-700 to-amber-700 text-white shadow-sm font-bold'
                   : 'text-orange-800 hover:text-orange-950 font-bold'
               }`}
             >
@@ -330,7 +330,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               </div>
 
               <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-3">
                   Destinos em destaque
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -408,7 +408,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
               {/* Quick Preset Buttons */}
               <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-neutral-400 mb-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">
                   Atalhos rápidos
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -600,7 +600,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
           <button
             onClick={handleApply}
-            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white text-sm font-bold shadow-md shadow-orange-500/30 hover:shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20 ${focusRing}`}
+            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-orange-700 to-amber-700 text-white text-sm font-bold shadow-md shadow-orange-500/30 hover:shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20 ${focusRing}`}
           >
             <Search className="w-4 h-4 stroke-[2.5]" />
             <span>Buscar hospedagens termais</span>

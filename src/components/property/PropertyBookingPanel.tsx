@@ -79,7 +79,7 @@ export function PropertyBookingPanel({
           <div className="flex items-center gap-1 text-xs font-semibold text-neutral-800 bg-white/60 px-2 py-0.5 rounded-lg border border-white/80 shadow-2xs">
             <Star className="h-3.5 w-3.5 fill-neutral-900 text-neutral-900" />
             <span>{property.rating.toFixed(2)}</span>
-            <span className="text-neutral-400">({property.reviewCount})</span>
+            <span className="text-neutral-600">({property.reviewCount})</span>
           </div>
         )}
       </div>
@@ -155,7 +155,7 @@ export function PropertyBookingPanel({
           isCalculatingPrice ||
           !selectedRangeAvailable
         }
-        className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 border border-white/30 backdrop-blur-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:from-neutral-200 disabled:via-neutral-200 disabled:to-neutral-200 disabled:text-neutral-700 disabled:shadow-none disabled:border-neutral-300 disabled:hover:scale-100 disabled:cursor-not-allowed"
+        className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-700 via-amber-700 to-orange-800 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 border border-white/30 backdrop-blur-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:from-neutral-200 disabled:via-neutral-200 disabled:to-neutral-200 disabled:text-neutral-700 disabled:shadow-none disabled:border-neutral-300 disabled:hover:scale-100 disabled:cursor-not-allowed"
       >
         <span>
           {isCalculatingPrice

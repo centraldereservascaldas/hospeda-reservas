@@ -64,3 +64,31 @@ test('map toggle name follows the action and category pagination announces its p
   fireEvent.click(getByRole('button', { name: /Ver outros filtros/ }));
   assert.ok(getByRole('button', { name: /Ver filtros anteriores; página 2 de 3/ }));
 });
+
+test('pagination keeps only visible categories in the tab order and moves focus to the new page', () => {
+  const { container, getByRole } = renderCategoryBar();
+  const categories = Array.from(
+    container.querySelectorAll<HTMLButtonElement>('[data-category-index]'),
+  );
+
+  assert.deepEqual(
+    categories.map((button) => button.tabIndex),
+    [0, -1, -1],
+  );
+  fireEvent.click(getByRole('button', { name: /Ver outros filtros/ }));
+
+  assert.deepEqual(
+    categories.map((button) => button.tabIndex),
+    [-1, 0, -1],
+  );
+  assert.equal(document.activeElement, categories[1]);
+  assert.equal(categories[0].getAttribute('aria-hidden'), 'true');
+  assert.equal(categories[1].getAttribute('aria-hidden'), 'false');
+
+  fireEvent.click(getByRole('button', { name: /Ver outros filtros/ }));
+  assert.deepEqual(
+    categories.map((button) => button.tabIndex),
+    [-1, -1, 0],
+  );
+  assert.equal(document.activeElement, categories[2]);
+});

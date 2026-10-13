@@ -316,7 +316,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </div>
                       {authError && <p role="alert" className="text-xs font-semibold text-red-700">{authError}</p>}
                       {authMessage && <p role="status" className="text-xs font-semibold text-emerald-800">{authMessage}</p>}
-                      <button type="submit" disabled={isAuthProcessing} className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 text-sm font-extrabold text-white shadow-md shadow-orange-500/20 disabled:cursor-wait disabled:opacity-60">
+                      <button type="submit" disabled={isAuthProcessing} className="w-full rounded-xl bg-gradient-to-r from-orange-700 to-amber-700 px-4 py-3 text-sm font-extrabold text-white shadow-md shadow-orange-500/20 disabled:cursor-wait disabled:opacity-60">
                         {isAuthProcessing ? 'Validando conta…' : authMode === 'signup' ? 'Criar conta e continuar' : 'Entrar e continuar'}
                       </button>
                     </form>
@@ -357,7 +357,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       !isStaysSynced
                     }
                     onClick={handleFinalizeBooking}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-700 via-amber-700 to-orange-800 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {changedQuote ? (
                       <>
@@ -391,7 +391,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </div>
                   )}
                   {checkoutError && <p role="alert" className="text-center text-xs font-semibold text-red-700 mt-2">{checkoutError}</p>}
-                  <p className="text-center text-[10px] text-neutral-400 mt-2">
+                  <p className="text-center text-[10px] text-neutral-600 mt-2">
                     A reserva só estará confirmada após a conclusão do pagamento.
                   </p>
                 </div>
@@ -420,7 +420,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       {property.reviewsSynced && property.reviewCount > 0 && (
                         <div className="flex items-center gap-1 text-[11px] font-semibold text-neutral-800">
                           <span>★ {property.rating.toFixed(2)}</span>
-                          <span className="text-neutral-400">({property.reviewCount} avaliações)</span>
+                          <span className="text-neutral-600">({property.reviewCount} avaliações)</span>
                         </div>
                       )}
                     </div>

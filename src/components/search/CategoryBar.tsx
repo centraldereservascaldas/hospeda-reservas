@@ -55,6 +55,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
 }) => {
   const toolbarRowRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const pendingCategoryFocusRef = useRef<number | null>(null);
   const [visibleCategoryCount, setVisibleCategoryCount] = useState(4);
   const [categoryPage, setCategoryPage] = useState(0);
   const [categoryItemWidth, setCategoryItemWidth] = useState(112);
@@ -93,6 +94,18 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
     setCategoryPage((current) => Math.min(current, pageCount - 1));
   }, [pageCount]);
 
+  useEffect(() => {
+    const index = pendingCategoryFocusRef.current;
+    if (index === null) return;
+    pendingCategoryFocusRef.current = null;
+    toolbarRowRef.current?.querySelectorAll<HTMLButtonElement>('[data-category-index]')[index]?.focus();
+  }, [categoryPage]);
+
+  const changeCategoryPage = (nextPage: number) => {
+    pendingCategoryFocusRef.current = nextPage * visibleCategoryCount;
+    setCategoryPage(nextPage);
+  };
+
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case 'Waves': return <Waves className="w-5 h-5" />;
@@ -122,19 +135,23 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
           {/* Exibe apenas cartões inteiros; as setas alternam páginas sem cortar rótulos. */}
           <div className="flex min-w-0 flex-none items-center gap-2">
             {categoryPage > 0 && (
-              <button type="button" onClick={() => setCategoryPage((page) => Math.max(0, page - 1))} aria-label={`Ver filtros anteriores; página ${categoryPage + 1} de ${pageCount}`} title="Ver filtros anteriores" className="liquid-glass-button flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/85 text-neutral-800 shadow-md transition hover:scale-105 hover:bg-white active:scale-95">
+              <button type="button" onClick={() => changeCategoryPage(Math.max(0, categoryPage - 1))} aria-label={`Ver filtros anteriores; página ${categoryPage + 1} de ${pageCount}`} title="Ver filtros anteriores" className="liquid-glass-button flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/85 text-neutral-800 shadow-md transition hover:scale-105 hover:bg-white active:scale-95">
                 <ChevronLeft className="h-4 w-4" />
               </button>
             )}
             <div className="min-w-0 max-w-full flex-none overflow-hidden py-1" style={{ width: categoryPageWidth }}>
               <div className="category-filter-track flex items-stretch gap-2 px-1 sm:gap-3" style={{ width: categoryTrackWidth, transform: `translateX(-${categoryPage * categoryPageWidth}px)` }}>
-              {availableCategories.map((cat) => {
+              {availableCategories.map((cat, index) => {
                 const isSelected = selectedCategory === cat.id;
+                const isVisible = index >= categoryPage * visibleCategoryCount && index < (categoryPage + 1) * visibleCategoryCount;
                 return (
                   <button
                     key={cat.id}
+                    data-category-index={index}
                     onClick={() => onSelectCategory(cat.id)}
                     aria-pressed={isSelected}
+                    aria-hidden={!isVisible}
+                    tabIndex={isVisible ? 0 : -1}
                     className={`flex w-24 min-w-24 flex-shrink-0 flex-col items-center gap-1 border-b-2 py-1 text-center transition-all duration-300 cursor-pointer group rounded-2xl px-1 sm:w-28 sm:min-w-28 sm:px-1 lg:px-2 ${
                       isSelected
                         ? 'border-orange-500/65 text-neutral-950 font-bold'
@@ -161,7 +178,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             {categoryPage < pageCount - 1 && (
               <button
                 type="button"
-                onClick={() => setCategoryPage((page) => Math.min(pageCount - 1, page + 1))}
+                onClick={() => changeCategoryPage(Math.min(pageCount - 1, categoryPage + 1))}
                 aria-label={`Ver outros filtros; página ${categoryPage + 1} de ${pageCount}`}
                 title="Ver outros filtros"
                 className="liquid-glass-button flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/85 text-neutral-800 shadow-md transition hover:scale-105 hover:bg-white active:scale-95"
@@ -183,7 +200,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               <SlidersHorizontal className="w-3.5 h-3.5 text-neutral-700" />
               <span className="hidden sm:inline">Filtros</span>
               {activeFilterCount > 0 && (
-                <span className="w-5 h-5 rounded-full bg-orange-500 text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
+                <span className="w-5 h-5 rounded-full bg-orange-700 text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
                   {activeFilterCount}
                 </span>
               )}

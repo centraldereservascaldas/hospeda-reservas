@@ -115,7 +115,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
         {/* Carousel Arrow Buttons */}
         {property.images.length > 1 && (
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200">
             {currentImageIndex > 0 && (
               <button
                 onClick={prevImage}
