@@ -18,10 +18,9 @@ import { SofiaAssistantTrigger } from './components/assistant/SofiaAssistantTrig
 import { getAuthCallbackError } from './utils/authCallback';
 import { MainContentRouter } from './components/MainContentRouter';
 import { AppOverlayLayer } from './components/AppOverlayLayer';
-import type { AppOverlayBookingPayload } from './components/AppOverlayLayer';
+import type { AppOverlayBookingPayload } from './types/booking';
 import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
 import { useSearchUrlSync } from './hooks/useSearchUrlSync';
-import { scrollIntoViewRespectingMotion } from './utils/motion';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { useAccommodationCatalog } from './hooks/useAccommodationCatalog';
 import { useExploreCatalogViewModel } from './hooks/useExploreCatalogViewModel';
@@ -31,6 +30,7 @@ import { useSupabaseSession } from './hooks/useSupabaseSession';
 import { useAccommodationSearch } from './hooks/useAccommodationSearch';
 import { useAccountActions } from './hooks/useAccountActions';
 import { useSavedPropertyIds } from './hooks/useSavedPropertyIds';
+import { useAppOverlayActions } from './hooks/useAppOverlayActions';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
@@ -122,36 +122,25 @@ export default function App() {
     catalogLoadError,
   });
 
-  // Handlers
-  const handleAddNewProperty = (newProp: Property) => {
-    setProperties([newProp, ...properties]);
-  };
-
   const { handleStaysWidgetSearch } = useAccommodationSearch({
     setProperties,
     setFilters,
     restoreSearchFromUrlRef,
   });
 
-  const handleStartBooking = (bookingData: AppOverlayBookingPayload) => {
-    handleClosePropertyDetail();
-    setBookingPayload(bookingData);
-  };
-
-  const handleAssistantApplyFilters = (suggested: { destination?: string; guests?: number }) => {
-    if (suggested.destination) {
-      setFilters((prev) => ({ ...prev, destination: suggested.destination! }));
-    }
-    if (suggested.guests) {
-      setFilters((prev) => ({
-        ...prev,
-        guests: { ...prev.guests, adults: suggested.guests! },
-      }));
-    }
-    setIsSofiaOpen(false);
-    const catalogEl = document.getElementById('stays-apartments-catalog');
-    if (catalogEl) scrollIntoViewRespectingMotion(catalogEl);
-  };
+  const {
+    handleAddNewProperty,
+    handleStartBooking,
+    handleAssistantApplyFilters,
+    handleSelectPropertyFromSofia,
+  } = useAppOverlayActions({
+    setProperties,
+    setFilters,
+    setIsSofiaOpen,
+    setBookingPayload,
+    onClosePropertyDetail: handleClosePropertyDetail,
+    onSelectProperty: handleSelectProperty,
+  });
 
   return (
     <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 selection:bg-orange-500/20 selection:text-orange-950">
@@ -276,10 +265,7 @@ export default function App() {
         onToggleSave={toggleSavedProperty}
         onCloseCondominium={() => setSelectedCondominium(null)}
         onCloseSofia={() => setIsSofiaOpen(false)}
-        onSelectPropertyFromSofia={(property) => {
-          setIsSofiaOpen(false);
-          handleSelectProperty(property);
-        }}
+        onSelectPropertyFromSofia={handleSelectPropertyFromSofia}
         onApplySofiaFilters={handleAssistantApplyFilters}
         onCloseCheckout={() => setBookingPayload(null)}
         onCloseAccount={() => setAccountModalMode(null)}
