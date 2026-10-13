@@ -51,6 +51,10 @@ test('returns validated reservation records from the authenticated API', async (
   }
 });
 
+test('accepts a pending reservation without inventing its payment method', () => {
+  assert.equal(isReservation({ ...reservation, status: 'pending', paymentMethod: '' }), true);
+});
+
 test('clears unsafe accommodation image URLs in authenticated reservations', async () => {
   const originalFetch = globalThis.fetch;
   setReservationsResponse({

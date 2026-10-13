@@ -42,6 +42,13 @@ return [
         'timeout' => (int) env('STAYS_TIMEOUT', 10),
     ],
 
+    'mercadopago' => [
+        'public_key' => env('VITE_MERCADO_PAGO_PUBLIC_KEY'),
+        'access_token' => env('MERCADO_PAGO_ACCESS_TOKEN'),
+        'webhook_secret' => env('MERCADO_PAGO_WEBHOOK_SECRET'),
+        'webhook_queue_connection' => env('MERCADO_PAGO_WEBHOOK_QUEUE_CONNECTION', 'database'),
+    ],
+
     'supabase' => [
         'url' => env('SUPABASE_URL', env('VITE_SUPABASE_URL')),
         'anon_key' => env('SUPABASE_ANON_KEY', env('VITE_SUPABASE_ANON_KEY')),

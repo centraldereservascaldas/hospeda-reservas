@@ -1,5 +1,9 @@
 # Stays quote and checkout flow
 
+> Estado em 13/10/2026: a sequência de checkout hospedado descrita abaixo foi desativada. O site mantém o resumo da estadia e informa que a compra não está disponível. A base do checkout próprio registra pedidos idempotentes após revalidar a Stays e guardar um snapshot server-side das condições específicas aprovadas para o imóvel. O endpoint público `POST /api/checkout` ainda responde `503` até que essas condições estejam cadastradas e os fluxos de pré-reserva e pagamento sejam integrados; não inicia reserva nem cobrança. O plano de checkout próprio está em [MVP de vendas diretas](mvp-vendas-diretas.md).
+
+Na API de reservas existentes, `reserved` é exposto como `pending`; não representa confirmação, não recebe método de pagamento presumido, não oferece voucher e não pode ser cancelado diretamente pelo fluxo atual.
+
 ## Authoritative pricing
 
 `POST /api/price` obtains a fresh Stays `booking/calculate-price` quote and normalizes it in `src/utils/staysPricing.ts`. Search results use the same normalizer. When Stays says `feesIncluded: true`, the nightly display is the full PMS total divided by nights; cleaning is shown only as an informational included amount. When fees are not included, non-cleaning charges (including the account-specific counter fee) are folded into the displayed nightly rate, while cleaning stays separate. The PMS final total remains authoritative in both cases. Fee labels other than cleaning are not exposed as separate rows. The live quote check on 2026-10-01 returned `feesIncluded: true` and a `Tarifa Balcão` fee for listing `LH20J`; the normalizer includes that amount in the displayed nightly rate without exposing its fee row.
@@ -10,10 +14,10 @@ With Stays credentials configured, a failed/invalid live quote (including a quot
 
 1. The detail view requires a live quote before allowing the guest to continue.
 2. The checkout view carries the quote's nightly and fee-inclusion fields so its breakdown agrees with the detail view.
-3. `POST /api/checkout` validates dates, guests, name, and email, then recalculates the quote at Stays.
-4. If the total changed by one cent or more, the endpoint returns `409 quote_changed` with the current quote; the guest must review it and submit again.
-5. If unchanged, the backend calls Stays `POST /external/v1/book-request` and redirects only to a validated HTTPS Stays host.
-6. The guest completes the actual booking/payment in Stays' hosted checkout. The local site deliberately does not claim that a reservation is confirmed or paid merely because the redirect was created.
+3. O contrato antigo de `/api/checkout` exigia autenticação e redirecionava para o checkout hospedado da Stays. Ele foi removido.
+4. O novo `POST /api/checkout` valida dados de hóspede, datas, hóspedes, aceite/versionamento das condições e a chave `Idempotency-Key`. Ele exige termos aprovados por imóvel, revalida disponibilidade e cotação na Stays, e retorna `409 quote_changed` quando o total difere.
+5. Quando o preço coincide, o servidor grava o pedido e os snapshots de cotação/condições; por enquanto retorna `503 own_checkout_unavailable` com o identificador do pedido, pois criação de `reserved`, pagamento, webhooks e confirmação ainda não estão habilitados.
+6. Repetir a mesma tentativa retorna o mesmo pedido sem novas consultas externas; reutilizar a chave com outro corpo retorna `409 idempotency_key_reused`. Nenhuma etapa declara pagamento ou reserva confirmados.
 
 Error responses include `invalid_checkout_request`, `invalid_guest`, `stays_not_configured`, `quote_unavailable`, `quote_changed`, and `stays_checkout_failed`.
 

@@ -119,8 +119,8 @@ export interface Reservation {
   serviceFee: number;
   discount: number;
   totalAmount: number;
-  paymentMethod: 'pix' | 'credit_card' | 'apple_pay';
-  status: 'confirmed' | 'cancelled' | 'completed';
+  paymentMethod: 'pix' | 'credit_card' | 'apple_pay' | '';
+  status: 'confirmed' | 'cancelled' | 'completed' | 'pending';
   createdAt: string;
   hostName: string;
   guestName: string;

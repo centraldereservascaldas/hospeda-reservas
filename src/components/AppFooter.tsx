@@ -9,7 +9,7 @@ interface AppFooterProps {
 
 export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
   return (
-    <footer className="border-t border-white/60 bg-white/40 backdrop-blur-2xl text-xs text-neutral-600 hidden sm:block">
+    <footer className="border-t border-white/60 bg-white/40 backdrop-blur-2xl text-xs text-neutral-600">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-3">
@@ -21,6 +21,8 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
             <div className="pt-1 text-[11px] text-neutral-700 font-semibold space-y-1">
               <p>📍 Caldas Novas - Goiás, Brasil</p>
               <p>✉️ centraldereservascn@gmail.com</p>
+              <p>CENTRAL DE RESERVAS CALDAS NOVAS CRCN LTDA</p>
+              <p>CNPJ 67.314.679/0001-64</p>
             </div>
           </div>
 
@@ -54,14 +56,14 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
           </div>
 
           <div>
-            <h4 className="font-bold text-neutral-900 mb-3">Segurança e Garantia CRCN</h4>
+            <h4 className="font-bold text-neutral-900 mb-3">Atendimento CRCN</h4>
             <div className="p-3.5 bg-white/80 backdrop-blur-md rounded-2xl border border-white/80 shadow-2xs space-y-2">
               <div className="flex items-center gap-2 text-orange-600 font-bold">
                 <ShieldCheck className="w-4 h-4" />
-                <span>Reserva Garantida CRCN</span>
+                <span>Acompanhamento da reserva</span>
               </div>
               <p className="text-[11px] text-neutral-500 leading-relaxed">
-                Vouchers autênticos com liberação imediata de pulseiras e chaves na portaria do
+                Nossa equipe acompanha a confirmação da reserva e orienta sobre o check-in do
                 condomínio contratado.
               </p>
             </div>

@@ -343,8 +343,9 @@ export const isReservation = (value: unknown): value is Reservation =>
   isNonNegativeNumber(value.totalAmount) &&
   (value.paymentMethod === 'pix' ||
     value.paymentMethod === 'credit_card' ||
-    value.paymentMethod === 'apple_pay') &&
-  (value.status === 'confirmed' || value.status === 'cancelled' || value.status === 'completed') &&
+    value.paymentMethod === 'apple_pay' ||
+    value.paymentMethod === '') &&
+  (value.status === 'confirmed' || value.status === 'cancelled' || value.status === 'completed' || value.status === 'pending') &&
   typeof value.createdAt === 'string' &&
   typeof value.hostName === 'string' &&
   typeof value.guestName === 'string' &&

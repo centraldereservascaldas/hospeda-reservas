@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
-use App\Services\GuestStaysSyncService;
+use App\Http\Requests\StoreCheckoutRequest;
+use App\Http\Resources\DirectBookingOrderResource;
+use App\Models\DirectBookingOrder;
+use App\Services\DirectCheckoutService;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +15,6 @@ class BookingController extends Controller
 {
     public function __construct(
         private readonly StaysExternalApiClient $stays,
-        private readonly GuestStaysSyncService $guestSync,
     ) {}
 
     public function price(Request $request): JsonResponse
@@ -105,95 +106,40 @@ class BookingController extends Controller
         return response()->json(['connected' => true, 'hasCredentials' => true, 'totalProperties' => $count, 'environment' => app()->environment()]);
     }
 
-    public function checkout(Request $request): JsonResponse
+    public function createCheckoutOrder(StoreCheckoutRequest $request, DirectCheckoutService $checkout): JsonResponse
     {
-        $guest = $request->attributes->get('verified_guest');
-        $input = $request->validate([
-            'listingId' => ['nullable', 'string', 'max:100'], 'listingIds' => ['nullable', 'array'], 'listingIds.*' => ['string', 'max:100'],
-            'from' => ['required', 'date_format:Y-m-d'], 'to' => ['required', 'date_format:Y-m-d', 'after:from'],
-            'guests' => ['required'], 'quoteTotal' => ['required', 'numeric', 'gt:0'],
+        $result = $checkout->createOrder($request);
+        $body = [
+            'success' => $result['success'] ?? false,
+            'code' => $result['code'],
+            'message' => $result['message'],
+            'payment' => ['enabled' => false, 'methods' => []],
+        ];
+        if ($result['order'] !== null) {
+            $body['order'] = (new DirectBookingOrderResource($result['order']))->resolve($request);
+            $body['resume'] = [
+                'reference' => $result['resumeReference'],
+                'token' => $result['resumeToken'],
+                'path' => '/checkout/'.$result['resumeReference'],
+            ];
+        }
+        $body['idempotentReplay'] = $result['replayed'];
+
+        return response()->json($body, $result['status']);
+    }
+
+    public function resumeCheckout(Request $request, string $publicReference): JsonResponse
+    {
+        $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
+        $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
+        if ($order === null || $providedToken === '' || ! hash_equals((string) $order->resume_token, $providedToken)) {
+            return response()->json(['success' => false, 'code' => 'checkout_not_found', 'message' => 'Pedido não encontrado.'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'order' => (new DirectBookingOrderResource($order))->resolve($request),
+            'payment' => ['enabled' => false, 'methods' => []],
         ]);
-        $id = $input['listingId'] ?? $input['listingIds'][0] ?? null;
-        $catalog = json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
-        $property = collect($catalog)->first(fn (array $item): bool => in_array($id, [$item['id'] ?? '', $item['staysListingId'] ?? ''], true));
-        if (! $property || ! $guest instanceof VerifiedGuest) {
-            return response()->json(['success' => false, 'code' => 'invalid_checkout_request', 'message' => 'Imóvel, datas ou quantidade de hóspedes inválidos.'], 400);
-        }
-        $guests = is_array($input['guests']) ? $input['guests'] : ['adults' => $input['guests']];
-        $adults = max(0, (int) ($guests['adults'] ?? 0));
-        $children = max(0, (int) ($guests['children'] ?? 0));
-        $persons = $adults + $children;
-        $nights = max(1, (int) now()->parse($input['from'])->diffInDays(now()->parse($input['to'])));
-        if ($persons < 1 || $persons > (int) $property['maxGuests']) {
-            return response()->json(['success' => false, 'code' => 'invalid_checkout_request', 'message' => 'Imóvel, datas ou quantidade de hóspedes inválidos.'], 400);
-        }
-        if (! $this->stays->isConfigured()) {
-            return response()->json(['success' => false, 'code' => 'stays_not_configured', 'message' => 'Checkout seguro indisponível no momento.'], 503);
-        }
-        $listingId = $property['staysListingId'] ?? $property['id'];
-        $availability = $this->stays->post('/booking/search-listings', ['from' => $input['from'], 'to' => $input['to'], 'guests' => $persons, 'listingId' => $listingId, 'limit' => 100, 'skip' => 0]);
-        if (! is_array($availability)) {
-            return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Não foi possível confirmar a disponibilidade atual. Nenhuma reserva foi iniciada. Tente novamente.'], 503);
-        }
-        $available = collect($availability)->contains(fn (array $listing): bool => in_array($listingId, [(string) ($listing['id'] ?? ''), (string) ($listing['_id'] ?? ''), (string) ($listing['code'] ?? '')], true));
-        if (! $available) {
-            return response()->json(['success' => false, 'code' => 'dates_unavailable', 'message' => 'Este apartamento não está mais disponível para as datas selecionadas. Escolha outro período.'], 409);
-        }
-        $quoteResponse = $this->stays->post('/booking/calculate-price', ['from' => $input['from'], 'to' => $input['to'], 'listingIds' => [$listingId], 'guests' => $persons]);
-        $quote = is_array($quoteResponse) && array_is_list($quoteResponse)
-            ? (collect($quoteResponse)->firstWhere('_idlisting', $listingId) ?? $quoteResponse[0] ?? null)
-            : $quoteResponse;
-        if (! is_array($quote)) {
-            return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'Não foi possível revalidar preço e disponibilidade. Tente novamente.'], 503);
-        }
-        $price = is_array($quote['bookingPrice'] ?? null) ? $quote['bookingPrice'] : $quote;
-        $currency = (string) ($price['mainCurrency'] ?? $quote['currency'] ?? 'BRL');
-        $rawTotal = $quote['total'] ?? $price['_mctotal'][$currency] ?? $price['_mctotal']['BRL'] ?? null;
-        $feesIncluded = $quote['feesIncluded'] ?? $price['feesIncluded'] ?? null;
-        if (! is_numeric($rawTotal) || (float) $rawTotal <= 0 || ! is_bool($feesIncluded)) {
-            return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'Não foi possível revalidar preço e disponibilidade. Tente novamente.'], 503);
-        }
-        $fees = is_array($price['fees'] ?? null) ? $price['fees'] : (is_array($quote['fees'] ?? null) ? $quote['fees'] : []);
-        $fees = array_values(array_filter($fees, fn (mixed $fee): bool => is_array($fee)));
-        $feeTotal = collect($fees)->sum(fn (array $fee): float => $this->feeAmount($fee, $currency));
-        $cleaningFee = collect($fees)
-            ->filter(fn (array $fee): bool => $this->isCleaningFee($fee))
-            ->sum(fn (array $fee): float => $this->feeAmount($fee, $currency));
-        $total = (float) $rawTotal + ($feesIncluded ? 0 : $feeTotal);
-        if ($total <= 0) {
-            return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'Não foi possível revalidar preço e disponibilidade. Tente novamente.'], 503);
-        }
-        $baseTotal = (float) ($quote['subtotal'] ?? $quote['baseTotal'] ?? ($feesIncluded ? $total : $total - $cleaningFee));
-        $daily = (float) ($quote['dailyRate'] ?? ($baseTotal / $nights));
-        $currentQuote = ['listingId' => $property['id'], 'staysListingId' => $listingId, 'nights' => $nights, 'dailyRate' => $daily, 'baseTotal' => $baseTotal, 'cleaningFee' => (float) ($quote['cleaningFee'] ?? $cleaningFee), 'serviceFee' => (float) ($quote['serviceFee'] ?? max(0, $total - $baseTotal)), 'discount' => (float) ($quote['discount'] ?? 0), 'total' => $total, 'currency' => $currency, 'source' => 'stays-live'];
-        if (abs(round((float) $input['quoteTotal'] * 100) - round($total * 100)) > 0) {
-            return response()->json(['success' => false, 'code' => 'quote_changed', 'message' => 'O preço ou a disponibilidade mudou. Revise a cotação atualizada antes de continuar.', 'quote' => $currentQuote], 409);
-        }
-        if (! $this->guestSync->sync($guest)) {
-            return response()->json(['success' => false, 'code' => 'stays_client_sync_failed', 'message' => 'Não foi possível confirmar seu cadastro com o sistema de reservas. Nenhuma reserva foi iniciada. Tente novamente.'], 503);
-        }
-        $nameParts = preg_split('/\s+/', trim($guest->fullName), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $bookRequest = $this->stays->post('/book-request', ['from' => $input['from'], 'to' => $input['to'], 'aptid' => $listingId, 'persons' => $persons, 'client' => ['email' => $guest->email, 'fName' => $nameParts[0] ?? '', 'lName' => implode(' ', array_slice($nameParts, 1))]]);
-        $redirectUrl = (string) ($bookRequest['redirectUrl'] ?? '');
-        $host = strtolower((string) parse_url($redirectUrl, PHP_URL_HOST));
-        if (! str_starts_with($redirectUrl, 'https://') || ! preg_match('/(^|\.)stays\.(net|com\.br)$/', $host)) {
-            return response()->json(['success' => false, 'code' => 'stays_checkout_failed', 'message' => 'Não foi possível abrir o checkout. Tente novamente.'], 502);
-        }
-
-        return response()->json(['success' => true, 'status' => 'checkout_pending', 'checkoutUrl' => $redirectUrl, 'redirectUrl' => $redirectUrl, 'quote' => $currentQuote]);
-    }
-
-    private function feeAmount(array $fee, string $currency): float
-    {
-        $amounts = is_array($fee['_mcval'] ?? null) ? $fee['_mcval'] : [];
-
-        return (float) ($amounts[$currency] ?? $amounts['BRL'] ?? 0);
-    }
-
-    private function isCleaningFee(array $fee): bool
-    {
-        $title = is_array($fee['_mstitle'] ?? null) ? ($fee['_mstitle']['pt_BR'] ?? '') : '';
-
-        return preg_match('/clean|limpez/i', (string) ($fee['internalName'] ?? '').' '.$title) === 1;
     }
 }

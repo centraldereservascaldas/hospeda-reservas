@@ -45,7 +45,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
     initialFocusRef: keepTripButtonRef,
   });
 
-  const activeReservations = reservations.filter((r) => r.status === 'confirmed');
+  const activeReservations = reservations.filter((r) => r.status === 'confirmed' || r.status === 'pending');
   const cancelledReservations = reservations.filter((r) => r.status === 'cancelled');
 
   return (
@@ -118,9 +118,9 @@ export const TripsView: React.FC<TripsViewProps> = ({
                           <span className="text-[10px] font-extrabold text-orange-600 uppercase tracking-wider bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
                             {res.code}
                           </span>
-                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center gap-1 border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3" />
-                            Confirmada
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 border ${res.status === 'pending' ? 'bg-amber-100 text-amber-900 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}`}>
+                            {res.status === 'pending' ? <AlertCircle className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
+                            {res.status === 'pending' ? 'Pré-reserva • aguardando confirmação' : 'Confirmada'}
                           </span>
                         </div>
 
@@ -149,19 +149,23 @@ export const TripsView: React.FC<TripsViewProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setSelectedVoucher(res)}
-                            className="px-3.5 py-1.5 rounded-xl bg-white/80 hover:bg-white border border-white/90 text-xs font-bold text-neutral-700 shadow-2xs hover:scale-105 transition-all cursor-pointer"
-                          >
-                            Voucher
-                          </button>
+                          {res.status === 'confirmed' && (
+                            <button
+                              onClick={() => setSelectedVoucher(res)}
+                              className="px-3.5 py-1.5 rounded-xl bg-white/80 hover:bg-white border border-white/90 text-xs font-bold text-neutral-700 shadow-2xs hover:scale-105 transition-all cursor-pointer"
+                            >
+                              Voucher
+                            </button>
+                          )}
 
-                          <button
-                            onClick={() => setCancellingId(res.id)}
-                            className="px-3 py-1.5 rounded-xl text-xs font-bold text-orange-600 hover:bg-orange-50/80 transition-colors cursor-pointer"
-                          >
-                            Cancelar
-                          </button>
+                          {res.status === 'confirmed' && (
+                            <button
+                              onClick={() => setCancellingId(res.id)}
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold text-orange-600 hover:bg-orange-50/80 transition-colors cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -237,7 +241,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
               <div className="flex justify-between items-center">
                 <span className="font-mono text-base font-extrabold text-orange-600">{selectedVoucher.code}</span>
                 <span className="text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px]">
-                  Confirmada • Pulseiras Liberadas
+                  Reserva confirmada
                 </span>
               </div>
               <div>

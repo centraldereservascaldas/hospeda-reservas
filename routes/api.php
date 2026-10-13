@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\CheckoutPaymentController;
 use App\Http\Controllers\Api\GuestReservationController;
+use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OwnerAccessController;
 use App\Http\Controllers\Api\OwnerAdminController;
 use App\Http\Controllers\Api\OwnerDashboardController;
@@ -34,7 +36,10 @@ Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->gro
     Route::get('/stays-owners', [OwnerAdminController::class, 'staysOwners']);
     Route::post('/approve', [OwnerAdminController::class, 'approve']);
 });
-Route::post('/checkout', [BookingController::class, 'checkout'])->middleware('supabase.guest');
+Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->middleware('throttle:5,1');
+Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:20,1');
+Route::post('/checkout/{publicReference}/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
+Route::post('/webhooks/mercadopago', MercadoPagoWebhookController::class)->middleware('throttle:120,1');
 
 Route::get('/external/v1/content/listings', [AccommodationController::class, 'staysListings']);
 Route::get('/external/v1/content/listings/{id}', [AccommodationController::class, 'staysListing']);

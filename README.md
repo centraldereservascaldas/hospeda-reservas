@@ -44,7 +44,21 @@ Use o checklist de novas features e o plano de auditoria em [`docs/frontend-qual
 
 O navegador usa apenas `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. O middleware valida cada bearer token no Supabase Auth. Laravel grava o vínculo `guest_profiles` e os pedidos de acesso `owner_access`; não há FK para `auth.users`, pois a identidade continua externa. `SUPABASE_SERVICE_ROLE_KEY`, credenciais Stays e chave OpenAI são exclusivamente server-side.
 
-A API mantém os contratos consumidos em `src/services/crcnBackendApi.ts` e os aliases `/external/v1` usados pela interface de integração. Reservas e disponibilidade permanecem autoritativas na Stays. O checkout redireciona para o checkout hospedado Stays; não confirma pagamento localmente.
+### Supabase de teste
+
+Há um projeto Supabase hospedado e exclusivo para testar a CRCN. A CLI está vinculada a esse projeto nesta máquina; a referência local fica em `supabase/.temp/` (ignorado pelo Git). `supabase/config.toml` define os retornos de autenticação para `http://localhost:3000` e `http://127.0.0.1:3000`. O projeto de teste dispensa confirmação de e-mail para facilitar cadastro/login local; não aplique essa configuração a um projeto de produção.
+
+Neste ambiente, o `.env` ignorado pelo Git contém URL e chaves do Supabase de teste e usa o PostgreSQL dele pelo **pooler em modo de sessão**, com SSL. As migrações Laravel foram aplicadas a esse banco. A conta de QA e sua senha também estão somente no `.env` local (`SUPABASE_TEST_USER_EMAIL` e `SUPABASE_TEST_USER_PASSWORD`). Não copie esses valores para arquivos versionados nem para `VITE_*`, exceto URL e chave pública. As migrações antigas em `supabase/migrations/` não substituem as migrações Laravel atuais; não execute `supabase db push` sem revisar o destino e o escopo.
+
+Para outro computador, obtenha as credenciais desse projeto de teste, configure as mesmas variáveis no `.env` e vincule a CLI com `supabase link --project-ref <referência-do-projeto>`. O `supabase start` local exige um runtime de containers e **não é necessário** para usar o projeto hospedado. Os testes automatizados do Laravel continuam isolados em SQLite em memória por `phpunit.xml`; o PostgreSQL hospedado serve ao desenvolvimento e aos testes manuais da aplicação.
+
+A API mantém os contratos consumidos em `src/services/crcnBackendApi.ts` e os aliases `/external/v1` usados pela interface de integração. Reservas e disponibilidade permanecem autoritativas na Stays. O redirecionamento para o checkout hospedado Stays foi desativado; `POST /api/checkout` revalida a oferta e, quando consegue registrar um pedido cotado, responde `503` até que a pré-reserva e o pagamento próprios da CRCN estejam integrados e validados. A proposta de compra como visitante não depende de sessão autenticada.
+
+## Checkout próprio planejado
+
+A jornada de venda direta e o sistema de pagamento estão detalhados na [especificação do checkout](docs/especificacao-checkout-pagamentos-proprios.md), com [decisão de arquitetura](docs/adr/0001-checkout-proprio-e-informacoes-em-camadas.md) e [ordem de execução](docs/roadmap-vendas-diretas.md). Mercado Pago com Pix e cartão é a primeira integração; a CRCN recebe o valor integral e registra reserva/pagamento na Stays. Essas etapas ainda não estão habilitadas no site.
+
+O desenho de URLs tem dois momentos: uma futura `/reservar/{listingId}?checkin=...&checkout=...&adults=...` preserva a seleção **antes** de criar o pedido, e uma futura `/checkout/{referenciaPublica}` retoma o pedido **depois** de criado. Nenhuma das rotas está implementada. Datas e hóspedes recebidos pela URL precisam ser revalidados; preço, condições aceitas, pagamento e status da reserva vêm do servidor. O acesso ao pedido exige autorização além de um identificador público. Dados pessoais, tokens, segredos e valor final não devem ser colocados na query string.
 
 ## Skills e instruções locais
 

@@ -79,7 +79,7 @@ class GuestReservationController extends Controller
         if (in_array($status, ['canceled', 'cancelled'], true)) {
             return response()->json(['success' => false, 'code' => 'already_cancelled', 'message' => 'Esta reserva já está cancelada.'], 409);
         }
-        if (! in_array($status, ['booked', 'reserved', 'contract'], true)) {
+        if (! in_array($status, ['booked', 'contract'], true)) {
             return response()->json(['success' => false, 'code' => 'reservation_not_cancellable', 'message' => 'O status atual desta reserva não permite cancelamento por este fluxo.'], 409);
         }
         $response = $this->stays->request('PATCH', '/booking/reservations/'.rawurlencode($reservationId), payload: ['type' => 'canceled', 'cancelMessage' => 'Cancelamento solicitado pelo hóspede pelo site Central de Reservas Caldas Novas.']);
@@ -109,7 +109,12 @@ class GuestReservationController extends Controller
             return null;
         }
         $type = strtolower((string) ($record['type'] ?? ''));
-        $status = in_array($type, ['cancelled', 'canceled'], true) ? 'cancelled' : (in_array($type, ['booked', 'reserved', 'contract'], true) ? 'confirmed' : null);
+        $status = match (true) {
+            in_array($type, ['cancelled', 'canceled'], true) => 'cancelled',
+            in_array($type, ['booked', 'contract'], true) => 'confirmed',
+            $type === 'reserved' => 'pending',
+            default => null,
+        };
         if ($status === null) {
             return null;
         }
@@ -118,6 +123,6 @@ class GuestReservationController extends Controller
         $property = collect($catalog)->first(fn (array $item): bool => in_array($propertyId, [$item['id'] ?? '', $item['staysListingId'] ?? ''], true));
         $total = (float) ($record['price']['_f_total'] ?? $record['price']['hostingDetails']['_f_total'] ?? 0);
 
-        return ['id' => $id, 'code' => $id, 'propertyId' => $propertyId, 'propertyTitle' => $property['title'] ?? $record['_mslistingTitle']['pt_BR'] ?? 'Acomodação', 'propertyLocation' => $property['subtitle'] ?? '', 'propertyImage' => $property['images'][0] ?? $catalog[0]['images'][0] ?? '', 'checkIn' => $checkIn, 'checkOut' => $checkOut, 'nights' => $nights, 'guests' => ['adults' => (int) ($record['guestsDetails']['adults'] ?? $record['guests'] ?? 1), 'children' => (int) ($record['guestsDetails']['children'] ?? 0), 'infants' => (int) ($record['guestsDetails']['infants'] ?? 0), 'pets' => 0], 'pricePerNight' => (float) ($record['price']['hostingDetails']['_f_nightPrice'] ?? $total / $nights), 'cleaningFee' => 0, 'serviceFee' => 0, 'discount' => 0, 'totalAmount' => $total, 'paymentMethod' => 'pix', 'status' => $status === 'confirmed' && $checkOut < now()->toDateString() ? 'completed' : $status, 'createdAt' => $record['creationDate'] ?? '', 'hostName' => 'Central de Reservas Caldas Novas', 'guestName' => $record['bookerDetails']['name'] ?? '', 'guestEmail' => $record['bookerDetails']['email'] ?? '', 'guestPhone' => '', 'staysReservationId' => $id, 'staysLocator' => $record['partnerCode'] ?? '', 'staysSyncStatus' => 'synced'];
+        return ['id' => $id, 'code' => $id, 'propertyId' => $propertyId, 'propertyTitle' => $property['title'] ?? $record['_mslistingTitle']['pt_BR'] ?? 'Acomodação', 'propertyLocation' => $property['subtitle'] ?? '', 'propertyImage' => $property['images'][0] ?? $catalog[0]['images'][0] ?? '', 'checkIn' => $checkIn, 'checkOut' => $checkOut, 'nights' => $nights, 'guests' => ['adults' => (int) ($record['guestsDetails']['adults'] ?? $record['guests'] ?? 1), 'children' => (int) ($record['guestsDetails']['children'] ?? 0), 'infants' => (int) ($record['guestsDetails']['infants'] ?? 0), 'pets' => 0], 'pricePerNight' => (float) ($record['price']['hostingDetails']['_f_nightPrice'] ?? $total / $nights), 'cleaningFee' => 0, 'serviceFee' => 0, 'discount' => 0, 'totalAmount' => $total, 'paymentMethod' => '', 'status' => $status === 'confirmed' && $checkOut < now()->toDateString() ? 'completed' : $status, 'createdAt' => $record['creationDate'] ?? '', 'hostName' => 'Central de Reservas Caldas Novas', 'guestName' => $record['bookerDetails']['name'] ?? '', 'guestEmail' => $record['bookerDetails']['email'] ?? '', 'guestPhone' => '', 'staysReservationId' => $id, 'staysLocator' => $record['partnerCode'] ?? '', 'staysSyncStatus' => 'synced'];
     }
 }
