@@ -1,14 +1,25 @@
-import { Property, StaysConfig, StaysApiLog, StaysPriceCalculationRequest, StaysPriceCalculationResponse } from '../types';
+import {
+  Property,
+  StaysConfig,
+  StaysApiLog,
+  StaysPriceCalculationRequest,
+  StaysPriceCalculationResponse,
+} from '../types';
 import { isProperty, isRecord } from '../utils/apiValidation';
+import { sanitizePropertyMedia } from '../utils/propertyMedia';
 
 const CONFIG_KEY = 'stays_net_config';
 const LOGS_KEY = 'stays_net_api_logs';
 
 const isStaysApiLog = (value: unknown): value is StaysApiLog =>
-  isRecord(value) && typeof value.id === 'string' && typeof value.timestamp === 'string' &&
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  typeof value.timestamp === 'string' &&
   ['GET', 'POST', 'PUT', 'DELETE'].includes(String(value.method)) &&
-  typeof value.endpoint === 'string' && typeof value.status === 'number' &&
-  typeof value.durationMs === 'number' && typeof value.success === 'boolean';
+  typeof value.endpoint === 'string' &&
+  typeof value.status === 'number' &&
+  typeof value.durationMs === 'number' &&
+  typeof value.success === 'boolean';
 
 const errorMessage = (value: unknown, fallback: string): string =>
   isRecord(value) && typeof value.message === 'string' ? value.message : fallback;
@@ -39,7 +50,14 @@ class StaysApiService {
   }
 
   public saveConfig(newConfig: Partial<StaysConfig>): StaysConfig {
-    this.config = { ...this.config, ...newConfig, clientId: '', clientSecret: '', webhookUrl: '', isConnected: false };
+    this.config = {
+      ...this.config,
+      ...newConfig,
+      clientId: '',
+      clientSecret: '',
+      webhookUrl: '',
+      isConnected: false,
+    };
     try {
       localStorage.setItem(CONFIG_KEY, JSON.stringify(this.config));
     } catch (e) {
@@ -56,11 +74,15 @@ class StaysApiService {
         if (isRecord(parsed)) {
           return {
             ...DEFAULT_STAYS_CONFIG,
-            accountDomain: typeof parsed.accountDomain === 'string' ? parsed.accountDomain : DEFAULT_STAYS_CONFIG.accountDomain,
+            accountDomain:
+              typeof parsed.accountDomain === 'string'
+                ? parsed.accountDomain
+                : DEFAULT_STAYS_CONFIG.accountDomain,
             environment: parsed.environment === 'sandbox' ? 'sandbox' : 'production',
             autoSyncListings: parsed.autoSyncListings === true,
             autoSyncReservations: parsed.autoSyncReservations === true,
-            lastSyncTimestamp: typeof parsed.lastSyncTimestamp === 'string' ? parsed.lastSyncTimestamp : null,
+            lastSyncTimestamp:
+              typeof parsed.lastSyncTimestamp === 'string' ? parsed.lastSyncTimestamp : null,
           };
         }
       }
@@ -99,7 +121,11 @@ class StaysApiService {
   private recordLog(log: Omit<StaysApiLog, 'id' | 'timestamp'>) {
     const entry: StaysApiLog = {
       id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      timestamp: new Date().toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
       ...log,
     };
     this.logs = [entry, ...this.logs.slice(0, 49)];
@@ -111,7 +137,10 @@ class StaysApiService {
   }
 
   public getBaseUrl(): string {
-    const domain = this.config.accountDomain.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const domain = this.config.accountDomain
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/$/, '');
     if (this.config.environment === 'sandbox') {
       return 'https://play.stays.net/external/v1';
     }
@@ -151,7 +180,11 @@ class StaysApiService {
       };
     }
 
-    this.saveConfig({ ...targetConfig, isConnected: true, lastSyncTimestamp: new Date().toISOString() });
+    this.saveConfig({
+      ...targetConfig,
+      isConnected: true,
+      lastSyncTimestamp: new Date().toISOString(),
+    });
     return {
       success: true,
       latencyMs,
@@ -160,8 +193,10 @@ class StaysApiService {
         companyName: targetConfig.accountDomain,
         tier: 'Stays External API',
         version: 'v1',
-        activeListings: typeof status.totalProperties === 'number' && Number.isFinite(status.totalProperties)
-          ? status.totalProperties : 0,
+        activeListings:
+          typeof status.totalProperties === 'number' && Number.isFinite(status.totalProperties)
+            ? status.totalProperties
+            : 0,
       },
     };
   }
@@ -170,7 +205,10 @@ class StaysApiService {
    * Calculate price and fees for reservation via Stays.net API
    * POST /external/v1/booking/calculate-price
    */
-  public async calculatePrice(params: StaysPriceCalculationRequest, baseDailyRate: number): Promise<StaysPriceCalculationResponse> {
+  public async calculatePrice(
+    params: StaysPriceCalculationRequest,
+    baseDailyRate: number,
+  ): Promise<StaysPriceCalculationResponse> {
     void baseDailyRate;
     const response = await fetch('/api/price', {
       method: 'POST',
@@ -179,7 +217,10 @@ class StaysApiService {
         listingIds: [params.listingId],
         from: params.checkInDate,
         to: params.checkOutDate,
-        guests: (Number(params.guests.adults) || 0) + (Number(params.guests.children) || 0) + (Number(params.guests.infants) || 0),
+        guests:
+          (Number(params.guests.adults) || 0) +
+          (Number(params.guests.children) || 0) +
+          (Number(params.guests.infants) || 0),
       }),
     });
     const quote: unknown = await response.json();
@@ -187,11 +228,20 @@ class StaysApiService {
       throw new Error(errorMessage(quote, 'Cotação oficial da Stays indisponível.'));
     }
 
-    if (typeof quote.currency !== 'string' || typeof quote.nights !== 'number' ||
-      typeof quote.dailyRate !== 'number' || typeof quote.baseTotal !== 'number' ||
-      typeof quote.discount !== 'number' || typeof quote.total !== 'number' ||
-      ![quote.nights, quote.dailyRate, quote.baseTotal, quote.discount, quote.total].every(Number.isFinite) ||
-      quote.nights < 1 || quote.dailyRate <= 0 || quote.total <= 0) {
+    if (
+      typeof quote.currency !== 'string' ||
+      typeof quote.nights !== 'number' ||
+      typeof quote.dailyRate !== 'number' ||
+      typeof quote.baseTotal !== 'number' ||
+      typeof quote.discount !== 'number' ||
+      typeof quote.total !== 'number' ||
+      ![quote.nights, quote.dailyRate, quote.baseTotal, quote.discount, quote.total].every(
+        Number.isFinite,
+      ) ||
+      quote.nights < 1 ||
+      quote.dailyRate <= 0 ||
+      quote.total <= 0
+    ) {
       throw new Error('A cotação oficial da Stays retornou dados inválidos.');
     }
 
@@ -204,10 +254,17 @@ class StaysApiService {
       dailyPriceAverage: quote.dailyRate,
       subtotal: quote.baseTotal,
       fees: fees.filter(isRecord).map((fee) => {
-        const title = isRecord(fee._mstitle) && typeof fee._mstitle.pt_BR === 'string' ? fee._mstitle.pt_BR : '';
+        const title =
+          isRecord(fee._mstitle) && typeof fee._mstitle.pt_BR === 'string'
+            ? fee._mstitle.pt_BR
+            : '';
         const internalName = typeof fee.internalName === 'string' ? fee.internalName : '';
-        const amount = isRecord(fee._mcval) && typeof fee._mcval.BRL === 'number' && Number.isFinite(fee._mcval.BRL)
-          ? fee._mcval.BRL : 0;
+        const amount =
+          isRecord(fee._mcval) &&
+          typeof fee._mcval.BRL === 'number' &&
+          Number.isFinite(fee._mcval.BRL)
+            ? fee._mcval.BRL
+            : 0;
         return {
           type: /clean|limpez/i.test(`${internalName} ${title}`) ? 'cleaning' : 'other',
           amount,
@@ -234,10 +291,15 @@ class StaysApiService {
     try {
       const response = await fetch('/api/accommodations');
       const json: unknown = await response.json();
-      if (!response.ok || !isRecord(json) || !Array.isArray(json.data) || !json.data.every(isProperty)) {
+      if (
+        !response.ok ||
+        !isRecord(json) ||
+        !Array.isArray(json.data) ||
+        !json.data.every(isProperty)
+      ) {
         throw new Error(errorMessage(json, 'O catálogo de acomodações retornou dados inválidos.'));
       }
-      const listings: Property[] = json.data;
+      const listings: Property[] = json.data.map(sanitizePropertyMedia);
       const source = typeof json.source === 'string' ? json.source : 'unknown';
       const live = source === 'stays-live' && listings.length > 0;
       const syncedAt = new Date().toISOString();
@@ -247,7 +309,10 @@ class StaysApiService {
         localStorage.setItem('hospeda_properties_source', 'stays-live');
       }
 
-      this.saveConfig({ lastSyncTimestamp: live ? syncedAt : this.config.lastSyncTimestamp, isConnected: live });
+      this.saveConfig({
+        lastSyncTimestamp: live ? syncedAt : this.config.lastSyncTimestamp,
+        isConnected: live,
+      });
       this.recordLog({
         method: 'GET',
         endpoint: '/api/accommodations',
@@ -270,7 +335,6 @@ class StaysApiService {
       throw error;
     }
   }
-
 }
 
 export const staysApi = new StaysApiService();

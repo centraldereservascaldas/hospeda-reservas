@@ -3,6 +3,7 @@ import type { Property } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
 import { staysApi } from '../services/staysApi';
 import { isProperty } from '../utils/apiValidation';
+import { sanitizePropertyMedia } from '../utils/propertyMedia';
 
 function readCachedProperties(): Property[] {
   const saved = localStorage.getItem('hospeda_properties');
@@ -16,7 +17,8 @@ function readCachedProperties(): Property[] {
     // was last synchronized from the live Stays-backed catalogue.
     const cleaned = parsed
       .filter(isProperty)
-      .filter((property) => !property.id.startsWith('prop-'));
+      .filter((property) => !property.id.startsWith('prop-'))
+      .map(sanitizePropertyMedia);
     if (
       cleaned.length === 0 ||
       localStorage.getItem('hospeda_properties_source') !== 'stays-live'
@@ -26,12 +28,7 @@ function readCachedProperties(): Property[] {
 
     // Refresh galleries from the backend on startup instead of trusting stale
     // cached image lists.
-    return cleaned.map((property) => ({
-      ...property,
-      images: Array.isArray(property.images)
-        ? property.images.filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url))
-        : [],
-    }));
+    return cleaned;
   } catch {
     return [];
   }

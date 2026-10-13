@@ -15,6 +15,7 @@ import {
   isStaysCalendarDay,
 } from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
+import { sanitizePropertyMedia } from '../utils/propertyMedia';
 
 export interface SearchAccommodationsParams {
   from?: string;
@@ -235,7 +236,7 @@ class CrcnBackendApiService {
       if (!isRecord(json) || !Array.isArray(json.data) || !json.data.every(isProperty)) {
         throw new Error('O catálogo retornou dados inválidos.');
       }
-      const accommodations: Property[] = json.data;
+      const accommodations: Property[] = json.data.map(sanitizePropertyMedia);
       if (json.source === 'stays-live' && accommodations.length > 0) {
         localStorage.setItem('hospeda_properties', JSON.stringify(accommodations));
         localStorage.setItem('hospeda_properties_source', 'stays-live');
@@ -257,7 +258,7 @@ class CrcnBackendApiService {
       if (!isRecord(json) || (json.data !== null && !isProperty(json.data))) {
         throw new Error('A acomodação retornou dados inválidos.');
       }
-      const property = json.data;
+      const property = json.data ? sanitizePropertyMedia(json.data) : null;
       if (property && Array.isArray(property.images)) {
         try {
           const cachedValue: unknown = JSON.parse(
@@ -306,7 +307,7 @@ class CrcnBackendApiService {
       ) {
         throw new Error('A pesquisa retornou uma resposta inválida.');
       }
-      return { total: json.total, data: json.data };
+      return { total: json.total, data: json.data.map(sanitizePropertyMedia) };
     } catch (err) {
       console.warn('Falling back to local search filtering:', err);
       if (params.from && params.to) {
