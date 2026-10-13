@@ -99,6 +99,20 @@ test('reservation validation rejects date-night mismatches and negative amounts'
 test('property validation enforces semantic title, rating, and coordinate bounds', () => {
   const property = STAYS_NET_APARTMENTS[0]!;
   assert.equal(isProperty(property), true);
+  assert.equal(
+    isProperty({
+      ...property,
+      calculatedPrice: { ...property.calculatedPrice, nights: 0 },
+    }),
+    false,
+  );
+  assert.equal(
+    isProperty({
+      ...property,
+      calculatedPrice: { ...property.calculatedPrice, nights: 1.5 },
+    }),
+    false,
+  );
   assert.equal(isProperty({ ...property, title: '  ' }), false);
   assert.equal(isProperty({ ...property, rating: 5.1 }), false);
   assert.equal(isProperty({ ...property, location: { ...property.location, lat: 91 } }), false);

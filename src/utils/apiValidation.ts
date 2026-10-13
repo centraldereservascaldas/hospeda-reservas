@@ -139,6 +139,8 @@ const isReview = (value: unknown): value is Property['reviews'][number] => {
 const isCalculatedPrice = (value: unknown): value is NonNullable<Property['calculatedPrice']> =>
   isRecord(value) &&
   isFiniteNumber(value.nights) &&
+  Number.isInteger(value.nights) &&
+  value.nights > 0 &&
   isNonNegativeNumber(value.dailyRate) &&
   isNonNegativeNumber(value.basePrice) &&
   isNonNegativeNumber(value.cleaningFee) &&
