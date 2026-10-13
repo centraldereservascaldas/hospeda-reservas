@@ -8,7 +8,6 @@ import type { Session } from '@supabase/supabase-js';
 import { Property, Reservation, SearchFilters, Currency } from './types';
 import { CalculatedPriceResponse } from './services/crcnBackendApi';
 import { CATEGORIES } from './data/mockProperties';
-import { staysApi } from './services/staysApi';
 import { matchesPropertyCategory } from './utils/propertyCategories';
 import { Header } from './components/Header';
 import { CategoryBar } from './components/CategoryBar';
@@ -29,6 +28,7 @@ import { useSearchUrlSync } from './hooks/useSearchUrlSync';
 import { countActivePropertyFilters, filterPropertiesBySearchFilters } from './utils/propertySearchFilters';
 import { scrollIntoViewRespectingMotion } from './utils/motion';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
+import { useAccommodationCatalog } from './hooks/useAccommodationCatalog';
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
@@ -88,53 +88,8 @@ const DeferredModal: React.FC<{ active: boolean; children: React.ReactNode }> = 
 };
 
 export default function App() {
-  // Persistent properties supplied by the reservations catalogue
-  const [properties, setProperties] = useState<Property[]>(() => {
-    const saved = localStorage.getItem('hospeda_properties');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          // Purge any legacy mockup items
-          const cleaned = parsed.filter((p: Property) => !p.id.startsWith('prop-'));
-          if (cleaned.length > 0 && localStorage.getItem('hospeda_properties_source') === 'stays-live') {
-            // Galleries are refreshed from the backend at startup; do not treat
-            // an older one-image cache as the current source of truth.
-            return cleaned.map((property: Property) => ({
-              ...property,
-              images: Array.isArray(property.images) ? property.images.filter((url) => typeof url === 'string' && /^https?:\/\//i.test(url)) : [],
-            }));
-          }
-        }
-      } catch { /* fallback */ }
-    }
-    return [];
-  });
-
-  const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogLoadError, setCatalogLoadError] = useState(false);
-
-  const handlePullStaysApartments = async () => {
-    try {
-      const res = await staysApi.fetchListings();
-      if (res.success && res.listings.length > 0) {
-        setProperties(res.listings);
-        setCatalogLoading(false);
-        setCatalogLoadError(false);
-        localStorage.setItem('hospeda_properties', JSON.stringify(res.listings));
-        localStorage.setItem('hospeda_properties_source', 'stays-live');
-      }
-    } catch {
-      // Keep the current catalogue when refreshing from the API fails.
-    }
-  };
-
-  useEffect(() => {
-    // Replace the local demo seed with account-owned listing IDs before users
-    // start quoting or attempting checkout; synthetic seed IDs are not valid
-    // identifiers in the live booking catalog.
-    void handlePullStaysApartments();
-  }, []);
+  const { properties, setProperties, catalogLoading, catalogLoadError } =
+    useAccommodationCatalog();
 
   // Persistent Reservations State
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -295,35 +250,6 @@ export default function App() {
       window.history.pushState(null, '', `/${window.location.search}${window.location.hash}`);
     }
   };
-
-  // Refresh accommodation catalog from the booking service
-  useEffect(() => {
-    let cancelled = false;
-    void crcnBackendApi.getAccommodations().then(async (list) => {
-      if (cancelled) return;
-      if (list.length > 0) {
-        setProperties(list);
-        localStorage.setItem('hospeda_properties', JSON.stringify(list));
-        localStorage.setItem('hospeda_properties_source', 'stays-live');
-        return;
-      }
-
-      // The bundled catalogue is only needed when the API and synchronized
-      // cache have no listings. Keep it outside the initial application chunk.
-      const { STAYS_NET_APARTMENTS } = await import('./data/staysApartments');
-      if (!cancelled) setProperties((current) => current.length > 0 ? current : STAYS_NET_APARTMENTS);
-    }).catch((error) => {
-      console.warn('Unable to load accommodation catalogue:', error);
-      if (!cancelled) setCatalogLoadError(true);
-    }).finally(() => {
-      if (!cancelled) setCatalogLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem('hospeda_properties', JSON.stringify(properties));
-  }, [properties]);
 
   useEffect(() => {
     if (!accountSession?.access_token) {
@@ -548,7 +474,7 @@ export default function App() {
     if (catalogEl) {
       scrollIntoViewRespectingMotion(catalogEl);
     }
-  }, []);
+  }, [setProperties]);
 
   restoreSearchFromUrlRef.current = (restoredFilters) => {
     void handleStaysWidgetSearch({
