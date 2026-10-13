@@ -3,6 +3,7 @@ import { X, ChevronLeft, ShieldCheck } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { Property, Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import {
   crcnBackendApi,
   CalculatedPriceResponse,
@@ -105,6 +106,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   if (!isOpen || !bookingData) return null;
 
   const { property, checkIn, checkOut, guests, nights, totalAmount, cleaningFee, discount } = bookingData;
+  const displayTitle = getPublicPropertyTitle(property.title);
   const shownTotal = currentQuote?.total ?? totalAmount;
 
   const handleAccountSubmit = async (event: React.FormEvent) => {
@@ -403,7 +405,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <div className="flex gap-4">
                     <img
                       src={property.images[0]}
-                      alt={property.title}
+                      alt={displayTitle}
                       className="w-24 h-24 rounded-2xl object-cover flex-shrink-0 shadow-sm"
                     />
                     <div className="flex flex-col justify-between">
@@ -412,7 +414,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           {property.subtitle}
                         </span>
                         <h4 className="font-bold text-xs text-neutral-900 line-clamp-2 mt-0.5">
-                          {property.title}
+                          {displayTitle}
                         </h4>
                       </div>
                       {property.reviewsSynced && property.reviewCount > 0 && (

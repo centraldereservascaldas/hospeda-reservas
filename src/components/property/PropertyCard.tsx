@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Heart, Star, Sparkles } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 
 interface PropertyCardProps {
   property: Property;
@@ -30,6 +31,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   }, [property.id, galleryKey]);
 
   const imageCount = property.images.length;
+  const displayTitle = getPublicPropertyTitle(property.title);
   const currentImage = property.images[currentImageIndex] || property.images[0] || '';
   const goToImage = (index: number) => setCurrentImageIndex(index);
 
@@ -64,7 +66,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
       <button
         type="button"
         onClick={() => onSelectProperty(property)}
-        aria-label={`Ver detalhes de ${property.title}`}
+        aria-label={`Ver detalhes de ${displayTitle}`}
         className="absolute inset-0 z-0 rounded-3xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-600"
       />
       <div className="relative z-10 flex flex-col pointer-events-none">
@@ -84,7 +86,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         <button
           onClick={handleFavoriteClick}
           type="button"
-          aria-label={isSaved ? `Remover ${property.title} dos favoritos` : `Salvar ${property.title} nos favoritos`}
+          aria-label={isSaved ? `Remover ${displayTitle} dos favoritos` : `Salvar ${displayTitle} nos favoritos`}
           aria-pressed={isSaved}
           className="pointer-events-auto absolute top-3 right-3 z-20 p-2 sm:p-2.5 rounded-full liquid-glass-button bg-black/25 hover:bg-black/45 text-white hover:scale-115 active:scale-95 transition-all cursor-pointer shadow-sm border border-white/40 flex-shrink-0"
         >
@@ -172,7 +174,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         {/* Title & Rating */}
         <div className="flex items-start justify-between gap-2">
           <h3 className="font-extrabold text-neutral-950 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-orange-600 transition-colors">
-            {property.title}
+            {displayTitle}
           </h3>
           {property.reviewsSynced && property.reviewCount > 0 && (
             <div className="flex items-center gap-1 flex-shrink-0 font-bold text-xs liquid-glass px-2 py-0.5 rounded-lg border border-white/80 shadow-2xs" aria-label={`${property.rating.toFixed(2)} de média em ${property.reviewCount} avaliações recebidas pela Central de Reservas no último ano`}>

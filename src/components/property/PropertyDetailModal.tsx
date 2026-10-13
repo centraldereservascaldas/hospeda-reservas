@@ -25,6 +25,7 @@ import { PropertyDetailActions } from './PropertyDetailActions';
 import { useDialogFocus } from '../useDialogFocus';
 import { usePropertyAvailability } from './usePropertyAvailability';
 import { selectAvailabilityDay } from '../../utils/propertyDateSelection';
+import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -176,6 +177,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
   if (!property) return null;
 
+  const displayTitle = getPublicPropertyTitle(property.title);
   const staysReviews = getSyncedPropertyReviews(property);
   const hasReviews = staysReviews.length > 0;
   const scrollToReviews = () => {
@@ -290,7 +292,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             />
 
             <PropertyPhotoGrid
-              propertyTitle={property.title}
+              propertyTitle={displayTitle}
               images={property.images}
               onOpenGallery={openPhotoGallery}
             />
@@ -318,7 +320,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   onSelectDay={selectCalendarDay}
                 />
 
-                <PropertyLocationSection title={property.title} location={property.location} />
+                <PropertyLocationSection title={displayTitle} location={property.location} />
                 <PropertyHostSection host={property.host} />
               </div>
 
@@ -398,7 +400,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       />
 
       <PropertyGalleryDialog
-        propertyTitle={property.title}
+        propertyTitle={displayTitle}
         images={property.images}
         isOpen={showAllPhotos}
         activePhotoIndex={activePhotoIndex}

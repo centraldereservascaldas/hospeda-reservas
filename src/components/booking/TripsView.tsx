@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Reservation, Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { useDialogFocus } from '../useDialogFocus';
 import { 
   Calendar, 
@@ -107,7 +108,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                   >
                     <img
                       src={res.propertyImage}
-                      alt={res.propertyTitle}
+                      alt={getPublicPropertyTitle(res.propertyTitle)}
                       className="w-full sm:w-48 h-48 object-cover flex-shrink-0"
                     />
 
@@ -124,7 +125,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                         </div>
 
                         <h3 className="font-extrabold text-sm text-neutral-900 mt-2 line-clamp-1">
-                          {res.propertyTitle}
+                          {getPublicPropertyTitle(res.propertyTitle)}
                         </h3>
 
                         <div className="mt-2 space-y-1 text-xs text-neutral-600">
@@ -186,7 +187,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                   >
                     <div>
                       <span className="text-[10px] font-bold text-neutral-400">{res.code}</span>
-                      <p className="text-xs font-bold text-neutral-700 line-clamp-1">{res.propertyTitle}</p>
+                      <p className="text-xs font-bold text-neutral-700 line-clamp-1">{getPublicPropertyTitle(res.propertyTitle)}</p>
                       <p className="text-[11px] text-neutral-400">{res.checkIn} - {res.checkOut}</p>
                     </div>
                     <span className="text-xs font-semibold text-neutral-500 bg-neutral-200 px-2.5 py-1 rounded-full">
@@ -241,7 +242,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
               </div>
               <div>
                 <span className="text-neutral-400 block text-[10px] uppercase font-bold">Empreendimento</span>
-                <p className="font-bold text-sm text-neutral-900">{selectedVoucher.propertyTitle}</p>
+                <p className="font-bold text-sm text-neutral-900">{getPublicPropertyTitle(selectedVoucher.propertyTitle)}</p>
                 <p className="text-neutral-500">{selectedVoucher.propertyLocation}</p>
               </div>
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-neutral-200/80">

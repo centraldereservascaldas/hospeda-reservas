@@ -9,6 +9,7 @@ import {
 import { Property, Currency } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { formatCurrency } from '../../utils/formatters';
+import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { scrollIntoViewRespectingMotion } from '../../utils/motion';
 import { LogoCRCN } from '../LogoCRCN';
 import { useDialogFocus } from '../useDialogFocus';
@@ -219,7 +220,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                         <button
                           key={prop.id}
                           type="button"
-                          aria-label={`Ver detalhes de ${prop.title}`}
+                          aria-label={`Ver detalhes de ${getPublicPropertyTitle(prop.title)}`}
                           onClick={() => {
                             onSelectProperty(prop);
                             onClose();
@@ -233,7 +234,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                           />
                           <div className="flex-1 min-w-0">
                             <h4 className="font-extrabold text-xs text-neutral-900 truncate group-hover:text-orange-600 transition-colors">
-                              {prop.title}
+                              {getPublicPropertyTitle(prop.title)}
                             </h4>
                             <p className="text-[11px] text-neutral-500 truncate">
                               {prop.location.neighborhood || 'Caldas Novas'} • Até {prop.maxGuests} hóspedes

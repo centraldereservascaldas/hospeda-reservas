@@ -1,5 +1,6 @@
 import { Medal, Star } from 'lucide-react';
 import type { Property } from '../../types';
+import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 
 interface PropertyDetailHeaderProps {
   property: Property;
@@ -12,6 +13,8 @@ export function PropertyDetailHeader({
   hasReviews,
   onShowReviews,
 }: PropertyDetailHeaderProps) {
+  const displayTitle = getPublicPropertyTitle(property.title);
+
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
@@ -23,7 +26,7 @@ export function PropertyDetailHeader({
         id="property-detail-title"
         className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight"
       >
-        {property.title}
+        {displayTitle}
       </h1>
       <div className="mt-2 flex flex-wrap items-center gap-y-2 gap-x-4 text-xs sm:text-sm text-neutral-600">
         {hasReviews && (

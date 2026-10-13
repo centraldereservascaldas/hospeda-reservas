@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Property, Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { MapPin, Minus, Plus, Star, X, LocateFixed, ExternalLink } from 'lucide-react';
 
 interface InteractiveMapProps {
@@ -240,11 +241,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
       {pinPositions.map(({ property, x, y }) => {
         const isActive = activeProperty?.id === property.id;
+        const displayTitle = getPublicPropertyTitle(property.title);
         return (
           <button
             key={property.id}
             type="button"
-            aria-label={`${property.title}, ${formatCurrency(property.pricePerNight, currency)} por noite`}
+            aria-label={`${displayTitle}, ${formatCurrency(property.pricePerNight, currency)} por noite`}
             aria-pressed={isActive}
             onClick={() => {
               if (draggedSincePointerDown.current) return;
@@ -285,11 +287,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       {activeProperty && (
         <div className="absolute bottom-10 left-1/2 z-30 w-[min(20rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-2xl border border-white bg-white/95 p-3 shadow-2xl backdrop-blur-xl sm:bottom-12">
           <div className="relative mb-2 aspect-[16/9] overflow-hidden rounded-xl bg-neutral-100">
-            {activeProperty.images[0] && <img src={activeProperty.images[0]} alt={activeProperty.title} className="h-full w-full object-cover" />}
+            {activeProperty.images[0] && <img src={activeProperty.images[0]} alt={getPublicPropertyTitle(activeProperty.title)} className="h-full w-full object-cover" />}
             <button type="button" onClick={() => setActiveProperty(null)} aria-label="Fechar detalhes do marcador" className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white"><X className="h-4 w-4" /></button>
             {activeProperty.reviewsSynced && activeProperty.reviewCount > 0 && <span className="absolute bottom-2 left-2 flex items-center gap-1 rounded-full bg-white/95 px-2 py-1 text-[10px] font-bold"><Star className="h-3 w-3 fill-current" />{activeProperty.rating.toFixed(2)}</span>}
           </div>
-          <p className="truncate text-sm font-extrabold text-neutral-900">{activeProperty.title}</p>
+          <p className="truncate text-sm font-extrabold text-neutral-900">{getPublicPropertyTitle(activeProperty.title)}</p>
           <p className="truncate text-xs text-neutral-500">{activeProperty.location.neighborhood}, {activeProperty.location.city}</p>
           <div className="mt-2 flex items-center justify-between border-t border-neutral-200 pt-2">
             <div><strong className="text-sm">{formatCurrency(activeProperty.pricePerNight, currency)}</strong><span className="text-xs text-neutral-500"> / noite*</span></div>
