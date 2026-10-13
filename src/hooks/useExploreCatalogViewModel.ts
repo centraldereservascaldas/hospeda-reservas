@@ -41,11 +41,13 @@ export function useExploreCatalogViewModel({
   );
   const condominiums = useMemo(() => buildCondominiumCatalog(properties), [properties]);
   const isCondominiumView = filters.category === 'condominiums';
-  const catalogStatus: 'loading' | 'error' | 'ready' =
+  const catalogStatus: 'loading' | 'error' | 'stale' | 'ready' =
     catalogLoading && properties.length === 0
       ? 'loading'
-      : catalogLoadError && properties.length === 0
-        ? 'error'
+      : catalogLoadError
+        ? properties.length === 0
+          ? 'error'
+          : 'stale'
         : 'ready';
   const activeFilterCount = useMemo(() => countActivePropertyFilters(filters), [filters]);
   const savedPropertiesList = useMemo(

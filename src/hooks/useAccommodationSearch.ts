@@ -53,9 +53,11 @@ export function useAccommodationSearch({
     `${window.location.pathname}${window.location.search}${window.location.hash}`,
   );
   const initialUrlSearchHandledRef = useRef(false);
+  const searchGenerationRef = useRef(0);
 
   const handleStaysWidgetSearch = useCallback(
     async (searchParams: AccommodationWidgetSearchParams) => {
+      const searchGeneration = ++searchGenerationRef.current;
       let searchedProperties: SearchResultProperty[] | null = null;
       setFilters((previous) => ({
         ...previous,
@@ -94,6 +96,7 @@ export function useAccommodationSearch({
             destination: searchParams.destination,
             propertyId: searchParams.propertyId,
           });
+          if (searchGeneration !== searchGenerationRef.current) return;
           const results = searchResult?.data || [];
           if (searchParams.surpriseMe) {
             const confirmedQuotes = results.filter(
@@ -110,6 +113,7 @@ export function useAccommodationSearch({
             break;
           }
         } catch (error) {
+          if (searchGeneration !== searchGenerationRef.current) return;
           console.warn('Backend search error:', error);
         }
       }

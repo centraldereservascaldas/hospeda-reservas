@@ -551,3 +551,49 @@ test('rejects malformed resort entries and invalid total counts', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('rejects failed or malformed live catalogs instead of labeling bundled data as live', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  console.warn = () => undefined;
+  try {
+    for (const response of [
+      new Response('{"message":"Unavailable"}', { status: 500 }),
+      new Response('{"source":"unknown","data":[]}', { status: 200 }),
+      new Response('{"source":"stays-live","data":[{}]}', { status: 200 }),
+    ]) {
+      globalThis.fetch = async () => response.clone();
+      await assert.rejects(crcnBackendApi.getAccommodations());
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
+test('applies property, city and pagination filters to the undated search fallback', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  globalThis.fetch = async () => new Response('Unavailable', { status: 500 });
+  console.warn = () => undefined;
+  try {
+    const target = STAYS_NET_APARTMENTS[0]!;
+    const result = await crcnBackendApi.searchAccommodations({
+      propertyId: target.staysPropertyId,
+      cities: [target.location.city],
+      skip: 1,
+      limit: 1,
+    });
+    const expected = STAYS_NET_APARTMENTS.filter(
+      (property) =>
+        property.staysPropertyId === target.staysPropertyId &&
+        property.location.city.toLocaleLowerCase('pt-BR') ===
+          target.location.city.toLocaleLowerCase('pt-BR'),
+    );
+    assert.equal(result.total, expected.length);
+    assert.deepEqual(result.data, expected.slice(1, 2));
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});

@@ -72,6 +72,19 @@ test('renders a catalog grid for matching accommodations', () => {
   assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' }));
 });
 
+test('warns when saved accommodations are stale while keeping cards available', () => {
+  render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'stale',
+      properties: [STAYS_NET_APARTMENTS[0]!],
+    }),
+  );
+
+  assert.match(screen.getByRole('alert').textContent || '', /dados salvos/);
+  assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' }));
+});
+
 test('renders gallery selectors with touch-sized hit areas', () => {
   render(
     React.createElement(PropertyCatalogGrid, {

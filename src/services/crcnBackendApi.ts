@@ -229,24 +229,34 @@ class CrcnBackendApiService {
 
   // 1. GET /api/accommodations
   public async getAccommodations(): Promise<Property[]> {
-    try {
-      const res = await fetch('/api/accommodations');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: unknown = await res.json();
-      if (!isRecord(json) || !Array.isArray(json.data) || !json.data.every(isProperty)) {
-        throw new Error('O catálogo retornou dados inválidos.');
-      }
-      const accommodations: Property[] = json.data.map(sanitizePropertyMedia);
-      if (json.source === 'stays-live' && accommodations.length > 0) {
+    const res = await fetch('/api/accommodations');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json: unknown = await res.json();
+    if (
+      !isRecord(json) ||
+      json.source !== 'stays-live' ||
+      !Array.isArray(json.data) ||
+      !json.data.every(isProperty)
+    ) {
+      throw new Error('O catálogo retornou dados inválidos.');
+    }
+    const accommodations: Property[] = json.data.map(sanitizePropertyMedia);
+    if (accommodations.length > 0) {
+      try {
         localStorage.setItem('hospeda_properties', JSON.stringify(accommodations));
         localStorage.setItem('hospeda_properties_source', 'stays-live');
+      } catch (error) {
+        console.warn('Unable to cache the live accommodation catalog:', error);
       }
-      return accommodations;
-    } catch (err) {
-      console.warn('Falling back to local cache for accommodations:', err);
-      const { STAYS_NET_APARTMENTS } = await import('../data/staysApartments');
-      return STAYS_NET_APARTMENTS;
+    } else {
+      try {
+        localStorage.removeItem('hospeda_properties');
+        localStorage.removeItem('hospeda_properties_source');
+      } catch (error) {
+        console.warn('Unable to clear the accommodation catalog cache:', error);
+      }
     }
+    return accommodations;
   }
 
   // 2. GET /api/accommodations/:id
@@ -325,7 +335,17 @@ class CrcnBackendApiService {
           (p) => p.title.toLowerCase().includes(q) || p.subtitle.toLowerCase().includes(q),
         );
       }
-      return { total: filtered.length, data: filtered };
+      if (params.propertyId) {
+        filtered = filtered.filter((p) => p.staysPropertyId === params.propertyId);
+      }
+      if (params.cities?.length) {
+        const cities = new Set(params.cities.map((city) => city.toLocaleLowerCase('pt-BR')));
+        filtered = filtered.filter((p) => cities.has(p.location.city.toLocaleLowerCase('pt-BR')));
+      }
+      const total = filtered.length;
+      const skip = Math.max(0, Math.trunc(params.skip ?? 0));
+      const limit = params.limit === undefined ? undefined : Math.max(0, Math.trunc(params.limit));
+      return { total, data: filtered.slice(skip, limit === undefined ? undefined : skip + limit) };
     }
   }
 

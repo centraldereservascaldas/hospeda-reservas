@@ -30,7 +30,7 @@ const OwnerAccessAdminView = React.lazy(() =>
   })),
 );
 
-type PropertyCatalogStatus = 'loading' | 'error' | 'ready';
+type PropertyCatalogStatus = 'loading' | 'error' | 'stale' | 'ready';
 
 interface MainContentRouterProps {
   currentView: MainView;

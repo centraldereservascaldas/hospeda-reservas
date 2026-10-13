@@ -1,15 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { Property } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
-import { staysApi } from '../services/staysApi';
 import { isProperty } from '../utils/apiValidation';
 import { sanitizePropertyMedia } from '../utils/propertyMedia';
 
 function readCachedProperties(): Property[] {
-  const saved = localStorage.getItem('hospeda_properties');
-  if (!saved) return [];
-
   try {
+    const saved = localStorage.getItem('hospeda_properties');
+    if (!saved) return [];
     const parsed: unknown = JSON.parse(saved);
     if (!Array.isArray(parsed)) return [];
 
@@ -35,54 +34,29 @@ function readCachedProperties(): Property[] {
 }
 
 export function useAccommodationCatalog() {
-  const [properties, setProperties] = useState<Property[]>(readCachedProperties);
+  const [properties, setCatalogProperties] = useState<Property[]>(readCachedProperties);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogLoadError, setCatalogLoadError] = useState(false);
+  const externallyUpdated = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    void staysApi
-      .fetchListings()
-      .then((result) => {
-        if (cancelled || !result.success || result.listings.length === 0) return;
-        setProperties(result.listings);
-        setCatalogLoading(false);
-        setCatalogLoadError(false);
-        localStorage.setItem('hospeda_properties', JSON.stringify(result.listings));
-        localStorage.setItem('hospeda_properties_source', 'stays-live');
-      })
-      .catch(() => {
-        // Keep the cached or fallback catalogue when refreshing fails.
-      });
-
-    return () => {
-      cancelled = true;
-    };
+  const setProperties: Dispatch<SetStateAction<Property[]>> = useCallback((value) => {
+    externallyUpdated.current = true;
+    setCatalogLoadError(false);
+    setCatalogProperties(value);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     void crcnBackendApi
       .getAccommodations()
-      .then(async (list) => {
+      .then((list) => {
         if (cancelled) return;
-        if (list.length > 0) {
-          setProperties(list);
-          localStorage.setItem('hospeda_properties', JSON.stringify(list));
-          localStorage.setItem('hospeda_properties_source', 'stays-live');
-          return;
-        }
-
-        // The bundled catalogue is only used when the API and synchronized
-        // cache have no listings; keep it outside the initial application chunk.
-        const { STAYS_NET_APARTMENTS } = await import('../data/staysApartments');
-        if (!cancelled) {
-          setProperties((current) => (current.length > 0 ? current : STAYS_NET_APARTMENTS));
-        }
+        if (!externallyUpdated.current) setCatalogProperties(list);
+        setCatalogLoadError(false);
       })
       .catch((error) => {
         console.warn('Unable to load accommodation catalogue:', error);
-        if (!cancelled) setCatalogLoadError(true);
+        if (!cancelled && !externallyUpdated.current) setCatalogLoadError(true);
       })
       .finally(() => {
         if (!cancelled) setCatalogLoading(false);
@@ -92,10 +66,6 @@ export function useAccommodationCatalog() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem('hospeda_properties', JSON.stringify(properties));
-  }, [properties]);
 
   return { properties, setProperties, catalogLoading, catalogLoadError };
 }

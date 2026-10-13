@@ -312,3 +312,39 @@ test('exposes URL restoration through the routing ref and scrolls the catalogue'
   assert.equal(hook.result.current.filters.guests.adults, 2);
   assert.equal(scrollCount, 1);
 });
+
+test('ignores an older search response after a newer search finishes', async () => {
+  const pending: Array<(result: { total: number; data: Property[] }) => void> = [];
+  const hook = renderSearchHook({
+    searchAccommodations: () =>
+      new Promise((resolve) => {
+        pending.push(resolve);
+      }),
+  });
+
+  let firstSearch!: Promise<void>;
+  let secondSearch!: Promise<void>;
+  act(() => {
+    firstSearch = hook.result.current.handleStaysWidgetSearch({
+      checkIn: '2027-05-01',
+      checkOut: '2027-05-04',
+      persons: 2,
+    });
+    secondSearch = hook.result.current.handleStaysWidgetSearch({
+      checkIn: '2027-06-01',
+      checkOut: '2027-06-04',
+      persons: 3,
+    });
+  });
+  const latest = { ...property, id: 'latest' };
+  await act(async () => {
+    pending[1]!({ total: 1, data: [latest] });
+    await secondSearch;
+  });
+  await act(async () => {
+    pending[0]!({ total: 1, data: [property] });
+    await firstSearch;
+  });
+  assert.deepEqual(hook.result.current.properties, [latest]);
+  assert.equal(hook.result.current.filters.checkIn, '2027-06-01');
+});

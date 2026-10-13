@@ -17,7 +17,6 @@ Object.assign(globalThis, {
 const { act, cleanup, renderHook, waitFor } = await import('@testing-library/react');
 const { useAccommodationCatalog } = await import('../src/hooks/useAccommodationCatalog.ts');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
-const { staysApi } = await import('../src/services/staysApi.ts');
 
 afterEach(() => {
   cleanup();
@@ -26,7 +25,6 @@ afterEach(() => {
 
 test('uses only synchronized cache, filters stale image URLs, and replaces it with live data', async () => {
   const originalGetAccommodations = crcnBackendApi.getAccommodations;
-  const originalFetchListings = staysApi.fetchListings;
   const cachedProperty = {
     ...STAYS_NET_APARTMENTS[0]!,
     images: ['https://example.com/cover.jpg', 'javascript:invalid'],
@@ -48,13 +46,6 @@ test('uses only synchronized cache, filters stale image URLs, and replaces it wi
     new Promise((resolve) => {
       resolveCatalog = resolve as typeof resolveCatalog;
     });
-  staysApi.fetchListings = async () => ({
-    success: false,
-    listings: [],
-    syncedAt: '',
-    total: 0,
-    source: 'empty',
-  });
 
   try {
     const { result } = renderHook(() => useAccommodationCatalog());
@@ -70,82 +61,84 @@ test('uses only synchronized cache, filters stale image URLs, and replaces it wi
     assert.equal(localStorage.getItem('hospeda_properties_source'), 'stays-live');
     assert.equal(
       JSON.parse(localStorage.getItem('hospeda_properties') || '[]')[0].title,
-      'Acomodação atualizada',
+      cachedProperty.title,
     );
 
     const addedProperty = { ...liveProperty, id: 'new-live-listing' };
     act(() => result.current.setProperties([addedProperty]));
-    await waitFor(() => {
-      assert.equal(
-        JSON.parse(localStorage.getItem('hospeda_properties') || '[]')[0].id,
-        'new-live-listing',
-      );
-    });
+    assert.equal(result.current.properties[0]?.id, 'new-live-listing');
+    assert.equal(
+      JSON.parse(localStorage.getItem('hospeda_properties') || '[]')[0].id,
+      cachedProperty.id,
+    );
   } finally {
     crcnBackendApi.getAccommodations = originalGetAccommodations;
-    staysApi.fetchListings = originalFetchListings;
   }
 });
 
 test('ignores stale catalog responses after unmount', async () => {
   const originalGetAccommodations = crcnBackendApi.getAccommodations;
-  const originalFetchListings = staysApi.fetchListings;
   let resolveCatalog!: (items: typeof STAYS_NET_APARTMENTS) => void;
   crcnBackendApi.getAccommodations = () =>
     new Promise((resolve) => {
       resolveCatalog = resolve as typeof resolveCatalog;
     });
-  staysApi.fetchListings = async () => ({
-    success: false,
-    listings: [],
-    syncedAt: '',
-    total: 0,
-    source: 'empty',
-  });
 
   try {
     const { unmount } = renderHook(() => useAccommodationCatalog());
     unmount();
     await act(async () => resolveCatalog(STAYS_NET_APARTMENTS));
-    assert.deepEqual(JSON.parse(localStorage.getItem('hospeda_properties') || 'null'), []);
+    assert.equal(localStorage.getItem('hospeda_properties'), null);
   } finally {
     crcnBackendApi.getAccommodations = originalGetAccommodations;
-    staysApi.fetchListings = originalFetchListings;
   }
 });
 
-test('loads the bundled catalog when the backend catalog is empty', async () => {
-  const originalGetAccommodations = crcnBackendApi.getAccommodations;
-  const originalFetchListings = staysApi.fetchListings;
-  crcnBackendApi.getAccommodations = async () => [];
-  staysApi.fetchListings = async () => ({
-    success: false,
-    listings: [],
-    syncedAt: '',
-    total: 0,
-    source: 'empty',
-  });
-
+test('keeps a live empty catalog empty without loading bundled listings', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ success: true, source: 'stays-live', data: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   try {
     const { result } = renderHook(() => useAccommodationCatalog());
     await waitFor(() => assert.equal(result.current.catalogLoading, false));
-    assert.ok(result.current.properties.length > 0);
+    assert.deepEqual(result.current.properties, []);
     assert.equal(result.current.catalogLoadError, false);
+    assert.equal(localStorage.getItem('hospeda_properties_source'), null);
   } finally {
-    crcnBackendApi.getAccommodations = originalGetAccommodations;
-    staysApi.fetchListings = originalFetchListings;
+    globalThis.fetch = originalFetch;
   }
 });
 
-test('announces catalog failure when both synchronized sources reject', async () => {
+test('clears synchronized cache when the live API returns an empty catalog', async () => {
+  const originalFetch = globalThis.fetch;
+  localStorage.setItem('hospeda_properties', JSON.stringify([STAYS_NET_APARTMENTS[0]!]));
+  localStorage.setItem('hospeda_properties_source', 'stays-live');
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ success: true, source: 'stays-live', data: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  try {
+    const { result } = renderHook(() => useAccommodationCatalog());
+    assert.equal(result.current.properties.length, 1);
+    await waitFor(() => assert.equal(result.current.catalogLoading, false));
+    assert.deepEqual(result.current.properties, []);
+    assert.equal(result.current.catalogLoadError, false);
+    assert.equal(localStorage.getItem('hospeda_properties'), null);
+    assert.equal(localStorage.getItem('hospeda_properties_source'), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('announces catalog failure when the live source rejects', async () => {
   const originalGetAccommodations = crcnBackendApi.getAccommodations;
-  const originalFetchListings = staysApi.fetchListings;
   const originalWarn = console.warn;
   crcnBackendApi.getAccommodations = async () => {
     throw new Error('catalog unavailable');
-  };
-  staysApi.fetchListings = async () => {
-    throw new Error('Stays sync unavailable');
   };
   console.warn = () => undefined;
 
@@ -156,7 +149,51 @@ test('announces catalog failure when both synchronized sources reject', async ()
     assert.deepEqual(result.current.properties, []);
   } finally {
     crcnBackendApi.getAccommodations = originalGetAccommodations;
-    staysApi.fetchListings = originalFetchListings;
+    console.warn = originalWarn;
+  }
+});
+
+test('does not let a late catalog response replace an active search result', async () => {
+  const originalGetAccommodations = crcnBackendApi.getAccommodations;
+  let resolveCatalog!: (items: typeof STAYS_NET_APARTMENTS) => void;
+  crcnBackendApi.getAccommodations = () =>
+    new Promise((resolve) => {
+      resolveCatalog = resolve as typeof resolveCatalog;
+    });
+
+  try {
+    const { result } = renderHook(() => useAccommodationCatalog());
+    const searchResult = [{ ...STAYS_NET_APARTMENTS[0]!, id: 'search-result' }];
+    act(() => result.current.setProperties(searchResult));
+    await act(async () => resolveCatalog(STAYS_NET_APARTMENTS));
+    assert.deepEqual(result.current.properties, searchResult);
+    assert.equal(result.current.catalogLoading, false);
+  } finally {
+    crcnBackendApi.getAccommodations = originalGetAccommodations;
+  }
+});
+
+test('shows a stale-data warning for cached listings after API failure, then clears it on search', async () => {
+  const originalGetAccommodations = crcnBackendApi.getAccommodations;
+  const originalWarn = console.warn;
+  localStorage.setItem('hospeda_properties', JSON.stringify([STAYS_NET_APARTMENTS[0]!]));
+  localStorage.setItem('hospeda_properties_source', 'stays-live');
+  crcnBackendApi.getAccommodations = async () => {
+    throw new Error('catalog unavailable');
+  };
+  console.warn = () => undefined;
+
+  try {
+    const { result } = renderHook(() => useAccommodationCatalog());
+    await waitFor(() => assert.equal(result.current.catalogLoading, false));
+    assert.equal(result.current.catalogLoadError, true);
+    assert.equal(result.current.properties.length, 1);
+
+    act(() => result.current.setProperties([]));
+    assert.equal(result.current.catalogLoadError, false);
+    assert.deepEqual(result.current.properties, []);
+  } finally {
+    crcnBackendApi.getAccommodations = originalGetAccommodations;
     console.warn = originalWarn;
   }
 });

@@ -66,4 +66,7 @@ test('derives catalog results, categories, saved properties, and empty-catalog s
 
   rerender({ ...options, properties: [], catalogLoading: false, catalogLoadError: true });
   assert.equal(result.current.catalogStatus, 'error');
+
+  rerender({ ...options, properties: [property], catalogLoading: false, catalogLoadError: true });
+  assert.equal(result.current.catalogStatus, 'stale');
 });
