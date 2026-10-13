@@ -103,8 +103,8 @@ export const PropertyReviewsSection: React.FC<PropertyReviewsSectionProps> = ({
             Avaliações dos hóspedes
           </h2>
           {property.reviewsSynced
-            ? 'A API não retornou avaliações para este apartamento.'
-            : 'As avaliações da API não estão disponíveis no momento.'}
+            ? 'Este anúncio ainda não tem avaliações publicadas.'
+            : 'As avaliações deste anúncio não estão disponíveis no momento.'}
         </div>
       )}
     </section>
