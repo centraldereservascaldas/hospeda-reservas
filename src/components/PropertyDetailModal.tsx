@@ -10,14 +10,11 @@ import {
   Sparkles, 
   ChevronRight, 
   BedDouble, 
-  MapPin, 
-  Clock, 
   Maximize2,
   ChevronDown,
   ChevronLeft,
 } from 'lucide-react';
 import { Property, Currency } from '../types';
-import { LogoCRCN } from './LogoCRCN';
 import { formatCurrency, calculateNights } from '../utils/formatters';
 import { crcnBackendApi, CalculatedPriceResponse } from '../services/crcnBackendApi';
 import { isCalendarRangeAvailable } from '../utils/staysAvailability';
@@ -27,6 +24,9 @@ import { getSyncedPropertyReviews } from '../utils/propertyReviews';
 import { PropertyReviewsSection } from './PropertyReviewsSection';
 import { PropertyAmenitiesSection } from './PropertyAmenitiesSection';
 import { PropertyPoliciesSection } from './PropertyPoliciesSection';
+import { HostAvatar } from './HostAvatar';
+import { PropertyLocationSection } from './PropertyLocationSection';
+import { PropertyHostSection } from './PropertyHostSection';
 import { useDialogFocus } from './useDialogFocus';
 
 interface PropertyDetailModalProps {
@@ -51,26 +51,6 @@ interface PropertyDetailModalProps {
     quote: CalculatedPriceResponse;
   }) => void;
 }
-
-const HostAvatar: React.FC<{ src?: string; alt: string; className?: string }> = ({ src, alt, className = '' }) => {
-  const [hasError, setHasError] = useState(!src);
-
-  useEffect(() => setHasError(!src), [src]);
-
-  return (
-    <div className={`relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ${className}`}>
-      <LogoCRCN showText={false} size="sm" variant="light" className="scale-[0.82]" />
-      {src && !hasError && (
-        <img
-          src={src}
-          alt={alt}
-          onError={() => setHasError(true)}
-          className="absolute inset-0 z-10 h-full w-full rounded-full object-cover"
-        />
-      )}
-    </div>
-  );
-};
 
 export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   property,
@@ -260,17 +240,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const totalGuests = adults + children;
   const guestLimit = Math.max(1, Number(property.maxGuests) || 1);
   const selectedRangeAvailable = calendarAvailable && isCalendarRangeAvailable(calendarDays, checkIn, checkOut);
-  const latitude = property.location.lat;
-  const longitude = property.location.lng;
-  const hasValidCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude)
-    && Math.abs(latitude) > 0.01 && Math.abs(longitude) > 0.01;
-  const mapBounds = new URLSearchParams({
-    bbox: `${longitude - 0.008},${latitude - 0.006},${longitude + 0.008},${latitude + 0.006}`,
-    layer: 'mapnik',
-    marker: `${latitude},${longitude}`,
-  });
-  const mapEmbedUrl = `https://www.openstreetmap.org/export/embed.html?${mapBounds.toString()}`;
-  const externalMapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${latitude},${longitude}`)}`;
   const calendarYear = displayedMonth.getFullYear();
   const calendarMonth = displayedMonth.getMonth();
   const calendarLeadingDays = (new Date(calendarYear, calendarMonth, 1).getDay() + 6) % 7;
@@ -657,75 +626,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   {calendarMessage && <p className="mt-2 text-xs text-amber-700" role="status">{calendarMessage}</p>}
                 </div>
 
-                {/* Where you will be / Onde você estará (Airbnb Style Map Section) */}
-                <div className="pt-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h3 className="text-lg font-bold text-neutral-900">
-                        Onde você estará
-                      </h3>
-                      <p className="text-xs text-neutral-600 mt-0.5">
-                        {property.location.neighborhood ? `${property.location.neighborhood}, Caldas Novas - GO` : 'Caldas Novas - GO'}
-                      </p>
-                    </div>
-                    <span className="text-xs font-bold text-orange-600 flex items-center gap-1 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200">
-                      <MapPin className="w-3.5 h-3.5 text-orange-500" />
-                      Região das Águas Termais
-                    </span>
-                  </div>
-
-                  <div className="relative h-72 overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-100 shadow-xs sm:h-80">
-                    {hasValidCoordinates ? (
-                      <iframe
-                        title={`Mapa da localização de ${property.title}`}
-                        src={mapEmbedUrl}
-                        className="h-full w-full border-0"
-                        style={{ filter: 'saturate(0.78) sepia(0.12) hue-rotate(-8deg)' }}
-                        loading="lazy"
-                        referrerPolicy="no-referrer-when-downgrade"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-neutral-600">
-                        Não há coordenadas disponíveis para mostrar o mapa desta acomodação.
-                      </div>
-                    )}
-                    {hasValidCoordinates && (
-                      <a
-                        href={externalMapUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white/95 px-3 py-1.5 text-xs font-bold text-neutral-900 shadow-md transition-colors hover:bg-white"
-                      >
-                        <span>Abrir no Google Maps</span>
-                        <MapPin className="h-3.5 w-3.5 text-orange-600" />
-                      </a>
-                    )}
-                  </div>
-                  <p className="mt-2 text-[11px] text-neutral-500">A localização exibida pode ser aproximada para proteger a privacidade do anfitrião.</p>
-                </div>
-                <div className="pt-6">
-                  <div className="flex items-start gap-4">
-                    <HostAvatar src={property.host.avatar} alt={property.host.name} className="shadow-sm" />
-                    <div>
-                      <h3 className="text-base font-bold text-neutral-900">
-                        Hospedado por {property.host.name}
-                      </h3>
-                      <p className="text-xs text-neutral-500">
-                        Cadastrado em {property.host.joinedYear} • {property.host.isSuperhost ? 'Superhost verificado' : 'Anfitrião'}
-                      </p>
-                      <p className="text-xs text-neutral-700 mt-2 italic leading-relaxed">
-                        "{property.host.bio}"
-                      </p>
-                      <div className="mt-3 flex items-center gap-4 text-xs text-neutral-600">
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-neutral-400" />
-                          Tempo de resposta: {property.host.responseTime}
-                        </span>
-                        <span>Taxa de resposta: {property.host.responseRate}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <PropertyLocationSection title={property.title} location={property.location} />
+                <PropertyHostSection host={property.host} />
 
               </div>
 
