@@ -92,3 +92,51 @@ test('booking calendar names full dates and exposes the active date field', asyn
     crcnBackendApi.calculatePrice = originalCalculatePrice;
   }
 });
+
+test('photo gallery supports keyboard navigation and returns focus to its opener', async () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalCalculatePrice = crcnBackendApi.calculatePrice;
+  crcnBackendApi.getAccommodationCalendar = async () => [];
+  crcnBackendApi.calculatePrice = async () => null;
+  try {
+    const property = STAYS_NET_APARTMENTS[0]!;
+    const { container, getByRole } = render(
+      React.createElement(PropertyDetailModal, {
+        property,
+        initialCheckIn: '2026-11-11',
+        initialCheckOut: '2026-11-15',
+        initialGuests: { adults: 2, children: 0, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking: () => {},
+      }),
+    );
+    const galleryTrigger = getByRole('button', {
+      name: `Mostrar todas as ${property.images.length} fotos`,
+    });
+    assert.ok(property.images.length > 1);
+    galleryTrigger.focus();
+    fireEvent.click(galleryTrigger);
+
+    const galleryDialog = container.ownerDocument.querySelector<HTMLElement>(
+      '[aria-labelledby="property-gallery-title"]',
+    );
+    assert.ok(galleryDialog);
+    assert.equal(galleryDialog.getAttribute('role'), 'dialog');
+    assert.match(galleryDialog.textContent || '', /1 de \d+ fotos/);
+    fireEvent.click(getByRole('button', { name: 'Próxima foto' }));
+    assert.match(galleryDialog.textContent || '', /2 de \d+ fotos/);
+
+    fireEvent.keyDown(getByRole('button', { name: 'Fechar galeria' }), { key: 'Escape' });
+    assert.equal(
+      container.ownerDocument.querySelector('[aria-labelledby="property-gallery-title"]'),
+      null,
+    );
+    assert.equal(document.activeElement, galleryTrigger);
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
+});
