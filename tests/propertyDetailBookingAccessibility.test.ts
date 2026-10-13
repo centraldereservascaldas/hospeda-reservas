@@ -23,9 +23,121 @@ const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/r
 const { PropertyDetailModal } = await import('../src/components/property/PropertyDetailModal.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
+const liveQuote = {
+  success: true,
+  listingId: 'JQ08G',
+  staysListingId: 'JQ08G',
+  nights: 2,
+  dailyRate: 350,
+  baseTotal: 700,
+  cleaningFee: 150,
+  serviceFee: 0,
+  discount: 0,
+  total: 850,
+  currency: 'BRL',
+  feesIncluded: false,
+  cleaningIncluded: false,
+  fees: [],
+  source: 'stays-live',
+  breakdown: {
+    dailyRateText: 'R$ 350,00 x 2 noites',
+    cleaningFeeText: 'Taxa de limpeza',
+    serviceFeeText: 'Taxa de serviço',
+    totalText: 'R$ 850,00',
+  },
+};
+
 afterEach(() => {
   cleanup();
   document.body.innerHTML = '';
+});
+
+test('booking callback requires live price and an available selected range', async () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalCalculatePrice = crcnBackendApi.calculatePrice;
+  const property = STAYS_NET_APARTMENTS[0]!;
+  const onStartBooking = (bookingData: unknown) => submittedBookings.push(bookingData);
+  const submittedBookings: unknown[] = [];
+  const calendar = Array.from({ length: 5 }, (_, index) => ({
+    date: `2026-11-${String(11 + index).padStart(2, '0')}`,
+    avail: 1,
+  }));
+  crcnBackendApi.getAccommodationCalendar = async () => calendar;
+  crcnBackendApi.calculatePrice = async () => liveQuote;
+
+  try {
+    const { getByRole } = render(
+      React.createElement(PropertyDetailModal, {
+        property,
+        initialCheckIn: '2026-11-11',
+        initialCheckOut: '2026-11-13',
+        initialGuests: { adults: 2, children: 1, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking,
+      }),
+    );
+
+    await waitFor(() => {
+      assert.equal(
+        (getByRole('button', { name: 'Continuar para reserva' }) as HTMLButtonElement).disabled,
+        false,
+      );
+    });
+
+    const continueButton = getByRole('button', { name: 'Continuar para reserva' });
+    fireEvent.click(continueButton);
+    assert.equal(submittedBookings.length, 1);
+    assert.deepEqual(submittedBookings[0], {
+      property,
+      checkIn: '2026-11-11',
+      checkOut: '2026-11-13',
+      guests: { adults: 2, children: 1, infants: 0, pets: 0 },
+      nights: 2,
+      totalAmount: 850,
+      cleaningFee: 150,
+      serviceFee: 0,
+      discount: 0,
+      quote: liveQuote,
+    });
+
+    crcnBackendApi.getAccommodationCalendar = async () => [];
+    crcnBackendApi.calculatePrice = async () => null;
+    // The live range is no longer backed by authoritative availability or a live quote.
+    // Re-rendering a fresh modal verifies that its disabled CTA cannot submit a booking.
+    cleanup();
+    const unavailable = render(
+      React.createElement(PropertyDetailModal, {
+        property,
+        initialCheckIn: '2026-11-11',
+        initialCheckOut: '2026-11-13',
+        initialGuests: { adults: 2, children: 1, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking,
+      }),
+    );
+    await waitFor(() => {
+      assert.equal(
+        (
+          unavailable.getByRole('button', {
+            name: 'Disponibilidade indisponível',
+          }) as HTMLButtonElement
+        ).disabled,
+        true,
+      );
+    });
+    fireEvent.click(unavailable.getByRole('button', { name: 'Disponibilidade indisponível' }));
+    assert.equal(submittedBookings.length, 1);
+    unavailable.unmount();
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
 });
 
 test('booking calendar names full dates and exposes the active date field', async () => {
