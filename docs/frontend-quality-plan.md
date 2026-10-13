@@ -8,7 +8,7 @@ Aplicar as melhorias da auditoria do frontend por etapas pequenas e verificávei
 
 - Frontend: React 19, TypeScript, Vite 6 e Tailwind CSS 4.
 - Backend Laravel coexistindo com serviços legados. Preservar `/api/*`, `server.ts` e as integrações existentes.
-- Hotspots observados: `src/App.tsx`, `src/components/PropertyDetailModal.tsx` e `src/components/StaysNetModal.tsx`.
+- Hotspots observados: `src/App.tsx` e `src/components/PropertyDetailModal.tsx`. O antigo `StaysNetModal.tsx` foi removido após confirmar que não tinha nenhum consumidor.
 - O TypeScript partiu de `strict: false`; havia usos de `any` em serviços e componentes.
 - Havia `package-lock.json` e `bun.lock`, enquanto o README instruía `npm ci`.
 - O build partiu de um chunk JavaScript de aproximadamente 777 kB e uma importação dinâmica ineficaz de `src/data/staysApartments.ts`.
@@ -24,9 +24,9 @@ O trabalho é feito em commits locais pequenos, revisados e validados. A branch 
 | 0 — padrão de diálogo | Implementada; validação manual parcial | Testes automatizados cobrem foco inicial, contenção de Tab, Escape, retorno do foco e controles em portais fora do DOM do diálogo. Em Chromium local, detalhes e diálogos aninhados de hóspedes, datas e galeria abriram com nome/foco esperados; Escape fechou a camada superior e restaurou foco ao acionador. Outros fluxos seguem pendentes. |
 | 1 — acessibilidade | Em andamento; fixes priorizados com testes | Busca, filtros, checkout, cadastro, conta, suporte, condomínio, detalhe e cartões receberam melhorias anteriores. Nesta continuação: `FilterModal` ressincroniza o rascunho após reset externo (teste de regressão); diálogos de voucher/cancelamento em `TripsView` agora têm nome, semântica modal, foco inicial/retorno e Escape; Sofia tem campo e envio nomeados, log `aria-live` e rolagem que respeita movimento reduzido; menu Minha Conta expõe seu estado, controle associado e fecha por Escape com retorno de foco; navegação do painel de proprietário informa seção atual e anuncia carregamento; calendários e seletores portaled do widget Stays ficam no ciclo de foco do diálogo. Testes automatizados cobrem essas mudanças; revisar jornadas restantes, navegador e leitor de tela. |
 | 2 — tipos e dependências | Concluída para o escopo auditado | TypeScript estrito agora checa frontend, `server.ts` e testes via `tsconfig.json`; declaração local mínima tipa o uso existente de jsdom. npm é o único gerenciador; payloads externos seguem validados, incluindo agora o formato, datas, status e números da resposta do dashboard Laravel de proprietário. |
-| 3 — bundle e carregamento | Em andamento; primeira redução do chunk inicial medida | Telas/modais, catálogo Stays e agora SDK Supabase estão em chunks separados. Build atual: chunk de entrada 349,56 kB / 104,74 kB gzip; o chunk Supabase mede 226,85 kB / 58,83 kB gzip e ainda é solicitado de forma assíncrona no início para restaurar a sessão. A divisão reduz o JS inicial, mas não reduz bytes totais caso o chunk de autenticação seja baixado logo após a renderização. Sem medição de navegador não alegar ganho de LCP/Web Vitals; validar callback OAuth, restauração de sessão e checkout no navegador antes de encerrar a fase. |
+| 3 — bundle e carregamento | Em andamento; primeira redução do chunk inicial medida | Telas/modais, catálogo Stays e agora SDK Supabase estão em chunks separados. Build após remover a tela Stays órfã: chunk JS inicial 349,56 kB / 104,73 kB gzip e CSS 105,58 kB / 15,57 kB gzip; o chunk Supabase mede 226,85 kB / 58,83 kB gzip e ainda é solicitado de forma assíncrona no início para restaurar a sessão. A divisão reduz o JS inicial, mas não reduz bytes totais caso o chunk de autenticação seja baixado logo após a renderização. Sem medição de navegador não alegar ganho de LCP/Web Vitals; validar callback OAuth, restauração de sessão e checkout no navegador antes de encerrar a fase. |
 | 4 — tokens e movimento | Parcialmente concluída | Tokens de foco, página e borda de vidro; suporte global a movimento reduzido. Sofia agora usa rolagem automática sem animação quando `prefers-reduced-motion` está ativo. Revisão visual de consistência e inventário das transições próprias nas telas principais continuam pendentes. |
-| 5 — decomposição dos hotspots | Em andamento | Extraídos cálculo de preços/taxas, avaliações, comodidades, regras/políticas, localização/mapa, perfil do anfitrião, avatar e agora o resumo, destaques, descrição e acomodações de `PropertyDetailModal.tsx`; essas seções apresentacionais são componentes separados. Cálculos, médias e links de mapa têm testes. Continuar por seções apresentacionais e depois revisar `App.tsx`; `StaysNetModal.tsx` não tem consumidor no código atual e deve ser avaliado como possível módulo órfão antes de refatorar. Sem alterar regras de negócio; um hotspot por vez. |
+| 5 — decomposição dos hotspots | Em andamento | Extraídos cálculo de preços/taxas, avaliações, comodidades, regras/políticas, localização/mapa, perfil do anfitrião, avatar e o resumo, destaques, descrição e acomodações de `PropertyDetailModal.tsx`; essas seções apresentacionais são componentes separados. Cálculos, médias e links de mapa têm testes. `StaysNetModal.tsx` foi removido por não ter consumidor; `StaysSearchWidget` continua ativo no app e na busca. Próximo: revisar seções restantes de `PropertyDetailModal.tsx` e depois decompor `App.tsx`, sem alterar regras de negócio. |
 | 6 — lint, formatação, testes e CI | Base implementada; cobertura incremental | ESLint, Prettier, testes de foco/diálogo e workflow GitHub Actions. Em 2026-10-12, `npm run lint`, `npm test` (74/74), `npm run format:check` e `npm run build` passam; o teste novo cobre validação da resposta do dashboard Laravel de proprietário. Formatação segue limitada para evitar reformatar o legado. O chunk principal está abaixo do limite de aviso de 500 kB; o chunk Supabase é carregado separadamente. |
 | 7 — convenções permanentes | Parcialmente concluída | Regras de qualidade foram adicionadas ao `AGENTS.md`; manter este plano atualizado com critérios e estado executável. |
 
@@ -107,7 +107,7 @@ Na sequência, com os componentes de localização/anfitrião extraídos, inspe�
 
 **Pacote C — Stays e detalhes de acomodação**
 
-- Responsável por `src/components/StaysNetModal.tsx` e `src/components/PropertyDetailModal.tsx`.
+- Responsável por `src/components/PropertyDetailModal.tsx`.
 - Aplicar padrão aos diálogos e subdiálogos existentes, incluindo galeria, datas, hóspedes e mensagens de status; corrigir rótulos e botões de ícone.
 - Preservar contratos da Stays API, navegação de calendário, cotação e comportamento de disponibilidade.
 
@@ -162,7 +162,7 @@ Na sequência, com os componentes de localização/anfitrião extraídos, inspe�
 
 **Responsabilidade:** um hotspot por agente/PR local sequencial; arquivos não devem ser editados simultaneamente.
 
-**Ordem:** `PropertyDetailModal.tsx`, depois `StaysNetModal.tsx`, depois `App.tsx`.
+**Ordem:** concluir `PropertyDetailModal.tsx`, depois decompor `App.tsx`. `StaysNetModal.tsx` foi avaliado e removido por não ter consumidores; o widget compartilhado continua em `StaysSearchWidget.tsx`.
 
 **Trabalho:** extrair subcomponentes/hooks por responsabilidade, sem alterar APIs ou regras de negócio. Só criar primitivas compartilhadas quando dois ou mais usos concretos justificarem a abstração.
 
