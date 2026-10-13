@@ -17,7 +17,7 @@ import { CondominiumDirectory } from './components/CondominiumDirectory';
 import { StaysSearchWidget } from './components/StaysSearchWidget';
 import { LogoCRCN } from './components/LogoCRCN';
 import { crcnBackendApi } from './services/crcnBackendApi';
-import { initialAuthCallbackError, supabase } from './services/supabase';
+import { getAuthCallbackError } from './utils/authCallback';
 import { getSurpriseDateCandidates } from './utils/surpriseDates';
 import { buildCondominiumCatalog } from './utils/condominiumCatalog';
 import { createDefaultSearchFilters, mergeSearchFiltersIntoUrl, parseSearchFilters } from './utils/searchUrlState';
@@ -32,6 +32,8 @@ import {
   ShieldCheck, 
   Search 
 } from 'lucide-react';
+
+const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
 const InteractiveMap = React.lazy(() => import('./components/InteractiveMap').then(({ InteractiveMap }) => ({ default: InteractiveMap })));
 const PropertyDetailModal = React.lazy(() => import('./components/PropertyDetailModal').then(({ PropertyDetailModal }) => ({ default: PropertyDetailModal })));
@@ -175,27 +177,48 @@ export default function App() {
     if (initialAuthCallbackError) {
       setAuthCallbackNotice(`Não foi possível confirmar o e-mail: ${initialAuthCallbackError}`);
     }
-    if (!supabase) return;
+    if (!import.meta.env.VITE_SUPABASE_URL?.trim() || !import.meta.env.VITE_SUPABASE_ANON_KEY?.trim()) return;
+
+    let isMounted = true;
+    let unsubscribeAuth: (() => void) | undefined;
 
     const handleConfirmedSession = (session: import('@supabase/supabase-js').Session | null) => {
+      if (!isMounted) return;
       if (localStorage.getItem('hospeda_pending_email_confirmation') !== 'true') return;
       if (!session?.user.email_confirmed_at) return;
       localStorage.removeItem('hospeda_pending_email_confirmation');
       setAuthCallbackNotice('E-mail confirmado! Volte à reserva e entre na sua conta para continuar.');
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setAccountSession(session);
-      if (event === 'PASSWORD_RECOVERY') setAccountModalMode('recovery');
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        handleConfirmedSession(session);
-      }
-    });
-    void supabase.auth.getSession().then(({ data }) => {
-      setAccountSession(data.session);
-      handleConfirmedSession(data.session);
-    });
-    return () => subscription.unsubscribe();
+    const bootstrapTimer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const { supabase } = await import('./services/supabase');
+          if (!isMounted || !supabase) return;
+          const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (!isMounted) return;
+            setAccountSession(session);
+            if (event === 'PASSWORD_RECOVERY') setAccountModalMode('recovery');
+            if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+              handleConfirmedSession(session);
+            }
+          });
+          unsubscribeAuth = () => subscription.unsubscribe();
+          const { data } = await supabase.auth.getSession();
+          if (!isMounted) return;
+          setAccountSession(data.session);
+          handleConfirmedSession(data.session);
+        } catch {
+          if (isMounted) setAuthCallbackNotice('Não foi possível verificar sua sessão. Tente atualizar a página.');
+        }
+      })();
+    }, 0);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(bootstrapTimer);
+      unsubscribeAuth?.();
+    };
   }, []);
 
   // Modals & Active selections
@@ -665,6 +688,7 @@ export default function App() {
         isAccountConnected={Boolean(accountSession?.user.email_confirmed_at)}
         onOpenAccount={setAccountModalMode}
         onSignOut={async () => {
+          const { supabase } = await import('./services/supabase');
           if (!supabase) throw new Error('Serviço de autenticação indisponível.');
           const { error } = await supabase.auth.signOut();
           if (error) throw error;
