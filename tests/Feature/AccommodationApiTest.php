@@ -7,6 +7,13 @@ use Tests\TestCase;
 
 class AccommodationApiTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['services.stays.client_id' => '', 'services.stays.client_secret' => '']);
+    }
+
     public function test_catalog_returns_local_fallback_without_stays_credentials(): void
     {
         config(['services.stays.client_id' => '', 'services.stays.client_secret' => '']);
@@ -35,6 +42,25 @@ class AccommodationApiTest extends TestCase
         $this->getJson('/api/external/v1/content/listings')->assertOk()->assertJsonCount(19);
         $this->getJson('/api/external/v1/translation/listing-amenities')->assertOk()->assertJsonPath('0.code', 'air_conditioning');
         $this->getJson('/api/external/v1/translation/property-amenities')->assertOk()->assertJsonPath('0.code', 'thermal_pools');
+    }
+
+    public function test_live_listing_compatibility_handles_records_without_amenities(): void
+    {
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake([
+            '*' => Http::response([[
+                '_id' => 'live-listing',
+                'id' => 'live-listing',
+                '_mstitle' => ['pt_BR' => 'Anúncio live'],
+                '_t_mainImageMeta' => ['url' => 'https://crcn.stays.net/image.jpg'],
+            ]], 200),
+        ]);
+
+        $this->getJson('/api/external/v1/content/listings')
+            ->assertOk()
+            ->assertJsonPath('0._id', 'live-listing')
+            ->assertJsonPath('0.amenities', [])
+            ->assertJsonPath('0.images.0', 'https://crcn.stays.net/image.jpg');
     }
 
     public function test_dated_live_search_maps_stays_result_and_quote(): void

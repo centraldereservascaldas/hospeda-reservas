@@ -273,7 +273,20 @@ class AccommodationController extends Controller
     private function mapListing(array $listing, array $catalog): array
     {
         $id = (string) ($listing['id'] ?? $listing['code'] ?? $listing['_id'] ?? '');
-        $existing = collect($catalog)->first(fn (array $item): bool => in_array($id, [$item['id'] ?? '', $item['staysListingId'] ?? '', $listing['_id'] ?? ''], true)) ?? [];
+        $listingIds = array_values(array_filter([
+            (string) ($listing['id'] ?? ''),
+            (string) ($listing['code'] ?? ''),
+            (string) ($listing['_id'] ?? ''),
+        ]));
+        $existing = collect($catalog)->first(function (array $item) use ($listingIds): bool {
+            $catalogIds = array_filter([
+                $item['id'] ?? null,
+                $item['staysListingId'] ?? null,
+                $item['staysListingObjectId'] ?? null,
+            ], 'is_string');
+
+            return array_intersect($listingIds, $catalogIds) !== [];
+        }) ?? [];
         $location = $existing['location'] ?? [];
         $images = collect([$listing['_t_mainImageMeta']['url'] ?? null, ...($listing['images'] ?? [])])->filter()->unique()->values()->all();
 
@@ -303,7 +316,7 @@ class AccommodationController extends Controller
             '_i_maxGuests' => $property['maxGuests'], '_i_rooms' => $property['bedrooms'], '_i_beds' => $property['beds'], '_f_bathrooms' => $property['bathrooms'],
             'address' => ['street' => $property['location']['address'], 'neighborhood' => $property['location']['neighborhood'], 'city' => $property['location']['city'], 'state' => $property['location']['state'], 'country' => $property['location']['country']],
             'latLng' => ['lat' => $property['location']['lat'], 'lng' => $property['location']['lng']], 'instantBooking' => $property['instantBook'], 'bookingPrice' => $property['pricePerNight'],
-            'cleaningFee' => $property['cleaningFee'], '_t_mainImageMeta' => ['url' => $property['images'][0] ?? null], 'images' => $property['images'], 'amenities' => $property['amenities'],
+            'cleaningFee' => $property['cleaningFee'], '_t_mainImageMeta' => ['url' => $property['images'][0] ?? null], 'images' => $property['images'], 'amenities' => $property['amenities'] ?? [],
             'listingAmenities' => $property['listingAmenities'] ?? [], 'propertyAmenities' => $property['propertyAmenities'] ?? [], 'sleepingArrangements' => $property['sleepingArrangements'] ?? [],
         ];
     }
