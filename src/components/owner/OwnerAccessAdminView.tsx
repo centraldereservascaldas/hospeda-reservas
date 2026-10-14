@@ -360,6 +360,10 @@ const staysActionLabels: Record<string, string> = {
   register_payment: 'Lançamento do pagamento',
   confirm_reservation: 'Confirmação da reserva',
 };
+const manualCancellationReasonLabels: Record<string, string> = {
+  guest_cancellation_requested: 'cancelamento solicitado pelo hóspede',
+  payment_approved_after_hold: 'pagamento aprovado após o prazo da pré-reserva',
+};
 const webhookStatusLabels: Record<DirectBookingOperationsWebhook['status'], string> = {
   received: 'Recebido',
   retrying: 'Em nova tentativa',
@@ -437,6 +441,14 @@ const DirectBookingOperationsCard: React.FC<{
     }
   };
 
+  const latePaymentCancellationReview =
+    order.status === 'atencao_operacional' &&
+    order.latePaymentAfterHold &&
+    order.paymentStatus === 'approved' &&
+    order.staysReservationId !== null;
+  const canStartManualCancellation =
+    order.status === 'cancelamento_solicitado' || latePaymentCancellationReview;
+
   return (
     <article className="rounded-2xl border border-amber-200/80 bg-white p-4 shadow-sm sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -456,6 +468,22 @@ const DirectBookingOperationsCard: React.FC<{
           {operationsMoney.format(Number(order.quoteTotal))}
         </p>
       </div>
+      {(order.paymentApprovedWithoutConfirmedReservation || order.staysActionFailed) && (
+        <ul
+          className="mt-4 space-y-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-xs font-semibold text-rose-950"
+          aria-label="Alertas operacionais prioritários"
+        >
+          {order.paymentApprovedWithoutConfirmedReservation && (
+            <li role="alert">
+              Pagamento aprovado sem reserva confirmada na Stays. Conferir antes de qualquer ação
+              com o hóspede.
+            </li>
+          )}
+          {order.staysActionFailed && (
+            <li role="alert">Uma ação de integração com a Stays falhou e requer conferência.</li>
+          )}
+        </ul>
+      )}
       <dl className="mt-4 grid gap-3 border-t border-neutral-200 pt-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <dt className="font-bold uppercase tracking-wide text-neutral-500">Imóvel</dt>
@@ -528,14 +556,14 @@ const DirectBookingOperationsCard: React.FC<{
           )}
         </p>
       )}
-      {order.status === 'cancelamento_solicitado' && (
+      {canStartManualCancellation && (
         <div className="mt-4 border-t border-neutral-100 pt-4">
           {confirmingManualCancellation ? (
             <div className="space-y-3">
               <p className="text-xs leading-5 text-neutral-700">
-                Este encaminhamento só registra a decisão e não altera a Stays nem o gateway. A
-                equipe ainda precisará cancelar a reserva na Stays, executar o reembolso e conferir
-                ambos.
+                {latePaymentCancellationReview
+                  ? 'O pagamento foi aprovado após o prazo da pré-reserva. Este registro inicia a revisão manual; não altera a Stays nem o Mercado Pago. A equipe ainda precisa cancelar a reserva na Stays e executar o estorno conforme a política aplicável.'
+                  : 'Este encaminhamento só registra a decisão e não altera a Stays nem o gateway. A equipe ainda precisará cancelar a reserva na Stays, executar o reembolso e conferir ambos.'}
               </p>
               {manualCancellationError && (
                 <p className="text-xs font-semibold text-rose-800" role="alert">
@@ -557,7 +585,11 @@ const DirectBookingOperationsCard: React.FC<{
                   disabled={startingManualCancellation}
                   className="rounded-xl bg-neutral-950 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60"
                 >
-                  {startingManualCancellation ? 'Registrando…' : 'Registrar encaminhamento manual'}
+                  {startingManualCancellation
+                    ? 'Registrando…'
+                    : latePaymentCancellationReview
+                      ? 'Registrar revisão de pagamento tardio'
+                      : 'Registrar encaminhamento manual'}
                 </button>
               </div>
             </div>
@@ -568,7 +600,9 @@ const DirectBookingOperationsCard: React.FC<{
                 onClick={() => setConfirmingManualCancellation(true)}
                 className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
               >
-                Registrar encaminhamento manual
+                {latePaymentCancellationReview
+                  ? 'Registrar revisão de pagamento tardio'
+                  : 'Registrar encaminhamento manual'}
               </button>
             </div>
           )}
@@ -583,6 +617,21 @@ const DirectBookingOperationsCard: React.FC<{
             O pedido só sai desta fila quando a Stays confirmar a baixa e o Mercado Pago informar o
             estorno.
           </p>
+          {order.manualCancellationReview && (
+            <p className="text-[11px] leading-5 text-neutral-600">
+              Revisão registrada por ID{' '}
+              <span className="font-mono text-neutral-800">
+                {order.manualCancellationReview.reviewedBy ?? 'indisponível'}
+              </span>
+              {order.manualCancellationReview.reason
+                ? ` · ${manualCancellationReasonLabels[order.manualCancellationReview.reason] ?? order.manualCancellationReview.reason}`
+                : ''}
+              {order.manualCancellationReview.at
+                ? ` · ${operationsDateTime.format(new Date(order.manualCancellationReview.at))}`
+                : ''}
+              .
+            </p>
+          )}
           <dl className="grid gap-2 text-xs sm:grid-cols-2">
             <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
               <dt className="font-bold text-neutral-600">Cancelamento na Stays</dt>

@@ -138,8 +138,12 @@ export const isDirectBookingOperationsOrder = (
   (value.paymentMethod === null || typeof value.paymentMethod === 'string') &&
   (value.gatewayPaymentId === null || typeof value.gatewayPaymentId === 'string') &&
   (value.staysReservationId === null || typeof value.staysReservationId === 'string') &&
+  typeof value.paymentApprovedWithoutConfirmedReservation === 'boolean' &&
+  typeof value.latePaymentAfterHold === 'boolean' &&
+  typeof value.staysActionFailed === 'boolean' &&
   typeof value.staysCancellationConfirmed === 'boolean' &&
   typeof value.gatewayRefundConfirmed === 'boolean' &&
+  (value.manualCancellationReview === null || isManualCancellationReview(value.manualCancellationReview)) &&
   (value.updatedAt === null || typeof value.updatedAt === 'string') &&
   (value.lastEvent === null || isDirectBookingOperationsEvent(value.lastEvent)) &&
   (value.issue === null || isDirectBookingOperationsIssue(value.issue));
@@ -167,6 +171,14 @@ const isDirectBookingOperationsEvent = (
   ['event', 'status', 'source', 'code', 'at'].every(
     (field) => value[field] === undefined || typeof value[field] === 'string',
   );
+
+const isManualCancellationReview = (
+  value: unknown,
+): value is NonNullable<DirectBookingOperationsOrder['manualCancellationReview']> =>
+  isRecord(value) &&
+  (value.reason === null || typeof value.reason === 'string') &&
+  (value.reviewedBy === null || typeof value.reviewedBy === 'string') &&
+  (value.at === null || typeof value.at === 'string');
 
 const isDirectBookingOperationsIssue = (
   value: unknown,

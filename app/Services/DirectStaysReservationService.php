@@ -35,6 +35,36 @@ class DirectStaysReservationService
             return $this->result(false, 'reservation_hold_unconfigured', 'A duração da pré-reserva ainda não foi aprovada e configurada. Nenhuma reserva foi iniciada.');
         }
 
+        $canReconcileExistingReservation = $order->stays_reservation_id !== null
+            && in_array($order->status, [
+                DirectBookingOrderStatus::Cotado,
+                DirectBookingOrderStatus::PreReservado,
+                DirectBookingOrderStatus::AtencaoOperacional,
+            ], true);
+        $canCreateReservation = $order->stays_reservation_id === null
+            && in_array($order->status, [DirectBookingOrderStatus::Cotado, DirectBookingOrderStatus::AtencaoOperacional], true)
+            && $order->payment_status === null
+            && ! $this->paymentRequiresReconciliation($order);
+
+        if (! $canReconcileExistingReservation && ! $canCreateReservation) {
+            $pendingActions = DirectBookingStaysAction::query()
+                ->where('direct_booking_order_id', $order->id)
+                ->whereIn('action_type', ['create_client', 'create_reservation'])
+                ->whereIn('status', ['pending', 'unknown'])
+                ->get();
+
+            foreach ($pendingActions as $pendingAction) {
+                $pendingAction->forceFill([
+                    'status' => 'attention_required',
+                    'attention_required_at' => now(),
+                    'error_code' => 'reservation_order_state_not_eligible',
+                    'error_message' => 'O estado atual do pedido não permite iniciar ou retomar uma pré-reserva automaticamente. Nenhuma escrita foi enviada à Stays.',
+                ])->save();
+            }
+
+            return $this->attention($order, 'reservation_order_state_not_eligible', 'O estado atual do pedido não permite iniciar ou retomar uma pré-reserva automaticamente. Nenhuma escrita foi enviada à Stays.');
+        }
+
         if (! $this->stays->isConfigured()) {
             return $this->attention($order, 'stays_not_configured', 'A Stays não está configurada; nenhuma pré-reserva foi iniciada.');
         }
@@ -77,7 +107,7 @@ class DirectStaysReservationService
         ];
         $action = $this->action($order, 'create_reservation', $payload);
         if ($action->status === 'succeeded' && $action->external_id !== null) {
-            return $this->adoptReservation($order, $action->external_id, $holdMinutes);
+            return $this->adoptReservation($order, $action->external_id, $holdMinutes, $action);
         }
         $claim = $this->claim($action);
         if (! $claim['claimed']) {
@@ -135,9 +165,38 @@ class DirectStaysReservationService
 
         $staleBefore = now()->subSeconds(max(10, (int) config('direct-booking.reservation_claim_timeout_seconds', 60)));
         DirectBookingStaysAction::query()
+            ->whereIn('action_type', ['create_client', 'create_reservation'])
+            ->whereHas('order', fn ($orderQuery) => $orderQuery->whereNotIn('status', [
+                DirectBookingOrderStatus::Cotado,
+                DirectBookingOrderStatus::PreReservado,
+                DirectBookingOrderStatus::AtencaoOperacional,
+            ]))
+            ->where(function ($query) use ($staleBefore): void {
+                $query->whereIn('status', ['pending', 'unknown'])
+                    ->orWhere(fn ($query) => $query->where('status', 'processing')->where('last_attempt_at', '<=', $staleBefore));
+            })
+            ->update([
+                'status' => 'attention_required',
+                'attention_required_at' => now(),
+                'error_code' => 'reservation_order_state_not_eligible',
+                'error_message' => 'O pedido avançou para um estado que não permite retomar automaticamente a criação na Stays. Verifique o resultado externo antes de qualquer nova ação.',
+                'updated_at' => now(),
+            ]);
+
+        DirectBookingStaysAction::query()
             ->with('order')
             ->whereIn('action_type', ['create_client', 'create_reservation', 'cancel_reservation'])
             ->when(! $canRetryReservationCreation, fn ($query) => $query->where('action_type', 'cancel_reservation'))
+            ->where(function ($query): void {
+                $query->where('action_type', 'cancel_reservation')
+                    ->orWhere(fn ($query) => $query
+                        ->whereIn('action_type', ['create_client', 'create_reservation'])
+                        ->whereHas('order', fn ($orderQuery) => $orderQuery->whereIn('status', [
+                            DirectBookingOrderStatus::Cotado,
+                            DirectBookingOrderStatus::PreReservado,
+                            DirectBookingOrderStatus::AtencaoOperacional,
+                        ])));
+            })
             ->where(function ($query) use ($staleBefore): void {
                 $query->whereIn('status', ['pending', 'unknown', 'attention_required'])
                     ->orWhere(fn ($query) => $query->where('status', 'processing')->where('last_attempt_at', '<=', $staleBefore));
@@ -458,11 +517,15 @@ class DirectStaysReservationService
             $this->markActionSucceeded($action, $reservationId, $safeSnapshot);
         }
 
-        DB::transaction(function () use ($order, $reservationId, $safeSnapshot, $holdMinutes, $commercialDetailsVerified): void {
+        $reservationAction = $action?->fresh();
+        $holdStartedAt = $reservationAction?->created_at ?? $order->created_at;
+        $holdExpiresAt = $holdStartedAt?->copy()->addMinutes($holdMinutes) ?? now()->addMinutes($holdMinutes);
+
+        DB::transaction(function () use ($order, $reservationId, $safeSnapshot, $holdExpiresAt, $commercialDetailsVerified): void {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $lockedOrder->stays_reservation_id = $reservationId;
             $lockedOrder->reservation_status = 'reserved';
-            $lockedOrder->expires_at ??= now()->addMinutes($holdMinutes);
+            $lockedOrder->expires_at ??= $holdExpiresAt;
             $canMarkPreReserved = in_array($lockedOrder->status, [
                 DirectBookingOrderStatus::Cotado,
                 DirectBookingOrderStatus::AtencaoOperacional,

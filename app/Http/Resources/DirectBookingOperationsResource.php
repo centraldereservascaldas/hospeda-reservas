@@ -9,10 +9,13 @@ class DirectBookingOperationsResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $order = $this->resource;
         $events = $this->operational_events ?? [];
         $lastEvent = is_array($events) && $events !== []
             ? $events[array_key_last($events)]
             : null;
+        $manualCancellationReview = collect($events)->last(fn (mixed $event): bool => is_array($event)
+            && ($event['event'] ?? null) === 'manual_cancellation_processing_started');
 
         return [
             'id' => $this->id,
@@ -29,9 +32,21 @@ class DirectBookingOperationsResource extends JsonResource
             'paymentMethod' => $this->payment_method,
             'gatewayPaymentId' => $this->gateway_payment_id,
             'staysReservationId' => $this->stays_reservation_id,
+            'paymentApprovedWithoutConfirmedReservation' => $this->payment_status === 'approved'
+                && ! in_array($this->status->value, ['confirmado', 'concluido'], true),
+            'latePaymentAfterHold' => collect($events)->contains(fn (mixed $event): bool => is_array($event)
+                && (($event['code'] ?? null) === 'payment_approved_after_hold'
+                    || ($event['source'] ?? null) === 'late_or_unreserved_payment')),
+            'staysActionFailed' => $order->relationLoaded('staysActions')
+                && $order->staysActions->contains(fn ($action): bool => in_array($action->status, ['failed', 'attention_required'], true)),
             'staysCancellationConfirmed' => collect($events)->contains(fn (mixed $event): bool => is_array($event)
                 && ($event['code'] ?? null) === 'stays_cancellation_verified'),
             'gatewayRefundConfirmed' => $this->payment_status === 'refunded',
+            'manualCancellationReview' => is_array($manualCancellationReview) ? [
+                'reason' => is_string($manualCancellationReview['reason'] ?? null) ? $manualCancellationReview['reason'] : null,
+                'reviewedBy' => is_string($manualCancellationReview['reviewed_by'] ?? null) ? $manualCancellationReview['reviewed_by'] : null,
+                'at' => is_string($manualCancellationReview['reviewed_at'] ?? null) ? $manualCancellationReview['reviewed_at'] : null,
+            ] : null,
             'updatedAt' => $this->updated_at?->toISOString(),
             'lastEvent' => is_array($lastEvent) ? array_intersect_key($lastEvent, array_flip(['event', 'status', 'source', 'code', 'at'])) : null,
             'issue' => $this->resolveIssue($lastEvent),

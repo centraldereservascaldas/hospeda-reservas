@@ -12,6 +12,7 @@ use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
 use App\Models\OwnerAccess;
 use App\Services\DirectStaysReservationMatcher;
+use App\Services\MoneyAmount;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
 use App\Services\SupabaseAuthClient;
@@ -207,14 +208,44 @@ class OwnerAdminController extends Controller
             if ($order->status === DirectBookingOrderStatus::ReembolsoPendente) {
                 return 'already_started';
             }
-            if ($order->status !== DirectBookingOrderStatus::CancelamentoSolicitado || $order->payment_status !== 'approved') {
+            $latePaymentAfterHold = $order->status === DirectBookingOrderStatus::AtencaoOperacional
+                && $order->payment_status === 'approved'
+                && $order->stays_reservation_id !== null
+                && collect($order->operational_events ?? [])->contains(fn (mixed $event): bool => is_array($event)
+                    && (($event['code'] ?? null) === 'payment_approved_after_hold'
+                        || ($event['source'] ?? null) === 'late_or_unreserved_payment'));
+            $guestCancellationRequested = $order->status === DirectBookingOrderStatus::CancelamentoSolicitado;
+
+            if ((! $guestCancellationRequested && ! $latePaymentAfterHold)
+                || $order->payment_status !== 'approved'
+                || $order->stays_reservation_id === null) {
                 return 'not_ready';
+            }
+
+            $approvedAttempts = DirectBookingPaymentAttempt::query()
+                ->where('direct_booking_order_id', $order->id)
+                ->where('status', 'approved')
+                ->lockForUpdate()
+                ->get();
+            $approvedAttempt = $approvedAttempts->first();
+            $approvedAmountCents = $approvedAttempt === null ? null : MoneyAmount::toCents($approvedAttempt->amount);
+            $orderAmountCents = MoneyAmount::toCents($order->quote_total);
+            if ($approvedAttempts->count() !== 1
+                || $approvedAttempt->gateway_payment_id === null
+                || $order->gateway_payment_id === null
+                || ! hash_equals($order->gateway_payment_id, $approvedAttempt->gateway_payment_id)
+                || $approvedAmountCents === null
+                || $approvedAmountCents !== $orderAmountCents
+                || $approvedAttempt->currency !== $order->currency
+                || $order->payment_currency !== $order->currency) {
+                return 'payment_mismatch';
             }
 
             $order->transitionTo(DirectBookingOrderStatus::ReembolsoPendente, [
                 'source' => 'owner_admin_cancellation_review',
                 'event' => 'manual_cancellation_processing_started',
                 'code' => 'stays_cancellation_and_gateway_refund_required',
+                'reason' => $latePaymentAfterHold ? 'payment_approved_after_hold' : 'guest_cancellation_requested',
                 'reviewed_by' => $reviewer->id,
                 'reviewed_at' => now()->toISOString(),
             ]);
@@ -229,6 +260,10 @@ class OwnerAdminController extends Controller
         }
         if ($result === 'not_ready') {
             return response()->json(['success' => false, 'code' => 'direct_booking_cancellation_not_ready', 'message' => 'O pedido não está em estado válido para encaminhamento manual. Nenhuma alteração foi feita.'], 409)
+                ->header('Cache-Control', 'no-store, private');
+        }
+        if ($result === 'payment_mismatch') {
+            return response()->json(['success' => false, 'code' => 'direct_booking_approved_payment_mismatch', 'message' => 'O pedido não tem uma única tentativa aprovada que corresponda ao valor, à moeda e ao ID de pagamento registrados. Nenhuma alteração foi feita.'], 409)
                 ->header('Cache-Control', 'no-store, private');
         }
 

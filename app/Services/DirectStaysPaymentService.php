@@ -61,6 +61,10 @@ class DirectStaysPaymentService
             return $this->attention($order, 'stays_reservation_mismatch', 'A reserva consultada na Stays não corresponde ao imóvel, datas, hóspedes e valores do pedido.');
         }
 
+        if (($reservation['type'] ?? null) === 'reserved' && $order->expires_at->isPast()) {
+            return $this->attention($order, 'payment_approved_after_hold', 'O pagamento foi aprovado após o prazo interno da pré-reserva; nenhum lançamento financeiro ou confirmação será enviado à Stays antes da conferência operacional.');
+        }
+
         $paymentResult = $this->ensureStaysPaymentRecorded($order, $attempt);
         if (! $paymentResult['ready']) {
             return $paymentResult;
@@ -69,6 +73,10 @@ class DirectStaysPaymentService
         $reservation = $this->stays->get($reservationEndpoint);
         if (! is_array($reservation) || ! $this->matchesReservationForConfirmation($reservation, $order)) {
             return $this->attention($order, 'stays_reservation_changed_during_confirmation', 'A reserva mudou após o lançamento do pagamento na Stays; a confirmação foi interrompida para revisão operacional.');
+        }
+
+        if (($reservation['type'] ?? null) === 'reserved' && $order->expires_at->isPast()) {
+            return $this->attention($order, 'payment_approved_after_hold', 'A retenção venceu durante a reconciliação do pagamento; a reserva não será confirmada automaticamente.');
         }
 
         if (($reservation['type'] ?? null) === 'booked') {
@@ -81,9 +89,6 @@ class DirectStaysPaymentService
         }
         if (($reservation['type'] ?? null) !== 'reserved') {
             return $this->attention($order, 'stays_reservation_not_bookable', 'A reserva Stays não está em estado reserved; a confirmação automática foi interrompida.');
-        }
-        if ($order->expires_at->isPast()) {
-            return $this->attention($order, 'payment_approved_after_hold', 'O pagamento foi aprovado após o prazo interno da pré-reserva; a confirmação exige conferência operacional.');
         }
 
         return $this->confirmReservationType($order, $reservationEndpoint, $reservation);
@@ -168,6 +173,22 @@ class DirectStaysPaymentService
     /** @return array{ready: bool, code: string, message: string} */
     private function confirmReservationType(DirectBookingOrder $order, string $endpoint, array $reservation): array
     {
+        $order->refresh();
+        if (! in_array($order->status, [
+            DirectBookingOrderStatus::PagoEmConfirmacao,
+            DirectBookingOrderStatus::AtencaoOperacional,
+        ], true)) {
+            return $this->result(false, 'confirmation_order_state_changed', 'O estado do pedido mudou antes da confirmação; nenhuma alteração foi enviada à Stays.');
+        }
+
+        if ($order->payment_status !== 'approved') {
+            return $this->attention($order, 'confirmation_payment_state_changed', 'O pagamento deixou de estar aprovado antes da confirmação; nenhuma alteração foi enviada à Stays.');
+        }
+
+        if ($order->expires_at === null || $order->expires_at->isPast()) {
+            return $this->attention($order, 'payment_approved_after_hold', 'A retenção venceu antes da confirmação na Stays; a reserva não será alterada automaticamente.');
+        }
+
         $action = $this->action($order, 'confirm_reservation', ['type' => 'booked']);
         if ($action->status === 'succeeded') {
             return $this->markAttention($action, $order, 'stays_booking_state_regressed', 'A reserva voltou a reserved após confirmação anterior; revisão operacional necessária.');
@@ -180,6 +201,24 @@ class DirectStaysPaymentService
 
         if ($claim['previousAttempts'] > 0) {
             return $this->markAttention($action, $order, 'stays_booking_write_unknown', 'A confirmação anterior não foi concluída; a alteração não será repetida sem revisão.');
+        }
+
+        $order->refresh();
+        $stateError = match (true) {
+            ! in_array($order->status, [DirectBookingOrderStatus::PagoEmConfirmacao, DirectBookingOrderStatus::AtencaoOperacional], true) => ['confirmation_order_state_changed', 'O estado do pedido mudou antes da confirmação; nenhuma alteração foi enviada à Stays.'],
+            $order->payment_status !== 'approved' => ['confirmation_payment_state_changed', 'O pagamento deixou de estar aprovado antes da confirmação; nenhuma alteração foi enviada à Stays.'],
+            $order->expires_at === null || $order->expires_at->isPast() => ['payment_approved_after_hold', 'A retenção venceu antes da confirmação na Stays; a reserva não será alterada automaticamente.'],
+            default => null,
+        };
+        if ($stateError !== null) {
+            $action->forceFill([
+                'status' => 'attention_required',
+                'attention_required_at' => now(),
+                'error_code' => $stateError[0],
+                'error_message' => $stateError[1],
+            ])->save();
+
+            return $this->result(false, $stateError[0], $stateError[1]);
         }
 
         $this->stays->request('PATCH', $endpoint, payload: ['type' => 'booked']);

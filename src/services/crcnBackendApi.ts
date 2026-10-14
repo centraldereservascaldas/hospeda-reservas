@@ -443,8 +443,16 @@ export interface DirectBookingOperationsOrder {
   paymentMethod: string | null;
   gatewayPaymentId: string | null;
   staysReservationId: string | null;
+  paymentApprovedWithoutConfirmedReservation: boolean;
+  latePaymentAfterHold: boolean;
+  staysActionFailed: boolean;
   staysCancellationConfirmed: boolean;
   gatewayRefundConfirmed: boolean;
+  manualCancellationReview: {
+    reason: string | null;
+    reviewedBy: string | null;
+    at: string | null;
+  } | null;
   updatedAt: string | null;
   lastEvent: {
     event?: string;

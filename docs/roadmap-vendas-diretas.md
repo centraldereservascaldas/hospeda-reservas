@@ -1,6 +1,6 @@
 # Plano de execução — vendas diretas CRCN
 
-Atualizado em 13/10/2026. Objetivo: vender reservas no próprio site, receber o valor total pela CRCN, registrar reserva e pagamento na Stays, atender o hóspede e repassar ao proprietário no dia 15 conforme o contrato aplicável.
+Atualizado em 14/10/2026. Objetivo: vender reservas no próprio site, receber o valor total pela CRCN, registrar reserva e pagamento na Stays, atender o hóspede e repassar ao proprietário no dia 15 conforme o contrato aplicável.
 
 Este plano organiza entregas e responsabilidades; não autoriza cobrança real, alterações na Stays de produção, publicação ou repasses. O [escopo inicial do MVP](mvp-vendas-diretas.md) e o [fluxo técnico atual](stays-checkout-flow.md) continuam como referências.
 
@@ -14,9 +14,9 @@ Este plano organiza entregas e responsabilidades; não autoriza cobrança real, 
 
 ## Estado do sistema e ajustes obrigatórios
 
-O catálogo, a cotação e a consulta à Stays já existem. Há implementação local ainda não integrada para pedido idempotente, pré-reserva `reserved`, retomada protegida, pagamento Mercado Pago, webhook/reconciliação e confirmação/lançamento financeiro na Stays. A interface de checkout continua desabilitada: as três flags estão desligadas e o catálogo não tem snapshots de condições comerciais aprovadas. A rota de retomada existe; `/reservar/{listingId}` abre o anúncio com filtros de datas e hóspedes e não inicia pedido. Essa implementação não foi validada ponta a ponta e não está autorizada para cobrar.
+O catálogo, a cotação e a consulta à Stays já existem. A implementação de pedido idempotente, pré-reserva `reserved`, retomada protegida, pagamento Mercado Pago, webhook/reconciliação e confirmação/lançamento financeiro na Stays foi integrada em `main` pelo commit `7d19040`, mas ainda não foi validada ponta a ponta. A interface de checkout continua desabilitada: as três flags estão desligadas e o catálogo não tem snapshots de condições comerciais aprovadas. A rota de retomada existe; `/reservar/{listingId}` abre o anúncio com filtros de datas e hóspedes e não inicia pedido. Nenhuma cobrança real está autorizada.
 
-Na API das viagens, `reserved` é exposto como pendente; `booked` e `contract` como confirmados. Reservas encerradas agora aparecem em “Viagens concluídas”, com comprovante histórico; o voucher continua restrito às confirmadas. A conta de viagens ainda não incorpora pedidos de compra como visitante. Cancelamentos de reservas do checkout direto são encaminhados ao atendimento para evitar divergência entre Stays e gateway; cancelamento e reembolso coordenados continuam pendentes. Antes de vender, conferir o total cobrado contra taxas da cotação real.
+Na API das viagens, `reserved` é exposto como pendente; `booked` e `contract` como confirmados. Reservas encerradas aparecem em “Viagens concluídas”, com comprovante histórico; o voucher continua restrito às confirmadas. Pedidos do checkout feitos como visitante também aparecem em “Compras feitas no site” após login com o mesmo e-mail e podem reabrir a retomada protegida. Ainda faltam pós-venda transacional por e-mail e validação ponta a ponta dessa associação. Cancelamentos do checkout direto são encaminhados ao atendimento para evitar divergência entre Stays e gateway; cancelamento e reembolso coordenados continuam pendentes. Antes de vender, conferir o total cobrado contra taxas da cotação real.
 
 Há alterações locais anteriores em andamento. Cada executor deve conferir `git status` antes de criar um worktree, preservar essas alterações e trabalhar a partir de uma base explicitamente escolhida pelo coordenador. Arquivos não commitados do checkout, documentação, rodapé e viagens não são pressupostos como já integrados a outras árvores.
 
