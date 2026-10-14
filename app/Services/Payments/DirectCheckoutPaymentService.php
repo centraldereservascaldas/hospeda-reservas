@@ -28,7 +28,8 @@ class DirectCheckoutPaymentService
     {
         if (! config('direct-booking.enabled', false)
             || ! config('direct-booking.payments_enabled', false)
-            || ! config('direct-booking.confirmation_enabled', false)) {
+            || ! config('direct-booking.confirmation_enabled', false)
+            || ! $this->hasExternalMailTransport()) {
             return [];
         }
 
@@ -39,6 +40,7 @@ class DirectCheckoutPaymentService
         $mercadoPagoAccessToken = config('services.mercadopago.access_token');
         $mercadoPagoWebhookSecret = config('services.mercadopago.webhook_secret');
         $webhookQueueConnection = (string) config('services.mercadopago.webhook_queue_connection', 'database');
+        $notificationQueueConnection = (string) config('direct-booking.notification_queue_connection', 'database');
         $holdMinutes = filter_var(config('direct-booking.reservation_hold_minutes'), FILTER_VALIDATE_INT);
         $minimumPixMinutes = (int) config('direct-booking.pix_minimum_remaining_minutes', 30);
         $safetyMarginMinutes = (int) config('direct-booking.payment_safety_margin_minutes', 5);
@@ -56,6 +58,8 @@ class DirectCheckoutPaymentService
             || trim($mercadoPagoWebhookSecret) === ''
             || $webhookQueueConnection === 'sync'
             || ! config("queue.connections.{$webhookQueueConnection}")
+            || $notificationQueueConnection === 'sync'
+            || ! config("queue.connections.{$notificationQueueConnection}")
             || $holdMinutes === false
             || $holdMinutes > 1440
             || $holdMinutes <= $minimumPixMinutes + $safetyMarginMinutes) {
@@ -69,6 +73,47 @@ class DirectCheckoutPaymentService
         }
 
         return $methods;
+    }
+
+    /**
+     * Ensure a confirmed booking cannot be treated as emailed by a local-only mail transport.
+     *
+     * @param  list<string>  $visitedMailers
+     */
+    private function hasExternalMailTransport(?string $mailerName = null, array $visitedMailers = []): bool
+    {
+        $mailerName ??= (string) config('mail.default', 'log');
+        if ($mailerName === '' || in_array($mailerName, $visitedMailers, true)) {
+            return false;
+        }
+
+        $mailer = config("mail.mailers.{$mailerName}");
+        if (! is_array($mailer) || ! is_string($mailer['transport'] ?? null)) {
+            return false;
+        }
+
+        $transport = $mailer['transport'];
+        if (in_array($transport, ['log', 'array'], true)) {
+            return false;
+        }
+
+        if (in_array($transport, ['failover', 'roundrobin'], true)) {
+            $fallbackMailers = $mailer['mailers'] ?? null;
+            if (! is_array($fallbackMailers) || $fallbackMailers === []) {
+                return false;
+            }
+
+            foreach ($fallbackMailers as $fallbackMailer) {
+                if (! is_string($fallbackMailer)
+                    || ! $this->hasExternalMailTransport($fallbackMailer, [...$visitedMailers, $mailerName])) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return in_array($transport, ['smtp', 'sendmail', 'mailgun', 'ses', 'ses-v2', 'postmark', 'resend'], true);
     }
 
     public function publicKey(): ?string
@@ -208,6 +253,7 @@ class DirectCheckoutPaymentService
                     'status' => 'processing',
                     'amount' => $lockedOrder->quote_total,
                     'currency' => $lockedOrder->currency,
+                    'expires_at' => $lockedOrder->expires_at,
                     'gateway_idempotency_key' => (string) Str::uuid(),
                     'gateway_retry_payload' => $input['paymentMethod'] === 'pix'
                         ? ['paymentMethodData' => $methodData, 'additionalData' => $additionalData]
@@ -316,6 +362,8 @@ class DirectCheckoutPaymentService
     /** @return array{processed: int, attention: int} */
     public function recoverPendingPayments(): array
     {
+        $this->purgeExpiredPixInstructions();
+
         $accessToken = config('services.mercadopago.access_token');
         if (! is_string($accessToken) || trim($accessToken) === '') {
             return ['processed' => 0, 'attention' => 0];
@@ -396,31 +444,14 @@ class DirectCheckoutPaymentService
                             return null;
                         }
 
-                        $attempts = $lockedWebhook->reconciliation_attempts + 1;
-                        if ($attempts >= ReconcileMercadoPagoPayment::MAX_RECONCILIATION_ATTEMPTS) {
-                            $lockedWebhook->forceFill([
-                                'status' => 'failed',
-                                'error_code' => 'reconciliation_attempt_limit_reached',
-                                'reconciliation_attempts' => $attempts,
-                            ])->save();
-
-                            return 'exhausted';
-                        }
-
                         $lockedWebhook->forceFill([
                             'status' => 'queued',
                             'error_code' => null,
-                            'reconciliation_attempts' => $attempts,
                         ])->save();
 
                         return 'queued';
                     });
 
-                    if ($claim === 'exhausted') {
-                        $attention++;
-
-                        continue;
-                    }
                     if ($claim !== 'queued') {
                         continue;
                     }
@@ -434,6 +465,34 @@ class DirectCheckoutPaymentService
         }
 
         return compact('processed', 'attention');
+    }
+
+    private function purgeExpiredPixInstructions(): void
+    {
+        DirectBookingPaymentAttempt::query()
+            ->where('payment_method', 'pix')
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->where(function ($query): void {
+                $query->whereNotNull('pix_copy_paste')
+                    ->orWhereNotNull('pix_qr_code_base64')
+                    ->orWhereNotNull('gateway_retry_payload');
+            })
+            ->update([
+                'pix_copy_paste' => null,
+                'pix_qr_code_base64' => null,
+                'gateway_retry_payload' => null,
+                'updated_at' => now(),
+            ]);
+
+        DirectBookingOrder::query()
+            ->whereNotNull('payment_expires_at')
+            ->where('payment_expires_at', '<=', now())
+            ->whereNotNull('payment_qr_code')
+            ->update([
+                'payment_qr_code' => null,
+                'updated_at' => now(),
+            ]);
     }
 
     private function claimInitialGatewaySubmission(DirectBookingPaymentAttempt $attempt): bool
@@ -631,6 +690,9 @@ class DirectCheckoutPaymentService
         $expiresAt = $this->parseDate($gatewayPayment['date_of_expiration'] ?? null) ?? $order->expires_at;
         $paidAt = $status === 'approved' ? ($this->parseDate($gatewayPayment['date_approved'] ?? null) ?? now()) : null;
         $gatewayUpdatedAt = $this->parseDate($gatewayPayment['date_last_updated'] ?? null);
+        $pixInstructionsAreCurrent = $attempt->payment_method === 'pix'
+            && in_array($status, ['pending', 'in_process'], true)
+            && $expiresAt?->isFuture() === true;
         $attemptStatus = match ($status) {
             'approved' => 'approved',
             'pending' => 'pending',
@@ -641,7 +703,7 @@ class DirectCheckoutPaymentService
             default => 'unknown',
         };
 
-        $gatewayPaymentIdConflict = DB::transaction(function () use ($order, $attempt, $gatewayPayment, $gatewayId, $status, $attemptStatus, $expiresAt, $paidAt, $gatewayUpdatedAt, $transactionData): bool {
+        $gatewayPaymentIdConflict = DB::transaction(function () use ($order, $attempt, $gatewayPayment, $gatewayId, $status, $attemptStatus, $expiresAt, $paidAt, $gatewayUpdatedAt, $transactionData, $pixInstructionsAreCurrent): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
             if ($lockedAttempt->gateway_payment_id !== null && $lockedAttempt->gateway_payment_id !== (string) $gatewayId) {
@@ -685,8 +747,8 @@ class DirectCheckoutPaymentService
                 'expires_at' => $expiresAt,
                 'paid_at' => $paidAt,
                 'gateway_updated_at' => $gatewayUpdatedAt ?? $lockedAttempt->gateway_updated_at,
-                'pix_copy_paste' => data_get($transactionData, 'qr_code'),
-                'pix_qr_code_base64' => data_get($transactionData, 'qr_code_base64'),
+                'pix_copy_paste' => $pixInstructionsAreCurrent ? data_get($transactionData, 'qr_code') : null,
+                'pix_qr_code_base64' => $pixInstructionsAreCurrent ? data_get($transactionData, 'qr_code_base64') : null,
                 'error_code' => $status === 'charged_back' ? 'gateway_chargeback_reported' : null,
             ])->save();
 
@@ -698,7 +760,7 @@ class DirectCheckoutPaymentService
             $lockedOrder->payment_detail = $gatewayPayment['payment_method_id'] ?? null;
             $lockedOrder->payment_status_detail = $gatewayPayment['status_detail'] ?? null;
             $lockedOrder->payment_expires_at = $expiresAt;
-            $lockedOrder->payment_qr_code = data_get($transactionData, 'qr_code');
+            $lockedOrder->payment_qr_code = $pixInstructionsAreCurrent ? data_get($transactionData, 'qr_code') : null;
 
             if ($status === 'approved') {
                 $lockedOrder->paid_at = $paidAt;

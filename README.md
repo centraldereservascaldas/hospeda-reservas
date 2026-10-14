@@ -24,7 +24,9 @@ Aplicação de reservas com frontend React 19, TypeScript, Vite 6 e Tailwind CSS
 4. Crie o SQLite local: `touch database/database.sqlite`
 5. `php artisan migrate`
 6. `npm ci`
-7. Inicie a API com `composer dev` (porta 8000) e o frontend em outro terminal com `npm run dev` (porta 3000).
+7. Inicie a API com `composer dev` (porta 8000), o frontend em outro terminal com `npm run dev` (porta 3000), o worker da fila com `composer queue:work` e o scheduler com `composer schedule:work`.
+
+O worker processa reconciliações do gateway e e-mails transacionais; o scheduler executa a recuperação periódica de pré-reservas, pagamentos e notificações. Mantenha os dois processos ativos durante o desenvolvimento do checkout.
 
 O Vite encaminha `/api/*` e `/external/v1/*` para `VITE_API_PROXY_TARGET`. O padrão local é `http://127.0.0.1:8000`.
 

@@ -37,7 +37,15 @@ class DirectBookingPaymentAttempt extends Model
         'gateway_retry_payload',
     ];
 
-    protected $hidden = ['idempotency_key', 'request_fingerprint', 'gateway_idempotency_key', 'gateway_retry_payload'];
+    protected $hidden = [
+        'idempotency_key',
+        'request_fingerprint',
+        'gateway_payment_id',
+        'gateway_idempotency_key',
+        'gateway_retry_payload',
+        'pix_copy_paste',
+        'pix_qr_code_base64',
+    ];
 
     protected function casts(): array
     {

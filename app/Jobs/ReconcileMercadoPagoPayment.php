@@ -45,15 +45,10 @@ class ReconcileMercadoPagoPayment implements ShouldQueue
                 return false;
             }
 
-            $attempts = $webhook->reconciliation_attempts;
-            if ($webhook->status !== 'queued') {
-                $attempts++;
-            }
-
             $webhook->forceFill([
                 'status' => 'processing',
                 'error_code' => null,
-                'reconciliation_attempts' => $attempts,
+                'reconciliation_attempts' => $webhook->reconciliation_attempts + 1,
             ])->save();
 
             return true;

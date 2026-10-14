@@ -350,6 +350,7 @@ const issueSourceLabels: Record<string, string> = {
   payment: 'pagamento',
   payment_gateway: 'conciliação do gateway',
   webhook: 'notificação do gateway',
+  email: 'e-mail transacional',
   late_or_unreserved_payment: 'pagamento após o prazo da pré-reserva',
   guest_cancellation_request: 'solicitação de cancelamento do hóspede',
 };
@@ -512,6 +513,20 @@ const DirectBookingOperationsCard: React.FC<{
       </dl>
       {(order.issue || order.gatewayPaymentId) && (
         <div className="mt-3 space-y-2 break-words border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
+          {order.confirmationEmail && (
+            <p>
+              E-mail de confirmação:{' '}
+              <strong className="font-semibold text-neutral-700">
+                {order.confirmationEmail.status}
+              </strong>
+              {' · '}
+              {order.confirmationEmail.attempts} tentativa(s)
+              {order.confirmationEmail.queuedAt &&
+                ` · na fila desde ${operationsDateTime.format(new Date(order.confirmationEmail.queuedAt))}`}
+              {order.confirmationEmail.nextAttemptAt &&
+                ` · próxima tentativa ${operationsDateTime.format(new Date(order.confirmationEmail.nextAttemptAt))}`}
+            </p>
+          )}
           {order.issue && (
             <div>
               <p>

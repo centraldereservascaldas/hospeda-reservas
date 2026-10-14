@@ -73,12 +73,15 @@ class DirectStaysReservationService
             return $this->adoptReservation($order, $order->stays_reservation_id, $holdMinutes);
         }
 
-        if (config('direct-booking.payments_enabled', false) && config('direct-booking.confirmation_enabled', false)) {
-            $minimumPixMinutes = (int) config('direct-booking.pix_minimum_remaining_minutes', 30);
-            $safetyMarginMinutes = (int) config('direct-booking.payment_safety_margin_minutes', 5);
-            if ($holdMinutes <= $minimumPixMinutes + $safetyMarginMinutes) {
-                return $this->result(false, 'reservation_hold_too_short_for_pix', 'A retenção configurada não comporta o prazo mínimo de pagamento Pix e a margem de segurança. Nenhum cliente ou pré-reserva foi criado na Stays.');
-            }
+        if (! config('direct-booking.payments_enabled', false)
+            || ! config('direct-booking.confirmation_enabled', false)) {
+            return $this->result(false, 'payments_disabled', 'Pagamentos e confirmação estão desabilitados. Nenhum cliente ou pré-reserva foi criado na Stays.');
+        }
+
+        $minimumPixMinutes = (int) config('direct-booking.pix_minimum_remaining_minutes', 30);
+        $safetyMarginMinutes = (int) config('direct-booking.payment_safety_margin_minutes', 5);
+        if ($holdMinutes <= $minimumPixMinutes + $safetyMarginMinutes) {
+            return $this->result(false, 'reservation_hold_too_short_for_pix', 'A retenção configurada não comporta o prazo mínimo de pagamento Pix e a margem de segurança. Nenhum cliente ou pré-reserva foi criado na Stays.');
         }
 
         $clientResult = $this->resolveClient($order);
@@ -159,6 +162,8 @@ class DirectStaysReservationService
             return compact('processed', 'attention');
         }
         $canRetryReservationCreation = config('direct-booking.enabled', false)
+            && config('direct-booking.payments_enabled', false)
+            && config('direct-booking.confirmation_enabled', false)
             && $holdMinutes !== false
             && $holdMinutes >= 1
             && $holdMinutes <= 1440;

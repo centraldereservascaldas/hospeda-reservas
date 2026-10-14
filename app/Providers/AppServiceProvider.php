@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\DirectBookingOrder;
+use App\Observers\DirectBookingOrderObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -23,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        DirectBookingOrder::observe(DirectBookingOrderObserver::class);
+
         RateLimiter::for('checkout-resume', function (Request $request): array {
             $ip = (string) $request->ip();
             $reference = (string) $request->route('publicReference');

@@ -72,7 +72,6 @@ export interface CheckoutRequestPayload {
 }
 
 export interface DirectBookingOrderSummary {
-  id: string;
   status:
     | 'iniciado'
     | 'cotado'
@@ -90,14 +89,13 @@ export interface DirectBookingOrderSummary {
     | 'contestado'
     | 'concluido';
   publicReference: string;
-  reservationStatus: string;
-  staysReservationId: string | null;
+  reservationConfirmed: boolean;
   listingId: string;
   guestName: string;
   from: string;
   to: string;
   quoteTotal: string;
-  currency: string;
+  currency: 'BRL';
   paymentStatus: string | null;
   resumeToken?: string | null;
   expiresAt: string | null;
@@ -446,6 +444,14 @@ export interface DirectBookingOperationsOrder {
   paymentApprovedWithoutConfirmedReservation: boolean;
   latePaymentAfterHold: boolean;
   staysActionFailed: boolean;
+  confirmationEmail: {
+    status: 'pending' | 'queued' | 'processing' | 'sent' | 'failed';
+    attempts: number;
+    lastAttemptAt: string | null;
+    queuedAt: string | null;
+    nextAttemptAt: string | null;
+    sentAt: string | null;
+  } | null;
   staysCancellationConfirmed: boolean;
   gatewayRefundConfirmed: boolean;
   manualCancellationReview: {

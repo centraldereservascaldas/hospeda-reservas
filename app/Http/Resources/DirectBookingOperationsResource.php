@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\DirectBookingEmail;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -39,6 +40,16 @@ class DirectBookingOperationsResource extends JsonResource
                     || ($event['source'] ?? null) === 'late_or_unreserved_payment')),
             'staysActionFailed' => $order->relationLoaded('staysActions')
                 && $order->staysActions->contains(fn ($action): bool => in_array($action->status, ['failed', 'attention_required'], true)),
+            'confirmationEmail' => $order->relationLoaded('confirmationEmails') && $order->confirmationEmails->isNotEmpty()
+                ? [
+                    'status' => $order->confirmationEmails->first()->status,
+                    'attempts' => $order->confirmationEmails->first()->attempts,
+                    'lastAttemptAt' => $order->confirmationEmails->first()->last_attempt_at?->toISOString(),
+                    'queuedAt' => $order->confirmationEmails->first()->queued_at?->toISOString(),
+                    'nextAttemptAt' => $order->confirmationEmails->first()->next_attempt_at?->toISOString(),
+                    'sentAt' => $order->confirmationEmails->first()->sent_at?->toISOString(),
+                ]
+                : null,
             'staysCancellationConfirmed' => collect($events)->contains(fn (mixed $event): bool => is_array($event)
                 && ($event['code'] ?? null) === 'stays_cancellation_verified'),
             'gatewayRefundConfirmed' => $this->payment_status === 'refunded',
@@ -102,6 +113,28 @@ class DirectBookingOperationsResource extends JsonResource
                             ]);
                         }
                     }
+                }
+            }
+        }
+
+        if ($order->relationLoaded('confirmationEmails')) {
+            foreach ($order->confirmationEmails as $email) {
+                $emailIsStuck = $email->status === 'pending'
+                    && $email->created_at?->lte(now()->subMinutes(DirectBookingEmail::STALE_PENDING_MINUTES));
+                $emailIsStale = $email->status === 'processing'
+                    && $email->last_attempt_at?->lte(now()->subMinutes(DirectBookingEmail::STALE_PROCESSING_MINUTES));
+                $emailIsQueuedStale = $email->status === 'queued'
+                    && $email->queued_at?->lte(now()->subMinutes(DirectBookingEmail::STALE_QUEUED_MINUTES));
+
+                if ($email->status === 'failed' || $emailIsStuck || $emailIsStale || $emailIsQueuedStale) {
+                    $issues->push([
+                        'source' => 'email',
+                        'action' => null,
+                        'status' => $email->status,
+                        'code' => $email->error_code,
+                        'message' => null,
+                        'updatedAt' => $email->updated_at,
+                    ]);
                 }
             }
         }

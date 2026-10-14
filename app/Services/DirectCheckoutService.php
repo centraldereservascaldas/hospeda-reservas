@@ -193,7 +193,7 @@ class DirectCheckoutService
             'order' => $order,
             'code' => $ready ? 'pre_reserved' : ($reservation['code'] ?? 'reservation_not_ready'),
             'message' => $ready
-                ? 'Pré-reserva registrada. Pagamentos continuam desabilitados.'
+                ? 'Pré-reserva registrada. Nenhuma cobrança foi iniciada.'
                 : ($reservation['message'] ?? 'O pedido foi registrado, mas a pré-reserva requer conferência operacional. Nenhuma cobrança foi iniciada.'),
             'status' => $ready ? 201 : 503,
             'replayed' => $replayed,

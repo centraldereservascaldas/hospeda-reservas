@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -15,6 +15,39 @@ import type {
 } from '../../services/crcnBackendApi';
 import { MercadoPagoCardForm } from './MercadoPagoCardForm';
 import { getCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
+
+const pixIdempotencyStoragePrefix = 'crcn.checkout.pix.';
+
+function getPixPaymentIdempotencyKey(reference: string): string {
+  const storageKey = `${pixIdempotencyStoragePrefix}${reference}`;
+  try {
+    const existingKey = window.sessionStorage.getItem(storageKey);
+    if (existingKey && /^[A-Za-z0-9._~-]{16,128}$/.test(existingKey)) return existingKey;
+  } catch {
+    // Continue with an in-memory key when session storage is unavailable.
+  }
+
+  const idempotencyKey = crypto.randomUUID();
+  try {
+    window.sessionStorage.setItem(storageKey, idempotencyKey);
+  } catch {
+    // The ref below preserves the key until the page is closed.
+  }
+
+  return idempotencyKey;
+}
+
+function isValidPixPaymentIdempotencyKey(value: string | null): value is string {
+  return value !== null && /^[A-Za-z0-9._~-]{16,128}$/.test(value);
+}
+
+function clearPixPaymentIdempotencyKey(reference: string): void {
+  try {
+    window.sessionStorage.removeItem(`${pixIdempotencyStoragePrefix}${reference}`);
+  } catch {
+    // The key is still rotated in memory for this page.
+  }
+}
 
 interface CheckoutResumePageProps {
   reference: string;
@@ -171,20 +204,18 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
   if (order.paymentStatus === 'refunded') {
     return {
       title: 'Pagamento estornado',
-      detail:
-        order.reservationStatus === 'booked'
-          ? 'O gateway informa o estorno. O último registro da Stays indica a reserva como confirmada, e a equipe está revisando a situação da hospedagem.'
-          : 'O gateway informa o estorno. A equipe está revisando a situação do pedido e da reserva.',
+      detail: order.reservationConfirmed
+        ? 'O gateway informa o estorno. O último registro da Stays indica a reserva como confirmada, e a equipe está revisando a situação da hospedagem.'
+        : 'O gateway informa o estorno. A equipe está revisando a situação do pedido e da reserva.',
       tone: 'attention' as const,
     };
   }
   if (order.paymentStatus === 'charged_back') {
     return {
       title: 'Pagamento contestado',
-      detail:
-        order.reservationStatus === 'booked'
-          ? 'O gateway informa uma contestação. O último registro da Stays indica a reserva como confirmada; a equipe está revisando a situação da hospedagem.'
-          : 'O gateway informa uma contestação. A equipe está revisando a situação do pedido e da reserva.',
+      detail: order.reservationConfirmed
+        ? 'O gateway informa uma contestação. O último registro da Stays indica a reserva como confirmada; a equipe está revisando a situação da hospedagem.'
+        : 'O gateway informa uma contestação. A equipe está revisando a situação do pedido e da reserva.',
       tone: 'attention' as const,
     };
   }
@@ -203,6 +234,8 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
   const [paymentStartError, setPaymentStartError] = useState<string | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const pixPaymentSubmissionInFlightRef = useRef(false);
+  const pixPaymentIdempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -279,31 +312,57 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
   };
 
   const startPixPayment = async (order: DirectBookingOrderSummary): Promise<void> => {
+    if (pixPaymentSubmissionInFlightRef.current) return;
+
     const token = getCheckoutResumeToken(reference);
     if (!token) {
       setPaymentStartError('Esta sessão não tem a credencial para continuar o pagamento.');
       return;
     }
 
+    pixPaymentSubmissionInFlightRef.current = true;
     setIsStartingPixPayment(true);
     setPaymentStartError(null);
-    const result = await crcnBackendApi.createCheckoutPayment(reference, token, order.quoteTotal, {
-      paymentMethod: 'pix',
-      paymentMethodId: 'pix',
-      idempotencyKey: crypto.randomUUID(),
-    });
-    setIsStartingPixPayment(false);
+    try {
+      if (!isValidPixPaymentIdempotencyKey(pixPaymentIdempotencyKeyRef.current)) {
+        pixPaymentIdempotencyKeyRef.current = getPixPaymentIdempotencyKey(reference);
+      }
+      const result = await crcnBackendApi.createCheckoutPayment(
+        reference,
+        token,
+        order.quoteTotal,
+        {
+          paymentMethod: 'pix',
+          paymentMethodId: 'pix',
+          idempotencyKey: pixPaymentIdempotencyKeyRef.current,
+        },
+      );
 
-    if (result.kind === 'response' && result.success) {
-      setRetryKey((current) => current + 1);
-      return;
+      if (result.kind === 'response') {
+        if (result.success) {
+          pixPaymentIdempotencyKeyRef.current = null;
+          clearPixPaymentIdempotencyKey(reference);
+          setRetryKey((current) => current + 1);
+          return;
+        }
+
+        setPaymentStartError(result.message);
+        if (result.code === 'idempotency_key_reused') {
+          pixPaymentIdempotencyKeyRef.current = null;
+          clearPixPaymentIdempotencyKey(reference);
+        }
+        setRetryKey((current) => current + 1);
+      } else {
+        setPaymentStartError(
+          'Não foi possível iniciar o Pix. Atualize o pedido e tente novamente.',
+        );
+      }
+    } catch {
+      setPaymentStartError('Não foi possível iniciar o Pix. Atualize o pedido e tente novamente.');
+    } finally {
+      pixPaymentSubmissionInFlightRef.current = false;
+      setIsStartingPixPayment(false);
     }
-
-    setPaymentStartError(
-      result.kind === 'response'
-        ? result.message
-        : 'Não foi possível iniciar o Pix. Atualize o pedido e tente novamente.',
-    );
   };
 
   const order = resumeState.kind === 'ready' ? resumeState.data.order : null;

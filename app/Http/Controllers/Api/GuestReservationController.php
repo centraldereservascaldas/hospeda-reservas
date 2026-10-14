@@ -326,6 +326,7 @@ class GuestReservationController extends Controller
             'guestPhone' => '',
             'staysReservationId' => $id,
             'staysLocator' => $record['partnerCode'] ?? '',
+            'directBookingReference' => $directOrder?->public_reference,
             'staysSyncStatus' => 'synced',
         ];
     }

@@ -14,6 +14,10 @@ import {
   type CheckoutReadinessResponse,
 } from '../../services/crcnBackendApi';
 import { useDialogFocus } from '../useDialogFocus';
+import {
+  clearCheckoutSubmissionKey,
+  getOrCreateCheckoutSubmissionKey,
+} from '../../utils/checkoutSubmissionStorage';
 
 interface CheckoutModalProps {
   isOpen: boolean;
@@ -50,6 +54,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [quoteOverride, setQuoteOverride] = useState<CalculatedPriceResponse | null>(null);
+  const checkoutSubmissionInFlightRef = useRef(false);
   const fieldId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useDialogFocus(isOpen && bookingData !== null, onClose, {
@@ -132,6 +137,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     event.preventDefault();
     setSubmitError(null);
 
+    if (checkoutSubmissionInFlightRef.current) return;
     if (!canSubmit || !approvedTerms || !readiness?.payment.methods.includes('pix')) {
       setSubmitError('A compra ainda não está pronta para continuar.');
       return;
@@ -145,9 +151,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     };
     const listingId = property.id;
     const quoteTotal = currentQuote?.total ?? totalAmount;
-
-    setIsSubmitting(true);
-    const result = await crcnBackendApi.createCheckout({
+    const checkoutSubmission = {
       listingId,
       from: checkIn,
       to: checkOut,
@@ -155,42 +159,61 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       quoteTotal,
       guest,
       acceptedTermsVersion: approvedTerms.version,
-      acceptedTerms: true,
-      idempotencyKey: crypto.randomUUID(),
-    });
+      acceptedTerms: true as const,
+    };
 
-    if (result?.resume) {
-      window.location.assign(result.resume.path);
-      return;
-    }
-
-    if (result?.code === 'quote_changed') {
-      setTermsAccepted(false);
-      const refreshedQuote = await crcnBackendApi.calculatePrice({
-        listingId: property.staysListingId || property.id,
-        from: checkIn,
-        to: checkOut,
-        guests: guestCount,
+    checkoutSubmissionInFlightRef.current = true;
+    setIsSubmitting(true);
+    try {
+      const idempotencyKey = await getOrCreateCheckoutSubmissionKey(checkoutSubmission);
+      const result = await crcnBackendApi.createCheckout({
+        ...checkoutSubmission,
+        idempotencyKey,
       });
 
-      if (refreshedQuote?.source === 'stays-live') {
-        setQuoteOverride(refreshedQuote);
-        setSubmitError(
-          'O preço ou a disponibilidade mudou. Confira o total atualizado e aceite novamente antes de continuar.',
-        );
-      } else {
-        setSubmitError(
-          'O preço mudou, mas não foi possível atualizá-lo agora. Tente novamente quando a cotação estiver disponível.',
-        );
+      if (result?.resume) {
+        await clearCheckoutSubmissionKey(checkoutSubmission);
+        window.location.assign(result.resume.path);
+        return;
       }
-      setIsSubmitting(false);
-      return;
-    }
 
-    setSubmitError(
-      result?.message || 'Não foi possível preparar o pedido. Revise a cotação e tente novamente.',
-    );
-    setIsSubmitting(false);
+      if (result !== null) {
+        await clearCheckoutSubmissionKey(checkoutSubmission);
+      }
+
+      if (result?.code === 'quote_changed') {
+        setTermsAccepted(false);
+        const refreshedQuote = await crcnBackendApi.calculatePrice({
+          listingId: property.staysListingId || property.id,
+          from: checkIn,
+          to: checkOut,
+          guests: guestCount,
+        });
+
+        if (refreshedQuote?.source === 'stays-live') {
+          setQuoteOverride(refreshedQuote);
+          setSubmitError(
+            'O preço ou a disponibilidade mudou. Confira o total atualizado e aceite novamente antes de continuar.',
+          );
+        } else {
+          setSubmitError(
+            'O preço mudou, mas não foi possível atualizá-lo agora. Tente novamente quando a cotação estiver disponível.',
+          );
+        }
+        return;
+      }
+
+      setSubmitError(
+        result?.message || 'Não foi possível preparar o pedido. Revise a cotação e tente novamente.',
+      );
+    } catch {
+      setSubmitError(
+        'Não foi possível confirmar se o pedido foi registrado. Tente novamente sem alterar os dados para reutilizar a mesma tentativa.',
+      );
+    } finally {
+      checkoutSubmissionInFlightRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   return (

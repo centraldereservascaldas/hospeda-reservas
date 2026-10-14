@@ -10,11 +10,9 @@ class DirectBookingOrderResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id,
             'status' => $this->status->value,
             'publicReference' => $this->public_reference,
-            'reservationStatus' => $this->reservation_status,
-            'staysReservationId' => $this->stays_reservation_id,
+            'reservationConfirmed' => $this->reservation_status === 'booked',
             'listingId' => $this->listing_id,
             'guestName' => $this->guest_name,
             'from' => $this->check_in->toDateString(),

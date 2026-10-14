@@ -132,6 +132,7 @@ export interface Reservation {
   installments?: number;
   staysReservationId?: string;
   staysLocator?: string;
+  directBookingReference?: string;
   staysSyncStatus?: 'synced' | 'pending' | 'offline';
 }
 

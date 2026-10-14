@@ -7,6 +7,7 @@ use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DirectBookingOperationsResource;
 use App\Jobs\ReconcileMercadoPagoPayment;
+use App\Models\DirectBookingEmail;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
@@ -77,12 +78,25 @@ class OwnerAdminController extends Controller
                     })
                     ->orWhereIn('payment_status', ['unknown', 'refunded', 'charged_back', 'attention_required'])
                     ->orWhereHas('staysActions', fn ($query) => $query->whereIn('status', ['failed', 'attention_required']))
+                    ->orWhereHas('confirmationEmails', function ($query): void {
+                        $query->where(fn ($query) => $query->where('status', 'failed')
+                            ->whereNull('next_attempt_at'))
+                            ->orWhere(fn ($query) => $query->where('status', 'pending')
+                                ->where('created_at', '<=', now()->subMinutes(DirectBookingEmail::STALE_PENDING_MINUTES)))
+                            ->orWhere(fn ($query) => $query->where('status', 'processing')
+                                ->where('last_attempt_at', '<=', now()->subMinutes(DirectBookingEmail::STALE_PROCESSING_MINUTES)))
+                            ->orWhere(fn ($query) => $query->where('status', 'queued')
+                                ->where('queued_at', '<=', now()->subMinutes(DirectBookingEmail::STALE_QUEUED_MINUTES)));
+                    })
                     ->orWhereHas('paymentAttempts', fn ($query) => $query->whereIn('status', ['failed', 'unknown', 'attention_required']))
                     ->orWhereHas('paymentAttempts.webhooks', fn ($query) => $query->whereIn('status', ['retrying', 'failed']));
             })
             ->with([
                 'staysActions' => fn ($query) => $query
                     ->select(['id', 'direct_booking_order_id', 'action_type', 'status', 'error_code', 'error_message', 'updated_at'])
+                    ->orderByDesc('updated_at'),
+                'confirmationEmails' => fn ($query) => $query
+                    ->select(['id', 'direct_booking_order_id', 'notification_type', 'status', 'attempts', 'last_attempt_at', 'queued_at', 'next_attempt_at', 'sent_at', 'error_code', 'created_at', 'updated_at'])
                     ->orderByDesc('updated_at'),
                 'paymentAttempts' => fn ($query) => $query
                     ->select(['id', 'direct_booking_order_id', 'gateway_payment_id', 'status', 'error_code', 'updated_at'])

@@ -73,30 +73,25 @@ const checkoutOrderStatuses = [
 export const isDirectBookingOrder = (
   value: unknown,
 ): value is {
-  id: string;
   status: (typeof checkoutOrderStatuses)[number];
   publicReference: string;
-  reservationStatus: string;
-  staysReservationId: string | null;
+  reservationConfirmed: boolean;
   listingId: string;
   guestName: string;
   from: string;
   to: string;
   quoteTotal: string;
-  currency: string;
+  currency: 'BRL';
   paymentStatus: string | null;
   resumeToken?: string | null;
   expiresAt: string | null;
   createdAt: string | null;
 } =>
   isRecord(value) &&
-  typeof value.id === 'string' &&
-  value.id.trim() !== '' &&
   checkoutOrderStatuses.includes(value.status as (typeof checkoutOrderStatuses)[number]) &&
   typeof value.publicReference === 'string' &&
   /^[A-Za-z0-9]{40}$/.test(value.publicReference) &&
-  typeof value.reservationStatus === 'string' &&
-  (value.staysReservationId === null || typeof value.staysReservationId === 'string') &&
+  typeof value.reservationConfirmed === 'boolean' &&
   typeof value.listingId === 'string' &&
   value.listingId.trim() !== '' &&
   typeof value.guestName === 'string' &&
@@ -141,9 +136,11 @@ export const isDirectBookingOperationsOrder = (
   typeof value.paymentApprovedWithoutConfirmedReservation === 'boolean' &&
   typeof value.latePaymentAfterHold === 'boolean' &&
   typeof value.staysActionFailed === 'boolean' &&
+  (value.confirmationEmail === null || isConfirmationEmailStatus(value.confirmationEmail)) &&
   typeof value.staysCancellationConfirmed === 'boolean' &&
   typeof value.gatewayRefundConfirmed === 'boolean' &&
-  (value.manualCancellationReview === null || isManualCancellationReview(value.manualCancellationReview)) &&
+  (value.manualCancellationReview === null ||
+    isManualCancellationReview(value.manualCancellationReview)) &&
   (value.updatedAt === null || typeof value.updatedAt === 'string') &&
   (value.lastEvent === null || isDirectBookingOperationsEvent(value.lastEvent)) &&
   (value.issue === null || isDirectBookingOperationsIssue(value.issue));
@@ -179,6 +176,18 @@ const isManualCancellationReview = (
   (value.reason === null || typeof value.reason === 'string') &&
   (value.reviewedBy === null || typeof value.reviewedBy === 'string') &&
   (value.at === null || typeof value.at === 'string');
+
+const isConfirmationEmailStatus = (
+  value: unknown,
+): value is NonNullable<DirectBookingOperationsOrder['confirmationEmail']> =>
+  isRecord(value) &&
+  ['pending', 'queued', 'processing', 'sent', 'failed'].includes(value.status as string) &&
+  Number.isInteger(value.attempts) &&
+  (value.attempts as number) >= 0 &&
+  (value.lastAttemptAt === null || typeof value.lastAttemptAt === 'string') &&
+  (value.queuedAt === null || typeof value.queuedAt === 'string') &&
+  (value.nextAttemptAt === null || typeof value.nextAttemptAt === 'string') &&
+  (value.sentAt === null || typeof value.sentAt === 'string');
 
 const isDirectBookingOperationsIssue = (
   value: unknown,
@@ -450,6 +459,9 @@ export const isReservation = (value: unknown): value is Reservation =>
       value.installments >= 1)) &&
   (value.staysReservationId === undefined || typeof value.staysReservationId === 'string') &&
   (value.staysLocator === undefined || typeof value.staysLocator === 'string') &&
+  (value.directBookingReference === undefined ||
+    (typeof value.directBookingReference === 'string' &&
+      /^[A-Za-z0-9]{40}$/.test(value.directBookingReference))) &&
   (value.staysSyncStatus === undefined ||
     value.staysSyncStatus === 'synced' ||
     value.staysSyncStatus === 'pending' ||

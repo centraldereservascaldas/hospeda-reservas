@@ -64,8 +64,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const cancelledReservations = reservations.filter((r) => r.status === 'cancelled');
   const visibleDirectBookingOrders = directBookingOrders.filter(
     (order) =>
-      !order.staysReservationId ||
-      !reservations.some((reservation) => reservation.staysReservationId === order.staysReservationId),
+      !reservations.some((reservation) => reservation.directBookingReference === order.publicReference),
   );
   const directBookingStatusLabels: Record<DirectBookingOrderSummary['status'], string> = {
     iniciado: 'Pedido iniciado',
@@ -91,11 +90,11 @@ export const TripsView: React.FC<TripsViewProps> = ({
   };
   const submitDirectBookingCancellation = async (order: DirectBookingOrderSummary): Promise<void> => {
     if (!accessToken) return;
-    setCancellationRequestSubmittingId(order.id);
-    setCancellationRequestErrors((errors) => ({ ...errors, [order.id]: '' }));
+    setCancellationRequestSubmittingId(order.publicReference);
+    setCancellationRequestErrors((errors) => ({ ...errors, [order.publicReference]: '' }));
     try {
       await crcnBackendApi.requestDirectBookingCancellation(accessToken, order.publicReference);
-      setLocallyRequestedCancellationIds((ids) => [...new Set([...ids, order.id])]);
+      setLocallyRequestedCancellationIds((ids) => [...new Set([...ids, order.publicReference])]);
       setCancellationConfirmationOrderId(null);
       setCancellationNotice(
         'A solicitação foi enviada para análise da Central. A reserva continua ativa até a confirmação do cancelamento; nenhum reembolso foi processado.',
@@ -103,7 +102,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
     } catch (error) {
       setCancellationRequestErrors((errors) => ({
         ...errors,
-        [order.id]:
+        [order.publicReference]:
           error instanceof Error
             ? error.message
             : 'Não foi possível registrar a solicitação. A reserva continua ativa.',
@@ -155,7 +154,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
           )}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {visibleDirectBookingOrders.map((order) => (
-              <article key={order.id} className="rounded-2xl border border-orange-200 bg-white p-4 shadow-sm">
+              <article key={order.publicReference} className="rounded-2xl border border-orange-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="font-mono text-xs font-bold text-neutral-500">
@@ -170,7 +169,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                       ? 'Pagamento estornado · reserva em revisão'
                       : order.paymentStatus === 'charged_back'
                         ? 'Pagamento contestado · reserva em revisão'
-                        : order.status === 'cancelamento_solicitado' || locallyRequestedCancellationIds.includes(order.id)
+                        : order.status === 'cancelamento_solicitado' || locallyRequestedCancellationIds.includes(order.publicReference)
                           ? directBookingStatusLabels.cancelamento_solicitado
                           : directBookingStatusLabels[order.status]}
                   </span>
@@ -184,7 +183,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                 <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
                   <span className="text-[10px] font-bold uppercase text-neutral-500">Total do pedido</span>
                   <span className="text-sm font-black text-neutral-900">
-                    {formatCurrency(Number(order.quoteTotal), currency)}
+                    {formatCurrency(Number(order.quoteTotal), 'BRL')}
                   </span>
                 </div>
                 {order.resumeToken && (
@@ -198,23 +197,23 @@ export const TripsView: React.FC<TripsViewProps> = ({
                     </button>
                   </div>
                 )}
-                {accessToken && order.status === 'confirmado' && !locallyRequestedCancellationIds.includes(order.id) && (
+                {accessToken && order.status === 'confirmado' && !locallyRequestedCancellationIds.includes(order.publicReference) && (
                   <div className="mt-3 border-t border-neutral-100 pt-3">
-                    {cancellationConfirmationOrderId === order.id ? (
+                    {cancellationConfirmationOrderId === order.publicReference ? (
                       <div className="space-y-3" role="group" aria-label="Confirmar solicitação de cancelamento">
                         <p className="text-xs leading-5 text-neutral-700">
                           A Central analisará o pedido. A reserva continuará ativa até a confirmação; esta solicitação não processa reembolso.
                         </p>
-                        {cancellationRequestErrors[order.id] && (
+                        {cancellationRequestErrors[order.publicReference] && (
                           <p className="text-xs font-semibold text-rose-800" role="alert">
-                            {cancellationRequestErrors[order.id]}
+                            {cancellationRequestErrors[order.publicReference]}
                           </p>
                         )}
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => setCancellationConfirmationOrderId(null)}
-                            disabled={cancellationRequestSubmittingId === order.id}
+                            disabled={cancellationRequestSubmittingId === order.publicReference}
                             className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                           >
                             Manter reserva
@@ -222,10 +221,10 @@ export const TripsView: React.FC<TripsViewProps> = ({
                           <button
                             type="button"
                             onClick={() => void submitDirectBookingCancellation(order)}
-                            disabled={cancellationRequestSubmittingId === order.id}
+                            disabled={cancellationRequestSubmittingId === order.publicReference}
                             className="rounded-xl bg-neutral-950 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60"
                           >
-                            {cancellationRequestSubmittingId === order.id ? 'Enviando…' : 'Enviar solicitação'}
+                            {cancellationRequestSubmittingId === order.publicReference ? 'Enviando…' : 'Enviar solicitação'}
                           </button>
                         </div>
                       </div>
@@ -233,7 +232,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                       <div className="flex justify-end">
                         <button
                           type="button"
-                          onClick={() => setCancellationConfirmationOrderId(order.id)}
+                          onClick={() => setCancellationConfirmationOrderId(order.publicReference)}
                           className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
                         >
                           Pedir análise de cancelamento

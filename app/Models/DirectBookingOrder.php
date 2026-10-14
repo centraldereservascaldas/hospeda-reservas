@@ -49,7 +49,12 @@ class DirectBookingOrder extends Model
         'operational_events',
     ];
 
-    protected $hidden = ['resume_token'];
+    protected $hidden = [
+        'idempotency_key',
+        'request_fingerprint',
+        'resume_token',
+        'payment_qr_code',
+    ];
 
     protected function casts(): array
     {
@@ -108,5 +113,10 @@ class DirectBookingOrder extends Model
     public function staysActions(): HasMany
     {
         return $this->hasMany(DirectBookingStaysAction::class, 'direct_booking_order_id');
+    }
+
+    public function confirmationEmails(): HasMany
+    {
+        return $this->hasMany(DirectBookingEmail::class, 'direct_booking_order_id');
     }
 }
