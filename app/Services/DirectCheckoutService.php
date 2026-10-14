@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\DirectBookingOrderStatus;
 use App\Http\Requests\StoreCheckoutRequest;
 use App\Models\DirectBookingOrder;
+use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -15,6 +16,7 @@ class DirectCheckoutService
         private readonly StaysExternalApiClient $stays,
         private readonly DirectSaleTermsRegistry $terms,
         private readonly DirectStaysReservationService $reservations,
+        private readonly DirectCheckoutPaymentService $payments,
     ) {}
 
     /** @return array{order: DirectBookingOrder|null, code: string|null, message: string|null, status: int, replayed: bool, success: bool, resumeReference: string|null, resumeToken: string|null} */
@@ -25,6 +27,19 @@ class DirectCheckoutService
                 'order' => null,
                 'code' => 'checkout_disabled',
                 'message' => 'A compra no site está em preparação. Nenhum pedido, pré-reserva ou pagamento foi iniciado.',
+                'status' => 503,
+                'replayed' => false,
+                'success' => false,
+                'resumeReference' => null,
+                'resumeToken' => null,
+            ];
+        }
+
+        if ($this->payments->availableMethods() === []) {
+            return [
+                'order' => null,
+                'code' => 'payments_disabled',
+                'message' => 'O pagamento no site ainda não está pronto. Nenhum pedido, pré-reserva ou pagamento foi iniciado.',
                 'status' => 503,
                 'replayed' => false,
                 'success' => false,
@@ -86,15 +101,23 @@ class DirectCheckoutService
         if (! is_array($availability)) {
             return ['order' => null, 'code' => 'availability_unavailable', 'message' => 'Não foi possível confirmar a disponibilidade atual na Stays. Nenhum pedido, reserva ou cobrança foi iniciado.', 'status' => 503, 'replayed' => false];
         }
-        $isAvailable = collect($availability)->filter(fn (mixed $listing): bool => is_array($listing))->contains(fn (array $listing): bool => in_array($staysListingId, [
+        $availableListing = collect($availability)->filter(fn (mixed $listing): bool => is_array($listing))->first(fn (array $listing): bool => in_array($staysListingId, [
             (string) ($listing['id'] ?? ''),
             (string) ($listing['_idlisting'] ?? ''),
             (string) ($listing['_id'] ?? ''),
             (string) ($listing['code'] ?? ''),
         ], true));
-        if (! $isAvailable) {
+        if (! is_array($availableListing)) {
             return ['order' => null, 'code' => 'dates_unavailable', 'message' => 'Este imóvel não está disponível para as datas selecionadas. Nenhum pedido, reserva ou cobrança foi iniciado.', 'status' => 409, 'replayed' => false];
         }
+
+        $quoteListingIds = array_values(array_unique(array_filter([
+            $staysListingId,
+            $availableListing['id'] ?? null,
+            $availableListing['_idlisting'] ?? null,
+            $availableListing['_id'] ?? null,
+            $availableListing['code'] ?? null,
+        ], fn (mixed $listingId): bool => is_string($listingId) && $listingId !== '')));
 
         $quoteResponse = $this->stays->post('/booking/calculate-price', [
             'from' => $input['from'],
@@ -102,7 +125,7 @@ class DirectCheckoutService
             'listingIds' => [$staysListingId],
             'guests' => $guestCount,
         ]);
-        $quote = $this->extractQuote($quoteResponse, $staysListingId);
+        $quote = $this->extractQuote($quoteResponse, $quoteListingIds);
         if ($quote === null) {
             return ['order' => null, 'code' => 'quote_unavailable', 'message' => 'Não foi possível revalidar o preço na Stays. Nenhum pedido, reserva ou cobrança foi iniciado.', 'status' => 503, 'replayed' => false];
         }
@@ -207,23 +230,25 @@ class DirectCheckoutService
         return $value;
     }
 
-    /** @param array<mixed>|null $response
+    /**
+     * @param  array<mixed>|null  $response
+     * @param  list<string>  $staysListingIds
      * @return array{total: float, currency: string, snapshot: array<string, mixed>}|null
      */
-    private function extractQuote(?array $response, string $staysListingId): ?array
+    private function extractQuote(?array $response, array $staysListingIds): ?array
     {
         if (! is_array($response)) {
             return null;
         }
 
         if (array_is_list($response)) {
-            $quote = collect($response)->first(function (mixed $item) use ($staysListingId): bool {
+            $quote = collect($response)->first(function (mixed $item) use ($staysListingIds): bool {
                 return is_array($item)
-                    && (string) ($item['_idlisting'] ?? $item['listingId'] ?? '') === $staysListingId;
+                    && in_array((string) ($item['_idlisting'] ?? $item['listingId'] ?? ''), $staysListingIds, true);
             });
         } else {
             $responseListingId = $response['_idlisting'] ?? $response['listingId'] ?? null;
-            if ($responseListingId !== null && (string) $responseListingId !== $staysListingId) {
+            if ($responseListingId !== null && ! in_array((string) $responseListingId, $staysListingIds, true)) {
                 return null;
             }
 
@@ -235,17 +260,33 @@ class DirectCheckoutService
         }
 
         $bookingPrice = is_array($quote['bookingPrice'] ?? null) ? $quote['bookingPrice'] : $quote;
-        $currency = (string) ($bookingPrice['mainCurrency'] ?? $quote['currency'] ?? 'BRL');
+        $currency = 'BRL';
         $feesIncluded = $quote['feesIncluded'] ?? $bookingPrice['feesIncluded'] ?? null;
-        if ($currency !== 'BRL' || ! is_bool($feesIncluded)) {
+        if (! is_bool($feesIncluded)) {
             return null;
         }
-        $total = $quote['total'] ?? $bookingPrice['_mctotal'][$currency] ?? $bookingPrice['_mctotal']['BRL'] ?? null;
+        $total = $bookingPrice['_mctotal'][$currency] ?? null;
         if (! is_numeric($total) || ! is_finite((float) $total) || (float) $total <= 0) {
             return null;
         }
-        $fees = is_array($bookingPrice['fees'] ?? null) ? $bookingPrice['fees'] : (is_array($quote['fees'] ?? null) ? $quote['fees'] : []);
-        $fees = array_values(array_filter($fees, fn (mixed $fee): bool => is_array($fee)));
+        $hasFees = array_key_exists('fees', $bookingPrice) || array_key_exists('fees', $quote);
+        $fees = $bookingPrice['fees'] ?? $quote['fees'] ?? [];
+        if (! is_array($fees) || ! array_is_list($fees) || (! $feesIncluded && ! $hasFees)) {
+            return null;
+        }
+
+        foreach ($fees as $fee) {
+            if (! is_array($fee)) {
+                return null;
+            }
+
+            $amounts = is_array($fee['_mcval'] ?? null) ? $fee['_mcval'] : [];
+            $amount = $amounts[$currency] ?? null;
+            if (! is_numeric($amount) || ! is_finite((float) $amount) || (float) $amount < 0) {
+                return null;
+            }
+        }
+
         if (! $feesIncluded) {
             foreach ($fees as $fee) {
                 $amounts = is_array($fee['_mcval'] ?? null) ? $fee['_mcval'] : [];

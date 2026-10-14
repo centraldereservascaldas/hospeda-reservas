@@ -5,6 +5,7 @@ import {
   CircleAlert,
   Clock3,
   LoaderCircle,
+  Printer,
   ShieldCheck,
 } from 'lucide-react';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
@@ -12,6 +13,7 @@ import type {
   CheckoutResumeResponse,
   DirectBookingOrderSummary,
 } from '../../services/crcnBackendApi';
+import { MercadoPagoCardForm } from './MercadoPagoCardForm';
 import { getCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
 
 interface CheckoutResumePageProps {
@@ -89,7 +91,7 @@ const statusDetails: Record<
   },
   atencao_operacional: {
     title: 'Pedido em conferência',
-    detail: 'A equipe precisa revisar este pedido. A reserva não deve ser considerada confirmada.',
+    detail: 'A equipe precisa revisar este pedido antes de orientar os próximos passos.',
     tone: 'attention',
   },
   expirado: {
@@ -141,6 +143,18 @@ const refreshableStatuses = new Set<DirectBookingOrderSummary['status']>([
   'pagamento_pendente',
   'pago_em_confirmacao',
   'liberacao_pendente',
+  'atencao_operacional',
+  'cancelamento_solicitado',
+  'reembolso_pendente',
+  'contestado',
+]);
+
+const refreshablePaymentStatuses = new Set([
+  'pending',
+  'in_process',
+  'approved',
+  'unknown',
+  'attention_required',
 ]);
 
 function formatDate(value: string): string {
@@ -153,6 +167,31 @@ function getToneClasses(tone: 'neutral' | 'positive' | 'attention'): string {
   return 'border-orange-200 bg-orange-50 text-orange-950';
 }
 
+function getOrderStatusDetails(order: DirectBookingOrderSummary) {
+  if (order.paymentStatus === 'refunded') {
+    return {
+      title: 'Pagamento estornado',
+      detail:
+        order.reservationStatus === 'booked'
+          ? 'O gateway informa o estorno. O último registro da Stays indica a reserva como confirmada, e a equipe está revisando a situação da hospedagem.'
+          : 'O gateway informa o estorno. A equipe está revisando a situação do pedido e da reserva.',
+      tone: 'attention' as const,
+    };
+  }
+  if (order.paymentStatus === 'charged_back') {
+    return {
+      title: 'Pagamento contestado',
+      detail:
+        order.reservationStatus === 'booked'
+          ? 'O gateway informa uma contestação. O último registro da Stays indica a reserva como confirmada; a equipe está revisando a situação da hospedagem.'
+          : 'O gateway informa uma contestação. A equipe está revisando a situação do pedido e da reserva.',
+      tone: 'attention' as const,
+    };
+  }
+
+  return statusDetails[order.status];
+}
+
 export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
   const [resumeState, setResumeState] = useState<ResumeState>({ kind: 'loading' });
   const [retryKey, setRetryKey] = useState(0);
@@ -160,6 +199,10 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
     code: string;
     status: 'copied' | 'failed';
   } | null>(null);
+  const [isStartingPixPayment, setIsStartingPixPayment] = useState(false);
+  const [paymentStartError, setPaymentStartError] = useState<string | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -206,7 +249,12 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
       }
 
       setResumeState({ kind: 'ready', data: result.data });
-      if (refreshableStatuses.has(result.data.order.status)) {
+      if (
+        refreshableStatuses.has(result.data.order.status) ||
+        (result.data.order.status === 'expirado' &&
+          result.data.payment.attempt != null &&
+          refreshablePaymentStatuses.has(result.data.payment.attempt.status))
+      ) {
         refreshTimeout = window.setTimeout(() => {
           void refresh(false);
         }, 30_000);
@@ -230,15 +278,86 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
     }
   };
 
+  const startPixPayment = async (order: DirectBookingOrderSummary): Promise<void> => {
+    const token = getCheckoutResumeToken(reference);
+    if (!token) {
+      setPaymentStartError('Esta sessão não tem a credencial para continuar o pagamento.');
+      return;
+    }
+
+    setIsStartingPixPayment(true);
+    setPaymentStartError(null);
+    const result = await crcnBackendApi.createCheckoutPayment(reference, token, order.quoteTotal, {
+      paymentMethod: 'pix',
+      paymentMethodId: 'pix',
+      idempotencyKey: crypto.randomUUID(),
+    });
+    setIsStartingPixPayment(false);
+
+    if (result.kind === 'response' && result.success) {
+      setRetryKey((current) => current + 1);
+      return;
+    }
+
+    setPaymentStartError(
+      result.kind === 'response'
+        ? result.message
+        : 'Não foi possível iniciar o Pix. Atualize o pedido e tente novamente.',
+    );
+  };
+
   const order = resumeState.kind === 'ready' ? resumeState.data.order : null;
-  const paymentAttempt = resumeState.kind === 'ready' ? resumeState.data.payment.attempt : null;
-  const status = order ? statusDetails[order.status] : null;
+  const paymentAttempt =
+    resumeState.kind === 'ready' ? (resumeState.data.payment.attempt ?? null) : null;
+  const reservationExpiresAt = order?.expiresAt ? Date.parse(order.expiresAt) : Number.NaN;
+  const reservationIsActive =
+    Number.isFinite(reservationExpiresAt) && reservationExpiresAt > currentTime;
+
+  useEffect(() => {
+    if (!Number.isFinite(reservationExpiresAt)) return;
+
+    const timeout = window.setTimeout(
+      () => setCurrentTime(Date.now()),
+      Math.max(0, reservationExpiresAt - Date.now() + 1),
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [reservationExpiresAt]);
+
+  const canRetryPixPayment =
+    paymentAttempt === null ||
+    paymentAttempt.status === 'rejected' ||
+    paymentAttempt.status === 'cancelled';
+  const canStartPixPayment =
+    order !== null &&
+    resumeState.kind === 'ready' &&
+    resumeState.data.payment.enabled &&
+    resumeState.data.payment.methods.includes('pix') &&
+    reservationIsActive &&
+    (order.status === 'pre_reservado' || order.status === 'pagamento_recusado') &&
+    canRetryPixPayment;
+  const paymentCapabilities = resumeState.kind === 'ready' ? resumeState.data.payment : null;
+  const cardPublicKey = paymentCapabilities?.publicKey ?? null;
+  const canStartCardPayment =
+    order !== null &&
+    paymentCapabilities?.enabled === true &&
+    paymentCapabilities.methods.includes('card') &&
+    cardPublicKey !== null &&
+    reservationIsActive &&
+    (order.status === 'pre_reservado' || order.status === 'pagamento_recusado') &&
+    canRetryPixPayment;
+  const showPaymentMethodSelector = canStartPixPayment && canStartCardPayment;
+  const showPixPaymentAction =
+    canStartPixPayment && (!canStartCardPayment || selectedPaymentMethod === 'pix');
+  const showCardPaymentForm =
+    canStartCardPayment && (!canStartPixPayment || selectedPaymentMethod === 'card');
+  const status = order ? getOrderStatusDetails(order) : null;
   const StatusIcon =
     status?.tone === 'positive' ? BadgeCheck : status?.tone === 'attention' ? CircleAlert : Clock3;
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-4 py-8 text-neutral-950 sm:px-8 sm:py-12">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl flex-col">
+    <main className="min-h-screen bg-[#f7f4ee] px-4 py-8 text-neutral-950 print:min-h-0 print:bg-white print:px-0 print:py-0 sm:px-8 sm:py-12">
+      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl flex-col print:min-h-0 print:py-5">
         <header className="flex items-center justify-between border-b border-neutral-300/80 pb-5">
           <a href="/" className="text-sm font-black tracking-tight text-neutral-950">
             CRCN <span className="font-medium text-neutral-500">· Central de Reservas</span>
@@ -343,6 +462,15 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                       <p className="mt-1 text-sm leading-6">{status.detail}</p>
                     </div>
                   </div>
+                  {order.status === 'pagamento_recusado' && !reservationIsActive && (
+                    <p
+                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
+                      role="status"
+                    >
+                      O prazo da pré-reserva terminou. Consulte novamente a disponibilidade e o
+                      preço antes de iniciar outro pedido.
+                    </p>
+                  )}
 
                   <dl className="grid gap-4 sm:grid-cols-2">
                     <div className="rounded-2xl bg-[#f7f4ee] p-4">
@@ -365,6 +493,22 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                         {moneyFormatter.format(Number(order.quoteTotal))}
                       </dd>
                     </div>
+                    {order.expiresAt && !resumeState.data.confirmation && (
+                      <div className="rounded-2xl bg-[#f7f4ee] p-4">
+                        <dt className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                          Prazo da pré-reserva
+                        </dt>
+                        <dd className="mt-1 font-bold">
+                          {dateTimeFormatter.format(new Date(order.expiresAt))} (horário local)
+                        </dd>
+                      </div>
+                    )}
+                    <div className="rounded-2xl bg-[#f7f4ee] p-4">
+                      <dt className="text-xs font-bold uppercase tracking-wider text-neutral-500">
+                        Responsável
+                      </dt>
+                      <dd className="mt-1 font-bold">{order.guestName}</dd>
+                    </div>
                     <div className="rounded-2xl bg-[#f7f4ee] p-4">
                       <dt className="text-xs font-bold uppercase tracking-wider text-neutral-500">
                         Pedido
@@ -375,10 +519,150 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                     </div>
                   </dl>
 
+                  {resumeState.data.confirmation && (
+                    <section
+                      aria-labelledby="checkout-confirmation-title"
+                      className="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
+                    >
+                      <h2
+                        id="checkout-confirmation-title"
+                        className="font-extrabold text-emerald-950"
+                      >
+                        Confirmação registrada na Stays
+                      </h2>
+                      {resumeState.data.confirmation.reservationCode && (
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                            Código da reserva
+                          </p>
+                          <p className="mt-1 break-all font-mono text-lg font-black text-emerald-950">
+                            {resumeState.data.confirmation.reservationCode}
+                          </p>
+                        </div>
+                      )}
+                      {resumeState.data.confirmation.confirmedAt && (
+                        <p className="text-xs text-emerald-900">
+                          Confirmada em{' '}
+                          {dateTimeFormatter.format(
+                            new Date(resumeState.data.confirmation.confirmedAt),
+                          )}
+                        </p>
+                      )}
+                      {paymentAttempt?.status === 'approved' && (
+                        <dl className="grid gap-3 border-t border-emerald-200 pt-3 text-sm sm:grid-cols-2">
+                          <div>
+                            <dt className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                              Valor pago
+                            </dt>
+                            <dd className="mt-1 font-extrabold text-emerald-950">
+                              {moneyFormatter.format(Number(paymentAttempt.amount))}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                              Forma de pagamento
+                            </dt>
+                            <dd className="mt-1 font-extrabold text-emerald-950">
+                              {paymentAttempt.method === 'pix' ? 'Pix' : 'Cartão'}
+                            </dd>
+                          </div>
+                          {paymentAttempt.paidAt && (
+                            <div className="sm:col-span-2">
+                              <dt className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                                Pagamento aprovado em
+                              </dt>
+                              <dd className="mt-1 font-semibold text-emerald-950">
+                                {dateTimeFormatter.format(new Date(paymentAttempt.paidAt))}
+                              </dd>
+                            </div>
+                          )}
+                        </dl>
+                      )}
+                      <div className="flex justify-end border-t border-emerald-200 pt-3 print:hidden">
+                        <button
+                          type="button"
+                          onClick={() => window.print()}
+                          className="inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-950 transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
+                        >
+                          <Printer className="h-4 w-4" aria-hidden="true" />
+                          Imprimir comprovante
+                        </button>
+                      </div>
+                    </section>
+                  )}
+
+                  {(canStartPixPayment || canStartCardPayment) && order && (
+                    <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+                      {showPaymentMethodSelector && (
+                        <div className="flex gap-2" role="group" aria-label="Método de pagamento">
+                          <button
+                            type="button"
+                            aria-pressed={selectedPaymentMethod === 'pix'}
+                            onClick={() => setSelectedPaymentMethod('pix')}
+                            className={`rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'pix' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
+                          >
+                            Pix
+                          </button>
+                          <button
+                            type="button"
+                            aria-pressed={selectedPaymentMethod === 'card'}
+                            onClick={() => setSelectedPaymentMethod('card')}
+                            className={`rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'card' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
+                          >
+                            Cartão
+                          </button>
+                        </div>
+                      )}
+
+                      {showPixPaymentAction && (
+                        <div className="space-y-3" aria-labelledby="checkout-start-payment-title">
+                          <div>
+                            <h2 id="checkout-start-payment-title" className="font-extrabold">
+                              {paymentAttempt
+                                ? 'Nova tentativa Pix disponível'
+                                : 'Pré-reserva pronta para pagamento'}
+                            </h2>
+                            <p className="mt-1 text-sm leading-6 text-neutral-700">
+                              {paymentAttempt
+                                ? 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto a pré-reserva estiver válida.'
+                                : 'A cobrança Pix só será solicitada quando você continuar. A confirmação da estadia depende da validação posterior na Stays.'}
+                            </p>
+                          </div>
+                          {paymentStartError && (
+                            <p className="text-sm text-rose-800" role="alert">
+                              {paymentStartError}
+                            </p>
+                          )}
+                          <button
+                            type="button"
+                            disabled={isStartingPixPayment}
+                            onClick={() => void startPixPayment(order)}
+                            className="rounded-full bg-orange-800 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
+                          >
+                            {isStartingPixPayment
+                              ? 'Solicitando Pix…'
+                              : paymentAttempt
+                                ? 'Tentar novamente com Pix'
+                                : 'Gerar pagamento Pix'}
+                          </button>
+                        </div>
+                      )}
+
+                      {showCardPaymentForm && cardPublicKey && (
+                        <MercadoPagoCardForm
+                          reference={reference}
+                          amount={order.quoteTotal}
+                          publicKey={cardPublicKey}
+                          onAttemptFinished={() => setRetryKey((current) => current + 1)}
+                        />
+                      )}
+                    </section>
+                  )}
+
                   {paymentAttempt && (
                     <section
                       aria-labelledby="checkout-payment-title"
-                      className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4"
+                      className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4 print:hidden"
                     >
                       <div>
                         <h2 id="checkout-payment-title" className="font-extrabold">
@@ -452,21 +736,22 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                   <button
                     type="button"
                     onClick={() => setRetryKey((current) => current + 1)}
-                    className="rounded-full border border-neutral-300 bg-white px-4 py-2.5 text-xs font-bold text-neutral-800 transition hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                    className="rounded-full border border-neutral-300 bg-white px-4 py-2.5 text-xs font-bold text-neutral-800 transition hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 print:hidden"
                   >
                     Atualizar status
                   </button>
 
                   <p className="border-t border-neutral-200 pt-4 text-xs leading-5 text-neutral-600">
-                    Esta consulta não inicia novos pagamentos. Nenhum dado pessoal ou informação de
-                    cartão é exibido nesta página.
+                    {paymentAttempt
+                      ? 'Esta consulta acompanha o pagamento já solicitado e não envia novas cobranças.'
+                      : 'Nenhum dado pessoal ou informação de cartão é exibido nesta página.'}
                   </p>
                 </div>
               )}
             </div>
           </section>
 
-          <aside className="relative hidden min-h-[430px] overflow-hidden rounded-[2rem] bg-neutral-950 p-9 text-white shadow-[0_30px_80px_-35px_rgba(37,30,18,0.5)] lg:flex lg:flex-col lg:justify-between">
+          <aside className="relative hidden min-h-[430px] overflow-hidden rounded-[2rem] bg-neutral-950 p-9 text-white shadow-[0_30px_80px_-35px_rgba(37,30,18,0.5)] lg:flex lg:flex-col lg:justify-between print:hidden">
             <div
               className="absolute -right-20 -top-16 h-72 w-72 rounded-full border border-white/10"
               aria-hidden="true"

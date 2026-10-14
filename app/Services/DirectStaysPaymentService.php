@@ -19,6 +19,11 @@ class DirectStaysPaymentService
     /** @return array{ready: bool, code: string, message: string} */
     public function confirmPaidReservation(DirectBookingOrder $order): array
     {
+        $order->refresh();
+        if ($order->status === DirectBookingOrderStatus::Contestado || $order->payment_status === 'charged_back') {
+            return $this->result(false, 'gateway_chargeback_requires_review', 'A contestação do pagamento exige revisão operacional; nenhuma confirmação automática foi iniciada.');
+        }
+
         if (! config('direct-booking.confirmation_enabled', false)) {
             return $this->result(false, 'stays_confirmation_disabled', 'A confirmação automática na Stays permanece desabilitada.');
         }
@@ -59,6 +64,11 @@ class DirectStaysPaymentService
         $paymentResult = $this->ensureStaysPaymentRecorded($order, $attempt);
         if (! $paymentResult['ready']) {
             return $paymentResult;
+        }
+
+        $reservation = $this->stays->get($reservationEndpoint);
+        if (! is_array($reservation) || ! $this->matchesReservationForConfirmation($reservation, $order)) {
+            return $this->attention($order, 'stays_reservation_changed_during_confirmation', 'A reserva mudou após o lançamento do pagamento na Stays; a confirmação foi interrompida para revisão operacional.');
         }
 
         if (($reservation['type'] ?? null) === 'booked') {
@@ -266,18 +276,26 @@ class DirectStaysPaymentService
             ], true);
             if ($paymentStillApproved && $canConfirmLocally && $lockedOrder->status !== DirectBookingOrderStatus::Confirmado) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::Confirmado, ['source' => 'stays_booked_verified', 'external_id' => $lockedOrder->stays_reservation_id]);
-            } elseif (! $paymentStillApproved || ! $canConfirmLocally) {
-                if (! in_array($lockedOrder->status, [DirectBookingOrderStatus::AtencaoOperacional, DirectBookingOrderStatus::Expirado], true)) {
+            } elseif ((! $paymentStillApproved || ! $canConfirmLocally)
+                && $lockedOrder->status !== DirectBookingOrderStatus::Contestado) {
+                if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'stays_booked_requires_review']);
                 }
             }
             $lockedOrder->reservation_status = 'booked';
+            $requiresReview = ! $paymentStillApproved || ! $canConfirmLocally;
             $events = $lockedOrder->operational_events ?? [];
-            $events[] = [
+            $event = [
                 'event' => $paymentStillApproved && $canConfirmLocally ? 'stays_booked_confirmed' : 'stays_booked_requires_review',
                 'at' => now()->toISOString(),
                 'snapshot' => $snapshot,
             ];
+            if ($requiresReview) {
+                $event['source'] = 'stays';
+                $event['status'] = $lockedOrder->status->value;
+                $event['code'] = 'stays_booked_requires_review';
+            }
+            $events[] = $event;
             $lockedOrder->operational_events = $events;
             $lockedOrder->save();
         });
@@ -303,7 +321,7 @@ class DirectStaysPaymentService
      */
     private function safeReservationSnapshot(array $reservation): array
     {
-        return array_intersect_key($reservation, array_flip(['_id', '_idlisting', '_idclient', 'type', 'checkInDate', 'checkOutDate', 'guests', 'guestsDetails', 'price', 'internalNote']));
+        return array_intersect_key($reservation, array_flip(['_id', 'id', 'partnerCode', '_idlisting', '_idclient', 'type', 'checkInDate', 'checkInTime', 'checkOutDate', 'checkOutTime', 'guests', 'guestsDetails', 'price', 'internalNote']));
     }
 
     private function action(DirectBookingOrder $order, string $type, array $payload): DirectBookingStaysAction
@@ -373,7 +391,11 @@ class DirectStaysPaymentService
     {
         DB::transaction(function () use ($order, $code): void {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
-            if (! in_array($lockedOrder->status, [DirectBookingOrderStatus::AtencaoOperacional, DirectBookingOrderStatus::Expirado], true)) {
+            if (! in_array($lockedOrder->status, [
+                DirectBookingOrderStatus::AtencaoOperacional,
+                DirectBookingOrderStatus::Expirado,
+                DirectBookingOrderStatus::Contestado,
+            ], true)) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'stays_payment_confirmation', 'code' => $code]);
             }
             $events = $lockedOrder->operational_events ?? [];

@@ -1,8 +1,11 @@
 import React, { useRef, useState } from 'react';
 import type { Reservation, Currency, ReservationCancellationResult } from '../../types';
+import { crcnBackendApi } from '../../services/crcnBackendApi';
+import type { DirectBookingOrderSummary } from '../../services/crcnBackendApi';
 import { formatCurrency } from '../../utils/formatters';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { useDialogFocus } from '../useDialogFocus';
+import { saveCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
 import { 
   Calendar, 
   MapPin, 
@@ -16,6 +19,9 @@ import {
 
 interface TripsViewProps {
   reservations: Reservation[];
+  directBookingOrders?: DirectBookingOrderSummary[];
+  directBookingOrdersError?: string;
+  accessToken?: string;
   currency: Currency;
   onCancelReservation: (id: string) => Promise<void | ReservationCancellationResult>;
   onExploreMore: () => void;
@@ -23,6 +29,9 @@ interface TripsViewProps {
 
 export const TripsView: React.FC<TripsViewProps> = ({
   reservations,
+  directBookingOrders = [],
+  directBookingOrdersError = '',
+  accessToken,
   currency,
   onCancelReservation,
   onExploreMore,
@@ -32,6 +41,10 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
   const [cancellationError, setCancellationError] = useState('');
   const [cancellationNotice, setCancellationNotice] = useState('');
+  const [cancellationConfirmationOrderId, setCancellationConfirmationOrderId] = useState<string | null>(null);
+  const [cancellationRequestSubmittingId, setCancellationRequestSubmittingId] = useState<string | null>(null);
+  const [cancellationRequestErrors, setCancellationRequestErrors] = useState<Record<string, string>>({});
+  const [locallyRequestedCancellationIds, setLocallyRequestedCancellationIds] = useState<string[]>([]);
   const voucherCloseButtonRef = useRef<HTMLButtonElement>(null);
   const keepTripButtonRef = useRef<HTMLButtonElement>(null);
   const voucherDialogRef = useDialogFocus(!!selectedVoucher, () => setSelectedVoucher(null), {
@@ -49,6 +62,56 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const activeReservations = reservations.filter((r) => r.status === 'confirmed' || r.status === 'pending');
   const completedReservations = reservations.filter((r) => r.status === 'completed');
   const cancelledReservations = reservations.filter((r) => r.status === 'cancelled');
+  const visibleDirectBookingOrders = directBookingOrders.filter(
+    (order) =>
+      !order.staysReservationId ||
+      !reservations.some((reservation) => reservation.staysReservationId === order.staysReservationId),
+  );
+  const directBookingStatusLabels: Record<DirectBookingOrderSummary['status'], string> = {
+    iniciado: 'Pedido iniciado',
+    cotado: 'Cotação registrada',
+    pre_reservado: 'Pré-reserva',
+    liberacao_pendente: 'Liberação pendente',
+    pagamento_pendente: 'Pagamento pendente',
+    pago_em_confirmacao: 'Pagamento aprovado · confirmação pendente',
+    confirmado: 'Confirmada',
+    concluido: 'Concluída',
+    expirado: 'Pedido expirado',
+    pagamento_recusado: 'Pagamento não aprovado',
+    atencao_operacional: 'Em análise pela Central',
+    cancelamento_solicitado: 'Cancelamento solicitado',
+    reembolso_pendente: 'Reembolso em análise',
+    reembolsado: 'Reembolsado',
+    contestado: 'Pagamento contestado',
+  };
+  const openDirectBookingOrder = (order: DirectBookingOrderSummary): void => {
+    if (!order.resumeToken) return;
+    saveCheckoutResumeToken(order.publicReference, order.resumeToken);
+    window.location.assign(`/checkout/${encodeURIComponent(order.publicReference)}`);
+  };
+  const submitDirectBookingCancellation = async (order: DirectBookingOrderSummary): Promise<void> => {
+    if (!accessToken) return;
+    setCancellationRequestSubmittingId(order.id);
+    setCancellationRequestErrors((errors) => ({ ...errors, [order.id]: '' }));
+    try {
+      await crcnBackendApi.requestDirectBookingCancellation(accessToken, order.publicReference);
+      setLocallyRequestedCancellationIds((ids) => [...new Set([...ids, order.id])]);
+      setCancellationConfirmationOrderId(null);
+      setCancellationNotice(
+        'A solicitação foi enviada para análise da Central. A reserva continua ativa até a confirmação do cancelamento; nenhum reembolso foi processado.',
+      );
+    } catch (error) {
+      setCancellationRequestErrors((errors) => ({
+        ...errors,
+        [order.id]:
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível registrar a solicitação. A reserva continua ativa.',
+      }));
+    } finally {
+      setCancellationRequestSubmittingId(null);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 min-h-[75vh]">
@@ -77,7 +140,115 @@ export const TripsView: React.FC<TripsViewProps> = ({
         </p>
       )}
 
-      {reservations.length === 0 ? (
+      {(visibleDirectBookingOrders.length > 0 || directBookingOrdersError) && (
+        <section className="mt-6" aria-labelledby="direct-booking-orders-title">
+          <h2 id="direct-booking-orders-title" className="mb-1 text-lg font-bold text-neutral-900">
+            Compras feitas no site
+          </h2>
+          <p className="mb-4 text-xs text-neutral-600">
+            A pré-reserva não significa que a estadia esteja confirmada. Confira o estado de cada pedido.
+          </p>
+          {directBookingOrdersError && (
+            <p role="alert" className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              {directBookingOrdersError}
+            </p>
+          )}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {visibleDirectBookingOrders.map((order) => (
+              <article key={order.id} className="rounded-2xl border border-orange-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="font-mono text-xs font-bold text-neutral-500">
+                      Pedido {order.publicReference.slice(0, 12).toUpperCase()}
+                    </p>
+                    <h3 className="mt-1 text-sm font-extrabold text-neutral-900">
+                      Acomodação {order.listingId}
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900">
+                    {order.paymentStatus === 'refunded'
+                      ? 'Pagamento estornado · reserva em revisão'
+                      : order.paymentStatus === 'charged_back'
+                        ? 'Pagamento contestado · reserva em revisão'
+                        : order.status === 'cancelamento_solicitado' || locallyRequestedCancellationIds.includes(order.id)
+                          ? directBookingStatusLabels.cancelamento_solicitado
+                          : directBookingStatusLabels[order.status]}
+                  </span>
+                </div>
+                <p className="mt-3 text-xs text-neutral-600">
+                  {order.from} até {order.to}
+                  {order.expiresAt && ['pre_reservado', 'pagamento_pendente'].includes(order.status)
+                    ? ` · pré-reserva até ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(order.expiresAt))}`
+                    : ''}
+                </p>
+                <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
+                  <span className="text-[10px] font-bold uppercase text-neutral-500">Total do pedido</span>
+                  <span className="text-sm font-black text-neutral-900">
+                    {formatCurrency(Number(order.quoteTotal), currency)}
+                  </span>
+                </div>
+                {order.resumeToken && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => openDirectBookingOrder(order)}
+                      className="rounded-xl bg-neutral-950 px-4 py-2 text-xs font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                    >
+                      Abrir acompanhamento
+                    </button>
+                  </div>
+                )}
+                {accessToken && order.status === 'confirmado' && !locallyRequestedCancellationIds.includes(order.id) && (
+                  <div className="mt-3 border-t border-neutral-100 pt-3">
+                    {cancellationConfirmationOrderId === order.id ? (
+                      <div className="space-y-3" role="group" aria-label="Confirmar solicitação de cancelamento">
+                        <p className="text-xs leading-5 text-neutral-700">
+                          A Central analisará o pedido. A reserva continuará ativa até a confirmação; esta solicitação não processa reembolso.
+                        </p>
+                        {cancellationRequestErrors[order.id] && (
+                          <p className="text-xs font-semibold text-rose-800" role="alert">
+                            {cancellationRequestErrors[order.id]}
+                          </p>
+                        )}
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCancellationConfirmationOrderId(null)}
+                            disabled={cancellationRequestSubmittingId === order.id}
+                            className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+                          >
+                            Manter reserva
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void submitDirectBookingCancellation(order)}
+                            disabled={cancellationRequestSubmittingId === order.id}
+                            className="rounded-xl bg-neutral-950 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60"
+                          >
+                            {cancellationRequestSubmittingId === order.id ? 'Enviando…' : 'Enviar solicitação'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setCancellationConfirmationOrderId(order.id)}
+                          className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                        >
+                          Pedir análise de cancelamento
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {reservations.length === 0 && visibleDirectBookingOrders.length === 0 ? (
         <div className="text-center py-20 max-w-md mx-auto space-y-4">
           <div className="w-16 h-16 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center mx-auto border border-orange-200/60 shadow-xs">
             <Ticket className="w-8 h-8" />
@@ -307,11 +478,17 @@ export const TripsView: React.FC<TripsViewProps> = ({
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-neutral-200/80">
                 <div>
                   <span className="text-neutral-600 text-[10px]">Check-in</span>
-                  <p className="font-semibold text-neutral-800">{selectedVoucher.checkIn} (após 14:00)</p>
+                  <p className="font-semibold text-neutral-800">
+                    {selectedVoucher.checkIn}
+                    {selectedVoucher.checkInTime ? ` · ${selectedVoucher.checkInTime}` : ''}
+                  </p>
                 </div>
                 <div>
                   <span className="text-neutral-600 text-[10px]">Check-out</span>
-                  <p className="font-semibold text-neutral-800">{selectedVoucher.checkOut} (até 11:00)</p>
+                  <p className="font-semibold text-neutral-800">
+                    {selectedVoucher.checkOut}
+                    {selectedVoucher.checkOutTime ? ` · ${selectedVoucher.checkOutTime}` : ''}
+                  </p>
                 </div>
               </div>
               <div className="pt-2 border-t border-neutral-200/80">

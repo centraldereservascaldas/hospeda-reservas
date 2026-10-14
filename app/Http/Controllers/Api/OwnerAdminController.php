@@ -6,16 +6,27 @@ use App\Data\VerifiedGuest;
 use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DirectBookingOperationsResource;
+use App\Jobs\ReconcileMercadoPagoPayment;
 use App\Models\DirectBookingOrder;
+use App\Models\DirectBookingPaymentAttempt;
+use App\Models\DirectBookingPaymentWebhook;
 use App\Models\OwnerAccess;
+use App\Services\DirectStaysReservationMatcher;
+use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
 use App\Services\SupabaseAuthClient;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class OwnerAdminController extends Controller
 {
-    public function __construct(private readonly StaysExternalApiClient $stays) {}
+    public function __construct(
+        private readonly StaysExternalApiClient $stays,
+        private readonly DirectStaysReservationMatcher $reservationMatcher,
+    ) {}
 
     public function status(Request $request): JsonResponse
     {
@@ -45,7 +56,10 @@ class OwnerAdminController extends Controller
 
     public function directBookingOrders(Request $request): JsonResponse
     {
-        $input = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:10000']]);
+        $input = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1', 'max:10000'],
+            'webhookPage' => ['sometimes', 'integer', 'min:1', 'max:10000'],
+        ]);
         $orders = DirectBookingOrder::query()
             ->where(function ($query): void {
                 $query
@@ -67,7 +81,7 @@ class OwnerAdminController extends Controller
             })
             ->with([
                 'staysActions' => fn ($query) => $query
-                    ->select(['id', 'direct_booking_order_id', 'action_type', 'status', 'error_code', 'updated_at'])
+                    ->select(['id', 'direct_booking_order_id', 'action_type', 'status', 'error_code', 'error_message', 'updated_at'])
                     ->orderByDesc('updated_at'),
                 'paymentAttempts' => fn ($query) => $query
                     ->select(['id', 'direct_booking_order_id', 'gateway_payment_id', 'status', 'error_code', 'updated_at'])
@@ -79,14 +93,283 @@ class OwnerAdminController extends Controller
             ->orderByDesc('updated_at')
             ->orderByDesc('id')
             ->paginate(50, ['*'], 'page', (int) ($input['page'] ?? 1));
+        $unmatchedWebhookQuery = DirectBookingPaymentWebhook::query()
+            ->whereIn('status', ['received', 'retrying', 'failed', 'queued', 'processing'])
+            ->whereNotIn('gateway_payment_id', DirectBookingPaymentAttempt::query()
+                ->select('gateway_payment_id')
+                ->whereNotNull('gateway_payment_id'));
+        $unmatchedWebhooks = (clone $unmatchedWebhookQuery)
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->paginate(50, ['id', 'gateway_payment_id', 'status', 'error_code', 'reconciliation_attempts', 'received_at', 'updated_at'], 'webhookPage', (int) ($input['webhookPage'] ?? 1));
+        $unmatchedWebhookItems = $unmatchedWebhooks->getCollection()
+            ->map(fn (DirectBookingPaymentWebhook $webhook): array => [
+                'id' => $webhook->id,
+                'gatewayPaymentId' => $webhook->gateway_payment_id,
+                'status' => $webhook->status,
+                'errorCode' => $webhook->error_code,
+                'attempts' => $webhook->reconciliation_attempts,
+                'canRetry' => $webhook->status === 'failed'
+                    && $webhook->reconciliation_attempts < ReconcileMercadoPagoPayment::MAX_RECONCILIATION_ATTEMPTS,
+                'receivedAt' => $webhook->received_at?->toISOString(),
+                'updatedAt' => $webhook->updated_at?->toISOString(),
+            ])
+            ->values();
 
         return response()->json([
             'success' => true,
             'orders' => DirectBookingOperationsResource::collection(collect($orders->items()))->resolve(),
+            'unmatchedWebhooks' => $unmatchedWebhookItems,
+            'unmatchedWebhookTotal' => $unmatchedWebhooks->total(),
+            'unmatchedWebhookCurrentPage' => $unmatchedWebhooks->currentPage(),
+            'unmatchedWebhookLastPage' => $unmatchedWebhooks->lastPage(),
             'currentPage' => $orders->currentPage(),
             'lastPage' => $orders->lastPage(),
             'total' => $orders->total(),
         ])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function retryDirectBookingWebhook(string $webhookId): JsonResponse
+    {
+        $queueConnection = (string) config('services.mercadopago.webhook_queue_connection', 'database');
+        if ($queueConnection === 'sync' || ! config("queue.connections.{$queueConnection}")) {
+            return response()->json([
+                'success' => false,
+                'code' => 'webhook_queue_unavailable',
+                'message' => 'A fila de conciliação não está disponível.',
+            ], 503);
+        }
+
+        try {
+            $webhook = DB::transaction(function () use ($webhookId, $queueConnection): DirectBookingPaymentWebhook {
+                $webhook = DirectBookingPaymentWebhook::query()->lockForUpdate()->findOrFail($webhookId);
+                $alreadyLinked = DirectBookingPaymentAttempt::query()
+                    ->where('gateway_payment_id', $webhook->gateway_payment_id)
+                    ->exists();
+
+                if ($alreadyLinked || $webhook->status !== 'failed') {
+                    abort(409, 'Esta notificação já foi associada ou não está disponível para reenvio.');
+                }
+                if ($webhook->reconciliation_attempts >= ReconcileMercadoPagoPayment::MAX_RECONCILIATION_ATTEMPTS) {
+                    abort(409, 'O limite de tentativas foi atingido. A notificação precisa de conferência manual.');
+                }
+
+                $webhook->forceFill([
+                    'status' => 'queued',
+                    'error_code' => null,
+                ])->save();
+
+                ReconcileMercadoPagoPayment::dispatch($webhook->id)
+                    ->onConnection($queueConnection)
+                    ->afterCommit();
+
+                return $webhook;
+            });
+        } catch (ModelNotFoundException) {
+            return response()->json([
+                'success' => false,
+                'code' => 'webhook_not_found',
+                'message' => 'A notificação não foi encontrada.',
+            ], 404);
+        } catch (HttpException $exception) {
+            return response()->json([
+                'success' => false,
+                'code' => 'webhook_not_retryable',
+                'message' => $exception->getMessage(),
+            ], $exception->getStatusCode());
+        }
+
+        return response()->json([
+            'success' => true,
+            'status' => 'queued',
+            'message' => 'A notificação foi reenviada para conciliação.',
+        ], 202)->header('Cache-Control', 'no-store, private');
+    }
+
+    public function startManualDirectBookingCancellation(Request $request, string $publicReference): JsonResponse
+    {
+        $reviewer = $request->attributes->get('verified_guest');
+        if (! $reviewer instanceof VerifiedGuest) {
+            return response()->json(['success' => false, 'code' => 'invalid_session'], 401);
+        }
+        if (! preg_match('/^[A-Za-z0-9]{40}$/', $publicReference)) {
+            return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404);
+        }
+
+        $result = DB::transaction(function () use ($publicReference, $reviewer): string {
+            $order = DirectBookingOrder::query()
+                ->where('public_reference', $publicReference)
+                ->lockForUpdate()
+                ->first();
+            if ($order === null) {
+                return 'not_found';
+            }
+            if ($order->status === DirectBookingOrderStatus::ReembolsoPendente) {
+                return 'already_started';
+            }
+            if ($order->status !== DirectBookingOrderStatus::CancelamentoSolicitado || $order->payment_status !== 'approved') {
+                return 'not_ready';
+            }
+
+            $order->transitionTo(DirectBookingOrderStatus::ReembolsoPendente, [
+                'source' => 'owner_admin_cancellation_review',
+                'event' => 'manual_cancellation_processing_started',
+                'code' => 'stays_cancellation_and_gateway_refund_required',
+                'reviewed_by' => $reviewer->id,
+                'reviewed_at' => now()->toISOString(),
+            ]);
+            $order->save();
+
+            return 'started';
+        });
+
+        if ($result === 'not_found') {
+            return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404)
+                ->header('Cache-Control', 'no-store, private');
+        }
+        if ($result === 'not_ready') {
+            return response()->json(['success' => false, 'code' => 'direct_booking_cancellation_not_ready', 'message' => 'O pedido não está em estado válido para encaminhamento manual. Nenhuma alteração foi feita.'], 409)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        return response()->json([
+            'success' => true,
+            'status' => DirectBookingOrderStatus::ReembolsoPendente->value,
+            'alreadyStarted' => $result === 'already_started',
+            'requiredActions' => ['stays_cancellation', 'gateway_refund'],
+            'message' => 'Encaminhamento registrado. O cancelamento na Stays e o reembolso no gateway ainda precisam ser executados e conferidos manualmente.',
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function verifyManualDirectBookingStaysCancellation(Request $request, string $publicReference): JsonResponse
+    {
+        $reviewer = $request->attributes->get('verified_guest');
+        if (! $reviewer instanceof VerifiedGuest) {
+            return response()->json(['success' => false, 'code' => 'invalid_session'], 401);
+        }
+        if (! preg_match('/^[A-Za-z0-9]{40}$/', $publicReference)) {
+            return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404);
+        }
+
+        $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
+        if ($order === null) {
+            return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404)
+                ->header('Cache-Control', 'no-store, private');
+        }
+        if ($order->status !== DirectBookingOrderStatus::ReembolsoPendente || $order->stays_reservation_id === null) {
+            return response()->json(['success' => false, 'code' => 'manual_cancellation_not_ready', 'message' => 'O pedido não está pronto para verificar a baixa na Stays.'], 409)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        $reservation = $this->stays->get('/booking/reservations/'.rawurlencode($order->stays_reservation_id));
+        if (! is_array($reservation)) {
+            return response()->json(['success' => false, 'code' => 'stays_cancellation_status_unavailable', 'message' => 'Não foi possível consultar a reserva na Stays. Nenhuma conclusão foi registrada.'], 502)
+                ->header('Cache-Control', 'no-store, private');
+        }
+        if (! $this->reservationMatcher->matchesIdentity($reservation, $order)
+            || ! in_array(strtolower((string) ($reservation['type'] ?? '')), ['canceled', 'cancelled'], true)) {
+            return response()->json(['success' => false, 'code' => 'stays_cancellation_not_confirmed', 'message' => 'A Stays não confirmou o cancelamento desta reserva. Nenhuma conclusão foi registrada.'], 409)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        $result = DB::transaction(function () use ($order, $reservation, $reviewer): array {
+            $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
+            if ($lockedOrder->status !== DirectBookingOrderStatus::ReembolsoPendente
+                || $lockedOrder->stays_reservation_id !== $order->stays_reservation_id) {
+                return ['status' => 'changed', 'orderStatus' => $lockedOrder->status->value];
+            }
+
+            $events = $lockedOrder->operational_events ?? [];
+            $alreadyVerified = collect($events)->contains(fn (mixed $event): bool => is_array($event)
+                && ($event['code'] ?? null) === 'stays_cancellation_verified');
+            if (! $alreadyVerified) {
+                $lockedOrder->reservation_status = 'canceled';
+                $events[] = [
+                    'source' => 'owner_admin_cancellation_review',
+                    'event' => 'stays_cancellation_verified',
+                    'code' => 'stays_cancellation_verified',
+                    'external_id' => (string) ($reservation['_id'] ?? $reservation['id'] ?? $lockedOrder->stays_reservation_id),
+                    'reviewed_by' => $reviewer->id,
+                    'status' => $lockedOrder->status->value,
+                    'at' => now()->toISOString(),
+                ];
+                $lockedOrder->operational_events = $events;
+            }
+
+            if ($lockedOrder->payment_status === 'refunded') {
+                $lockedOrder->transitionTo(DirectBookingOrderStatus::Reembolsado, [
+                    'source' => 'manual_cancellation_steps_verified',
+                    'code' => 'stays_cancellation_and_gateway_refund_verified',
+                    'reviewed_by' => $reviewer->id,
+                ]);
+            }
+            $lockedOrder->save();
+
+            return [
+                'status' => $alreadyVerified ? 'already_verified' : 'verified',
+                'orderStatus' => $lockedOrder->status->value,
+                'gatewayRefundConfirmed' => $lockedOrder->payment_status === 'refunded',
+            ];
+        });
+
+        if ($result['status'] === 'changed') {
+            return response()->json(['success' => false, 'code' => 'manual_cancellation_state_changed', 'message' => 'O estado do pedido mudou durante a verificação. Atualize a fila.'], 409)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        return response()->json([
+            'success' => true,
+            'staysCancellationConfirmed' => true,
+            'gatewayRefundConfirmed' => $result['gatewayRefundConfirmed'],
+            'status' => $result['orderStatus'],
+            'message' => $result['gatewayRefundConfirmed']
+                ? 'A Stays confirmou o cancelamento e o gateway informa o estorno.'
+                : 'A Stays confirmou o cancelamento. O reembolso ainda aguarda confirmação autoritativa do gateway.',
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function verifyManualDirectBookingGatewayRefund(
+        Request $request,
+        string $publicReference,
+        DirectCheckoutPaymentService $payments,
+    ): JsonResponse {
+        $reviewer = $request->attributes->get('verified_guest');
+        if (! $reviewer instanceof VerifiedGuest) {
+            return response()->json(['success' => false, 'code' => 'invalid_session'], 401);
+        }
+        if (! preg_match('/^[A-Za-z0-9]{40}$/', $publicReference)) {
+            return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404);
+        }
+
+        $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
+        if ($order === null) {
+            return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404)
+                ->header('Cache-Control', 'no-store, private');
+        }
+        if ($order->status !== DirectBookingOrderStatus::ReembolsoPendente || $order->gateway_payment_id === null) {
+            return response()->json(['success' => false, 'code' => 'manual_refund_not_ready', 'message' => 'O pedido não está pronto para verificar o estorno no Mercado Pago.'], 409)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        try {
+            $payments->reconcileGatewayPayment($order->gateway_payment_id);
+        } catch (\Throwable) {
+            return response()->json(['success' => false, 'code' => 'gateway_refund_status_unavailable', 'message' => 'Não foi possível consultar o pagamento no Mercado Pago. Nenhuma confirmação foi registrada.'], 502)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        $order->refresh();
+        $refundConfirmed = $order->payment_status === 'refunded';
+
+        return response()->json([
+            'success' => $refundConfirmed,
+            'code' => $refundConfirmed ? null : 'gateway_refund_not_confirmed',
+            'gatewayRefundConfirmed' => $refundConfirmed,
+            'status' => $order->status->value,
+            'message' => $refundConfirmed
+                ? 'O Mercado Pago confirmou o estorno.'
+                : 'O Mercado Pago ainda não informa o pagamento como estornado. Nenhuma conclusão foi registrada.',
+        ], $refundConfirmed ? 200 : 409)->header('Cache-Control', 'no-store, private');
     }
 
     public function staysOwners(Request $request): JsonResponse

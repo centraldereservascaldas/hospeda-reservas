@@ -4,6 +4,7 @@ import type { Currency, Property, Reservation, ReservationCancellationResult, Se
 import type { AccommodationWidgetSearchParams } from '../hooks/useAccommodationSearch';
 import type { CondominiumSummary } from '../utils/condominiumCatalog';
 import type { MainView } from './MobileBottomNavigation';
+import type { DirectBookingOrderSummary } from '../services/crcnBackendApi';
 import { CondominiumDirectory } from './condominium/CondominiumDirectory';
 import { ActiveSearchFilters } from './search/ActiveSearchFilters';
 import { StaysSearchWidget } from './search/StaysSearchWidget';
@@ -48,6 +49,8 @@ interface MainContentRouterProps {
   showTotalWithTaxes: boolean;
   condominiums: CondominiumSummary[];
   reservations: Reservation[];
+  directBookingOrders?: DirectBookingOrderSummary[];
+  directBookingOrdersError?: string;
   selectedProperty: Property | null;
   accessToken: string | undefined;
   isOwnerAdmin: boolean;
@@ -78,6 +81,8 @@ export function MainContentRouter({
   showTotalWithTaxes,
   condominiums,
   reservations,
+  directBookingOrders = [],
+  directBookingOrdersError = '',
   selectedProperty,
   accessToken,
   isOwnerAdmin,
@@ -150,6 +155,9 @@ export function MainContentRouter({
         <LazyFeatureBoundary>
           <TripsView
             reservations={reservations}
+            directBookingOrders={directBookingOrders}
+            directBookingOrdersError={directBookingOrdersError}
+            accessToken={accessToken}
             currency={currency}
             onCancelReservation={onCancelReservation}
             onExploreMore={onExploreMore}

@@ -8,6 +8,7 @@ use App\Http\Resources\DirectBookingOrderResource;
 use App\Models\DirectBookingOrder;
 use App\Services\DirectCheckoutService;
 use App\Services\DirectSaleTermsRegistry;
+use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -31,6 +32,7 @@ class BookingController extends Controller
         }
         $catalog = json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
         $property = collect($catalog)->first(fn (array $item): bool => in_array($id, [$item['id'] ?? '', $item['staysListingId'] ?? ''], true));
+        $listing = null;
         if (! $property) {
             $listing = $this->stays->get('/content/listings/'.rawurlencode($id));
             if ($listing) {
@@ -44,28 +46,107 @@ class BookingController extends Controller
             return response()->json(['success' => false, 'code' => 'invalid_guest_count', 'message' => 'Quantidade de hóspedes inválida para esta acomodação.'], 400);
         }
         $staysId = $property['staysListingId'] ?? $property['id'];
+        $listing ??= $this->stays->get('/content/listings/'.rawurlencode((string) $staysId));
+        $staysListingIds = array_values(array_unique(array_filter([
+            (string) $staysId,
+            is_string($listing['id'] ?? null) ? $listing['id'] : null,
+            is_string($listing['_id'] ?? null) ? $listing['_id'] : null,
+        ], fn (mixed $listingId): bool => is_string($listingId) && $listingId !== '')));
         $quoteList = $this->stays->post('/booking/calculate-price', array_filter([
             'from' => $input['from'], 'to' => $input['to'], 'listingIds' => [$staysId], 'guests' => $input['guests'], 'promocode' => $input['promocode'] ?? null,
         ], fn ($value): bool => $value !== null));
-        $quote = is_array($quoteList) && array_is_list($quoteList) ? (collect($quoteList)->firstWhere('_idlisting', $staysId) ?? $quoteList[0] ?? null) : $quoteList;
+        $quote = is_array($quoteList) && array_is_list($quoteList)
+            ? collect($quoteList)->first(fn (mixed $item): bool => is_array($item)
+                && in_array((string) ($item['_idlisting'] ?? $item['listingId'] ?? ''), $staysListingIds, true))
+            : $quoteList;
+        $quoteListingId = is_array($quote) ? ($quote['_idlisting'] ?? $quote['listingId'] ?? null) : null;
+        if ($quoteListingId !== null && ! in_array((string) $quoteListingId, $staysListingIds, true)) {
+            $quote = null;
+        }
         if (is_array($quote)) {
             $nights = max(1, now()->parse($input['from'])->diffInDays(now()->parse($input['to'])));
             $price = is_array($quote['bookingPrice'] ?? null) ? $quote['bookingPrice'] : $quote;
-            $currency = (string) ($price['mainCurrency'] ?? $quote['currency'] ?? 'BRL');
-            $total = (float) ($quote['total'] ?? $price['_mctotal'][$currency] ?? $price['_mctotal']['BRL'] ?? 0);
-            $baseTotal = (float) ($quote['subtotal'] ?? $quote['baseTotal'] ?? $total);
-            $fees = is_array($price['fees'] ?? null) ? $price['fees'] : (is_array($quote['fees'] ?? null) ? $quote['fees'] : []);
+            $currency = 'BRL';
+            $rawTotal = $price['_mctotal'][$currency] ?? null;
+            $feesIncluded = $quote['feesIncluded'] ?? $price['feesIncluded'] ?? null;
+            if (! is_numeric($rawTotal) || ! is_finite((float) $rawTotal) || (float) $rawTotal <= 0 || ! is_bool($feesIncluded)) {
+                return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'A cotação atual da Stays não trouxe preço e composição de taxas válidos. Tente novamente.'], 503);
+            }
+
+            $rawTotal = (float) $rawTotal;
+            $hasFees = array_key_exists('fees', $price) || array_key_exists('fees', $quote);
+            $fees = $price['fees'] ?? $quote['fees'] ?? [];
+            if (! is_array($fees) || ! array_is_list($fees) || (! $feesIncluded && ! $hasFees)) {
+                return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'A cotação atual da Stays não trouxe a composição de taxas necessária. Tente novamente.'], 503);
+            }
+
             $cleaning = 0.0;
+            $service = 0.0;
+            $allFees = 0.0;
+            $counterFee = 0.0;
             foreach ($fees as $fee) {
-                $label = mb_strtolower(($fee['internalName'] ?? '').' '.($fee['_mstitle']['pt_BR'] ?? ''));
+                if (! is_array($fee)) {
+                    return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'A cotação atual da Stays trouxe uma taxa inválida. Tente novamente.'], 503);
+                }
+
+                $feeValues = is_array($fee['_mcval'] ?? null) ? $fee['_mcval'] : [];
+                $amount = $feeValues[$currency] ?? null;
+                if (! is_numeric($amount) || ! is_finite((float) $amount) || (float) $amount < 0) {
+                    return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'A cotação atual da Stays trouxe uma taxa sem valor válido. Tente novamente.'], 503);
+                }
+                $amount = (float) $amount;
+                $allFees += $amount;
+                $title = is_array($fee['_mstitle'] ?? null) ? $fee['_mstitle'] : [];
+                $label = mb_strtolower(
+                    (is_string($fee['internalName'] ?? null) ? $fee['internalName'] : '')
+                    .' '.(is_string($title['pt_BR'] ?? null) ? $title['pt_BR'] : '')
+                    .' '.(is_string($title['pt_PT'] ?? null) ? $title['pt_PT'] : '')
+                    .' '.(is_string($title['en_US'] ?? null) ? $title['en_US'] : ''),
+                );
                 if (str_contains($label, 'limpez') || str_contains($label, 'clean')) {
-                    $cleaning += (float) ($fee['_mcval'][$currency] ?? $fee['_mcval']['BRL'] ?? 0);
+                    $cleaning += $amount;
+                }
+                if (str_contains($label, 'service') || str_contains($label, 'servi')) {
+                    $service += $amount;
+                }
+                if (preg_match('/balc[aã]o|counter/i', $label) === 1) {
+                    $counterFee += $amount;
                 }
             }
-            $daily = (float) ($quote['dailyRate'] ?? ($baseTotal / $nights));
-            $service = (float) ($quote['serviceFee'] ?? max(0, $total - $baseTotal));
+            if (! is_finite($allFees) || ! is_finite($cleaning) || ! is_finite($service) || ! is_finite($counterFee)) {
+                return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'A composição de taxas da cotação atual não é válida. Tente novamente.'], 503);
+            }
 
-            return response()->json(['success' => true, 'listingId' => $property['id'], 'staysListingId' => $staysId, 'nights' => $nights, 'dailyRate' => $daily, 'baseTotal' => $baseTotal, 'cleaningFee' => $cleaning, 'serviceFee' => $service, 'discount' => (float) ($quote['discount'] ?? 0), 'total' => $total, 'currency' => $currency, 'source' => 'stays-live', 'feesIncluded' => $quote['feesIncluded'] ?? $price['feesIncluded'] ?? true, 'fees' => $fees, 'cleaningIncluded' => $quote['cleaningIncluded'] ?? false, 'breakdown' => ['dailyRateText' => 'R$ '.number_format($daily, 2, ',', '.').' x '.$nights.' noites', 'cleaningFeeText' => 'Taxa de limpeza', 'serviceFeeText' => 'Outras taxas incluídas na diária', 'totalText' => 'R$ '.number_format($total, 2, ',', '.')]]);
+            $baseTotal = $feesIncluded ? $rawTotal : $rawTotal + $counterFee;
+            $total = $feesIncluded ? $rawTotal : $rawTotal + $allFees;
+            if (! is_finite($baseTotal) || $baseTotal <= 0 || ! is_finite($total) || $total <= 0) {
+                return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'A cotação atual da Stays não trouxe um total final válido. Tente novamente.'], 503);
+            }
+            $daily = $baseTotal / $nights;
+
+            return response()->json([
+                'success' => true,
+                'listingId' => $property['id'],
+                'staysListingId' => $staysId,
+                'nights' => $nights,
+                'dailyRate' => $daily,
+                'baseTotal' => $baseTotal,
+                'cleaningFee' => $cleaning,
+                'serviceFee' => $service,
+                'discount' => 0,
+                'total' => $total,
+                'currency' => $currency,
+                'source' => 'stays-live',
+                'feesIncluded' => $feesIncluded,
+                'fees' => $fees,
+                'cleaningIncluded' => $feesIncluded && $cleaning > 0,
+                'breakdown' => [
+                    'dailyRateText' => 'Hospedagem · '.$nights.' noites',
+                    'cleaningFeeText' => 'Taxa de limpeza',
+                    'serviceFeeText' => 'Taxas da hospedagem',
+                    'totalText' => 'R$ '.number_format($total, 2, ',', '.'),
+                ],
+            ]);
         }
         if ($this->stays->isConfigured()) {
             return response()->json(['success' => false, 'code' => 'quote_unavailable', 'message' => 'Não foi possível obter uma cotação atual da Stays. Tente novamente.'], 503);
@@ -107,14 +188,22 @@ class BookingController extends Controller
         return response()->json(['connected' => true, 'hasCredentials' => true, 'totalProperties' => $count, 'environment' => app()->environment()]);
     }
 
-    public function createCheckoutOrder(StoreCheckoutRequest $request, DirectCheckoutService $checkout): JsonResponse
-    {
+    public function createCheckoutOrder(
+        StoreCheckoutRequest $request,
+        DirectCheckoutService $checkout,
+        DirectCheckoutPaymentService $payments,
+    ): JsonResponse {
         $result = $checkout->createOrder($request);
+        $paymentMethods = $payments->availableMethods();
         $body = [
             'success' => $result['success'] ?? false,
             'code' => $result['code'],
             'message' => $result['message'],
-            'payment' => ['enabled' => false, 'methods' => []],
+            'payment' => [
+                'enabled' => $paymentMethods !== [],
+                'methods' => $paymentMethods,
+                'publicKey' => $payments->publicKey(),
+            ],
         ];
         if ($result['order'] !== null) {
             $body['order'] = (new DirectBookingOrderResource($result['order']))->resolve($request);
@@ -152,8 +241,40 @@ class BookingController extends Controller
         ])->header('Cache-Control', 'no-store');
     }
 
-    public function resumeCheckout(Request $request, string $publicReference): JsonResponse
-    {
+    public function checkoutReadiness(
+        string $listingId,
+        DirectSaleTermsRegistry $terms,
+        DirectCheckoutPaymentService $payments,
+    ): JsonResponse {
+        $approvedListing = $terms->findApprovedListing($listingId);
+        $paymentMethods = $payments->availableMethods();
+        $holdMinutes = filter_var(config('direct-booking.reservation_hold_minutes'), FILTER_VALIDATE_INT);
+        $checkoutReady = config('direct-booking.enabled', false)
+            && $approvedListing !== null
+            && $this->stays->isConfigured()
+            && $holdMinutes !== false
+            && $holdMinutes >= 1
+            && $holdMinutes <= 1440;
+        $ready = $checkoutReady && $paymentMethods !== [];
+
+        return response()->json([
+            'success' => true,
+            'ready' => $ready,
+            'termsAvailable' => $approvedListing !== null,
+            'checkoutEnabled' => $checkoutReady,
+            'payment' => [
+                'enabled' => $paymentMethods !== [],
+                'methods' => $paymentMethods,
+                'publicKey' => $payments->publicKey(),
+            ],
+        ])->header('Cache-Control', 'no-store');
+    }
+
+    public function resumeCheckout(
+        Request $request,
+        string $publicReference,
+        DirectCheckoutPaymentService $payments,
+    ): JsonResponse {
         $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
         $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
         if ($order === null || $providedToken === '' || ! hash_equals((string) $order->resume_token, $providedToken)) {
@@ -165,14 +286,37 @@ class BookingController extends Controller
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->first();
+        $paymentMethods = $payments->availableMethods();
         $pixInstructions = $attempt?->safePixInstructions($order->status->value === 'pagamento_pendente');
+        $confirmation = null;
+        if ($order->status->value === 'confirmado' && $order->payment_status === 'approved') {
+            $confirmationAction = $order->staysActions()
+                ->where('action_type', 'confirm_reservation')
+                ->where('status', 'succeeded')
+                ->orderByDesc('completed_at')
+                ->first();
+            $reservationSnapshot = $confirmationAction?->response_snapshot;
+            $partnerCode = is_array($reservationSnapshot) ? ($reservationSnapshot['partnerCode'] ?? null) : null;
+            $reservationCode = is_string($partnerCode) && trim($partnerCode) !== ''
+                ? trim($partnerCode)
+                : (is_array($reservationSnapshot) && is_string($reservationSnapshot['id'] ?? null)
+                    && trim($reservationSnapshot['id']) !== ''
+                    ? trim($reservationSnapshot['id'])
+                    : $confirmationAction?->external_id);
+            $confirmation = [
+                'reservationCode' => is_string($reservationCode) && trim($reservationCode) !== '' ? trim($reservationCode) : null,
+                'confirmedAt' => $confirmationAction?->completed_at?->toISOString(),
+            ];
+        }
 
         return response()->json([
             'success' => true,
             'order' => (new DirectBookingOrderResource($order))->resolve($request),
+            'confirmation' => $confirmation,
             'payment' => [
-                'enabled' => false,
-                'methods' => [],
+                'enabled' => $paymentMethods !== [],
+                'methods' => $paymentMethods,
+                'publicKey' => $payments->publicKey(),
                 'attempt' => $attempt === null ? null : [
                     'status' => $attempt->status,
                     'method' => $attempt->payment_method,

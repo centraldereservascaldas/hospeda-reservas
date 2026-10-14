@@ -3,7 +3,16 @@ import { X, ChevronLeft, ShieldCheck, CircleAlert } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
-import { crcnBackendApi, type CalculatedPriceResponse } from '../../services/crcnBackendApi';
+import {
+  getPropertyFeeAmount,
+  getPropertyFeeLabel,
+  getVisiblePropertyFees,
+} from '../../utils/propertyPricing';
+import {
+  crcnBackendApi,
+  type CalculatedPriceResponse,
+  type CheckoutReadinessResponse,
+} from '../../services/crcnBackendApi';
 import { useDialogFocus } from '../useDialogFocus';
 
 interface CheckoutModalProps {
@@ -35,13 +44,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     fields: [string, string][];
   } | null>(null);
   const [termsUnavailable, setTermsUnavailable] = useState(false);
+  const [readiness, setReadiness] = useState<CheckoutReadinessResponse | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [quoteOverride, setQuoteOverride] = useState<CalculatedPriceResponse | null>(null);
   const fieldId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useDialogFocus(isOpen && bookingData !== null, onClose, {
     initialFocusRef: closeButtonRef,
   });
 
-  const currentQuote = bookingData?.quote || null;
+  const currentQuote = quoteOverride ?? bookingData?.quote ?? null;
 
   useEffect(() => {
     let isCurrent = true;
@@ -49,33 +64,46 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     setApprovedTerms(null);
     setTermsUnavailable(false);
+    setReadiness(null);
+    setReadinessLoading(Boolean(isOpen && listingId));
+    setTermsAccepted(false);
+    setIsSubmitting(false);
+    setSubmitError(null);
+    setQuoteOverride(null);
 
     if (!isOpen || !listingId) {
+      setReadinessLoading(false);
       return () => {
         isCurrent = false;
       };
     }
 
-    void crcnBackendApi.getCheckoutTerms(listingId).then((result) => {
+    void Promise.all([
+      crcnBackendApi.getCheckoutTerms(listingId),
+      crcnBackendApi.getCheckoutReadiness(bookingData?.property.id || listingId),
+    ]).then(([termsResult, readinessResult]) => {
       if (!isCurrent) return;
 
-      if (result.kind !== 'ready') {
+      if (termsResult.kind === 'ready') {
+        const { version, snapshot } = termsResult.data.terms;
+        const fields = Object.entries(snapshot).filter(([key]) => key !== 'version');
+        const areAllFieldsPlainText =
+          fields.length > 0 &&
+          fields.every(([, value]) => typeof value === 'string' && value.trim() !== '');
+
+        if (areAllFieldsPlainText) {
+          setApprovedTerms({ version, fields: fields as [string, string][] });
+        } else {
+          setTermsUnavailable(true);
+        }
+      } else {
         setTermsUnavailable(true);
-        return;
       }
 
-      const { version, snapshot } = result.data.terms;
-      const fields = Object.entries(snapshot).filter(([key]) => key !== 'version');
-      const areAllFieldsPlainText =
-        fields.length > 0 &&
-        fields.every(([, value]) => typeof value === 'string' && value.trim() !== '');
-
-      if (!areAllFieldsPlainText) {
-        setTermsUnavailable(true);
-        return;
+      if (readinessResult.kind === 'ready') {
+        setReadiness(readinessResult.data);
       }
-
-      setApprovedTerms({ version, fields: fields as [string, string][] });
+      setReadinessLoading(false);
     });
 
     return () => {
@@ -87,8 +115,83 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const { property, checkIn, checkOut, guests, nights, totalAmount, cleaningFee, discount } =
     bookingData;
+  const guestCount = guests.adults + guests.children + guests.infants;
   const displayTitle = getPublicPropertyTitle(property.title);
   const shownTotal = currentQuote?.total ?? totalAmount;
+  const shownDiscount = currentQuote?.source === 'stays-live' ? currentQuote.discount : discount;
+  const shownCleaningFee = currentQuote?.cleaningFee ?? cleaningFee;
+  const shownServiceFee = currentQuote?.serviceFee ?? 0;
+  const visibleQuoteFees = getVisiblePropertyFees(currentQuote?.fees || []);
+  const quoteFeesIncluded = currentQuote?.feesIncluded ?? false;
+  const quoteCurrency = currentQuote?.currency ?? currency;
+
+  const canSubmit =
+    readiness?.ready === true && approvedTerms !== null && termsAccepted && !isSubmitting;
+
+  const handleCheckoutSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    setSubmitError(null);
+
+    if (!canSubmit || !approvedTerms || !readiness?.payment.methods.includes('pix')) {
+      setSubmitError('A compra ainda não está pronta para continuar.');
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const guest = {
+      fullName: String(formData.get('name') ?? '').trim(),
+      email: String(formData.get('email') ?? '').trim(),
+      phone: String(formData.get('phone') ?? '').trim(),
+    };
+    const listingId = property.id;
+    const quoteTotal = currentQuote?.total ?? totalAmount;
+
+    setIsSubmitting(true);
+    const result = await crcnBackendApi.createCheckout({
+      listingId,
+      from: checkIn,
+      to: checkOut,
+      guests,
+      quoteTotal,
+      guest,
+      acceptedTermsVersion: approvedTerms.version,
+      acceptedTerms: true,
+      idempotencyKey: crypto.randomUUID(),
+    });
+
+    if (result?.resume) {
+      window.location.assign(result.resume.path);
+      return;
+    }
+
+    if (result?.code === 'quote_changed') {
+      setTermsAccepted(false);
+      const refreshedQuote = await crcnBackendApi.calculatePrice({
+        listingId: property.staysListingId || property.id,
+        from: checkIn,
+        to: checkOut,
+        guests: guestCount,
+      });
+
+      if (refreshedQuote?.source === 'stays-live') {
+        setQuoteOverride(refreshedQuote);
+        setSubmitError(
+          'O preço ou a disponibilidade mudou. Confira o total atualizado e aceite novamente antes de continuar.',
+        );
+      } else {
+        setSubmitError(
+          'O preço mudou, mas não foi possível atualizá-lo agora. Tente novamente quando a cotação estiver disponível.',
+        );
+      }
+      setIsSubmitting(false);
+      return;
+    }
+
+    setSubmitError(
+      result?.message || 'Não foi possível preparar o pedido. Revise a cotação e tente novamente.',
+    );
+    setIsSubmitting(false);
+  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200">
@@ -152,26 +255,31 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <div>
                     <p className="font-bold text-neutral-900">Hóspedes</p>
                     <p className="text-neutral-600">
-                      {guests.adults + guests.children} hóspedes
-                      {guests.infants > 0 ? `, ${guests.infants} bebês` : ''}
+                      {guestCount} pessoa{guestCount === 1 ? '' : 's'}
+                      {guests.infants > 0
+                        ? `, incluindo ${guests.infants} bebê${guests.infants === 1 ? '' : 's'}`
+                        : ''}
                       {guests.pets > 0 ? `, ${guests.pets} pets` : ''}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <form className="space-y-5" onSubmit={(event) => event.preventDefault()}>
+              <form
+                className="space-y-5"
+                aria-busy={isSubmitting}
+                onSubmit={(event) => void handleCheckoutSubmit(event)}
+              >
                 <div className="space-y-3">
                   <div>
                     <h3 className="text-base font-bold text-neutral-900">
                       Dados do responsável pela reserva
                     </h3>
                     <p className="mt-1 text-xs text-neutral-600">
-                      Os campos serão ativados quando as condições da acomodação e o pagamento
-                      estiverem disponíveis.
+                      Informe os dados de contato para continuar com a pré-reserva e o pagamento.
                     </p>
                   </div>
-                  <fieldset disabled className="space-y-3">
+                  <fieldset disabled={!readiness?.ready || isSubmitting} className="space-y-3">
                     <div>
                       <label
                         htmlFor={`${fieldId}-guest-name`}
@@ -241,9 +349,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         </div>
                       ))}
                     </dl>
+                    <label
+                      htmlFor={`${fieldId}-accept-terms`}
+                      className="flex items-start gap-2 border-t border-emerald-200 pt-3 font-semibold"
+                    >
+                      <input
+                        id={`${fieldId}-accept-terms`}
+                        type="checkbox"
+                        required
+                        checked={termsAccepted}
+                        disabled={!readiness?.ready || isSubmitting}
+                        onChange={(event) => setTermsAccepted(event.currentTarget.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-emerald-500 text-emerald-700 focus-visible:ring-2 focus-visible:ring-orange-600 disabled:cursor-not-allowed"
+                      />
+                      <span>
+                        Li e aceito as condições desta acomodação e o total de{' '}
+                        {formatCurrency(shownTotal, currency)}.
+                      </span>
+                    </label>
                     <p>
-                      Nenhum pedido, reserva ou pagamento será iniciado enquanto a compra no site
-                      estiver indisponível.
+                      O pedido só será criado após nova validação de preço e disponibilidade. A
+                      pré-reserva não significa confirmação da estadia.
                     </p>
                   </section>
                 ) : (
@@ -266,8 +392,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                           Elas variam por acomodação e não serão presumidas aqui.
                         </p>
                         <p>
-                          Nenhuma reserva ou cobrança será iniciada enquanto essas informações e o
-                          pagamento no site não estiverem prontos.
+                          {readinessLoading
+                            ? 'Também estamos verificando se a compra e o pagamento estão habilitados.'
+                            : 'Nenhum pedido, pré-reserva ou pagamento será iniciado até que as condições e o pagamento estejam prontos.'}
                         </p>
                       </div>
                     </div>
@@ -275,21 +402,38 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 )}
 
                 <div className="pt-1">
+                  {submitError && (
+                    <p
+                      className="mb-3 rounded-xl border border-rose-300 bg-rose-50 p-3 text-xs text-rose-950"
+                      role="alert"
+                    >
+                      {submitError}
+                    </p>
+                  )}
                   <button
-                    type="button"
-                    disabled
+                    type="submit"
+                    disabled={!canSubmit}
                     aria-describedby={`${fieldId}-checkout-status`}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-700 via-amber-700 to-orange-800 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-700 via-amber-700 to-orange-800 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 flex items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <ShieldCheck className="w-4 h-4" aria-hidden="true" />
-                    <span>Compra no site em preparação</span>
+                    <span>
+                      {isSubmitting
+                        ? 'Preparando seu pedido…'
+                        : readinessLoading
+                          ? 'Verificando compra no site…'
+                          : readiness?.ready && readiness.payment.methods.includes('pix')
+                            ? 'Continuar para pagamento Pix'
+                            : 'Compra no site em preparação'}
+                    </span>
                   </button>
                   <p
                     id={`${fieldId}-checkout-status`}
                     className="text-center text-[10px] text-neutral-600 mt-2"
                   >
-                    Pix e cartão ainda não estão disponíveis. Nenhum pedido, reserva ou pagamento
-                    será iniciado.
+                    {readiness?.ready && readiness.payment.methods.includes('pix')
+                      ? 'O pedido será validado e pré-reservado antes de você iniciar o pagamento Pix.'
+                      : 'Pix e cartão ainda não estão disponíveis. Nenhum pedido, reserva ou pagamento será iniciado.'}
                   </p>
                 </div>
               </form>
@@ -332,8 +476,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 <div className="space-y-2 text-xs text-neutral-600">
                   <div className="flex justify-between">
                     <span>
-                      {formatCurrency(currentQuote?.dailyRate ?? property.pricePerNight, currency)}{' '}
-                      x {nights} noites
+                      {currentQuote?.breakdown.dailyRateText ||
+                        `${formatCurrency(property.pricePerNight, currency)} x ${nights} noites`}
                     </span>
                     <span>
                       {formatCurrency(
@@ -343,22 +487,44 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </span>
                   </div>
 
-                  {discount > 0 && (
+                  {shownDiscount > 0 && (
                     <div className="flex justify-between text-emerald-600 font-semibold">
                       <span>Desconto estadia prolongada</span>
-                      <span>-{formatCurrency(discount, currency)}</span>
+                      <span>-{formatCurrency(shownDiscount, currency)}</span>
                     </div>
                   )}
 
-                  {cleaningFee > 0 && (
-                    <div className="flex justify-between">
-                      <span>
-                        Taxa de limpeza
-                        {currentQuote?.cleaningIncluded ? ' (incluída na diária)' : ''}
-                      </span>
-                      <span>{formatCurrency(cleaningFee, currency)}</span>
-                    </div>
-                  )}
+                  {visibleQuoteFees.length
+                    ? visibleQuoteFees.map((fee, index) => (
+                        <div className="flex justify-between" key={fee._id || index}>
+                          <span>
+                            {getPropertyFeeLabel(fee)}
+                            {quoteFeesIncluded ? ' (incluída no total)' : ''}
+                          </span>
+                          <span>
+                            {formatCurrency(getPropertyFeeAmount(fee, quoteCurrency), currency)}
+                          </span>
+                        </div>
+                      ))
+                    : (shownCleaningFee > 0 || shownServiceFee > 0) && (
+                        <>
+                          {shownCleaningFee > 0 && (
+                            <div className="flex justify-between">
+                              <span>
+                                Taxa de limpeza
+                                {currentQuote?.cleaningIncluded ? ' (incluída no total)' : ''}
+                              </span>
+                              <span>{formatCurrency(shownCleaningFee, currency)}</span>
+                            </div>
+                          )}
+                          {shownServiceFee > 0 && (
+                            <div className="flex justify-between">
+                              <span>Outras taxas incluídas na hospedagem</span>
+                              <span>{formatCurrency(shownServiceFee, currency)}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
 
                   <div className="border-t border-neutral-200 pt-3 flex justify-between font-bold text-sm text-neutral-900">
                     <span>Total final</span>

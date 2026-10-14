@@ -20,6 +20,7 @@ class CheckoutPaymentController extends Controller
         }
 
         $result = $payments->createAttempt($order, $request);
+        $order->refresh();
         $attempt = $result['attempt'];
         $pixInstructions = $attempt?->safePixInstructions($order->status->value === 'pagamento_pendente');
 

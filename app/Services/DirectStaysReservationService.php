@@ -21,6 +21,11 @@ class DirectStaysReservationService
     /** @return array{ready: bool, code: string, message: string} */
     public function reserve(DirectBookingOrder $order): array
     {
+        $order->refresh();
+        if ($this->chargebackRequiresManualReview($order)) {
+            return $this->result(false, 'gateway_chargeback_requires_review', 'A contestação do pagamento exige revisão operacional; nenhuma nova pré-reserva foi iniciada.');
+        }
+
         if (! config('direct-booking.enabled', false)) {
             return $this->result(false, 'checkout_disabled', 'A criação e retomada de pré-reservas está desabilitada. Nenhuma alteração foi enviada à Stays.');
         }
@@ -200,6 +205,11 @@ class DirectStaysReservationService
     /** @return array{ready: bool, code: string, message: string} */
     public function release(DirectBookingOrder $order): array
     {
+        $order->refresh();
+        if ($this->chargebackRequiresManualReview($order)) {
+            return $this->result(false, 'gateway_chargeback_requires_review', 'A contestação do pagamento exige revisão operacional; nenhuma liberação automática foi enviada à Stays.');
+        }
+
         if ($order->stays_reservation_id === null) {
             return $this->attention($order, 'reservation_id_missing', 'Não há ID Stays para confirmar a liberação da unidade.');
         }
@@ -581,7 +591,11 @@ class DirectStaysReservationService
     {
         DB::transaction(function () use ($order, $code, $message): void {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
-            if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional && $lockedOrder->status !== DirectBookingOrderStatus::Expirado) {
+            if (! in_array($lockedOrder->status, [
+                DirectBookingOrderStatus::AtencaoOperacional,
+                DirectBookingOrderStatus::Expirado,
+                DirectBookingOrderStatus::Contestado,
+            ], true)) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'stays_reservation', 'code' => $code]);
             }
             $events = $lockedOrder->operational_events ?? [];
@@ -606,6 +620,12 @@ class DirectStaysReservationService
             || $order->paymentAttempts()
                 ->whereIn('status', array_merge(['processing'], self::PAYMENT_ATTEMPT_RECONCILIATION_STATUSES))
                 ->exists();
+    }
+
+    private function chargebackRequiresManualReview(DirectBookingOrder $order): bool
+    {
+        return $order->status === DirectBookingOrderStatus::Contestado
+            || $order->payment_status === 'charged_back';
     }
 
     private function reservationCorrelation(DirectBookingOrder $order): string

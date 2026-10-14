@@ -29,6 +29,9 @@ class DirectBookingOperationsResource extends JsonResource
             'paymentMethod' => $this->payment_method,
             'gatewayPaymentId' => $this->gateway_payment_id,
             'staysReservationId' => $this->stays_reservation_id,
+            'staysCancellationConfirmed' => collect($events)->contains(fn (mixed $event): bool => is_array($event)
+                && ($event['code'] ?? null) === 'stays_cancellation_verified'),
+            'gatewayRefundConfirmed' => $this->payment_status === 'refunded',
             'updatedAt' => $this->updated_at?->toISOString(),
             'lastEvent' => is_array($lastEvent) ? array_intersect_key($lastEvent, array_flip(['event', 'status', 'source', 'code', 'at'])) : null,
             'issue' => $this->resolveIssue($lastEvent),
@@ -48,8 +51,10 @@ class DirectBookingOperationsResource extends JsonResource
                 if (in_array($action->status, ['failed', 'attention_required'], true)) {
                     $issues->push([
                         'source' => 'stays',
+                        'action' => $action->action_type,
                         'status' => $action->status,
                         'code' => $action->error_code,
+                        'message' => $action->error_message,
                         'updatedAt' => $action->updated_at,
                     ]);
                 }
@@ -61,8 +66,10 @@ class DirectBookingOperationsResource extends JsonResource
                 if (in_array($attempt->status, ['failed', 'unknown', 'attention_required'], true)) {
                     $issues->push([
                         'source' => 'payment',
+                        'action' => null,
                         'status' => $attempt->status,
                         'code' => $attempt->error_code,
+                        'message' => null,
                         'updatedAt' => $attempt->updated_at,
                     ]);
                 }
@@ -72,8 +79,10 @@ class DirectBookingOperationsResource extends JsonResource
                         if (in_array($webhook->status, ['retrying', 'failed'], true)) {
                             $issues->push([
                                 'source' => 'webhook',
+                                'action' => null,
                                 'status' => $webhook->status,
                                 'code' => $webhook->error_code,
+                                'message' => null,
                                 'updatedAt' => $webhook->updated_at,
                             ]);
                         }
@@ -87,16 +96,20 @@ class DirectBookingOperationsResource extends JsonResource
 
             return [
                 'source' => $issue['source'],
+                'action' => $issue['action'],
                 'status' => $issue['status'],
                 'code' => $issue['code'],
+                'message' => $issue['message'],
             ];
         }
 
         if (is_array($lastEvent) && is_string($lastEvent['code'] ?? null)) {
             return [
                 'source' => (string) ($lastEvent['source'] ?? $lastEvent['event'] ?? 'order'),
+                'action' => null,
                 'status' => (string) ($lastEvent['status'] ?? 'attention_required'),
                 'code' => $lastEvent['code'],
+                'message' => null,
             ];
         }
 

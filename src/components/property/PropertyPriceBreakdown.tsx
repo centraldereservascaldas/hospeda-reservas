@@ -38,13 +38,36 @@ export function PropertyPriceBreakdown({
         </div>
       )}
 
-      {staysPrice?.source === 'stays-live' ? (
-        staysPrice.cleaningFee > 0 && (
-          <div className="flex items-center justify-between text-neutral-600">
-            <span>Taxa de limpeza{staysPrice.cleaningIncluded ? ' (incluída na diária)' : ''}</span>
-            <span>{formatCurrency(staysPrice.cleaningFee, currency)}</span>
+      {staysPrice?.source === 'stays-live' && visibleFees.length ? (
+        visibleFees.map((fee, index) => (
+          <div
+            key={fee._id || index}
+            className="flex items-center justify-between text-neutral-600"
+          >
+            <span>
+              {getPropertyFeeLabel(fee)}
+              {staysPrice.feesIncluded ? ' (incluída no total)' : ''}
+            </span>
+            <span>{formatCurrency(getPropertyFeeAmount(fee, staysPrice.currency), currency)}</span>
           </div>
-        )
+        ))
+      ) : staysPrice?.source === 'stays-live' ? (
+        <>
+          {cleaningFee > 0 && (
+            <div className="flex items-center justify-between text-neutral-600">
+              <span>
+                Taxa de limpeza{staysPrice.cleaningIncluded ? ' (incluída no total)' : ''}
+              </span>
+              <span>{formatCurrency(cleaningFee, currency)}</span>
+            </div>
+          )}
+          {serviceFee > 0 && (
+            <div className="flex items-center justify-between text-neutral-600">
+              <span>Outras taxas incluídas na hospedagem</span>
+              <span>{formatCurrency(serviceFee, currency)}</span>
+            </div>
+          )}
+        </>
       ) : visibleFees.length ? (
         visibleFees.map((fee, index) => (
           <div
@@ -53,7 +76,7 @@ export function PropertyPriceBreakdown({
           >
             <span>
               {getPropertyFeeLabel(fee)}
-              {staysPrice?.feesIncluded ? ' (incluída na diária)' : ''}
+              {staysPrice?.feesIncluded ? ' (incluída no total)' : ''}
             </span>
             <span>
               {formatCurrency(getPropertyFeeAmount(fee, staysPrice?.currency || 'BRL'), currency)}

@@ -2,6 +2,7 @@ import type { Property, Reservation } from '../types';
 import type {
   CalculatedPriceResponse,
   DirectBookingOperationsOrder,
+  DirectBookingOperationsWebhook,
 } from '../services/crcnBackendApi';
 import type { StaysCalendarDay } from './staysAvailability';
 
@@ -76,11 +77,15 @@ export const isDirectBookingOrder = (
   status: (typeof checkoutOrderStatuses)[number];
   publicReference: string;
   reservationStatus: string;
+  staysReservationId: string | null;
   listingId: string;
+  guestName: string;
   from: string;
   to: string;
   quoteTotal: string;
   currency: string;
+  paymentStatus: string | null;
+  resumeToken?: string | null;
   expiresAt: string | null;
   createdAt: string | null;
 } =>
@@ -91,8 +96,11 @@ export const isDirectBookingOrder = (
   typeof value.publicReference === 'string' &&
   /^[A-Za-z0-9]{40}$/.test(value.publicReference) &&
   typeof value.reservationStatus === 'string' &&
+  (value.staysReservationId === null || typeof value.staysReservationId === 'string') &&
   typeof value.listingId === 'string' &&
   value.listingId.trim() !== '' &&
+  typeof value.guestName === 'string' &&
+  value.guestName.trim() !== '' &&
   isIsoDate(value.from) &&
   isIsoDate(value.to) &&
   value.to > value.from &&
@@ -100,6 +108,10 @@ export const isDirectBookingOrder = (
   /^\d+(?:\.\d{2})$/.test(value.quoteTotal) &&
   Number(value.quoteTotal) > 0 &&
   value.currency === 'BRL' &&
+  (value.paymentStatus === null || typeof value.paymentStatus === 'string') &&
+  (value.resumeToken === undefined ||
+    value.resumeToken === null ||
+    (typeof value.resumeToken === 'string' && /^[A-Za-z0-9]{64}$/.test(value.resumeToken))) &&
   (value.expiresAt === null || typeof value.expiresAt === 'string') &&
   (value.createdAt === null || typeof value.createdAt === 'string');
 
@@ -126,9 +138,27 @@ export const isDirectBookingOperationsOrder = (
   (value.paymentMethod === null || typeof value.paymentMethod === 'string') &&
   (value.gatewayPaymentId === null || typeof value.gatewayPaymentId === 'string') &&
   (value.staysReservationId === null || typeof value.staysReservationId === 'string') &&
+  typeof value.staysCancellationConfirmed === 'boolean' &&
+  typeof value.gatewayRefundConfirmed === 'boolean' &&
   (value.updatedAt === null || typeof value.updatedAt === 'string') &&
   (value.lastEvent === null || isDirectBookingOperationsEvent(value.lastEvent)) &&
   (value.issue === null || isDirectBookingOperationsIssue(value.issue));
+
+export const isDirectBookingOperationsWebhook = (
+  value: unknown,
+): value is DirectBookingOperationsWebhook =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  value.id.trim() !== '' &&
+  typeof value.gatewayPaymentId === 'string' &&
+  value.gatewayPaymentId.trim() !== '' &&
+  ['received', 'retrying', 'failed', 'queued', 'processing'].includes(value.status as string) &&
+  (value.errorCode === null || typeof value.errorCode === 'string') &&
+  Number.isInteger(value.attempts) &&
+  (value.attempts as number) >= 0 &&
+  typeof value.canRetry === 'boolean' &&
+  (value.receivedAt === null || typeof value.receivedAt === 'string') &&
+  (value.updatedAt === null || typeof value.updatedAt === 'string');
 
 const isDirectBookingOperationsEvent = (
   value: unknown,
@@ -143,8 +173,10 @@ const isDirectBookingOperationsIssue = (
 ): value is NonNullable<DirectBookingOperationsOrder['issue']> =>
   isRecord(value) &&
   typeof value.source === 'string' &&
+  (value.action === null || typeof value.action === 'string') &&
   typeof value.status === 'string' &&
-  (value.code === null || typeof value.code === 'string');
+  (value.code === null || typeof value.code === 'string') &&
+  (value.message === null || typeof value.message === 'string');
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -369,6 +401,12 @@ export const isReservation = (value: unknown): value is Reservation =>
   isIsoDate(value.checkIn) &&
   isIsoDate(value.checkOut) &&
   value.checkOut > value.checkIn &&
+  (value.checkInTime === undefined ||
+    value.checkInTime === null ||
+    typeof value.checkInTime === 'string') &&
+  (value.checkOutTime === undefined ||
+    value.checkOutTime === null ||
+    typeof value.checkOutTime === 'string') &&
   isFiniteNumber(value.nights) &&
   Number.isInteger(value.nights) &&
   value.nights >= 1 &&

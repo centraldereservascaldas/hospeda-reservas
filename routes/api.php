@@ -24,6 +24,8 @@ Route::get('/stays/status', [BookingController::class, 'staysStatus']);
 Route::middleware('supabase.guest')->group(function (): void {
     Route::post('/auth/sync-stays', [GuestReservationController::class, 'sync']);
     Route::get('/my-reservations', [GuestReservationController::class, 'index']);
+    Route::get('/my-direct-booking-orders', [GuestReservationController::class, 'directBookingOrders']);
+    Route::post('/my-direct-booking-orders/{publicReference}/cancel', [GuestReservationController::class, 'requestDirectBookingCancellation'])->middleware('throttle:5,1');
     Route::post('/my-reservations/{reservationId}/cancel', [GuestReservationController::class, 'cancel']);
     Route::get('/owner/access', [OwnerAccessController::class, 'show']);
     Route::post('/owner/access/request', [OwnerAccessController::class, 'requestAccess']);
@@ -34,11 +36,16 @@ Route::get('/owner/admin/status', [OwnerAdminController::class, 'status'])->midd
 Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->group(function (): void {
     Route::get('/requests', [OwnerAdminController::class, 'requests']);
     Route::get('/direct-booking-orders', [OwnerAdminController::class, 'directBookingOrders']);
+    Route::post('/direct-booking-webhooks/{webhookId}/retry', [OwnerAdminController::class, 'retryDirectBookingWebhook'])->middleware('throttle:10,1');
+    Route::post('/direct-booking-orders/{publicReference}/start-manual-cancellation', [OwnerAdminController::class, 'startManualDirectBookingCancellation'])->middleware('throttle:10,1');
+    Route::post('/direct-booking-orders/{publicReference}/verify-manual-stays-cancellation', [OwnerAdminController::class, 'verifyManualDirectBookingStaysCancellation'])->middleware('throttle:10,1');
+    Route::post('/direct-booking-orders/{publicReference}/verify-manual-gateway-refund', [OwnerAdminController::class, 'verifyManualDirectBookingGatewayRefund'])->middleware('throttle:10,1');
     Route::get('/stays-owners', [OwnerAdminController::class, 'staysOwners']);
     Route::post('/approve', [OwnerAdminController::class, 'approve']);
 });
 Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->middleware('throttle:5,1');
 Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');
+Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
 Route::post('/checkout/{publicReference}/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
 Route::post('/webhooks/mercadopago', MercadoPagoWebhookController::class)->middleware('throttle:120,1');

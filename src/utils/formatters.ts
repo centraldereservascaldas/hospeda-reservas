@@ -13,7 +13,8 @@ export const formatCurrency = (amount: number, currency: Currency = 'BRL'): stri
   return new Intl.NumberFormat(config.locale, {
     style: 'currency',
     currency: config.code,
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(converted);
 };
 

@@ -108,7 +108,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     property,
     checkIn,
     checkOut,
-    guests: adults + children,
+    guests: adults + children + infants,
     todayIso,
   });
 
@@ -194,7 +194,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       nights,
       quote: staysPrice,
     });
-  const totalGuests = adults + children;
+  const totalGuests = adults + children + infants;
   const guestLimit = Math.max(1, Number(property.maxGuests) || 1);
   const selectedRangeAvailable =
     calendarAvailable && isCalendarRangeAvailable(calendarDays, checkIn, checkOut);

@@ -68,7 +68,9 @@ export function PropertyBookingPanel({
               <span className="text-2xl font-black text-neutral-900">
                 {formatCurrency(staysPrice?.dailyRate ?? property.pricePerNight, currency)}
               </span>
-              <span className="ml-1 text-xs text-neutral-500">/ noite</span>
+              <span className="ml-1 text-xs text-neutral-500">
+                {staysPrice?.source === 'stays-live' ? 'média por noite' : '/ noite'}
+              </span>
             </>
           ) : (
             <span className="text-lg font-bold text-neutral-900">Consulte valores</span>
@@ -138,8 +140,8 @@ export function PropertyBookingPanel({
                 Hóspedes
               </span>
               <span className="text-xs font-semibold text-neutral-900">
-                {totalGuests} hóspede{totalGuests > 1 ? 's' : ''}
-                {infants > 0 ? `, ${infants} bebê${infants > 1 ? 's' : ''}` : ''}
+                {totalGuests} pessoa{totalGuests > 1 ? 's' : ''}
+                {infants > 0 ? ` (${infants} bebê${infants > 1 ? 's' : ''})` : ''}
               </span>
             </div>
             <ChevronDown className="w-4 h-4 text-neutral-500" />

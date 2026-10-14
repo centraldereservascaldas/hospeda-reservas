@@ -55,13 +55,31 @@ class MercadoPagoWebhookController extends Controller
                 return $webhook;
             });
         } catch (UniqueConstraintViolationException) {
-            $existingWebhook = DirectBookingPaymentWebhook::query()->where('event_key', $eventKey)->first();
-            if ($existingWebhook === null || in_array($existingWebhook->status, ['processed', 'received', 'processing', 'retrying'], true)) {
+            $shouldRequeue = DB::transaction(function () use ($eventKey): bool {
+                $existingWebhook = DirectBookingPaymentWebhook::query()
+                    ->where('event_key', $eventKey)
+                    ->lockForUpdate()
+                    ->first();
+                if ($existingWebhook === null
+                    || in_array($existingWebhook->status, ['processed', 'received', 'processing', 'retrying', 'queued'], true)
+                    || ($existingWebhook->status === 'failed'
+                        && $existingWebhook->reconciliation_attempts >= ReconcileMercadoPagoPayment::MAX_RECONCILIATION_ATTEMPTS)) {
+                    return false;
+                }
+
+                $existingWebhook->forceFill(['status' => 'received', 'error_code' => null])->save();
+
+                return true;
+            });
+            if (! $shouldRequeue) {
                 return response()->json(['success' => true, 'duplicate' => true], 200);
             }
 
-            $existingWebhook->forceFill(['status' => 'received', 'error_code' => null])->save();
-            ReconcileMercadoPagoPayment::dispatch($existingWebhook->id)->onConnection($queueConnection);
+            $existingWebhookId = DirectBookingPaymentWebhook::query()->where('event_key', $eventKey)->value('id');
+            if (! is_string($existingWebhookId)) {
+                return response()->json(['success' => true, 'duplicate' => true], 200);
+            }
+            ReconcileMercadoPagoPayment::dispatch($existingWebhookId)->onConnection($queueConnection);
 
             return response()->json(['success' => true, 'requeued' => true], 202);
         }

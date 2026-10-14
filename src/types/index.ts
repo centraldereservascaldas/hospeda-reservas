@@ -107,6 +107,8 @@ export interface Reservation {
   propertyImage: string;
   checkIn: string;
   checkOut: string;
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
   nights: number;
   guests: {
     adults: number;

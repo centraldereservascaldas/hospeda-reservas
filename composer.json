@@ -53,6 +53,14 @@
             "Composer\\Config::disableProcessTimeout",
             "@php artisan serve --host=127.0.0.1 --port=8000"
         ],
+        "queue:work": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan queue:work database --tries=5"
+        ],
+        "schedule:work": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php artisan schedule:work"
+        ],
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"

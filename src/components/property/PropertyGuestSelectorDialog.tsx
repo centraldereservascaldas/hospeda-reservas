@@ -108,9 +108,21 @@ export const PropertyGuestSelectorDialog: React.FC<PropertyGuestSelectorDialogPr
           </button>
         </div>
         <div className="divide-y divide-neutral-100">
-          {guestCounter('Adultos', adults, 1, guestLimit - children, onAdultsChange)}
-          {guestCounter('Crianças (2–12 anos)', children, 0, guestLimit - adults, onChildrenChange)}
-          {guestCounter('Bebês (até 2 anos)', infants, 0, 5, onInfantsChange)}
+          {guestCounter('Adultos', adults, 1, guestLimit - children - infants, onAdultsChange)}
+          {guestCounter(
+            'Crianças (2–12 anos)',
+            children,
+            0,
+            guestLimit - adults - infants,
+            onChildrenChange,
+          )}
+          {guestCounter(
+            'Bebês (até 2 anos)',
+            infants,
+            0,
+            Math.min(5, guestLimit - adults - children),
+            onInfantsChange,
+          )}
         </div>
         <div className="mt-3 border-t border-neutral-100 pt-3 text-right">
           <button

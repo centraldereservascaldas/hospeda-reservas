@@ -65,9 +65,17 @@ function MarketplaceApp() {
     initialHash: window.location.hash,
     initialAuthCallbackError,
   });
-  const { reservations, setReservations, ownerAccessStatus, setOwnerAccessStatus, isOwnerAdmin } =
-    useAccountWorkspaceData({
+  const {
+    reservations,
+    setReservations,
+    directBookingOrders,
+    directBookingOrdersError,
+    ownerAccessStatus,
+    setOwnerAccessStatus,
+    isOwnerAdmin,
+  } = useAccountWorkspaceData({
       accessToken: accountSession?.access_token,
+    currentView,
       currentViewRef,
       setCurrentView,
     });
@@ -217,6 +225,8 @@ function MarketplaceApp() {
         showTotalWithTaxes={showTotalWithTaxes}
         condominiums={condominiums}
         reservations={reservations}
+        directBookingOrders={directBookingOrders}
+        directBookingOrdersError={directBookingOrdersError}
         selectedProperty={selectedProperty}
         accessToken={accountSession?.access_token}
         isOwnerAdmin={isOwnerAdmin}

@@ -13,6 +13,7 @@ import {
   isStaysCalendarDay,
   isDirectBookingOrder,
   isDirectBookingOperationsOrder,
+  isDirectBookingOperationsWebhook,
 } from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
 import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
@@ -90,11 +91,15 @@ export interface DirectBookingOrderSummary {
     | 'concluido';
   publicReference: string;
   reservationStatus: string;
+  staysReservationId: string | null;
   listingId: string;
+  guestName: string;
   from: string;
   to: string;
   quoteTotal: string;
   currency: string;
+  paymentStatus: string | null;
+  resumeToken?: string | null;
   expiresAt: string | null;
   createdAt: string | null;
 }
@@ -134,8 +139,10 @@ export type CheckoutPaymentRequestPayload =
       paymentMethodId: string;
       token: string;
       installments: number;
+      cardholderName: string;
+      cardholderEmail: string;
       issuerId?: number;
-      payerIdentification?: { type: 'CPF' | 'CNPJ'; number: string };
+      payerIdentification: { type: 'CPF' | 'CNPJ'; number: string };
       idempotencyKey: string;
     };
 
@@ -159,16 +166,32 @@ export interface CheckoutResponse {
   fieldErrors?: Record<string, string[]>;
   order?: DirectBookingOrderSummary;
   resume?: CheckoutResumeCredentials;
-  payment: { enabled: false; methods: [] };
+  payment: CheckoutPaymentCapabilities;
   idempotentReplay: boolean;
 }
+
+export interface CheckoutPaymentCapabilities {
+  enabled: boolean;
+  methods: Array<'pix' | 'card'>;
+  publicKey: string | null;
+}
+
+export interface CheckoutReadinessResponse {
+  success: true;
+  ready: boolean;
+  termsAvailable: boolean;
+  checkoutEnabled: boolean;
+  payment: CheckoutPaymentCapabilities;
+}
+
+export type CheckoutReadinessResult =
+  { kind: 'ready'; data: CheckoutReadinessResponse } | { kind: 'unavailable' };
 
 export interface CheckoutResumeResponse {
   success: true;
   order: DirectBookingOrderSummary;
-  payment: {
-    enabled: false;
-    methods: [];
+  confirmation: { reservationCode: string | null; confirmedAt: string | null } | null;
+  payment: CheckoutPaymentCapabilities & {
     attempt?: CheckoutPaymentAttemptSummary | null;
   };
 }
@@ -220,11 +243,26 @@ const isCheckoutResumeCredentials = (value: unknown): value is CheckoutResumeCre
   /^[A-Za-z0-9]{64}$/.test(value.token) &&
   value.path === `/checkout/${value.reference}`;
 
-const isCheckoutPaymentDisabled = (value: unknown): value is { enabled: false; methods: [] } =>
+const isCheckoutPaymentCapabilities = (value: unknown): value is CheckoutPaymentCapabilities =>
   isRecord(value) &&
-  value.enabled === false &&
+  typeof value.enabled === 'boolean' &&
   Array.isArray(value.methods) &&
-  value.methods.length === 0;
+  value.methods.every((method) => method === 'pix' || method === 'card') &&
+  value.enabled === value.methods.length > 0 &&
+  (value.publicKey === null ||
+    (typeof value.publicKey === 'string' &&
+      value.publicKey.trim() !== '' &&
+      value.publicKey.length <= 255)) &&
+  value.methods.includes('card') === (typeof value.publicKey === 'string');
+
+const isCheckoutReadinessResponse = (value: unknown): value is CheckoutReadinessResponse =>
+  isRecord(value) &&
+  value.success === true &&
+  typeof value.ready === 'boolean' &&
+  typeof value.termsAvailable === 'boolean' &&
+  typeof value.checkoutEnabled === 'boolean' &&
+  isCheckoutPaymentCapabilities(value.payment) &&
+  value.ready === (value.checkoutEnabled && value.termsAvailable && value.payment.enabled);
 
 const checkoutPaymentAttemptStatuses: CheckoutPaymentAttemptSummary['status'][] = [
   'processing',
@@ -289,9 +327,7 @@ const isCheckoutPaymentResponse = (
 
 const isCheckoutResumePayment = (value: unknown): value is CheckoutResumeResponse['payment'] =>
   isRecord(value) &&
-  value.enabled === false &&
-  Array.isArray(value.methods) &&
-  value.methods.length === 0 &&
+  isCheckoutPaymentCapabilities(value) &&
   (value.attempt === undefined ||
     value.attempt === null ||
     isCheckoutPaymentAttempt(value.attempt));
@@ -300,6 +336,18 @@ const isCheckoutResumeResponse = (value: unknown): value is CheckoutResumeRespon
   isRecord(value) &&
   value.success === true &&
   isDirectBookingOrder(value.order) &&
+  (value.order.status === 'confirmado'
+    ? value.confirmation !== null
+    : value.confirmation === null) &&
+  (value.confirmation === null ||
+    (isRecord(value.confirmation) &&
+      (value.confirmation.reservationCode === null ||
+        (typeof value.confirmation.reservationCode === 'string' &&
+          value.confirmation.reservationCode.trim() !== '' &&
+          value.confirmation.reservationCode.length <= 100)) &&
+      (value.confirmation.confirmedAt === null ||
+        (typeof value.confirmation.confirmedAt === 'string' &&
+          Number.isFinite(Date.parse(value.confirmation.confirmedAt)))))) &&
   isCheckoutResumePayment(value.payment);
 
 const isCheckoutTermsResponse = (value: unknown): value is CheckoutTermsResponse => {
@@ -395,6 +443,8 @@ export interface DirectBookingOperationsOrder {
   paymentMethod: string | null;
   gatewayPaymentId: string | null;
   staysReservationId: string | null;
+  staysCancellationConfirmed: boolean;
+  gatewayRefundConfirmed: boolean;
   updatedAt: string | null;
   lastEvent: {
     event?: string;
@@ -405,16 +455,33 @@ export interface DirectBookingOperationsOrder {
   } | null;
   issue: {
     source: 'stays' | 'payment' | 'webhook' | string;
+    action: string | null;
     status: string;
     code: string | null;
+    message: string | null;
   } | null;
 }
 
 export interface DirectBookingOperationsPage {
   orders: DirectBookingOperationsOrder[];
+  unmatchedWebhooks: DirectBookingOperationsWebhook[];
+  unmatchedWebhookTotal: number;
+  unmatchedWebhookCurrentPage: number;
+  unmatchedWebhookLastPage: number;
   currentPage: number;
   lastPage: number;
   total: number;
+}
+
+export interface DirectBookingOperationsWebhook {
+  id: string;
+  gatewayPaymentId: string;
+  status: 'received' | 'retrying' | 'failed' | 'queued' | 'processing';
+  errorCode: string | null;
+  attempts: number;
+  canRetry: boolean;
+  receivedAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface StaysOwnerSummary {
@@ -734,7 +801,7 @@ class CrcnBackendApiService {
           code: 'invalid_checkout_request',
           message: 'Confira os dados informados antes de continuar.',
           ...(fieldErrors ? { fieldErrors } : {}),
-          payment: { enabled: false, methods: [] },
+          payment: { enabled: false, methods: [], publicKey: null },
           idempotentReplay: false,
         };
       }
@@ -743,7 +810,7 @@ class CrcnBackendApiService {
         typeof json.success !== 'boolean' ||
         (json.code !== undefined && typeof json.code !== 'string') ||
         (json.message !== undefined && typeof json.message !== 'string') ||
-        !isCheckoutPaymentDisabled(json.payment) ||
+        !isCheckoutPaymentCapabilities(json.payment) ||
         typeof json.idempotentReplay !== 'boolean'
       )
         return null;
@@ -871,6 +938,25 @@ class CrcnBackendApiService {
     }
   }
 
+  public async getCheckoutReadiness(listingId: string): Promise<CheckoutReadinessResult> {
+    if (!listingId.trim() || listingId.length > 100) return { kind: 'unavailable' };
+
+    try {
+      const res = await fetch(`/api/checkout/readiness/${encodeURIComponent(listingId)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) return { kind: 'unavailable' };
+      const json: unknown = await res.json();
+
+      return isCheckoutReadinessResponse(json)
+        ? { kind: 'ready', data: json }
+        : { kind: 'unavailable' };
+    } catch (err) {
+      console.warn('Error loading direct checkout readiness:', err);
+      return { kind: 'unavailable' };
+    }
+  }
+
   public async resumeCheckout(reference: string, token: string): Promise<CheckoutResumeResult> {
     if (!/^[A-Za-z0-9]{40}$/.test(reference) || !/^[A-Za-z0-9]{64}$/.test(token)) {
       return { kind: 'not-found' };
@@ -914,7 +1000,61 @@ class CrcnBackendApiService {
     }));
   }
 
-  public async cancelMyReservation(reservationId: string, accessToken: string): Promise<ReservationCancellationResult> {
+  public async getMyDirectBookingOrders(accessToken: string): Promise<DirectBookingOrderSummary[]> {
+    const res = await fetch('/api/my-direct-booking-orders', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    });
+    const json: unknown = await res.json();
+    if (!res.ok || !isRecord(json) || json.success !== true) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível carregar suas compras no site.',
+      );
+    }
+    if (!Array.isArray(json.data) || !json.data.every(isDirectBookingOrder)) {
+      throw new Error('A API retornou dados inválidos para as compras no site.');
+    }
+    return json.data;
+  }
+
+  public async requestDirectBookingCancellation(
+    accessToken: string,
+    publicReference: string,
+  ): Promise<void> {
+    if (!/^[A-Za-z0-9]{40}$/.test(publicReference)) {
+      throw new Error('Referência do pedido inválida.');
+    }
+
+    const res = await fetch(
+      `/api/my-direct-booking-orders/${encodeURIComponent(publicReference)}/cancel`,
+      {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const json: unknown = await res.json();
+    if (
+      !res.ok ||
+      !isRecord(json) ||
+      json.success !== true ||
+      json.cancellationStatus !== 'requested' ||
+      typeof json.message !== 'string'
+    ) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível registrar a solicitação de cancelamento.',
+      );
+    }
+  }
+
+  public async cancelMyReservation(
+    reservationId: string,
+    accessToken: string,
+  ): Promise<ReservationCancellationResult> {
     const res = await fetch(`/api/my-reservations/${encodeURIComponent(reservationId)}/cancel`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -1040,8 +1180,12 @@ class CrcnBackendApiService {
     return json.requests;
   }
 
-  public async getDirectBookingOperationsOrders(accessToken: string, page = 1): Promise<DirectBookingOperationsPage> {
-    const params = new URLSearchParams({ page: String(page) });
+  public async getDirectBookingOperationsOrders(
+    accessToken: string,
+    page = 1,
+    webhookPage = 1,
+  ): Promise<DirectBookingOperationsPage> {
+    const params = new URLSearchParams({ page: String(page), webhookPage: String(webhookPage) });
     const res = await fetch(`/api/owner/admin/direct-booking-orders?${params}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -1053,18 +1197,151 @@ class CrcnBackendApiService {
           : 'Não foi possível carregar os pedidos em conferência.',
       );
     }
-    if (!Array.isArray(json.orders) || !json.orders.every(isDirectBookingOperationsOrder)
-      || !Number.isInteger(json.currentPage) || (json.currentPage as number) < 1
-      || !Number.isInteger(json.lastPage) || (json.lastPage as number) < 0
-      || !Number.isInteger(json.total) || (json.total as number) < 0) {
+    if (
+      !Array.isArray(json.orders) ||
+      !json.orders.every(isDirectBookingOperationsOrder) ||
+      !Array.isArray(json.unmatchedWebhooks) ||
+      !json.unmatchedWebhooks.every(isDirectBookingOperationsWebhook) ||
+      !Number.isInteger(json.unmatchedWebhookTotal) ||
+      (json.unmatchedWebhookTotal as number) < json.unmatchedWebhooks.length ||
+      !Number.isInteger(json.unmatchedWebhookCurrentPage) ||
+      (json.unmatchedWebhookCurrentPage as number) < 1 ||
+      !Number.isInteger(json.unmatchedWebhookLastPage) ||
+      (json.unmatchedWebhookLastPage as number) < 1 ||
+      !Number.isInteger(json.currentPage) ||
+      (json.currentPage as number) < 1 ||
+      !Number.isInteger(json.lastPage) ||
+      (json.lastPage as number) < 0 ||
+      !Number.isInteger(json.total) ||
+      (json.total as number) < 0
+    ) {
       throw new Error('A API retornou dados inválidos para os pedidos em conferência.');
     }
     return {
       orders: json.orders,
+      unmatchedWebhooks: json.unmatchedWebhooks,
+      unmatchedWebhookTotal: json.unmatchedWebhookTotal as number,
+      unmatchedWebhookCurrentPage: json.unmatchedWebhookCurrentPage as number,
+      unmatchedWebhookLastPage: json.unmatchedWebhookLastPage as number,
       currentPage: json.currentPage as number,
       lastPage: json.lastPage as number,
       total: json.total as number,
     };
+  }
+
+  public async retryDirectBookingWebhook(accessToken: string, webhookId: string): Promise<void> {
+    const res = await fetch(
+      `/api/owner/admin/direct-booking-webhooks/${encodeURIComponent(webhookId)}/retry`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const json: unknown = await res.json();
+    if (!res.ok || !isRecord(json) || json.success !== true || json.status !== 'queued') {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível reenviar a notificação para conciliação.',
+      );
+    }
+  }
+
+  public async startManualDirectBookingCancellation(
+    accessToken: string,
+    publicReference: string,
+  ): Promise<void> {
+    if (!/^[A-Za-z0-9]{40}$/.test(publicReference)) {
+      throw new Error('Referência do pedido inválida.');
+    }
+
+    const res = await fetch(
+      `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/start-manual-cancellation`,
+      {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const json: unknown = await res.json();
+    if (
+      !res.ok ||
+      !isRecord(json) ||
+      json.success !== true ||
+      json.status !== 'reembolso_pendente' ||
+      !Array.isArray(json.requiredActions) ||
+      !json.requiredActions.includes('stays_cancellation') ||
+      !json.requiredActions.includes('gateway_refund')
+    ) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível registrar o encaminhamento manual.',
+      );
+    }
+  }
+
+  public async verifyManualDirectBookingStaysCancellation(
+    accessToken: string,
+    publicReference: string,
+  ): Promise<void> {
+    if (!/^[A-Za-z0-9]{40}$/.test(publicReference)) {
+      throw new Error('Referência do pedido inválida.');
+    }
+
+    const res = await fetch(
+      `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/verify-manual-stays-cancellation`,
+      {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const json: unknown = await res.json();
+    if (
+      !res.ok ||
+      !isRecord(json) ||
+      json.success !== true ||
+      json.staysCancellationConfirmed !== true ||
+      typeof json.gatewayRefundConfirmed !== 'boolean'
+    ) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível confirmar o cancelamento na Stays.',
+      );
+    }
+  }
+
+  public async verifyManualDirectBookingGatewayRefund(
+    accessToken: string,
+    publicReference: string,
+  ): Promise<void> {
+    if (!/^[A-Za-z0-9]{40}$/.test(publicReference)) {
+      throw new Error('Referência do pedido inválida.');
+    }
+
+    const res = await fetch(
+      `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/verify-manual-gateway-refund`,
+      {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const json: unknown = await res.json();
+    if (
+      !res.ok ||
+      !isRecord(json) ||
+      json.success !== true ||
+      json.gatewayRefundConfirmed !== true
+    ) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível confirmar o estorno no Mercado Pago.',
+      );
+    }
   }
 
   public async searchStaysOwners(accessToken: string, query: string): Promise<StaysOwnerSummary[]> {

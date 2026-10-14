@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Reservation } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
+import type { DirectBookingOrderSummary } from '../services/crcnBackendApi';
 import type { MainView } from '../components/MobileBottomNavigation';
 
 export type OwnerAccessStatus =
@@ -9,22 +10,28 @@ export type OwnerAccessStatus =
 
 interface UseAccountWorkspaceDataOptions {
   accessToken: string | undefined;
+  currentView?: MainView;
   currentViewRef: MutableRefObject<MainView>;
   setCurrentView: Dispatch<SetStateAction<MainView>>;
 }
 
 export function useAccountWorkspaceData({
   accessToken,
+  currentView,
   currentViewRef,
   setCurrentView,
 }: UseAccountWorkspaceDataOptions) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [directBookingOrders, setDirectBookingOrders] = useState<DirectBookingOrderSummary[]>([]);
+  const [directBookingOrdersError, setDirectBookingOrdersError] = useState('');
   const [ownerAccessStatus, setOwnerAccessStatus] = useState<OwnerAccessStatus>('none');
   const [isOwnerAdmin, setIsOwnerAdmin] = useState(false);
 
   useEffect(() => {
     if (!accessToken) {
       setReservations([]);
+      setDirectBookingOrders([]);
+      setDirectBookingOrdersError('');
       return;
     }
     let cancelled = false;
@@ -43,6 +50,34 @@ export function useAccountWorkspaceData({
       cancelled = true;
     };
   }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setDirectBookingOrders([]);
+      setDirectBookingOrdersError('');
+      return;
+    }
+    if (currentView !== undefined && currentView !== 'trips') {
+      return;
+    }
+    let cancelled = false;
+    setDirectBookingOrdersError('');
+    void crcnBackendApi
+      .getMyDirectBookingOrders(accessToken)
+      .then((items) => {
+        if (!cancelled) setDirectBookingOrders(items);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setDirectBookingOrders([]);
+        setDirectBookingOrdersError(
+          error instanceof Error ? error.message : 'Não foi possível carregar suas compras no site.',
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, currentView]);
 
   useEffect(() => {
     if (!accessToken) {
@@ -99,6 +134,8 @@ export function useAccountWorkspaceData({
   return {
     reservations,
     setReservations,
+    directBookingOrders,
+    directBookingOrdersError,
     ownerAccessStatus,
     setOwnerAccessStatus,
     isOwnerAdmin,

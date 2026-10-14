@@ -24,7 +24,7 @@ export function calculatePropertyPricing({
   const totalAmount = quote
     ? quote.total
     : baseSubtotal - discount + calculatedCleaningFee + serviceFee;
-  const visibleFees = quote?.fees?.filter((fee) => !isCounterFee(fee)) || [];
+  const visibleFees = getVisiblePropertyFees(quote?.fees || []);
 
   return {
     baseSubtotal,
@@ -36,10 +36,22 @@ export function calculatePropertyPricing({
   };
 }
 
+export function getVisiblePropertyFees(
+  fees: NonNullable<CalculatedPriceResponse['fees']>,
+): NonNullable<CalculatedPriceResponse['fees']> {
+  return fees.filter((fee) => !isCounterFee(fee));
+}
+
 export function getPropertyFeeLabel(
   fee: NonNullable<CalculatedPriceResponse['fees']>[number],
 ): string {
-  return fee._mstitle?.pt_BR || fee._mstitle?.pt_PT || fee.internalName || 'Taxa da hospedagem';
+  return (
+    fee._mstitle?.pt_BR ||
+    fee._mstitle?.pt_PT ||
+    fee._mstitle?.en_US ||
+    fee.internalName ||
+    'Taxa da hospedagem'
+  );
 }
 
 export function getPropertyFeeAmount(
@@ -51,6 +63,6 @@ export function getPropertyFeeAmount(
 
 function isCounterFee(fee: NonNullable<CalculatedPriceResponse['fees']>[number]): boolean {
   return /balc[aã]o|counter/i.test(
-    `${fee.internalName || ''} ${fee._mstitle?.pt_BR || ''} ${fee._mstitle?.pt_PT || ''}`,
+    `${fee.internalName || ''} ${fee._mstitle?.pt_BR || ''} ${fee._mstitle?.pt_PT || ''} ${fee._mstitle?.en_US || ''}`,
   );
 }
