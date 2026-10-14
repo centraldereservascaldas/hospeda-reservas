@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Check, LoaderCircle, RefreshCw, Search, ShieldCheck, UserRoundCheck } from 'lucide-react';
-import { crcnBackendApi, OwnerAccessRequest, StaysOwnerSummary } from '../../services/crcnBackendApi';
+import { AlertCircle, Check, ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, ShieldCheck, UserRoundCheck } from 'lucide-react';
+import {
+  crcnBackendApi,
+  DirectBookingOperationsOrder,
+  OwnerAccessRequest,
+  StaysOwnerSummary,
+} from '../../services/crcnBackendApi';
 
 interface OwnerAccessAdminViewProps {
   accessToken: string;
@@ -8,6 +13,13 @@ interface OwnerAccessAdminViewProps {
 
 export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ accessToken }) => {
   const [requests, setRequests] = useState<OwnerAccessRequest[]>([]);
+  const [operationsOrders, setOperationsOrders] = useState<DirectBookingOperationsOrder[]>([]);
+  const [operationsLoading, setOperationsLoading] = useState(true);
+  const [operationsError, setOperationsError] = useState('');
+  const [operationsRefreshKey, setOperationsRefreshKey] = useState(0);
+  const [operationsPage, setOperationsPage] = useState(1);
+  const [operationsLastPage, setOperationsLastPage] = useState(1);
+  const [operationsTotal, setOperationsTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
@@ -25,10 +37,71 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
     return () => { active = false; };
   }, [accessToken, refreshKey]);
 
+  useEffect(() => {
+    let active = true;
+    setOperationsLoading(true);
+    setOperationsError('');
+    void crcnBackendApi.getDirectBookingOperationsOrders(accessToken, operationsPage)
+      .then((result) => {
+        if (active) {
+          setOperationsOrders(result.orders);
+          setOperationsLastPage(result.lastPage);
+          setOperationsTotal(result.total);
+          if (result.currentPage > Math.max(result.lastPage, 1)) {
+            setOperationsPage(Math.max(result.lastPage, 1));
+          }
+        }
+      })
+      .catch((loadError) => {
+        if (active) setOperationsError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar os pedidos em conferência.');
+      })
+      .finally(() => { if (active) setOperationsLoading(false); });
+    return () => { active = false; };
+  }, [accessToken, operationsPage, operationsRefreshKey]);
+
   const handleApproved = () => setRefreshKey((value) => value + 1);
 
   return (
     <section className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mb-10">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" /> Operação de vendas diretas
+            </div>
+            <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">Pedidos que precisam de ação</h1>
+            <p className="mt-1 max-w-2xl text-sm text-neutral-600">Pagamentos aprovados sem confirmação, reembolsos, contestações e outros estados em conferência.</p>
+          </div>
+          <button type="button" onClick={() => setOperationsRefreshKey((value) => value + 1)} disabled={operationsLoading} className="inline-flex items-center gap-2 rounded-xl border border-white/80 bg-white/75 px-4 py-2.5 text-sm font-bold text-neutral-700 shadow-sm backdrop-blur-xl hover:bg-white disabled:opacity-60">
+            <RefreshCw className={`h-4 w-4 ${operationsLoading ? 'animate-spin' : ''}`} aria-hidden="true" /> Atualizar fila
+          </button>
+        </div>
+        {operationsError && <div role="alert" className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800">{operationsError}</div>}
+        {operationsLoading ? (
+          <div className="flex items-center justify-center gap-2 rounded-3xl border border-white/80 bg-white/65 p-8 text-sm font-semibold text-neutral-600 backdrop-blur-xl" role="status"><LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" /> Carregando pedidos…</div>
+        ) : operationsOrders.length === 0 ? (
+          <div className="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-8 text-center text-sm font-semibold text-emerald-900">Nenhum pedido exige ação operacional agora.</div>
+        ) : (
+          <>
+            <div className="space-y-3">
+              {operationsOrders.map((order) => <DirectBookingOperationsCard key={order.id} order={order} />)}
+            </div>
+            <nav aria-label="Paginação dos pedidos em conferência" className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs text-neutral-600">{operationsTotal} pedido(s) · página {operationsPage} de {Math.max(operationsLastPage, 1)}</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setOperationsPage((page) => Math.max(1, page - 1))} disabled={operationsLoading || operationsPage <= 1} className="inline-flex items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50">
+                  <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Anterior
+                </button>
+                <button type="button" onClick={() => setOperationsPage((page) => Math.min(operationsLastPage, page + 1))} disabled={operationsLoading || operationsPage >= operationsLastPage} className="inline-flex items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50">
+                  Próxima <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </div>
+            </nav>
+          </>
+        )}
+      </div>
+
+      <div className="border-t border-neutral-200 pt-8">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50/80 px-3 py-1 text-xs font-bold text-orange-800">
@@ -52,9 +125,66 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
           {requests.map((request) => <OwnerRequestCard key={request.userId} request={request} accessToken={accessToken} onApproved={handleApproved} />)}
         </div>
       )}
+      </div>
     </section>
   );
 };
+
+const orderStatusLabels: Record<DirectBookingOperationsOrder['status'], string> = {
+  iniciado: 'Pedido iniciado', cotado: 'Cotação registrada', pre_reservado: 'Pré-reserva',
+  liberacao_pendente: 'Liberação pendente', pagamento_pendente: 'Pagamento pendente',
+  pago_em_confirmacao: 'Pago, aguardando Stays', confirmado: 'Confirmado', concluido: 'Concluído',
+  expirado: 'Expirado', pagamento_recusado: 'Pagamento recusado', atencao_operacional: 'Atenção operacional',
+  cancelamento_solicitado: 'Cancelamento solicitado', reembolso_pendente: 'Reembolso pendente',
+  reembolsado: 'Reembolsado', contestado: 'Contestado',
+};
+
+const operationsMoney = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+const operationsDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' });
+const operationsDateTime = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+const issueSourceLabels: Record<string, string> = {
+  stays: 'Stays',
+  payment: 'pagamento',
+  payment_gateway: 'conciliação do gateway',
+  webhook: 'notificação do gateway',
+  late_or_unreserved_payment: 'pagamento após o prazo da pré-reserva',
+  guest_cancellation_request: 'solicitação de cancelamento do hóspede',
+};
+
+const DirectBookingOperationsCard: React.FC<{ order: DirectBookingOperationsOrder }> = ({ order }) => (
+  <article className="rounded-2xl border border-amber-200/80 bg-white p-4 shadow-sm sm:p-5">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-mono text-sm font-extrabold text-neutral-950">{order.publicReference.slice(0, 12).toUpperCase()}</h2>
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900">{orderStatusLabels[order.status]}</span>
+        </div>
+        <p className="mt-2 text-sm font-bold text-neutral-800">{order.guestName}</p>
+        <p className="text-xs text-neutral-600">{order.guestEmail}</p>
+      </div>
+      <p className="text-lg font-black text-neutral-950">{operationsMoney.format(Number(order.quoteTotal))}</p>
+    </div>
+    <dl className="mt-4 grid gap-3 border-t border-neutral-200 pt-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
+      <div><dt className="font-bold uppercase tracking-wide text-neutral-500">Imóvel</dt><dd className="mt-1 font-semibold text-neutral-800">{order.listingId}</dd></div>
+      <div><dt className="font-bold uppercase tracking-wide text-neutral-500">Estadia</dt><dd className="mt-1 font-semibold text-neutral-800">{operationsDate.format(new Date(`${order.from}T12:00:00Z`))} – {operationsDate.format(new Date(`${order.to}T12:00:00Z`))}</dd></div>
+      <div><dt className="font-bold uppercase tracking-wide text-neutral-500">Pagamento</dt><dd className="mt-1 font-semibold text-neutral-800">{order.paymentStatus ?? 'Sem atualização'}{order.paymentMethod ? ` · ${order.paymentMethod}` : ''}</dd></div>
+      <div><dt className="font-bold uppercase tracking-wide text-neutral-500">Stays</dt><dd className="mt-1 break-all font-mono font-semibold text-neutral-800">{order.staysReservationId ?? 'Sem reserva vinculada'}</dd></div>
+    </dl>
+    {(order.issue || order.gatewayPaymentId) && (
+      <p className="mt-3 break-all border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
+        {order.issue && <span>Exceção ({issueSourceLabels[order.issue.source] ?? order.issue.source}): <strong className="font-semibold text-neutral-700">{order.issue.status}{order.issue.code ? ` · ${order.issue.code}` : ''}</strong></span>}
+        {order.gatewayPaymentId && <span>{order.issue ? ' · ' : ''}ID do gateway: <span className="font-mono">{order.gatewayPaymentId}</span></span>}
+      </p>
+    )}
+    {(order.updatedAt || order.lastEvent) && (
+      <p className="mt-3 border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
+        {order.lastEvent?.event && <span>Último evento: <strong className="font-semibold text-neutral-700">{order.lastEvent.event}</strong></span>}
+        {order.lastEvent?.at && <span>{order.lastEvent.event ? ' · ' : ''}{operationsDateTime.format(new Date(order.lastEvent.at))}</span>}
+        {order.updatedAt && <span>{order.lastEvent?.at ? ' · ' : ''}Pedido atualizado {operationsDateTime.format(new Date(order.updatedAt))}</span>}
+      </p>
+    )}
+  </article>
+);
 
 const OwnerRequestCard: React.FC<{
   request: OwnerAccessRequest;

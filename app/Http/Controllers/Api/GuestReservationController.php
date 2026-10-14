@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Data\VerifiedGuest;
+use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
@@ -10,6 +11,7 @@ use App\Services\GuestStaysSyncService;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class GuestReservationController extends Controller
 {
@@ -48,7 +50,27 @@ class GuestReservationController extends Controller
         $client = $client['client'] ?? $client['data'] ?? $client;
         $records = $client['reservations'] ?? $client['data']['reservations'] ?? [];
         $catalog = json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
-        $data = collect(is_array($records) ? $records : [])->map(fn (array $record): ?array => $this->mapReservation($record, $catalog))->filter()->values();
+        $reservationRecords = collect(is_array($records) ? $records : []);
+        $reservationIds = $reservationRecords
+            ->flatMap(fn (array $record): array => array_filter([
+                $record['id'] ?? null,
+                $record['_id'] ?? null,
+            ], fn (mixed $id): bool => is_string($id) || is_int($id)))
+            ->map(fn (mixed $id): string => (string) $id)
+            ->unique()
+            ->values();
+        $directOrders = DirectBookingOrder::query()
+            ->whereIn('stays_reservation_id', $reservationIds)
+            ->get()
+            ->keyBy('stays_reservation_id');
+        $data = $reservationRecords
+            ->map(fn (array $record): ?array => $this->mapReservation(
+                $record,
+                $catalog,
+                $directOrders->get((string) ($record['id'] ?? $record['_id'] ?? '')),
+            ))
+            ->filter()
+            ->values();
 
         return response()->json(['success' => true, 'data' => $data]);
     }
@@ -91,10 +113,42 @@ class GuestReservationController extends Controller
         }
 
         $reservationIds = $detailIds->push($reservationId)->unique()->values();
+        $directOrder = DirectBookingOrder::query()->whereIn('stays_reservation_id', $reservationIds)->first();
         $isDirectCheckoutReservation = str_starts_with((string) ($details['internalNote'] ?? ''), 'CRCN_DIRECT_ORDER:')
-            || DirectBookingOrder::query()->whereIn('stays_reservation_id', $reservationIds)->exists();
+            || $directOrder !== null;
         if ($isDirectCheckoutReservation) {
-            return response()->json(['success' => false, 'code' => 'direct_booking_cancellation_requires_support', 'message' => 'O cancelamento desta compra precisa ser acompanhado pela Central para conferir a reserva e o pagamento. Entre em contato com o atendimento.'], 409);
+            if ($directOrder === null) {
+                return response()->json(['success' => false, 'code' => 'direct_booking_cancellation_requires_support', 'message' => 'A compra precisa ser localizada pela Central antes de registrar o cancelamento. Entre em contato com o atendimento.'], 409);
+            }
+
+            $requestRecorded = DB::transaction(function () use ($directOrder, $guest): bool {
+                $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($directOrder->id);
+                if ($lockedOrder->status === DirectBookingOrderStatus::CancelamentoSolicitado) {
+                    return true;
+                }
+                if ($lockedOrder->status !== DirectBookingOrderStatus::Confirmado || $lockedOrder->payment_status !== 'approved') {
+                    return false;
+                }
+
+                $lockedOrder->transitionTo(DirectBookingOrderStatus::CancelamentoSolicitado, [
+                    'source' => 'guest_cancellation_request',
+                    'code' => 'guest_cancellation_requested',
+                    'requested_by' => $guest->id,
+                ]);
+                $lockedOrder->save();
+
+                return true;
+            });
+            if (! $requestRecorded) {
+                return response()->json(['success' => false, 'code' => 'direct_booking_cancellation_state_conflict', 'message' => 'O estado atual da compra não permite registrar outro pedido de cancelamento. Nenhuma alteração foi feita.'], 409);
+            }
+
+            return response()->json([
+                'success' => true,
+                'reservationId' => $reservationId,
+                'cancellationStatus' => 'requested',
+                'message' => 'A solicitação foi registrada para análise da Central. A reserva continua ativa até a confirmação do cancelamento.',
+            ])->header('Cache-Control', 'no-store, private');
         }
 
         $detailClientId = (string) ($details['_idclient'] ?? '');
@@ -104,7 +158,11 @@ class GuestReservationController extends Controller
 
         $status = strtolower((string) ($details['type'] ?? ''));
         if (in_array($status, ['canceled', 'cancelled'], true)) {
-            return response()->json(['success' => false, 'code' => 'already_cancelled', 'message' => 'Esta reserva já está cancelada.'], 409);
+            return response()->json([
+                'success' => true,
+                'reservationId' => $reservationId,
+                'cancellationStatus' => 'cancelled',
+            ])->header('Cache-Control', 'no-store, private');
         }
         if (! in_array($status, ['booked', 'contract'], true)) {
             return response()->json(['success' => false, 'code' => 'reservation_not_cancellable', 'message' => 'O status atual desta reserva não permite cancelamento por este fluxo.'], 409);
@@ -114,7 +172,8 @@ class GuestReservationController extends Controller
             return response()->json(['success' => false, 'code' => 'stays_cancel_failed', 'message' => 'A Stays não confirmou o cancelamento. A reserva continua ativa; entre em contato com a Central.'], 502);
         }
 
-        return response()->json(['success' => true, 'reservationId' => $reservationId]);
+        return response()->json(['success' => true, 'reservationId' => $reservationId, 'cancellationStatus' => 'cancelled'])
+            ->header('Cache-Control', 'no-store, private');
     }
 
     private function clientId(VerifiedGuest $guest): ?string
@@ -127,7 +186,7 @@ class GuestReservationController extends Controller
         return GuestProfile::query()->find($guest->id)?->stays_client_id;
     }
 
-    private function mapReservation(array $record, array $catalog): ?array
+    private function mapReservation(array $record, array $catalog, ?DirectBookingOrder $directOrder = null): ?array
     {
         $id = (string) ($record['id'] ?? $record['_id'] ?? '');
         $checkIn = (string) ($record['checkInDate'] ?? '');
@@ -145,11 +204,19 @@ class GuestReservationController extends Controller
         if ($status === null) {
             return null;
         }
+        $isDirectCheckoutReservation = $directOrder !== null
+            || str_starts_with((string) ($record['internalNote'] ?? ''), 'CRCN_DIRECT_ORDER:');
+        $isDirectCheckoutConfirmed = $directOrder !== null
+            && in_array($directOrder->status, [DirectBookingOrderStatus::Confirmado, DirectBookingOrderStatus::CancelamentoSolicitado], true)
+            && $directOrder->payment_status === 'approved';
+        if ($isDirectCheckoutReservation && ! $isDirectCheckoutConfirmed) {
+            $status = 'pending';
+        }
         $nights = max(1, (int) now()->parse($checkIn)->diffInDays(now()->parse($checkOut)));
         $propertyId = (string) ($record['_idlisting'] ?? '');
         $property = collect($catalog)->first(fn (array $item): bool => in_array($propertyId, [$item['id'] ?? '', $item['staysListingId'] ?? ''], true));
         $total = (float) ($record['price']['_f_total'] ?? $record['price']['hostingDetails']['_f_total'] ?? 0);
 
-        return ['id' => $id, 'code' => $id, 'propertyId' => $propertyId, 'propertyTitle' => $property['title'] ?? $record['_mslistingTitle']['pt_BR'] ?? 'Acomodação', 'propertyLocation' => $property['subtitle'] ?? '', 'propertyImage' => $property['images'][0] ?? $catalog[0]['images'][0] ?? '', 'checkIn' => $checkIn, 'checkOut' => $checkOut, 'nights' => $nights, 'guests' => ['adults' => (int) ($record['guestsDetails']['adults'] ?? $record['guests'] ?? 1), 'children' => (int) ($record['guestsDetails']['children'] ?? 0), 'infants' => (int) ($record['guestsDetails']['infants'] ?? 0), 'pets' => 0], 'pricePerNight' => (float) ($record['price']['hostingDetails']['_f_nightPrice'] ?? $total / $nights), 'cleaningFee' => 0, 'serviceFee' => 0, 'discount' => 0, 'totalAmount' => $total, 'paymentMethod' => '', 'status' => $status === 'confirmed' && $checkOut < now()->toDateString() ? 'completed' : $status, 'createdAt' => $record['creationDate'] ?? '', 'hostName' => 'Central de Reservas Caldas Novas', 'guestName' => $record['bookerDetails']['name'] ?? '', 'guestEmail' => $record['bookerDetails']['email'] ?? '', 'guestPhone' => '', 'staysReservationId' => $id, 'staysLocator' => $record['partnerCode'] ?? '', 'staysSyncStatus' => 'synced'];
+        return ['id' => $id, 'code' => $id, 'propertyId' => $propertyId, 'propertyTitle' => $property['title'] ?? $record['_mslistingTitle']['pt_BR'] ?? 'Acomodação', 'propertyLocation' => $property['subtitle'] ?? '', 'propertyImage' => $property['images'][0] ?? $catalog[0]['images'][0] ?? '', 'checkIn' => $checkIn, 'checkOut' => $checkOut, 'nights' => $nights, 'guests' => ['adults' => (int) ($record['guestsDetails']['adults'] ?? $record['guests'] ?? 1), 'children' => (int) ($record['guestsDetails']['children'] ?? 0), 'infants' => (int) ($record['guestsDetails']['infants'] ?? 0), 'pets' => 0], 'pricePerNight' => (float) ($record['price']['hostingDetails']['_f_nightPrice'] ?? $total / $nights), 'cleaningFee' => 0, 'serviceFee' => 0, 'discount' => 0, 'totalAmount' => $total, 'paymentMethod' => '', 'status' => $status === 'confirmed' && $checkOut < now()->toDateString() ? 'completed' : $status, 'cancellationRequested' => $directOrder?->status === DirectBookingOrderStatus::CancelamentoSolicitado, 'createdAt' => $record['creationDate'] ?? '', 'hostName' => 'Central de Reservas Caldas Novas', 'guestName' => $record['bookerDetails']['name'] ?? '', 'guestEmail' => $record['bookerDetails']['email'] ?? '', 'guestPhone' => '', 'staysReservationId' => $id, 'staysLocator' => $record['partnerCode'] ?? '', 'staysSyncStatus' => 'synced'];
     }
 }

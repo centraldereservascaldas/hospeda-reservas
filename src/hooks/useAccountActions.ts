@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Reservation } from '../types';
+import type { Reservation, ReservationCancellationResult } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
 import type { OwnerAccessStatus as ApiOwnerAccessStatus } from '../services/crcnBackendApi';
 import type { MainView } from '../components/MobileBottomNavigation';
@@ -8,7 +8,10 @@ import type { AccountModalMode } from './useSupabaseSession';
 import type { OwnerAccessStatus } from './useAccountWorkspaceData';
 
 interface AccountActionsApi {
-  cancelMyReservation(reservationId: string, accessToken: string): Promise<void>;
+  cancelMyReservation(
+    reservationId: string,
+    accessToken: string,
+  ): Promise<void | ReservationCancellationResult>;
   getMyReservations(accessToken: string): Promise<Reservation[]>;
   requestOwnerAccess(accessToken: string): Promise<ApiOwnerAccessStatus>;
 }
@@ -50,7 +53,9 @@ export function useAccountActions({
   const handleCancelReservation = useCallback(
     async (reservationId: string) => {
       if (!accessToken) throw new Error('Entre na sua conta para solicitar o cancelamento.');
-      await api.cancelMyReservation(reservationId, accessToken);
+      const result = await api.cancelMyReservation(reservationId, accessToken);
+      if (result === 'requested') return result;
+
       setReservations((current) =>
         current.map((reservation) =>
           reservation.id === reservationId ? { ...reservation, status: 'cancelled' } : reservation,
@@ -68,6 +73,7 @@ export function useAccountActions({
       } catch {
         // Keep the PMS-confirmed cancellation visible if the refresh fails.
       }
+      return result;
     },
     [accessToken, api, setReservations],
   );

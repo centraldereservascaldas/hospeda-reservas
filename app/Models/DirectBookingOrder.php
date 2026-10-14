@@ -104,4 +104,9 @@ class DirectBookingOrder extends Model
     {
         return $this->hasMany(DirectBookingPaymentAttempt::class, 'direct_booking_order_id');
     }
+
+    public function staysActions(): HasMany
+    {
+        return $this->hasMany(DirectBookingStaysAction::class, 'direct_booking_order_id');
+    }
 }

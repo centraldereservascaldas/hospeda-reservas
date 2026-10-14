@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Data\VerifiedGuest;
+use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\DirectBookingOperationsResource;
+use App\Models\DirectBookingOrder;
 use App\Models\OwnerAccess;
 use App\Services\StaysExternalApiClient;
 use App\Services\SupabaseAuthClient;
@@ -38,6 +41,52 @@ class OwnerAdminController extends Controller
 
             return ['userId' => $item->user_id, 'fullName' => $item->full_name ?: ($user['user_metadata']['full_name'] ?? ''), 'email' => $user['email'] ?? '', 'requestedAt' => $item->created_at?->toISOString()];
         })]);
+    }
+
+    public function directBookingOrders(Request $request): JsonResponse
+    {
+        $input = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:10000']]);
+        $orders = DirectBookingOrder::query()
+            ->where(function ($query): void {
+                $query
+                    ->whereIn('status', [
+                        DirectBookingOrderStatus::LiberacaoPendente,
+                        DirectBookingOrderStatus::AtencaoOperacional,
+                        DirectBookingOrderStatus::CancelamentoSolicitado,
+                        DirectBookingOrderStatus::ReembolsoPendente,
+                        DirectBookingOrderStatus::Contestado,
+                    ])
+                    ->orWhere(function ($query): void {
+                        $query->where('payment_status', 'approved')
+                            ->whereNotIn('status', [DirectBookingOrderStatus::Confirmado, DirectBookingOrderStatus::Concluido]);
+                    })
+                    ->orWhereIn('payment_status', ['unknown', 'refunded', 'charged_back', 'attention_required'])
+                    ->orWhereHas('staysActions', fn ($query) => $query->whereIn('status', ['failed', 'attention_required']))
+                    ->orWhereHas('paymentAttempts', fn ($query) => $query->whereIn('status', ['failed', 'unknown', 'attention_required']))
+                    ->orWhereHas('paymentAttempts.webhooks', fn ($query) => $query->whereIn('status', ['retrying', 'failed']));
+            })
+            ->with([
+                'staysActions' => fn ($query) => $query
+                    ->select(['id', 'direct_booking_order_id', 'action_type', 'status', 'error_code', 'updated_at'])
+                    ->orderByDesc('updated_at'),
+                'paymentAttempts' => fn ($query) => $query
+                    ->select(['id', 'direct_booking_order_id', 'gateway_payment_id', 'status', 'error_code', 'updated_at'])
+                    ->orderByDesc('updated_at'),
+                'paymentAttempts.webhooks' => fn ($query) => $query
+                    ->select(['id', 'gateway_payment_id', 'status', 'error_code', 'updated_at'])
+                    ->orderByDesc('updated_at'),
+            ])
+            ->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->paginate(50, ['*'], 'page', (int) ($input['page'] ?? 1));
+
+        return response()->json([
+            'success' => true,
+            'orders' => DirectBookingOperationsResource::collection(collect($orders->items()))->resolve(),
+            'currentPage' => $orders->currentPage(),
+            'lastPage' => $orders->lastPage(),
+            'total' => $orders->total(),
+        ])->header('Cache-Control', 'no-store, private');
     }
 
     public function staysOwners(Request $request): JsonResponse

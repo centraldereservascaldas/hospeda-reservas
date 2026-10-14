@@ -1,5 +1,8 @@
 import type { Property, Reservation } from '../types';
-import type { CalculatedPriceResponse } from '../services/crcnBackendApi';
+import type {
+  CalculatedPriceResponse,
+  DirectBookingOperationsOrder,
+} from '../services/crcnBackendApi';
 import type { StaysCalendarDay } from './staysAvailability';
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -99,6 +102,49 @@ export const isDirectBookingOrder = (
   value.currency === 'BRL' &&
   (value.expiresAt === null || typeof value.expiresAt === 'string') &&
   (value.createdAt === null || typeof value.createdAt === 'string');
+
+export const isDirectBookingOperationsOrder = (
+  value: unknown,
+): value is DirectBookingOperationsOrder =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  value.id.trim() !== '' &&
+  typeof value.publicReference === 'string' &&
+  /^[A-Za-z0-9]{40}$/.test(value.publicReference) &&
+  checkoutOrderStatuses.includes(value.status as (typeof checkoutOrderStatuses)[number]) &&
+  typeof value.listingId === 'string' &&
+  value.listingId.trim() !== '' &&
+  isIsoDate(value.from) &&
+  isIsoDate(value.to) &&
+  value.to > value.from &&
+  typeof value.guestName === 'string' &&
+  typeof value.guestEmail === 'string' &&
+  typeof value.quoteTotal === 'string' &&
+  /^\d+(?:\.\d{2})$/.test(value.quoteTotal) &&
+  value.currency === 'BRL' &&
+  (value.paymentStatus === null || typeof value.paymentStatus === 'string') &&
+  (value.paymentMethod === null || typeof value.paymentMethod === 'string') &&
+  (value.gatewayPaymentId === null || typeof value.gatewayPaymentId === 'string') &&
+  (value.staysReservationId === null || typeof value.staysReservationId === 'string') &&
+  (value.updatedAt === null || typeof value.updatedAt === 'string') &&
+  (value.lastEvent === null || isDirectBookingOperationsEvent(value.lastEvent)) &&
+  (value.issue === null || isDirectBookingOperationsIssue(value.issue));
+
+const isDirectBookingOperationsEvent = (
+  value: unknown,
+): value is NonNullable<DirectBookingOperationsOrder['lastEvent']> =>
+  isRecord(value) &&
+  ['event', 'status', 'source', 'code', 'at'].every(
+    (field) => value[field] === undefined || typeof value[field] === 'string',
+  );
+
+const isDirectBookingOperationsIssue = (
+  value: unknown,
+): value is NonNullable<DirectBookingOperationsOrder['issue']> =>
+  isRecord(value) &&
+  typeof value.source === 'string' &&
+  typeof value.status === 'string' &&
+  (value.code === null || typeof value.code === 'string');
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -357,4 +403,5 @@ export const isReservation = (value: unknown): value is Reservation =>
   (value.staysSyncStatus === undefined ||
     value.staysSyncStatus === 'synced' ||
     value.staysSyncStatus === 'pending' ||
-    value.staysSyncStatus === 'offline');
+    value.staysSyncStatus === 'offline') &&
+  (value.cancellationRequested === undefined || typeof value.cancellationRequested === 'boolean');

@@ -121,6 +121,7 @@ export interface Reservation {
   totalAmount: number;
   paymentMethod: 'pix' | 'credit_card' | 'apple_pay' | '';
   status: 'confirmed' | 'cancelled' | 'completed' | 'pending';
+  cancellationRequested?: boolean;
   createdAt: string;
   hostName: string;
   guestName: string;
@@ -131,6 +132,8 @@ export interface Reservation {
   staysLocator?: string;
   staysSyncStatus?: 'synced' | 'pending' | 'offline';
 }
+
+export type ReservationCancellationResult = 'cancelled' | 'requested';
 
 export interface StaysConfig {
   accountDomain: string; // e.g. centraldereservascn.stays.net or play.stays.net

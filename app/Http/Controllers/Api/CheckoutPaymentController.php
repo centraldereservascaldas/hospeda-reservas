@@ -15,27 +15,30 @@ class CheckoutPaymentController extends Controller
         $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
         $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
         if ($order === null || $providedToken === '' || ! hash_equals((string) $order->resume_token, $providedToken)) {
-            return response()->json(['success' => false, 'code' => 'checkout_not_found', 'message' => 'Pedido não encontrado.'], 404);
+            return response()->json(['success' => false, 'code' => 'checkout_not_found', 'message' => 'Pedido não encontrado.'], 404)
+                ->header('Cache-Control', 'no-store, private');
         }
 
         $result = $payments->createAttempt($order, $request);
+        $attempt = $result['attempt'];
+        $pixInstructions = $attempt?->safePixInstructions($order->status->value === 'pagamento_pendente');
 
         return response()->json([
             'success' => in_array($result['status'], [200, 201], true),
             'code' => $result['code'],
             'message' => $result['message'],
             'replayed' => $result['replayed'],
-            'payment' => $result['attempt'] === null ? null : [
-                'id' => $result['attempt']->id,
-                'status' => $result['attempt']->status,
-                'method' => $result['attempt']->payment_method,
-                'amount' => $result['attempt']->amount,
-                'currency' => $result['attempt']->currency,
-                'expiresAt' => $result['attempt']->expires_at?->toISOString(),
-                'paidAt' => $result['attempt']->paid_at?->toISOString(),
-                'pix' => $result['attempt']->payment_method === 'pix' ? [
-                    'copyPaste' => $result['attempt']->pix_copy_paste,
-                    'qrCodeBase64' => $result['attempt']->pix_qr_code_base64,
+            'payment' => $attempt === null ? null : [
+                'id' => $attempt->id,
+                'status' => $attempt->status,
+                'method' => $attempt->payment_method,
+                'amount' => $attempt->amount,
+                'currency' => $attempt->currency,
+                'expiresAt' => $attempt->expires_at?->toISOString(),
+                'paidAt' => $attempt->paid_at?->toISOString(),
+                'pix' => $attempt->payment_method === 'pix' ? [
+                    'copyPaste' => $pixInstructions['copyPaste'],
+                    'qrCodeBase64' => $pixInstructions['qrCodeBase64'],
                 ] : null,
             ],
         ], $result['status'])->header('Cache-Control', 'no-store, private');

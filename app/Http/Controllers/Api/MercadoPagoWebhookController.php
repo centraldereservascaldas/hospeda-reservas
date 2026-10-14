@@ -56,7 +56,7 @@ class MercadoPagoWebhookController extends Controller
             });
         } catch (UniqueConstraintViolationException) {
             $existingWebhook = DirectBookingPaymentWebhook::query()->where('event_key', $eventKey)->first();
-            if ($existingWebhook === null || $existingWebhook->status === 'processed') {
+            if ($existingWebhook === null || in_array($existingWebhook->status, ['processed', 'received', 'processing', 'retrying'], true)) {
                 return response()->json(['success' => true, 'duplicate' => true], 200);
             }
 

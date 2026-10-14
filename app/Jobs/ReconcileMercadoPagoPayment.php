@@ -32,6 +32,8 @@ class ReconcileMercadoPagoPayment implements ShouldQueue
             return;
         }
 
+        $webhook->forceFill(['status' => 'processing'])->save();
+
         try {
             $payments->reconcileGatewayPayment($webhook->gateway_payment_id);
             $webhook->forceFill([

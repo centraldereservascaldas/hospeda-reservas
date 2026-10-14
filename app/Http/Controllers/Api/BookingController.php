@@ -149,7 +149,7 @@ class BookingController extends Controller
                 'version' => $listing['directSaleTermsVersion'],
                 'snapshot' => $snapshot,
             ],
-        ]);
+        ])->header('Cache-Control', 'no-store');
     }
 
     public function resumeCheckout(Request $request, string $publicReference): JsonResponse
@@ -165,21 +165,7 @@ class BookingController extends Controller
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->first();
-        $canShowPixInstructions = $attempt !== null
-            && $order->status->value === 'pagamento_pendente'
-            && in_array($attempt->status, ['pending', 'in_process'], true)
-            && $attempt->expires_at?->isFuture() === true
-            && $attempt->payment_method === 'pix';
-        $qrCodeBase64 = $canShowPixInstructions ? $attempt->pix_qr_code_base64 : null;
-        if (! is_string($qrCodeBase64)
-            || strlen($qrCodeBase64) > 100_000
-            || base64_decode($qrCodeBase64, true) === false) {
-            $qrCodeBase64 = null;
-        }
-        $pixCopyPaste = $canShowPixInstructions ? $attempt->pix_copy_paste : null;
-        if (! is_string($pixCopyPaste) || trim($pixCopyPaste) === '' || mb_strlen($pixCopyPaste) > 1_000) {
-            $pixCopyPaste = null;
-        }
+        $pixInstructions = $attempt?->safePixInstructions($order->status->value === 'pagamento_pendente');
 
         return response()->json([
             'success' => true,
@@ -195,8 +181,8 @@ class BookingController extends Controller
                     'expiresAt' => $attempt->expires_at?->toISOString(),
                     'paidAt' => $attempt->paid_at?->toISOString(),
                     'pix' => $attempt->payment_method === 'pix' ? [
-                        'copyPaste' => $pixCopyPaste,
-                        'qrCodeBase64' => $qrCodeBase64,
+                        'copyPaste' => $pixInstructions['copyPaste'],
+                        'qrCodeBase64' => $pixInstructions['qrCodeBase64'],
                     ] : null,
                 ],
             ],

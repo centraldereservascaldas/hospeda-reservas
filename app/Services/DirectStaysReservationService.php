@@ -21,6 +21,10 @@ class DirectStaysReservationService
     /** @return array{ready: bool, code: string, message: string} */
     public function reserve(DirectBookingOrder $order): array
     {
+        if (! config('direct-booking.enabled', false)) {
+            return $this->result(false, 'checkout_disabled', 'A criação e retomada de pré-reservas está desabilitada. Nenhuma alteração foi enviada à Stays.');
+        }
+
         $holdMinutes = filter_var(config('direct-booking.reservation_hold_minutes'), FILTER_VALIDATE_INT);
         if ($holdMinutes === false || $holdMinutes < 1 || $holdMinutes > 1440) {
             return $this->result(false, 'reservation_hold_unconfigured', 'A duração da pré-reserva ainda não foi aprovada e configurada. Nenhuma reserva foi iniciada.');
@@ -32,6 +36,14 @@ class DirectStaysReservationService
 
         if ($order->stays_reservation_id !== null) {
             return $this->adoptReservation($order, $order->stays_reservation_id, $holdMinutes);
+        }
+
+        if (config('direct-booking.payments_enabled', false) && config('direct-booking.confirmation_enabled', false)) {
+            $minimumPixMinutes = (int) config('direct-booking.pix_minimum_remaining_minutes', 30);
+            $safetyMarginMinutes = (int) config('direct-booking.payment_safety_margin_minutes', 5);
+            if ($holdMinutes <= $minimumPixMinutes + $safetyMarginMinutes) {
+                return $this->result(false, 'reservation_hold_too_short_for_pix', 'A retenção configurada não comporta o prazo mínimo de pagamento Pix e a margem de segurança. Nenhum cliente ou pré-reserva foi criado na Stays.');
+            }
         }
 
         $clientResult = $this->resolveClient($order);
@@ -105,18 +117,22 @@ class DirectStaysReservationService
     /** @return array{processed: int, attention: int} */
     public function recover(): array
     {
-        $paymentRecovery = $this->payments->recoverPendingPayments();
-        $processed = $paymentRecovery['processed'];
-        $attention = $paymentRecovery['attention'];
+        $processed = 0;
+        $attention = 0;
         $holdMinutes = filter_var(config('direct-booking.reservation_hold_minutes'), FILTER_VALIDATE_INT);
-        if ($holdMinutes === false || $holdMinutes < 1 || $holdMinutes > 1440 || ! $this->stays->isConfigured()) {
+        if (! $this->stays->isConfigured()) {
             return compact('processed', 'attention');
         }
+        $canRetryReservationCreation = config('direct-booking.enabled', false)
+            && $holdMinutes !== false
+            && $holdMinutes >= 1
+            && $holdMinutes <= 1440;
 
         $staleBefore = now()->subSeconds(max(10, (int) config('direct-booking.reservation_claim_timeout_seconds', 60)));
         DirectBookingStaysAction::query()
             ->with('order')
             ->whereIn('action_type', ['create_client', 'create_reservation', 'cancel_reservation'])
+            ->when(! $canRetryReservationCreation, fn ($query) => $query->where('action_type', 'cancel_reservation'))
             ->where(function ($query) use ($staleBefore): void {
                 $query->whereIn('status', ['pending', 'unknown', 'attention_required'])
                     ->orWhere(fn ($query) => $query->where('status', 'processing')->where('last_attempt_at', '<=', $staleBefore));
@@ -419,6 +435,11 @@ class DirectStaysReservationService
                 ? $this->markAttention($action, $order, 'stays_reservation_mismatch', 'O estado retornado pela Stays não corresponde ao imóvel, às datas e à correlação do pedido.')
                 : $this->attention($order, 'stays_reservation_mismatch', 'A consulta Stays não confirmou a pré-reserva correspondente ao pedido.');
         }
+        if (($reservation['type'] ?? null) !== 'reserved') {
+            return $action
+                ? $this->markAttention($action, $order, 'stays_reservation_not_reserved', 'A reserva correspondente na Stays não está em estado reserved; a adoção automática foi interrompida.')
+                : $this->attention($order, 'stays_reservation_not_reserved', 'A reserva correspondente na Stays não está em estado reserved; a adoção automática foi interrompida.');
+        }
 
         $commercialDetailsVerified = $this->reservationMatcher->matchesCommercialDetails($reservation, $order);
 
@@ -432,9 +453,16 @@ class DirectStaysReservationService
             $lockedOrder->stays_reservation_id = $reservationId;
             $lockedOrder->reservation_status = 'reserved';
             $lockedOrder->expires_at ??= now()->addMinutes($holdMinutes);
+            $canMarkPreReserved = in_array($lockedOrder->status, [
+                DirectBookingOrderStatus::Cotado,
+                DirectBookingOrderStatus::AtencaoOperacional,
+            ], true)
+                && in_array($lockedOrder->payment_status, [null, 'rejected', 'cancelled'], true)
+                && ! $this->paymentRequiresReconciliation($lockedOrder);
+
             if (! $commercialDetailsVerified && $lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'stays_reservation_details_unverified', 'external_id' => $reservationId]);
-            } elseif ($commercialDetailsVerified && in_array($lockedOrder->status, [DirectBookingOrderStatus::Cotado, DirectBookingOrderStatus::AtencaoOperacional], true)) {
+            } elseif ($commercialDetailsVerified && $canMarkPreReserved) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::PreReservado, ['source' => 'stays_reservation', 'external_id' => $reservationId]);
             }
             $events = $lockedOrder->operational_events ?? [];
@@ -450,6 +478,11 @@ class DirectStaysReservationService
 
         if (! $commercialDetailsVerified) {
             return $this->result(false, 'stays_reservation_details_unverified', 'A Stays não confirmou quantidade de hóspedes, valor e moeda da pré-reserva. Nenhuma cobrança será iniciada.');
+        }
+
+        $order->refresh();
+        if ($order->status !== DirectBookingOrderStatus::PreReservado || $order->expires_at?->isFuture() !== true) {
+            return $this->result(false, 'reservation_not_ready_for_payment', 'A pré-reserva foi conferida na Stays, mas o pedido continua em análise ou fora do prazo. Nenhuma nova tentativa de pagamento deve ser iniciada.');
         }
 
         return $this->result(true, 'pre_reserved', 'Pré-reserva criada e registrada. Pagamentos continuam desabilitados.');

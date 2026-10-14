@@ -1,4 +1,4 @@
-import type { Property, Reservation } from '../types';
+import type { Property, Reservation, ReservationCancellationResult } from '../types';
 import type { StaysCalendarDay } from '../utils/staysAvailability';
 import {
   isCalculatedPriceResponse,
@@ -12,6 +12,7 @@ import {
   isStaysOwnerSummary,
   isStaysCalendarDay,
   isDirectBookingOrder,
+  isDirectBookingOperationsOrder,
 } from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
 import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
@@ -377,6 +378,43 @@ export interface OwnerAccessRequest {
   fullName: string;
   email: string;
   requestedAt: string;
+}
+
+export interface DirectBookingOperationsOrder {
+  id: string;
+  publicReference: string;
+  status: DirectBookingOrderSummary['status'];
+  listingId: string;
+  from: string;
+  to: string;
+  guestName: string;
+  guestEmail: string;
+  quoteTotal: string;
+  currency: 'BRL';
+  paymentStatus: string | null;
+  paymentMethod: string | null;
+  gatewayPaymentId: string | null;
+  staysReservationId: string | null;
+  updatedAt: string | null;
+  lastEvent: {
+    event?: string;
+    status?: string;
+    source?: string;
+    code?: string;
+    at?: string;
+  } | null;
+  issue: {
+    source: 'stays' | 'payment' | 'webhook' | string;
+    status: string;
+    code: string | null;
+  } | null;
+}
+
+export interface DirectBookingOperationsPage {
+  orders: DirectBookingOperationsOrder[];
+  currentPage: number;
+  lastPage: number;
+  total: number;
 }
 
 export interface StaysOwnerSummary {
@@ -818,7 +856,9 @@ class CrcnBackendApiService {
     if (!listingId.trim() || listingId.length > 100) return { kind: 'unavailable' };
 
     try {
-      const res = await fetch(`/api/checkout/terms/${encodeURIComponent(listingId)}`);
+      const res = await fetch(`/api/checkout/terms/${encodeURIComponent(listingId)}`, {
+        cache: 'no-store',
+      });
       if (!res.ok) return { kind: 'unavailable' };
       const json: unknown = await res.json();
 
@@ -874,7 +914,7 @@ class CrcnBackendApiService {
     }));
   }
 
-  public async cancelMyReservation(reservationId: string, accessToken: string): Promise<void> {
+  public async cancelMyReservation(reservationId: string, accessToken: string): Promise<ReservationCancellationResult> {
     const res = await fetch(`/api/my-reservations/${encodeURIComponent(reservationId)}/cancel`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -884,7 +924,10 @@ class CrcnBackendApiService {
       !res.ok ||
       !isRecord(json) ||
       json.success !== true ||
-      json.reservationId !== reservationId
+      json.reservationId !== reservationId ||
+      (json.cancellationStatus !== undefined &&
+        json.cancellationStatus !== 'cancelled' &&
+        json.cancellationStatus !== 'requested')
     ) {
       throw new Error(
         isRecord(json) && typeof json.message === 'string'
@@ -892,6 +935,8 @@ class CrcnBackendApiService {
           : 'Não foi possível cancelar esta reserva.',
       );
     }
+
+    return json.cancellationStatus === 'requested' ? 'requested' : 'cancelled';
   }
 
   public async getOwnerAccess(accessToken: string): Promise<OwnerAccessStatus> {
@@ -993,6 +1038,33 @@ class CrcnBackendApiService {
       throw new Error('A API retornou dados inválidos para as solicitações.');
     }
     return json.requests;
+  }
+
+  public async getDirectBookingOperationsOrders(accessToken: string, page = 1): Promise<DirectBookingOperationsPage> {
+    const params = new URLSearchParams({ page: String(page) });
+    const res = await fetch(`/api/owner/admin/direct-booking-orders?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json: unknown = await res.json();
+    if (!res.ok || !isRecord(json) || json.success !== true) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível carregar os pedidos em conferência.',
+      );
+    }
+    if (!Array.isArray(json.orders) || !json.orders.every(isDirectBookingOperationsOrder)
+      || !Number.isInteger(json.currentPage) || (json.currentPage as number) < 1
+      || !Number.isInteger(json.lastPage) || (json.lastPage as number) < 0
+      || !Number.isInteger(json.total) || (json.total as number) < 0) {
+      throw new Error('A API retornou dados inválidos para os pedidos em conferência.');
+    }
+    return {
+      orders: json.orders,
+      currentPage: json.currentPage as number,
+      lastPage: json.lastPage as number,
+      total: json.total as number,
+    };
   }
 
   public async searchStaysOwners(accessToken: string, query: string): Promise<StaysOwnerSummary[]> {

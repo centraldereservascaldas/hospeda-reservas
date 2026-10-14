@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DirectBookingPaymentAttempt extends Model
 {
@@ -55,5 +56,35 @@ class DirectBookingPaymentAttempt extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(DirectBookingOrder::class, 'direct_booking_order_id');
+    }
+
+    public function webhooks(): HasMany
+    {
+        return $this->hasMany(DirectBookingPaymentWebhook::class, 'gateway_payment_id', 'gateway_payment_id');
+    }
+
+    /** @return array{copyPaste: string|null, qrCodeBase64: string|null} */
+    public function safePixInstructions(bool $orderAllowsPayment): array
+    {
+        $canShow = $orderAllowsPayment
+            && config('direct-booking.enabled', false)
+            && config('direct-booking.payments_enabled', false)
+            && config('direct-booking.confirmation_enabled', false)
+            && $this->payment_method === 'pix'
+            && in_array($this->status, ['pending', 'in_process'], true)
+            && $this->expires_at?->isFuture() === true;
+        $qrCodeBase64 = $canShow ? $this->pix_qr_code_base64 : null;
+        if (! is_string($qrCodeBase64)
+            || strlen($qrCodeBase64) > 100_000
+            || base64_decode($qrCodeBase64, true) === false) {
+            $qrCodeBase64 = null;
+        }
+
+        $copyPaste = $canShow ? $this->pix_copy_paste : null;
+        if (! is_string($copyPaste) || trim($copyPaste) === '' || mb_strlen($copyPaste) > 1_000) {
+            $copyPaste = null;
+        }
+
+        return ['copyPaste' => $copyPaste, 'qrCodeBase64' => $qrCodeBase64];
     }
 }

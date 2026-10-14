@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
-import type { Currency, Property, Reservation, SearchFilters } from '../types';
+import type { Currency, Property, Reservation, ReservationCancellationResult, SearchFilters } from '../types';
 import type { AccommodationWidgetSearchParams } from '../hooks/useAccommodationSearch';
 import type { CondominiumSummary } from '../utils/condominiumCatalog';
 import type { MainView } from './MobileBottomNavigation';
@@ -58,7 +58,7 @@ interface MainContentRouterProps {
   onToggleSave: (propertyId: string) => void;
   onSelectProperty: (property: Property) => void;
   onResetFilters: () => void;
-  onCancelReservation: (reservationId: string) => Promise<void>;
+  onCancelReservation: (reservationId: string) => Promise<void | ReservationCancellationResult>;
   onExploreMore: () => void;
 }
 

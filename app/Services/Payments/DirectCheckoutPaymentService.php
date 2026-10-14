@@ -4,8 +4,10 @@ namespace App\Services\Payments;
 
 use App\Enums\DirectBookingOrderStatus;
 use App\Http\Requests\StoreCheckoutPaymentRequest;
+use App\Jobs\ReconcileMercadoPagoPayment;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
+use App\Models\DirectBookingPaymentWebhook;
 use App\Services\DirectStaysReservationService;
 use App\Services\MoneyAmount;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -276,6 +278,35 @@ class DirectCheckoutPaymentService
             }
         }
 
+        $queueConnection = (string) config('services.mercadopago.webhook_queue_connection', 'database');
+        if ($queueConnection !== 'sync' && config("queue.connections.{$queueConnection}")) {
+            $staleWebhooks = DirectBookingPaymentWebhook::query()
+                ->where('status', 'received')
+                ->where('updated_at', '<=', $staleBefore)
+                ->orderBy('updated_at')
+                ->orderBy('id')
+                ->limit(20)
+                ->get();
+
+            foreach ($staleWebhooks as $webhook) {
+                try {
+                    $claimed = DirectBookingPaymentWebhook::query()
+                        ->whereKey($webhook->id)
+                        ->where('status', 'received')
+                        ->where('updated_at', '<=', $staleBefore)
+                        ->update(['updated_at' => now()]);
+                    if ($claimed !== 1) {
+                        continue;
+                    }
+
+                    ReconcileMercadoPagoPayment::dispatch($webhook->id)->onConnection($queueConnection);
+                    $processed++;
+                } catch (Throwable) {
+                    $attention++;
+                }
+            }
+        }
+
         return compact('processed', 'attention');
     }
 
@@ -521,9 +552,29 @@ class DirectCheckoutPaymentService
                     DirectBookingOrderStatus::AtencaoOperacional,
                 ], true)) {
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::PagoEmConfirmacao, ['source' => 'mercadopago_authoritative_lookup', 'payment_id' => (string) $gatewayId]);
-                } elseif (! in_array($lockedOrder->status, [DirectBookingOrderStatus::PagoEmConfirmacao, DirectBookingOrderStatus::Confirmado], true)) {
+                } elseif (! in_array($lockedOrder->status, [
+                    DirectBookingOrderStatus::PagoEmConfirmacao,
+                    DirectBookingOrderStatus::Confirmado,
+                    DirectBookingOrderStatus::CancelamentoSolicitado,
+                    DirectBookingOrderStatus::ReembolsoPendente,
+                    DirectBookingOrderStatus::Reembolsado,
+                    DirectBookingOrderStatus::Contestado,
+                    DirectBookingOrderStatus::Concluido,
+                ], true)) {
+                    $attentionEvent = [
+                        'source' => 'late_or_unreserved_payment',
+                        'code' => 'payment_approved_after_hold',
+                        'payment_id' => (string) $gatewayId,
+                    ];
                     if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
-                        $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'late_or_unreserved_payment', 'payment_id' => (string) $gatewayId]);
+                        $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, $attentionEvent);
+                    } else {
+                        $events = $lockedOrder->operational_events ?? [];
+                        $lastEvent = $events[array_key_last($events)] ?? null;
+                        if (($lastEvent['code'] ?? null) !== $attentionEvent['code'] || ($lastEvent['payment_id'] ?? null) !== $attentionEvent['payment_id']) {
+                            $events[] = [...$attentionEvent, 'status' => DirectBookingOrderStatus::AtencaoOperacional->value, 'at' => now()->toISOString()];
+                            $lockedOrder->operational_events = $events;
+                        }
                     }
                 }
             } elseif (in_array($status, ['rejected', 'cancelled'], true) && $lockedOrder->status === DirectBookingOrderStatus::PagamentoPendente) {
@@ -572,7 +623,19 @@ class DirectCheckoutPaymentService
         DB::transaction(function () use ($order, $code): void {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
-                $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'payment_gateway', 'code' => $code]);
+                if (in_array($lockedOrder->status, [DirectBookingOrderStatus::Concluido, DirectBookingOrderStatus::Reembolsado], true)) {
+                    $events = $lockedOrder->operational_events ?? [];
+                    $events[] = [
+                        'event' => 'payment_gateway_attention',
+                        'source' => 'payment_gateway',
+                        'code' => $code,
+                        'status' => $lockedOrder->status->value,
+                        'at' => now()->toISOString(),
+                    ];
+                    $lockedOrder->operational_events = $events;
+                } else {
+                    $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'payment_gateway', 'code' => $code]);
+                }
             }
             $lockedOrder->payment_status = 'unknown';
             $lockedOrder->save();

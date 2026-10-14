@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\DirectBookingOrder;
+
 class DirectStaysReservationMatcher
 {
     /** @param array<string, mixed> $reservation */
