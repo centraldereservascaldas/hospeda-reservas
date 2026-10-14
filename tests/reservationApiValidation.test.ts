@@ -40,6 +40,38 @@ const setReservationsResponse = (payload: unknown) => {
     });
 };
 
+const directCheckoutRequest = {
+  listingId: 'JQ08G',
+  from: '2026-10-13',
+  to: '2026-10-15',
+  guests: { adults: 1, children: 0, infants: 0, pets: 0 },
+  quoteTotal: 850,
+  guest: { fullName: 'Checkout Guest', email: 'checkout@example.test', phone: '+5511999999999' },
+  acceptedTermsVersion: 'terms-2026-01',
+  acceptedTerms: true as const,
+  idempotencyKey: 'checkout-attempt-00001',
+};
+
+const directCheckoutOrder = {
+  id: '90c0a1c0-27aa-4a23-8a63-d750de9f183e',
+  status: 'pre_reservado',
+  publicReference: '1234567890123456789012345678901234567890',
+  reservationStatus: 'reserved',
+  listingId: 'JQ08G',
+  from: '2026-10-13',
+  to: '2026-10-15',
+  quoteTotal: '850.00',
+  currency: 'BRL',
+  expiresAt: '2026-10-13T12:30:00.000000Z',
+  createdAt: '2026-10-13T12:00:00.000000Z',
+};
+
+const directCheckoutResume = {
+  reference: directCheckoutOrder.publicReference,
+  token: 'a'.repeat(64),
+  path: `/checkout/${directCheckoutOrder.publicReference}`,
+};
+
 test('returns validated reservation records from the authenticated API', async () => {
   const originalFetch = globalThis.fetch;
   setReservationsResponse({ success: true, data: [reservation] });
@@ -302,85 +334,44 @@ test('validates the remaining backend response boundaries', async () => {
     respond({ success: true, staysSynced: false });
     assert.equal(await crcnBackendApi.syncStaysGuest('test-token'), null);
 
-    const quoteUpdate = {
-      listingId: 'JQ08G',
-      staysListingId: 'JQ08G',
-      nights: 2,
-      dailyRate: 350,
-      baseTotal: 700,
-      cleaningFee: 150,
-      serviceFee: 0,
-      discount: 0,
-      total: 850,
-      currency: 'BRL',
-      source: 'stays-live',
-    };
     respond({
       success: true,
-      status: 'checkout_pending',
-      checkoutUrl: 'https://crcn.stays.net/checkout/abc',
-      redirectUrl: 'https://crcn.stays.net/checkout/abc',
-      quote: quoteUpdate,
+      code: 'pre_reserved',
+      message: 'Pré-reserva registrada.',
+      order: directCheckoutOrder,
+      resume: directCheckoutResume,
+      payment: { enabled: false, methods: [] },
+      idempotentReplay: false,
     });
-    const checkout = await crcnBackendApi.createCheckout(
-      {
-        listingId: 'JQ08G',
-        from: '2026-10-13',
-        to: '2026-10-15',
-        guests: { adults: 1, children: 0, infants: 0, pets: 0 },
-        quoteTotal: 850,
-      },
-      'test-token',
-    );
+    const checkout = await crcnBackendApi.createCheckout(directCheckoutRequest);
     assert.equal(checkout?.success, true);
-    assert.deepEqual(checkout?.quote, quoteUpdate);
-    assert.equal(checkout?.quote && 'breakdown' in checkout.quote, false);
+    assert.deepEqual(checkout?.order, directCheckoutOrder);
+    assert.deepEqual(checkout?.resume, directCheckoutResume);
+    assert.deepEqual(checkout?.payment, { enabled: false, methods: [] });
+    assert.equal(checkout?.idempotentReplay, false);
 
     respond(
       {
         success: false,
         code: 'quote_changed',
         message: 'O preço mudou.',
-        quote: quoteUpdate,
+        payment: { enabled: false, methods: [] },
+        idempotentReplay: false,
       },
       409,
     );
-    const changedQuote = await crcnBackendApi.createCheckout(
-      {
-        listingId: 'JQ08G',
-        from: '2026-10-13',
-        to: '2026-10-15',
-        guests: { adults: 1, children: 0, infants: 0, pets: 0 },
-        quoteTotal: 850,
-      },
-      'test-token',
-    );
+    const changedQuote = await crcnBackendApi.createCheckout(directCheckoutRequest);
     assert.equal(changedQuote?.success, false);
-    if (changedQuote?.success === false) {
-      assert.deepEqual(changedQuote.quote, quoteUpdate);
-      assert.equal(changedQuote.quote && 'breakdown' in changedQuote.quote, false);
-    }
 
     respond({
       success: true,
-      status: 'checkout_pending',
-      checkoutUrl: 'https://example.test/checkout',
-      redirectUrl: 'https://example.test/checkout',
-      quote: quoteUpdate,
+      code: 'pre_reserved',
+      order: directCheckoutOrder,
+      resume: { ...directCheckoutResume, token: 'invalid' },
+      payment: { enabled: false, methods: [] },
+      idempotentReplay: false,
     });
-    assert.equal(
-      await crcnBackendApi.createCheckout(
-        {
-          listingId: 'JQ08G',
-          from: '2026-10-13',
-          to: '2026-10-15',
-          guests: { adults: 1, children: 0, infants: 0, pets: 0 },
-          quoteTotal: 850,
-        },
-        'test-token',
-      ),
-      null,
-    );
+    assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
 
     respond({ success: true, reservationId: 'different-reservation' });
     await assert.rejects(crcnBackendApi.cancelMyReservation('reservation-1', 'test-token'));
@@ -403,83 +394,73 @@ test('validates the remaining backend response boundaries', async () => {
   }
 });
 
-test('checkout rejects quotes for another listing or stay length', async () => {
+test('checkout validates the created order and resumes it with a protected token', async () => {
   const originalFetch = globalThis.fetch;
-  const payload = {
-    listingId: 'JQ08G',
-    from: '2026-10-13',
-    to: '2026-10-15',
-    guests: { adults: 1, children: 0, infants: 0, pets: 0 },
-    quoteTotal: 850,
-  };
-  const quote = {
-    listingId: 'property-internal-id',
-    staysListingId: 'OTHER',
-    nights: 2,
-    dailyRate: 350,
-    baseTotal: 700,
-    cleaningFee: 150,
-    serviceFee: 0,
-    discount: 0,
-    total: 850,
-    currency: 'BRL',
-    source: 'stays-live',
-  };
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        success: true,
-        status: 'checkout_pending',
-        checkoutUrl: 'https://crcn.stays.net/checkout/abc',
-        redirectUrl: 'https://crcn.stays.net/checkout/abc',
-        quote,
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } },
-    );
 
   try {
-    assert.equal(await crcnBackendApi.createCheckout(payload, 'test-token'), null);
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          order: { ...directCheckoutOrder, listingId: 'OTHER' },
+          resume: directCheckoutResume,
+          payment: { enabled: false, methods: [] },
+          idempotentReplay: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
 
     globalThis.fetch = async () =>
       new Response(
         JSON.stringify({
           success: true,
-          status: 'checkout_pending',
-          checkoutUrl: 'https://crcn.stays.net/checkout/abc',
-          redirectUrl: 'https://crcn.stays.net/checkout/abc',
-          quote: { ...quote, staysListingId: 'JQ08G', nights: 1 },
+          order: { ...directCheckoutOrder, to: '2026-10-16' },
+          resume: directCheckoutResume,
+          payment: { enabled: false, methods: [] },
+          idempotentReplay: false,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
-    assert.equal(await crcnBackendApi.createCheckout(payload, 'test-token'), null);
+    assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
 
-    globalThis.fetch = async () =>
-      new Response(
+    let resumeHeader = '';
+    globalThis.fetch = async (_input, init) => {
+      resumeHeader = new Headers(init?.headers).get('X-Checkout-Resume-Token') ?? '';
+      return new Response(
         JSON.stringify({
           success: true,
-          status: 'checkout_pending',
-          checkoutUrl: 'https://crcn.stays.net/checkout/abc',
-          redirectUrl: 'https://crcn.stays.net/checkout/abc',
-          quote: { ...quote, staysListingId: 'JQ08G', nights: 2 },
+          order: directCheckoutOrder,
+          payment: { enabled: false, methods: [] },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
-    const validMappedQuote = await crcnBackendApi.createCheckout(payload, 'test-token');
-    assert.equal(validMappedQuote?.success, true);
+    };
+    const resumed = await crcnBackendApi.resumeCheckout(
+      directCheckoutResume.reference,
+      directCheckoutResume.token,
+    );
+    assert.deepEqual(resumed, {
+      kind: 'ready',
+      data: { success: true, order: directCheckoutOrder, payment: { enabled: false, methods: [] } },
+    });
+    assert.equal(resumeHeader, directCheckoutResume.token);
 
     globalThis.fetch = async () =>
       new Response(
         JSON.stringify({
-          success: false,
-          code: 'quote_changed',
-          quote: { ...quote, staysListingId: 'OTHER' },
+          order: { ...directCheckoutOrder, quoteTotal: '851.00' },
+          payment: { enabled: false, methods: [] },
         }),
-        {
-          status: 409,
-          headers: { 'Content-Type': 'application/json' },
-        },
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
-    assert.equal(await crcnBackendApi.createCheckout(payload, 'test-token'), null);
+    assert.deepEqual(
+      await crcnBackendApi.resumeCheckout(
+        directCheckoutResume.reference,
+        directCheckoutResume.token,
+      ),
+      { kind: 'unavailable' },
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

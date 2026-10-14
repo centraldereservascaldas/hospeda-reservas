@@ -38,6 +38,6 @@ class CheckoutPaymentController extends Controller
                     'qrCodeBase64' => $result['attempt']->pix_qr_code_base64,
                 ] : null,
             ],
-        ], $result['status']);
+        ], $result['status'])->header('Cache-Control', 'no-store, private');
     }
 }

@@ -150,6 +150,9 @@ export function parseSearchFilters(search: string): SearchFilters {
 }
 
 export function getAccommodationIdFromPath(pathname: string): string | null {
+  const reservationId = pathname.match(/^\/reservar\/([a-zA-Z0-9_-]+)(?:\/|$)/)?.[1];
+  if (reservationId) return reservationId;
+
   return pathname.match(/\/(?:apartamento|apartment)\/([a-zA-Z0-9_-]+)(?:\/|$)/)?.[1] ?? null;
 }
 

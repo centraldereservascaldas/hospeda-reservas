@@ -107,7 +107,7 @@ class DirectCheckoutService
             return ['order' => null, 'code' => 'quote_unavailable', 'message' => 'Não foi possível revalidar o preço na Stays. Nenhum pedido, reserva ou cobrança foi iniciado.', 'status' => 503, 'replayed' => false];
         }
 
-        if ((int) round(((float) $input['quoteTotal']) * 100) !== (int) round($quote['total'] * 100)) {
+        if (MoneyAmount::toCents($input['quoteTotal']) !== MoneyAmount::toCents($quote['total'])) {
             return ['order' => null, 'code' => 'quote_changed', 'message' => 'O preço ou a moeda mudou. Atualize a cotação e confirme novamente.', 'status' => 409, 'replayed' => false];
         }
 

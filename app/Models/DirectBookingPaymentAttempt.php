@@ -15,6 +15,7 @@ class DirectBookingPaymentAttempt extends Model
         'idempotency_key',
         'request_fingerprint',
         'gateway_payment_id',
+        'gateway_idempotency_key',
         'payment_method',
         'payment_method_id',
         'installments',
@@ -30,9 +31,12 @@ class DirectBookingPaymentAttempt extends Model
         'pix_copy_paste',
         'pix_qr_code_base64',
         'error_code',
+        'gateway_submission_started_at',
+        'gateway_submission_count',
+        'gateway_retry_payload',
     ];
 
-    protected $hidden = ['idempotency_key', 'request_fingerprint'];
+    protected $hidden = ['idempotency_key', 'request_fingerprint', 'gateway_idempotency_key', 'gateway_retry_payload'];
 
     protected function casts(): array
     {
@@ -42,6 +46,9 @@ class DirectBookingPaymentAttempt extends Model
             'expires_at' => 'immutable_datetime',
             'paid_at' => 'immutable_datetime',
             'gateway_updated_at' => 'immutable_datetime',
+            'gateway_submission_started_at' => 'immutable_datetime',
+            'gateway_submission_count' => 'integer',
+            'gateway_retry_payload' => 'encrypted:array',
         ];
     }
 

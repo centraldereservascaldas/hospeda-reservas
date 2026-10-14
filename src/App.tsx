@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useRef } from 'react';
+import { lazy, Suspense, useState, useRef } from 'react';
 import { Property, SearchFilters, Currency } from './types';
 import { Header } from './components/Header';
 import { AuthCallbackNotice } from './components/account/AuthCallbackNotice';
@@ -32,9 +32,15 @@ import { useAccountActions } from './hooks/useAccountActions';
 import { useSavedPropertyIds } from './hooks/useSavedPropertyIds';
 import { useAppOverlayActions } from './hooks/useAppOverlayActions';
 
+const CheckoutResumePage = lazy(() =>
+  import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
+    default: CheckoutResumePage,
+  })),
+);
+
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
-export default function App() {
+function MarketplaceApp() {
   const { properties, setProperties, catalogLoading, catalogLoadError } = useAccommodationCatalog();
 
   const { savedPropertyIds, toggleSavedProperty } = useSavedPropertyIds();
@@ -277,4 +283,26 @@ export default function App() {
       />
     </div>
   );
+}
+
+export default function App() {
+  const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})$/.exec(
+    window.location.pathname,
+  )?.[1];
+
+  if (checkoutResumeReference) {
+    return (
+      <Suspense
+        fallback={
+          <main className="min-h-screen bg-[#f7f4ee] px-4 py-8 text-neutral-700" role="status">
+            Abrindo seu pedido…
+          </main>
+        }
+      >
+        <CheckoutResumePage reference={checkoutResumeReference} />
+      </Suspense>
+    );
+  }
+
+  return <MarketplaceApp />;
 }

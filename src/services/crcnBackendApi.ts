@@ -10,12 +10,12 @@ import {
   isOwnerAccessRequest,
   isOwnerAccessStatus,
   isStaysOwnerSummary,
-  isCheckoutQuoteUpdate,
-  isSafeStaysCheckoutUrl,
   isStaysCalendarDay,
+  isDirectBookingOrder,
 } from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
 import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
+import { saveCheckoutResumeToken } from '../utils/checkoutResumeStorage';
 
 export interface SearchAccommodationsParams {
   from?: string;
@@ -63,40 +63,125 @@ export interface CheckoutRequestPayload {
   to: string;
   guests: { adults: number; children: number; infants: number; pets: number };
   quoteTotal: number;
+  guest: { fullName: string; email: string; phone: string };
+  acceptedTermsVersion: string;
+  acceptedTerms: true;
+  idempotencyKey: string;
 }
 
-export interface CheckoutQuoteUpdate {
+export interface DirectBookingOrderSummary {
+  id: string;
+  status:
+    | 'iniciado'
+    | 'cotado'
+    | 'pre_reservado'
+    | 'pagamento_pendente'
+    | 'pago_em_confirmacao'
+    | 'confirmado'
+    | 'atencao_operacional'
+    | 'expirado'
+    | 'pagamento_recusado'
+    | 'liberacao_pendente'
+    | 'cancelamento_solicitado'
+    | 'reembolso_pendente'
+    | 'reembolsado'
+    | 'contestado'
+    | 'concluido';
+  publicReference: string;
+  reservationStatus: string;
   listingId: string;
-  staysListingId?: string;
-  nights: number;
-  dailyRate: number;
-  baseTotal: number;
-  cleaningFee: number;
-  serviceFee: number;
-  discount: number;
-  total: number;
+  from: string;
+  to: string;
+  quoteTotal: string;
   currency: string;
-  source: 'stays-live';
-  breakdown?: CalculatedPriceResponse['breakdown'];
-  cleaningIncluded?: boolean;
-  feesIncluded?: boolean;
+  expiresAt: string | null;
+  createdAt: string | null;
 }
 
-export type CheckoutResponse =
+export interface CheckoutResumeCredentials {
+  reference: string;
+  token: string;
+  path: string;
+}
+
+export interface CheckoutPaymentAttemptSummary {
+  status:
+    | 'processing'
+    | 'pending'
+    | 'in_process'
+    | 'approved'
+    | 'rejected'
+    | 'cancelled'
+    | 'unknown'
+    | 'attention_required';
+  method: 'pix' | 'card';
+  amount: string;
+  currency: 'BRL';
+  expiresAt: string | null;
+  paidAt: string | null;
+  pix: { copyPaste: string | null; qrCodeBase64: string | null } | null;
+}
+
+export type CheckoutPaymentRequestPayload =
   | {
-      success: true;
-      status: 'checkout_pending';
-      checkoutUrl: string;
-      redirectUrl: string;
-      quote: CheckoutQuoteUpdate;
+      paymentMethod: 'pix';
+      paymentMethodId: 'pix';
+      idempotencyKey: string;
     }
   | {
-      success: false;
-      code?: string;
-      message?: string;
-      status?: string;
-      quote?: CheckoutQuoteUpdate;
+      paymentMethod: 'card';
+      paymentMethodId: string;
+      token: string;
+      installments: number;
+      issuerId?: number;
+      payerIdentification?: { type: 'CPF' | 'CNPJ'; number: string };
+      idempotencyKey: string;
     };
+
+export type CheckoutPaymentResult =
+  | {
+      kind: 'response';
+      success: boolean;
+      code: string;
+      message: string;
+      replayed: boolean;
+      payment: CheckoutPaymentAttemptSummary | null;
+    }
+  | { kind: 'invalid'; fieldErrors?: Record<string, string[]> }
+  | { kind: 'not-found' }
+  | { kind: 'unavailable' };
+
+export interface CheckoutResponse {
+  success: boolean;
+  code?: string;
+  message?: string;
+  fieldErrors?: Record<string, string[]>;
+  order?: DirectBookingOrderSummary;
+  resume?: CheckoutResumeCredentials;
+  payment: { enabled: false; methods: [] };
+  idempotentReplay: boolean;
+}
+
+export interface CheckoutResumeResponse {
+  success: true;
+  order: DirectBookingOrderSummary;
+  payment: {
+    enabled: false;
+    methods: [];
+    attempt?: CheckoutPaymentAttemptSummary | null;
+  };
+}
+
+export interface CheckoutTermsResponse {
+  success: true;
+  terms: { version: string; snapshot: Record<string, unknown> };
+}
+
+export type CheckoutTermsResult =
+  { kind: 'ready'; data: CheckoutTermsResponse } | { kind: 'unavailable' };
+
+export type CheckoutResumeResult =
+  { kind: 'ready'; data: CheckoutResumeResponse } | { kind: 'not-found' } | { kind: 'unavailable' };
 
 export interface StaysStatusResponse {
   connected: boolean;
@@ -126,15 +211,164 @@ const isSuggestedFilters = (
   (value.to === undefined || isIsoDate(value.to)) &&
   (value.from === undefined || value.to === undefined || value.to > value.from);
 
-const getStayNights = (from: string, to: string): number => {
-  if (!isIsoDate(from) || !isIsoDate(to) || to <= from) return -1;
-  return (Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86400000;
+const isCheckoutResumeCredentials = (value: unknown): value is CheckoutResumeCredentials =>
+  isRecord(value) &&
+  typeof value.reference === 'string' &&
+  /^[A-Za-z0-9]{40}$/.test(value.reference) &&
+  typeof value.token === 'string' &&
+  /^[A-Za-z0-9]{64}$/.test(value.token) &&
+  value.path === `/checkout/${value.reference}`;
+
+const isCheckoutPaymentDisabled = (value: unknown): value is { enabled: false; methods: [] } =>
+  isRecord(value) &&
+  value.enabled === false &&
+  Array.isArray(value.methods) &&
+  value.methods.length === 0;
+
+const checkoutPaymentAttemptStatuses: CheckoutPaymentAttemptSummary['status'][] = [
+  'processing',
+  'pending',
+  'in_process',
+  'approved',
+  'rejected',
+  'cancelled',
+  'unknown',
+  'attention_required',
+];
+
+const isCheckoutPaymentAttempt = (value: unknown): value is CheckoutPaymentAttemptSummary => {
+  if (
+    !isRecord(value) ||
+    !checkoutPaymentAttemptStatuses.includes(
+      value.status as CheckoutPaymentAttemptSummary['status'],
+    ) ||
+    (value.method !== 'pix' && value.method !== 'card') ||
+    typeof value.amount !== 'string' ||
+    !/^\d+(?:\.\d{2})$/.test(value.amount) ||
+    Number(value.amount) <= 0 ||
+    value.currency !== 'BRL' ||
+    (value.expiresAt !== null &&
+      (typeof value.expiresAt !== 'string' || !Number.isFinite(Date.parse(value.expiresAt)))) ||
+    (value.paidAt !== null &&
+      (typeof value.paidAt !== 'string' || !Number.isFinite(Date.parse(value.paidAt))))
+  ) {
+    return false;
+  }
+
+  if (value.method === 'card') return value.pix === null;
+  if (!isRecord(value.pix)) return false;
+
+  return (
+    (value.pix.copyPaste === null ||
+      (typeof value.pix.copyPaste === 'string' &&
+        value.pix.copyPaste.trim() !== '' &&
+        value.pix.copyPaste.length <= 1_000)) &&
+    (value.pix.qrCodeBase64 === null ||
+      (typeof value.pix.qrCodeBase64 === 'string' &&
+        value.pix.qrCodeBase64.length <= 100_000 &&
+        /^[A-Za-z0-9+/]+={0,2}$/.test(value.pix.qrCodeBase64)))
+  );
 };
 
-const matchesRequestedListing = (quote: CheckoutQuoteUpdate, listingId: string): boolean =>
-  quote.staysListingId !== undefined
-    ? quote.staysListingId === listingId
-    : quote.listingId === listingId;
+const isCheckoutPaymentResponse = (
+  value: unknown,
+): value is {
+  success: boolean;
+  code: string;
+  message: string;
+  replayed: boolean;
+  payment: CheckoutPaymentAttemptSummary | null;
+} =>
+  isRecord(value) &&
+  typeof value.success === 'boolean' &&
+  typeof value.code === 'string' &&
+  typeof value.message === 'string' &&
+  typeof value.replayed === 'boolean' &&
+  (value.payment === null || isCheckoutPaymentAttempt(value.payment));
+
+const isCheckoutResumePayment = (value: unknown): value is CheckoutResumeResponse['payment'] =>
+  isRecord(value) &&
+  value.enabled === false &&
+  Array.isArray(value.methods) &&
+  value.methods.length === 0 &&
+  (value.attempt === undefined ||
+    value.attempt === null ||
+    isCheckoutPaymentAttempt(value.attempt));
+
+const isCheckoutResumeResponse = (value: unknown): value is CheckoutResumeResponse =>
+  isRecord(value) &&
+  value.success === true &&
+  isDirectBookingOrder(value.order) &&
+  isCheckoutResumePayment(value.payment);
+
+const isCheckoutTermsResponse = (value: unknown): value is CheckoutTermsResponse => {
+  if (
+    !isRecord(value) ||
+    value.success !== true ||
+    !isRecord(value.terms) ||
+    typeof value.terms.version !== 'string' ||
+    value.terms.version.trim() === '' ||
+    value.terms.version.length > 100 ||
+    !isRecord(value.terms.snapshot) ||
+    value.terms.snapshot.version !== value.terms.version
+  ) {
+    return false;
+  }
+
+  const fields = Object.entries(value.terms.snapshot).filter(([key]) => key !== 'version');
+  if (fields.length === 0 || fields.length > 12) return false;
+
+  let snapshotLength = 0;
+  for (const [name, condition] of fields) {
+    if (
+      name.trim() === '' ||
+      name.length > 100 ||
+      typeof condition !== 'string' ||
+      condition.trim() === '' ||
+      condition.length > 3_000
+    ) {
+      return false;
+    }
+
+    snapshotLength += name.length + condition.length;
+    if (snapshotLength > 12_000) return false;
+  }
+
+  return true;
+};
+
+const checkoutFields = new Set([
+  'listingId',
+  'from',
+  'to',
+  'guests.adults',
+  'guests.children',
+  'guests.infants',
+  'guests.pets',
+  'quoteTotal',
+  'guest.fullName',
+  'guest.email',
+  'guest.phone',
+  'acceptedTermsVersion',
+  'acceptedTerms',
+  'idempotencyKey',
+]);
+
+const parseCheckoutFieldErrors = (value: unknown): Record<string, string[]> | undefined => {
+  if (!isRecord(value)) return undefined;
+
+  const fieldErrors: Record<string, string[]> = {};
+  for (const [field, messages] of Object.entries(value)) {
+    if (!checkoutFields.has(field) || !Array.isArray(messages)) continue;
+    const safeMessages = messages
+      .filter((message): message is string => typeof message === 'string')
+      .map((message) => message.slice(0, 200))
+      .slice(0, 3);
+    if (safeMessages.length > 0) fieldErrors[field] = safeMessages;
+  }
+
+  return Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined;
+};
 
 export type OwnerAccessStatus = 'none' | 'pending' | 'approved' | 'suspended';
 
@@ -434,62 +668,188 @@ class CrcnBackendApiService {
     }
   }
 
-  public async createCheckout(
-    payload: CheckoutRequestPayload,
-    accessToken: string,
-  ): Promise<CheckoutResponse | null> {
+  public async createCheckout(payload: CheckoutRequestPayload): Promise<CheckoutResponse | null> {
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
+          'Idempotency-Key': payload.idempotencyKey,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          listingId: payload.listingId,
+          from: payload.from,
+          to: payload.to,
+          guests: payload.guests,
+          quoteTotal: payload.quoteTotal,
+          guest: payload.guest,
+          acceptedTermsVersion: payload.acceptedTermsVersion,
+          acceptedTerms: payload.acceptedTerms,
+        }),
       });
-      if (res.status >= 500) return null;
       const json: unknown = await res.json();
-      if (!isRecord(json) || typeof json.success !== 'boolean') return null;
-      if (!json.success) {
-        if (res.ok) return null;
-        const quote =
-          json.code === 'quote_changed' && isCheckoutQuoteUpdate(json.quote)
-            ? json.quote
-            : undefined;
-        if (
-          json.code === 'quote_changed' &&
-          (!quote ||
-            !matchesRequestedListing(quote, payload.listingId) ||
-            quote.nights !== getStayNights(payload.from, payload.to))
-        )
-          return null;
+      if (res.status === 422 && isRecord(json)) {
+        const fieldErrors = parseCheckoutFieldErrors(json.errors);
+
         return {
-          success: false as const,
-          ...(typeof json.code === 'string' ? { code: json.code } : {}),
-          ...(typeof json.message === 'string' ? { message: json.message } : {}),
-          ...(quote ? { quote } : {}),
+          success: false,
+          code: 'invalid_checkout_request',
+          message: 'Confira os dados informados antes de continuar.',
+          ...(fieldErrors ? { fieldErrors } : {}),
+          payment: { enabled: false, methods: [] },
+          idempotentReplay: false,
         };
       }
-      const quote = isCheckoutQuoteUpdate(json.quote) ? json.quote : undefined;
       if (
-        json.status !== 'checkout_pending' ||
-        !isSafeStaysCheckoutUrl(json.checkoutUrl) ||
-        !isSafeStaysCheckoutUrl(json.redirectUrl) ||
-        !quote ||
-        !matchesRequestedListing(quote, payload.listingId) ||
-        quote.nights !== getStayNights(payload.from, payload.to)
+        !isRecord(json) ||
+        typeof json.success !== 'boolean' ||
+        (json.code !== undefined && typeof json.code !== 'string') ||
+        (json.message !== undefined && typeof json.message !== 'string') ||
+        !isCheckoutPaymentDisabled(json.payment) ||
+        typeof json.idempotentReplay !== 'boolean'
       )
         return null;
+
+      const order = json.order;
+      const resume = json.resume;
+      if (order !== undefined && !isDirectBookingOrder(order)) return null;
+      if (resume !== undefined && !isCheckoutResumeCredentials(resume)) return null;
+      if ((order === undefined) !== (resume === undefined)) return null;
+      if (
+        order &&
+        (order.listingId !== payload.listingId ||
+          order.from !== payload.from ||
+          order.to !== payload.to ||
+          Math.round(Number(order.quoteTotal) * 100) !== Math.round(payload.quoteTotal * 100) ||
+          resume?.reference !== order.publicReference)
+      )
+        return null;
+      if (json.success && (!res.ok || !order || !resume || order.status !== 'pre_reservado'))
+        return null;
+      if (res.ok && !json.success) return null;
+      if (resume) saveCheckoutResumeToken(resume.reference, resume.token);
+
       return {
-        success: true,
-        status: 'checkout_pending',
-        checkoutUrl: json.checkoutUrl,
-        redirectUrl: json.redirectUrl,
-        quote,
+        success: json.success,
+        ...(typeof json.code === 'string' ? { code: json.code } : {}),
+        ...(typeof json.message === 'string' ? { message: json.message } : {}),
+        ...(order ? { order } : {}),
+        ...(resume ? { resume } : {}),
+        payment: json.payment,
+        idempotentReplay: json.idempotentReplay,
       };
     } catch (err) {
       console.warn('Error creating checkout on backend:', err);
       return null;
+    }
+  }
+
+  public async createCheckoutPayment(
+    reference: string,
+    resumeToken: string,
+    expectedAmount: string,
+    payload: CheckoutPaymentRequestPayload,
+  ): Promise<CheckoutPaymentResult> {
+    if (
+      !/^[A-Za-z0-9]{40}$/.test(reference) ||
+      !/^[A-Za-z0-9]{64}$/.test(resumeToken) ||
+      !/^[A-Za-z0-9._~-]{16,128}$/.test(payload.idempotencyKey) ||
+      !/^\d{1,8}\.\d{2}$/.test(expectedAmount) ||
+      Number(expectedAmount) <= 0
+    ) {
+      return { kind: 'unavailable' };
+    }
+
+    const { idempotencyKey, ...paymentData } = payload;
+
+    try {
+      const res = await fetch(`/api/checkout/${encodeURIComponent(reference)}/payments`, {
+        method: 'POST',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+          'X-Checkout-Resume-Token': resumeToken,
+        },
+        body: JSON.stringify(paymentData),
+      });
+
+      if (res.status === 404) return { kind: 'not-found' };
+      if (res.status === 422) {
+        const json: unknown = await res.json();
+        const fieldErrors = isRecord(json) ? parseCheckoutFieldErrors(json.errors) : undefined;
+
+        return { kind: 'invalid', ...(fieldErrors ? { fieldErrors } : {}) };
+      }
+
+      const json: unknown = await res.json();
+      if (
+        !isCheckoutPaymentResponse(json) ||
+        (res.ok && !json.success) ||
+        (!res.ok && json.success) ||
+        (json.success && !json.payment)
+      ) {
+        return { kind: 'unavailable' };
+      }
+
+      if (
+        json.payment &&
+        (json.payment.method !== payload.paymentMethod ||
+          Math.round(Number(json.payment.amount) * 100) !==
+            Math.round(Number(expectedAmount) * 100))
+      ) {
+        return { kind: 'unavailable' };
+      }
+
+      return {
+        kind: 'response',
+        success: json.success,
+        code: json.code,
+        message: json.message,
+        replayed: json.replayed,
+        payment: json.payment,
+      };
+    } catch {
+      return { kind: 'unavailable' };
+    }
+  }
+
+  public async getCheckoutTerms(listingId: string): Promise<CheckoutTermsResult> {
+    if (!listingId.trim() || listingId.length > 100) return { kind: 'unavailable' };
+
+    try {
+      const res = await fetch(`/api/checkout/terms/${encodeURIComponent(listingId)}`);
+      if (!res.ok) return { kind: 'unavailable' };
+      const json: unknown = await res.json();
+
+      return isCheckoutTermsResponse(json)
+        ? { kind: 'ready', data: json }
+        : { kind: 'unavailable' };
+    } catch (err) {
+      console.warn('Error loading approved checkout terms:', err);
+      return { kind: 'unavailable' };
+    }
+  }
+
+  public async resumeCheckout(reference: string, token: string): Promise<CheckoutResumeResult> {
+    if (!/^[A-Za-z0-9]{40}$/.test(reference) || !/^[A-Za-z0-9]{64}$/.test(token)) {
+      return { kind: 'not-found' };
+    }
+
+    try {
+      const res = await fetch(`/api/checkout/${encodeURIComponent(reference)}`, {
+        cache: 'no-store',
+        headers: { 'X-Checkout-Resume-Token': token },
+      });
+      if (res.status === 404) return { kind: 'not-found' };
+      if (!res.ok) return { kind: 'unavailable' };
+      const json: unknown = await res.json();
+      return isCheckoutResumeResponse(json)
+        ? { kind: 'ready', data: json }
+        : { kind: 'unavailable' };
+    } catch (err) {
+      console.warn('Error resuming direct checkout:', err);
+      return { kind: 'unavailable' };
     }
   }
 

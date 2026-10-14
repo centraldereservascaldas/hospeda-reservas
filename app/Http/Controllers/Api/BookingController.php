@@ -7,6 +7,7 @@ use App\Http\Requests\StoreCheckoutRequest;
 use App\Http\Resources\DirectBookingOrderResource;
 use App\Models\DirectBookingOrder;
 use App\Services\DirectCheckoutService;
+use App\Services\DirectSaleTermsRegistry;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -125,7 +126,30 @@ class BookingController extends Controller
         }
         $body['idempotentReplay'] = $result['replayed'];
 
-        return response()->json($body, $result['status']);
+        return response()->json($body, $result['status'])
+            ->header('Cache-Control', 'no-store, private');
+    }
+
+    public function checkoutTerms(string $listingId, DirectSaleTermsRegistry $terms): JsonResponse
+    {
+        $listing = $terms->findApprovedListing($listingId);
+        if ($listing === null) {
+            return response()->json([
+                'success' => false,
+                'code' => 'checkout_conditions_unavailable',
+                'message' => 'As condições aprovadas para este imóvel ainda não estão disponíveis.',
+            ], 503);
+        }
+
+        $snapshot = $listing['directSaleTermsSnapshot'];
+
+        return response()->json([
+            'success' => true,
+            'terms' => [
+                'version' => $listing['directSaleTermsVersion'],
+                'snapshot' => $snapshot,
+            ],
+        ]);
     }
 
     public function resumeCheckout(Request $request, string $publicReference): JsonResponse
@@ -133,13 +157,49 @@ class BookingController extends Controller
         $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
         $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
         if ($order === null || $providedToken === '' || ! hash_equals((string) $order->resume_token, $providedToken)) {
-            return response()->json(['success' => false, 'code' => 'checkout_not_found', 'message' => 'Pedido não encontrado.'], 404);
+            return response()->json(['success' => false, 'code' => 'checkout_not_found', 'message' => 'Pedido não encontrado.'], 404)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        $attempt = $order->paymentAttempts()
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->first();
+        $canShowPixInstructions = $attempt !== null
+            && $order->status->value === 'pagamento_pendente'
+            && in_array($attempt->status, ['pending', 'in_process'], true)
+            && $attempt->expires_at?->isFuture() === true
+            && $attempt->payment_method === 'pix';
+        $qrCodeBase64 = $canShowPixInstructions ? $attempt->pix_qr_code_base64 : null;
+        if (! is_string($qrCodeBase64)
+            || strlen($qrCodeBase64) > 100_000
+            || base64_decode($qrCodeBase64, true) === false) {
+            $qrCodeBase64 = null;
+        }
+        $pixCopyPaste = $canShowPixInstructions ? $attempt->pix_copy_paste : null;
+        if (! is_string($pixCopyPaste) || trim($pixCopyPaste) === '' || mb_strlen($pixCopyPaste) > 1_000) {
+            $pixCopyPaste = null;
         }
 
         return response()->json([
             'success' => true,
             'order' => (new DirectBookingOrderResource($order))->resolve($request),
-            'payment' => ['enabled' => false, 'methods' => []],
-        ]);
+            'payment' => [
+                'enabled' => false,
+                'methods' => [],
+                'attempt' => $attempt === null ? null : [
+                    'status' => $attempt->status,
+                    'method' => $attempt->payment_method,
+                    'amount' => $attempt->amount,
+                    'currency' => $attempt->currency,
+                    'expiresAt' => $attempt->expires_at?->toISOString(),
+                    'paidAt' => $attempt->paid_at?->toISOString(),
+                    'pix' => $attempt->payment_method === 'pix' ? [
+                        'copyPaste' => $pixCopyPaste,
+                        'qrCodeBase64' => $qrCodeBase64,
+                    ] : null,
+                ],
+            ],
+        ])->header('Cache-Control', 'no-store, private');
     }
 }

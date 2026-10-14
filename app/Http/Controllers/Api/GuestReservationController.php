@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
+use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
 use App\Services\GuestStaysSyncService;
 use App\Services\StaysExternalApiClient;
@@ -75,7 +76,33 @@ class GuestReservationController extends Controller
         if (! $reservation) {
             return response()->json(['success' => false, 'code' => 'reservation_not_found', 'message' => 'Esta reserva não foi encontrada na sua conta.'], 404);
         }
-        $status = strtolower((string) ($reservation['type'] ?? ''));
+        $details = $this->stays->get('/booking/reservations/'.rawurlencode($reservationId));
+        if (! is_array($details)) {
+            return response()->json(['success' => false, 'code' => 'reservation_state_unavailable', 'message' => 'Não foi possível confirmar o estado atual da reserva. Nenhuma alteração foi feita.'], 502);
+        }
+
+        $detailIds = collect([
+            $details['id'] ?? null,
+            $details['_id'] ?? null,
+            $details['partnerCode'] ?? null,
+        ])->filter(fn (mixed $id): bool => is_string($id) || is_int($id))->map(fn (mixed $id): string => (string) $id)->unique()->values();
+        if (! $detailIds->contains($reservationId)) {
+            return response()->json(['success' => false, 'code' => 'reservation_state_mismatch', 'message' => 'Não foi possível validar a reserva. Nenhuma alteração foi feita.'], 502);
+        }
+
+        $reservationIds = $detailIds->push($reservationId)->unique()->values();
+        $isDirectCheckoutReservation = str_starts_with((string) ($details['internalNote'] ?? ''), 'CRCN_DIRECT_ORDER:')
+            || DirectBookingOrder::query()->whereIn('stays_reservation_id', $reservationIds)->exists();
+        if ($isDirectCheckoutReservation) {
+            return response()->json(['success' => false, 'code' => 'direct_booking_cancellation_requires_support', 'message' => 'O cancelamento desta compra precisa ser acompanhado pela Central para conferir a reserva e o pagamento. Entre em contato com o atendimento.'], 409);
+        }
+
+        $detailClientId = (string) ($details['_idclient'] ?? '');
+        if ($detailClientId !== '' && ! hash_equals($clientId, $detailClientId)) {
+            return response()->json(['success' => false, 'code' => 'reservation_not_found', 'message' => 'Esta reserva não foi encontrada na sua conta.'], 404);
+        }
+
+        $status = strtolower((string) ($details['type'] ?? ''));
         if (in_array($status, ['canceled', 'cancelled'], true)) {
             return response()->json(['success' => false, 'code' => 'already_cancelled', 'message' => 'Esta reserva já está cancelada.'], 409);
         }

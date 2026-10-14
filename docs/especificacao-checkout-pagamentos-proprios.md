@@ -14,14 +14,15 @@ O primeiro lançamento usa Mercado Pago. Cielo é uma possível segunda integra�
 
 | Área | Estado verificado | Próxima entrega |
 | --- | --- | --- |
-| Cotação e disponibilidade | Consultas à Stays existem. `DirectCheckoutService` revalida disponibilidade e preço. | Conferir composição do total, taxas e capacidade para as unidades piloto. |
-| Pedido local | Modelo, enum, migração e `POST /api/checkout` existem em alterações locais ainda não integradas. Há chave de idempotência e snapshot de termos. | Persistir eventos/entidades de tentativas e completar transições. |
-| Pré-reserva | Implementação local do fluxo `pedido → reserved`, com registro de ação, ID externo, estado e prazo interno configurável. A escrita fica bloqueada se o prazo não estiver aprovado/configurado. | Validar semântica e liberação na conta CRCN; então aprovar prazo por imóvel/tarifa e configurar ambiente. |
-| Pagamento | Cliente de Payments API e verificador de assinatura existem, mas não estão ligados a um fluxo de cobrança. | Integrar Pix/cartão, notificações, consulta autoritativa e reconciliação. |
-| Interface | `CheckoutModal` exibe resumo e campos desabilitados. O serviço frontend ainda espera URL do checkout hospedado. | Substituir o contrato da interface por pedido, tentativas de pagamento e estados próprios. |
-| Pós-venda | Tela de viagens/voucher requer correção de estados e conteúdo. | Confirmação, coleta de dados, documento e suporte. |
+| Cotação e disponibilidade | `DirectCheckoutService` revalida disponibilidade e preço antes do pedido. | Conferir composição do total, taxas e capacidade para as unidades piloto. |
+| Pedido local | Modelo, enum, migração e `POST /api/checkout` estão implementados localmente, com chave de idempotência e snapshot versionado de condições. | Revisar transições, histórico e idempotência no fluxo completo. |
+| Pré-reserva | O fluxo local cria `reserved`, registra ação/ID externo e exige prazo interno configurado. | Validar semântica e liberação na conta CRCN; aprovar prazo por imóvel/tarifa antes de configurar ambiente. |
+| Pagamento | Criação de tentativa Mercado Pago, tokenização recebida pelo backend, webhook assinado e reconciliação autoritativa estão ligados ao pedido. | Validar com credenciais de teste e cobrir estados Pix/cartão; cobranças seguem bloqueadas. |
+| Confirmação Stays | Pagamento aprovado pode iniciar confirmação `booked` e registro financeiro idempotente na Stays, com estados de atenção em falhas. | Validar contratos e recuperação em ambiente de teste, sem chamadas mutáveis de produção. |
+| Interface | `CheckoutModal` consulta condições aprovadas, mas deixa formulário e compra desabilitados. `/reservar/{listingId}` abre o anúncio com filtros; `/checkout/{referenciaPublica}` retoma pedido com token no header. | Aprovar snapshots comerciais e completar a interface Pix/cartão e a transição da seleção para a criação do pedido. |
+| Pós-venda | Viagens `completed` agora aparecem em histórico com comprovante; pedidos de visitantes ainda não entram em “Minhas viagens”. | Associar o pedido ao acesso do hóspede, concluir coleta de dados, documento, e-mail e suporte. |
 
-Este documento descreve o **estado desejado**; não presume que os itens acima já funcionem. Preservar alterações locais, `server.ts` e contratos `/api/*` durante a migração. O contrato antigo de URL hospedada deve ser substituído de forma coordenada entre frontend e Laravel.
+O código descrito está em alterações locais não integradas e não foi validado ponta a ponta. As flags de checkout, pagamentos e confirmação permanecem desligadas; o catálogo não contém snapshots aprovados e não há prazo de retenção Stays configurado. Preservar alterações locais, `server.ts` e contratos `/api/*` durante a migração. Não usar credenciais reais nem iniciar cobrança ou escrita mutável na Stays de produção.
 
 ## 3. Fontes de verdade e identificadores
 
@@ -32,7 +33,7 @@ Este documento descreve o **estado desejado**; não presume que os itens acima j
 | Condições exibidas e aceitas, estado da jornada | Pedido CRCN | Snapshot versionado, aceite, prazos e histórico. |
 | Dados exigidos para check-in | Ficha operacional aprovada por imóvel | Estado de preenchimento e envio, com acesso restrito. |
 
-O `order_id` UUID é a referência interna e o `external_reference` enviado ao gateway. Guardar também `stays_reservation_id`, `gateway_payment_id`, IDs de tentativas, reembolsos e notificações. Nenhuma busca por e-mail/nome deve ser usada para conciliar pagamentos. Toda operação mutável usa chave de idempotência própria e estável; repetir uma tentativa com payload diferente é erro.
+O `order_id` UUID é a referência interna e o `external_reference` enviado ao gateway. Guardar também `stays_reservation_id`, `gateway_payment_id`, IDs de tentativas, reembolsos e notificações. Nenhuma busca por e-mail/nome deve ser usada para conciliar pagamentos. Toda operação mutável usa chave de idempotência própria e estável; repetir uma tentativa com payload diferente é erro. O fluxo local persiste a chave Mercado Pago antes da chamada e, para Pix, guarda o payload de retry cifrado até receber um ID. Cartão nunca persiste o token: submissões sem resposta/ID ficam em atenção para evitar novo POST ambíguo. Reenvio Pix usa a mesma chave e payload, limitado a três submissões no total e somente com as flags de cobrança e confirmação ligadas; desligá-las bloqueia esse retry.
 
 ## 4. Jornada do hóspede e conteúdo de cada tela
 
@@ -67,7 +68,7 @@ Usar dois momentos distintos. **Antes de existir pedido**, a URL pode preservar 
 
 Ao editar datas/hóspedes depois do pedido, não reutilizar a mesma cobrança ou a mesma oferta congelada: criar uma nova revisão/pedido conforme o estado atual e invalidar ou resolver a pré-reserva anterior antes de prosseguir. Links de campanha levam à seleção; links transacionais de e-mail levam a uma retomada protegida. Rotas de checkout e retorno devem evitar indexação, limpar parâmetros desnecessários do histórico quando apropriado e configurar política de `Referrer-Policy` compatível com os recursos externos. Nunca registrar URL completa contendo credenciais ou dados pessoais.
 
-Esses caminhos são **proposta**, não rotas hoje implementadas. O serviço frontend atual ainda espera `checkoutUrl` da integração hospedada antiga; a migração precisa substituir esse contrato juntamente com as rotas e telas.
+O caminho pré-pedido `/reservar/{listingId}` abre o anúncio e pré-preenche filtros de datas e hóspedes; a cotação e a criação do pedido continuam sendo validadas no servidor. A retomada `/checkout/{referenciaPublica}` já existe localmente: ela exige `X-Checkout-Resume-Token`, sem expor PII na resposta. O token é guardado na sessão do navegador que criou o pedido; um fluxo de recuperação por e-mail ou sessão autenticada ainda precisa ser desenhado antes de oferecer retomada entre dispositivos. A resposta inclui o estado resumido da última tentativa; QR e copia e cola Pix só aparecem enquanto a tentativa estiver pendente/em análise e dentro da validade, sem iniciar uma nova cobrança.
 
 ## 5. Sequência transacional
 
@@ -137,7 +138,7 @@ Fonte consultada: `references/stays-openapi.json` da skill CRCN `/Users/murilloa
 | `GET /booking/reservations` | Filtros `from`, `to`, `dateType`, opcional `listingId`, `type`, paginação; retorno de reservas. | Não documenta busca por `internalNote`, consistência ou que resultado vazio prove ausência de uma escrita que sofreu timeout. |
 | `GET/POST /booking/clients` | Busca por `email`; criação aceita cadastro de cliente; POST sucesso `201 ClientDetailed`. | Não garante unicidade/consistência da busca. O código exige correspondência de e-mail exato única e não ativa conta/login. |
 
-O fluxo gera marcador interno `CRCN_DIRECT_ORDER:<uuid>` em `internalNote` e tenta reconciliar timeouts por listagem do anúncio/datas/estado e igualdade exata do marcador. Isso só é seguro se a conta devolver e preservar `internalNote` e se a listagem refletir a escrita no tempo esperado; validar ambos antes de habilitar. Se a confirmação após timeout não for conclusiva, o código não repete POST e registra atenção operacional. O cancelamento usa PATCH documentado; ainda exige comprovar que a unidade ficou novamente disponível por consulta/teste controlado.
+Embora a OpenAPI marque preço/moeda e detalhes de hóspedes como opcionais, uma reserva `reserved` só pode avançar para cobrança após a consulta confirmar total de hóspedes, moeda e valor do pedido; o PATCH para `booked` ocorre depois do pagamento aprovado. Se esses campos não vierem ou divergirem nessa etapa, a cobrança/alteração é interrompida e o pedido fica em atenção operacional. Uma reserva já `booked` pode ser reconciliada mesmo sem campos comerciais opcionais, desde que a identidade bata; todo detalhe comercial que a Stays retornar precisa corresponder ao pedido. A conferência de identidade exige ID, imóvel, hóspede, datas e marcador interno. O fluxo gera marcador interno `CRCN_DIRECT_ORDER:<uuid>` em `internalNote` e tenta reconciliar timeouts por listagem do anúncio/datas/estado e igualdade exata do marcador. Isso só é seguro se a conta devolver e preservar `internalNote` e se a listagem refletir a escrita no tempo esperado; validar ambos antes de habilitar. Se a confirmação após timeout não for conclusiva, o código não repete POST e registra atenção operacional. O cancelamento usa PATCH documentado; ainda exige comprovar que a unidade ficou novamente disponível por consulta/teste controlado.
 
 **Validação controlada necessária na Stays (sem produção durante esta etapa):** confirmar em ambiente de teste e para cada tipo de imóvel piloto: semântica de `reserved`/bloqueio, campos aceitos e exigidos, validade/conversão, persistência de `internalNote`, leitura após timeout, efeito e tempo de `PATCH canceled`, disponibilidade após cancelamento, relação com dados do hóspede e regras da conta. Não executar criação ou cancelamento real até obter autorização específica e ambiente/IDs aprovados.
 
@@ -162,15 +163,15 @@ Conferir documentação oficial para [Payment Brick](https://www.mercadopago.com
 
 Preservar `direct_booking_orders` como agregado principal. Adicionar tabelas/registro relacional de **tentativas de pagamento**, **eventos externos recebidos**, **ações Stays** e **reembolsos** conforme necessidade de auditoria, com unicidade para IDs externos e chaves de idempotência. O JSON `operational_events` atual pode apoiar histórico legível, mas não substitui chaves únicas e registros transacionais. Valores monetários em centavos ou decimal exato; nunca `float` como base de igualdade de cobrança. Restringir PII por função e política de retenção.
 
-Contrato HTTP implementado nesta etapa para pedido/retomada; as demais rotas abaixo seguem conceituais:
+Contrato HTTP que existe no código local; a habilitação e validação ponta a ponta continuam pendentes:
 
 | Rota | Uso | Resposta relevante |
 | --- | --- | --- |
-| `POST /api/checkout` | Cria pedido idempotente, revalida oferta e tenta `reserved` somente com prazo configurado. | `201` somente com `pre_reservado` verificado; `503` mantém pedido consultável em caso de dependência ou ambiguidade; resposta inclui `{reference, token, path}` para retomada. Métodos de pagamento ficam desabilitados. |
-| `POST /api/checkout/{id}/payments` | Cria tentativa Pix ou cartão tokenizado. | Estado, ID da tentativa, QR/validade se Pix; nunca PAN/CVV. |
-| `GET /api/checkout/{publicReference}` | Consulta estado após recarregar/retornar; caminho correspondente no site: `/checkout/{publicReference}`. | Exige `X-Checkout-Resume-Token`; referência sozinha/query string não autoriza acesso. Retorna resumo persistido pelo servidor e `payment.enabled=false`; token não aparece na URL. |
-| `POST /api/webhooks/mercadopago` | Recebe notificação assinada. | Aceite rápido; processamento assíncrono e deduplicado. |
-| `POST /api/reservations/{id}/cancellation-requests` | Abre solicitação acompanhada. | Protocolo e estado, sem prometer reembolso antes da decisão. |
+| `POST /api/checkout` | Cria pedido idempotente, revalida oferta e tenta `reserved` somente com prazo configurado. | `201` somente com `pre_reservado` verificado; `503` mantém pedido consultável em caso de dependência ou ambiguidade; resposta inclui `{reference, token, path}` para retomada e usa `Cache-Control: no-store, private`. Métodos de pagamento ficam desabilitados. |
+| `POST /api/checkout/{publicReference}/payments` | Cria tentativa Pix ou cartão tokenizado, protegida pelo token de retomada. | Estado e instruções Pix; nunca PAN/CVV; resposta não é armazenada em cache. A rota responde indisponível enquanto pagamentos estiverem desligados. |
+| `GET /api/checkout/{publicReference}` | Consulta estado após recarregar/retornar; caminho correspondente no site: `/checkout/{publicReference}`. | Exige `X-Checkout-Resume-Token`, responde `Cache-Control: no-store, private` e não usa cache no cliente; referência sozinha/query string não autoriza acesso. Retorna resumo do pedido e da tentativa, incluindo Pix apenas enquanto válido; `payment.enabled=false` continua indicando que não se pode iniciar nova cobrança. |
+| `POST /api/webhooks/mercadopago` | Recebe notificação assinada. | Aceite rápido; processamento assíncrono, deduplicado e reconciliado por consulta ao gateway. |
+| `POST /api/reservations/{id}/cancellation-requests` | Solicita cancelamento acompanhado. | Esta rota ainda não está implementada; não há protocolo automatizado de reembolso. |
 
 Não usar `GET` público com UUID como única proteção para nome, telefone, e-mail, QR e dados de viagem. Mensagens de erro são estruturadas (`code`, `message`, `order` quando seguro) e não incluem payloads brutos de Stays/gateway. Documentar HTTP `409` para preço/termos/disponibilidade alterados, `422` para entrada inválida e `503` para dependência indisponível. Qualquer resposta bem-sucedida precisa representar uma ação real persistida.
 

@@ -8,7 +8,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 #[Signature('direct-booking:recover-reservations')]
-#[Description('Reconcilia pré-reservas e tenta liberar retenções expiradas na Stays.')]
+#[Description('Reconcilia pré-reservas, pagamentos aprovados e retenções expiradas na Stays.')]
 class RecoverDirectBookingReservations extends Command
 {
     public function handle(DirectStaysReservationService $reservations): int

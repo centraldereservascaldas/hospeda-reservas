@@ -202,7 +202,7 @@ class BookingApiTest extends TestCase
 
     public function test_checkout_returns_503_and_replays_the_same_order_without_additional_stays_calls(): void
     {
-        $termsSnapshot = ['version' => 'terms-2026-01', 'conditions' => ['cancellation' => 'policy-for-this-listing']];
+        $termsSnapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.'];
         $this->configureApprovedCheckoutTerms($termsSnapshot);
         $requestOrder = [];
         $this->fakeDirectCheckoutRequests(3001, $requestOrder);
@@ -249,7 +249,7 @@ class BookingApiTest extends TestCase
         ], fn (mixed $value): bool => $value !== null);
     }
 
-    private function configureApprovedCheckoutTerms(array $snapshot = ['version' => 'terms-2026-01', 'conditions' => ['cancellation' => 'policy-for-this-listing']]): void
+    private function configureApprovedCheckoutTerms(array $snapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.']): void
     {
         config(['direct-booking.enabled' => true, 'cache.default' => 'array']);
         app('cache')->forgetDriver('array');

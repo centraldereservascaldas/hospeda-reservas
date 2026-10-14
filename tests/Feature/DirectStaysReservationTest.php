@@ -146,7 +146,7 @@ class DirectStaysReservationTest extends TestCase
 
     private function approvedTerms(): void
     {
-        $snapshot = ['version' => 'terms-test-1', 'conditions' => ['cancel' => 'per-property']];
+        $snapshot = ['version' => 'terms-test-1', 'cancelamento' => 'Condições específicas da acomodação.'];
         $this->mock(DirectSaleTermsRegistry::class)->shouldReceive('findApprovedListing')->once()->andReturn([
             'id' => 'JQ08G', 'staysListingId' => 'JQ08G', 'maxGuests' => 5,
             'directSaleTermsVersion' => 'terms-test-1', 'directSaleTermsSnapshot' => $snapshot,
@@ -193,6 +193,6 @@ class DirectStaysReservationTest extends TestCase
      */
     private function reservationFrom(array $requestData, string $id): array
     {
-        return ['_id' => $id, '_idlisting' => $requestData['listingId'] ?? 'JQ08G', '_idclient' => $requestData['_idclient'] ?? 'client-1', 'type' => $requestData['type'] ?? 'reserved', 'checkInDate' => $requestData['checkInDate'] ?? '2026-11-10', 'checkOutDate' => $requestData['checkOutDate'] ?? '2026-11-13', 'internalNote' => $requestData['internalNote'] ?? ''];
+        return ['_id' => $id, '_idlisting' => $requestData['listingId'] ?? 'JQ08G', '_idclient' => $requestData['_idclient'] ?? 'client-1', 'type' => $requestData['type'] ?? 'reserved', 'checkInDate' => $requestData['checkInDate'] ?? '2026-11-10', 'checkOutDate' => $requestData['checkOutDate'] ?? '2026-11-13', 'guests' => $requestData['guests'] ?? 2, 'guestsDetails' => $requestData['guestsDetails'] ?? ['adults' => 2, 'children' => 0, 'infants' => 0], 'price' => $requestData['price'] ?? ['currency' => 'BRL', '_f_expected' => 3001], 'internalNote' => $requestData['internalNote'] ?? ''];
     }
 }

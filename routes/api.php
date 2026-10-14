@@ -37,6 +37,7 @@ Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->gro
     Route::post('/approve', [OwnerAdminController::class, 'approve']);
 });
 Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->middleware('throttle:5,1');
+Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:20,1');
 Route::post('/checkout/{publicReference}/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
 Route::post('/webhooks/mercadopago', MercadoPagoWebhookController::class)->middleware('throttle:120,1');

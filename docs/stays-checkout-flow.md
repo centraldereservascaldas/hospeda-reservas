@@ -1,8 +1,8 @@
 # Stays quote and checkout flow
 
-> Estado em 13/10/2026: a sequência de checkout hospedado descrita abaixo foi desativada. O site mantém o resumo da estadia e informa que a compra não está disponível. A base do checkout próprio registra pedidos idempotentes após revalidar a Stays e guardar um snapshot server-side das condições específicas aprovadas para o imóvel. O endpoint público `POST /api/checkout` ainda responde `503` até que essas condições estejam cadastradas e os fluxos de pré-reserva e pagamento sejam integrados; não inicia reserva nem cobrança. O plano de checkout próprio está em [MVP de vendas diretas](mvp-vendas-diretas.md).
+> Estado em 13/10/2026: o checkout hospedado da Stays foi removido da jornada. O modal mostra o resumo, consulta as condições aprovadas e mantém os campos e a compra desabilitados. O catálogo ainda não contém snapshots de condições aprovados, então `GET /api/checkout/terms/{listingId}` responde `503` e `POST /api/checkout` não avança no estado atual. As flags `DIRECT_BOOKING_ENABLED`, `DIRECT_BOOKING_PAYMENTS_ENABLED` e `DIRECT_BOOKING_CONFIRMATION_ENABLED` estão desligadas; prazo de retenção, tipo e provedor financeiro Stays também não estão configurados. Nenhuma cobrança real ou publicação foi feita. O plano de checkout próprio está em [MVP de vendas diretas](mvp-vendas-diretas.md).
 
-Na API de reservas existentes, `reserved` é exposto como `pending`; não representa confirmação, não recebe método de pagamento presumido, não oferece voucher e não pode ser cancelado diretamente pelo fluxo atual.
+Na API de reservas existentes, `reserved` é exposto como `pending`; não representa confirmação, não recebe método de pagamento presumido e não libera voucher. A nova rotina de checkout pode cancelar uma pré-reserva própria após expiração, mas isso depende de uma retenção Stays aprovada e configurada.
 
 ## Authoritative pricing
 
@@ -15,11 +15,13 @@ With Stays credentials configured, a failed/invalid live quote (including a quot
 1. The detail view requires a live quote before allowing the guest to continue.
 2. The checkout view carries the quote's nightly and fee-inclusion fields so its breakdown agrees with the detail view.
 3. O contrato antigo de `/api/checkout` exigia autenticação e redirecionava para o checkout hospedado da Stays. Ele foi removido.
-4. O novo `POST /api/checkout` valida dados de hóspede, datas, hóspedes, aceite/versionamento das condições e a chave `Idempotency-Key`. Ele exige termos aprovados por imóvel, revalida disponibilidade e cotação na Stays, e retorna `409 quote_changed` quando o total difere.
-5. Quando o preço coincide, o servidor grava o pedido e os snapshots de cotação/condições; por enquanto retorna `503 own_checkout_unavailable` com o identificador do pedido, pois criação de `reserved`, pagamento, webhooks e confirmação ainda não estão habilitados.
-6. Repetir a mesma tentativa retorna o mesmo pedido sem novas consultas externas; reutilizar a chave com outro corpo retorna `409 idempotency_key_reused`. Nenhuma etapa declara pagamento ou reserva confirmados.
+4. `GET /api/checkout/terms/{listingId}` entrega somente snapshot com versão aprovada no catálogo; na ausência dele, responde `503 checkout_conditions_unavailable`.
+5. `POST /api/checkout` valida hóspede, datas, hóspedes, aceite/versionamento e `Idempotency-Key`; exige condições aprovadas, disponibilidade e preço revalidados na Stays. Divergência de total responde `409 quote_changed`.
+6. Com as flags atuais, `POST /api/checkout` responde `503 checkout_disabled` antes de consultar a Stays ou gravar um pedido. Se for habilitado depois da aprovação comercial, tenta criar uma pré-reserva `reserved` somente com prazo interno configurado, persiste a ação de forma idempotente e verifica o resultado na Stays. Só responde `201 pre_reserved` após confirmar essa pré-reserva; falhas e resultados ambíguos ficam em atenção operacional.
+7. A retomada `GET /api/checkout/{publicReference}` exige `X-Checkout-Resume-Token`, envia `Cache-Control: no-store, private` e não inclui PII. Ela retorna somente o resumo da tentativa mais recente; instruções Pix (QR e copia e cola) só são incluídas para tentativa pendente/em análise antes do vencimento. A consulta não inicia nova cobrança. O webhook do Mercado Pago valida assinatura, grava a notificação e agenda reconciliação que consulta o estado autoritativo no gateway. A rotina periódica também consulta tentativas com ID externo persistido para reparar notificações perdidas; ela roda mesmo sem novas cobranças habilitadas, mas exige token de acesso do gateway. A confirmação `booked` e o lançamento financeiro na Stays são protegidos por flags e configurações ainda desligadas.
+8. Reutilizar a mesma chave de checkout com o mesmo conteúdo retoma o pedido; reutilizá-la com dados diferentes responde `409 idempotency_key_reused`. `reserved`, pagamento pendente ou pagamento aprovado sem confirmação da Stays nunca é apresentado como reserva confirmada.
 
-Error responses include `invalid_checkout_request`, `invalid_guest`, `stays_not_configured`, `quote_unavailable`, `quote_changed`, and `stays_checkout_failed`.
+Error responses incluem `checkout_disabled`, `checkout_conditions_unavailable`, `invalid_checkout_request`, `invalid_guest_count`, `quote_unavailable`, `availability_unavailable`, `dates_unavailable`, `quote_changed`, `reservation_hold_unconfigured` e estados de atenção operacional. A resposta segura de retomada não expõe dados pessoais.
 
 ## Configuration and integration limits
 

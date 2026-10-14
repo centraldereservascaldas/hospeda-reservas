@@ -14,7 +14,9 @@ Este plano organiza entregas e responsabilidades; não autoriza cobrança real, 
 
 ## Estado do sistema e ajustes obrigatórios
 
-O catálogo, a cotação e a consulta à Stays já existem. `POST /api/checkout` está indisponível enquanto o checkout próprio não for implementado. Não há um pedido local completo nem conciliação de gateway. A tela de viagens atualmente equipara estados `reserved`, `booked` e `contract` a “confirmado” e apresenta Pix como forma fixa; isso deve mudar antes de liberar voucher. O cancelamento atual altera a reserva na Stays sem conduzir reembolso. Conferir o total cobrado contra taxas retornadas pela cotação real antes de abrir vendas.
+O catálogo, a cotação e a consulta à Stays já existem. Há implementação local ainda não integrada para pedido idempotente, pré-reserva `reserved`, retomada protegida, pagamento Mercado Pago, webhook/reconciliação e confirmação/lançamento financeiro na Stays. A interface de checkout continua desabilitada: as três flags estão desligadas e o catálogo não tem snapshots de condições comerciais aprovadas. A rota de retomada existe; `/reservar/{listingId}` abre o anúncio com filtros de datas e hóspedes e não inicia pedido. Essa implementação não foi validada ponta a ponta e não está autorizada para cobrar.
+
+Na API das viagens, `reserved` é exposto como pendente; `booked` e `contract` como confirmados. Reservas encerradas agora aparecem em “Viagens concluídas”, com comprovante histórico; o voucher continua restrito às confirmadas. A conta de viagens ainda não incorpora pedidos de compra como visitante. Cancelamentos de reservas do checkout direto são encaminhados ao atendimento para evitar divergência entre Stays e gateway; cancelamento e reembolso coordenados continuam pendentes. Antes de vender, conferir o total cobrado contra taxas da cotação real.
 
 Há alterações locais anteriores em andamento. Cada executor deve conferir `git status` antes de criar um worktree, preservar essas alterações e trabalhar a partir de uma base explicitamente escolhida pelo coordenador. Arquivos não commitados do checkout, documentação, rodapé e viagens não são pressupostos como já integrados a outras árvores.
 

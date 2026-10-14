@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Services\MoneyAmount;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
 
 class StoreCheckoutRequest extends FormRequest
 {
@@ -36,5 +38,18 @@ class StoreCheckoutRequest extends FormRequest
             'acceptedTerms' => ['required', 'accepted'],
             'idempotencyKey' => ['required', 'string', 'min:16', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
         ];
+    }
+
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            if ($validator->errors()->has('quoteTotal')) {
+                return;
+            }
+
+            if (MoneyAmount::toCents($this->input('quoteTotal')) === null) {
+                $validator->errors()->add('quoteTotal', 'Informe o total com no máximo duas casas decimais.');
+            }
+        }];
     }
 }

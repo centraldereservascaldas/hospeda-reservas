@@ -48,63 +48,57 @@ export const isStaysOwnerSummary = (
   (value.propertyCount === undefined ||
     (isNonNegativeNumber(value.propertyCount) && Number.isInteger(value.propertyCount)));
 
-export const isCheckoutQuoteUpdate = (
+const checkoutOrderStatuses = [
+  'iniciado',
+  'cotado',
+  'pre_reservado',
+  'liberacao_pendente',
+  'pagamento_pendente',
+  'pago_em_confirmacao',
+  'confirmado',
+  'concluido',
+  'expirado',
+  'pagamento_recusado',
+  'atencao_operacional',
+  'cancelamento_solicitado',
+  'reembolso_pendente',
+  'reembolsado',
+  'contestado',
+] as const;
+
+export const isDirectBookingOrder = (
   value: unknown,
 ): value is {
+  id: string;
+  status: (typeof checkoutOrderStatuses)[number];
+  publicReference: string;
+  reservationStatus: string;
   listingId: string;
-  staysListingId?: string;
-  nights: number;
-  dailyRate: number;
-  baseTotal: number;
-  cleaningFee: number;
-  serviceFee: number;
-  discount: number;
-  total: number;
+  from: string;
+  to: string;
+  quoteTotal: string;
   currency: string;
-  source: 'stays-live';
-  breakdown?: {
-    dailyRateText: string;
-    cleaningFeeText: string;
-    serviceFeeText: string;
-    totalText: string;
-  };
+  expiresAt: string | null;
+  createdAt: string | null;
 } =>
   isRecord(value) &&
+  typeof value.id === 'string' &&
+  value.id.trim() !== '' &&
+  checkoutOrderStatuses.includes(value.status as (typeof checkoutOrderStatuses)[number]) &&
+  typeof value.publicReference === 'string' &&
+  /^[A-Za-z0-9]{40}$/.test(value.publicReference) &&
+  typeof value.reservationStatus === 'string' &&
   typeof value.listingId === 'string' &&
   value.listingId.trim() !== '' &&
-  (value.staysListingId === undefined || typeof value.staysListingId === 'string') &&
-  isPositiveNumber(value.nights) &&
-  Number.isInteger(value.nights) &&
-  isNonNegativeNumber(value.dailyRate) &&
-  isNonNegativeNumber(value.baseTotal) &&
-  isNonNegativeNumber(value.cleaningFee) &&
-  isNonNegativeNumber(value.serviceFee) &&
-  isNonNegativeNumber(value.discount) &&
-  isNonNegativeNumber(value.total) &&
-  typeof value.currency === 'string' &&
-  value.currency.trim() !== '' &&
-  value.source === 'stays-live' &&
-  (value.breakdown === undefined ||
-    (isRecord(value.breakdown) &&
-      typeof value.breakdown.dailyRateText === 'string' &&
-      typeof value.breakdown.cleaningFeeText === 'string' &&
-      typeof value.breakdown.serviceFeeText === 'string' &&
-      typeof value.breakdown.totalText === 'string'));
-
-export const isSafeStaysCheckoutUrl = (value: unknown): value is string => {
-  if (typeof value !== 'string') return false;
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'https:' &&
-      !url.username &&
-      !url.password &&
-      /(^|\.)stays\.(net|com\.br)$/i.test(url.hostname)
-    );
-  } catch {
-    return false;
-  }
-};
+  isIsoDate(value.from) &&
+  isIsoDate(value.to) &&
+  value.to > value.from &&
+  typeof value.quoteTotal === 'string' &&
+  /^\d+(?:\.\d{2})$/.test(value.quoteTotal) &&
+  Number(value.quoteTotal) > 0 &&
+  value.currency === 'BRL' &&
+  (value.expiresAt === null || typeof value.expiresAt === 'string') &&
+  (value.createdAt === null || typeof value.createdAt === 'string');
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -345,7 +339,10 @@ export const isReservation = (value: unknown): value is Reservation =>
     value.paymentMethod === 'credit_card' ||
     value.paymentMethod === 'apple_pay' ||
     value.paymentMethod === '') &&
-  (value.status === 'confirmed' || value.status === 'cancelled' || value.status === 'completed' || value.status === 'pending') &&
+  (value.status === 'confirmed' ||
+    value.status === 'cancelled' ||
+    value.status === 'completed' ||
+    value.status === 'pending') &&
   typeof value.createdAt === 'string' &&
   typeof value.hostName === 'string' &&
   typeof value.guestName === 'string' &&
