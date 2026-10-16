@@ -130,7 +130,8 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   return (
     <div className="sticky top-16 sm:top-20 z-30 liquid-glass border-b border-white/50 backdrop-blur-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2">
-        <div ref={toolbarRowRef} className="flex items-center justify-center gap-2 sm:gap-4">
+        <div ref={toolbarRowRef} className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center">
+          <div className="col-start-2 flex items-center gap-2 sm:gap-4">
           
           {/* Exibe apenas cartões inteiros; as setas alternam páginas sem cortar rótulos. */}
           <div className="flex min-w-0 flex-none items-center gap-2">
@@ -217,12 +218,12 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
                 title="Exibir total com taxas"
                 aria-checked={showTotalWithTaxes}
                 onClick={() => setShowTotalWithTaxes(!showTotalWithTaxes)}
-                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border border-neutral-300 transition-colors duration-200 ease-in-out focus:outline-none ${
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-neutral-300 p-0 transition-colors duration-200 ease-in-out focus:outline-none ${
                   showTotalWithTaxes ? 'bg-neutral-900' : 'bg-neutral-200'
                 }`}
               >
                 <span
-                  className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                  className={`pointer-events-none absolute left-0.5 top-1/2 block h-4 w-4 -translate-y-1/2 transform rounded-full bg-white shadow-sm ring-0 transition-transform duration-200 ease-in-out ${
                     showTotalWithTaxes ? 'translate-x-4' : 'translate-x-0'
                   }`}
                 />
@@ -249,6 +250,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             </button>
 
           </div>}
+          </div>
 
         </div>
       </div>
