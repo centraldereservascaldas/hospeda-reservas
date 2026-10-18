@@ -43,7 +43,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
     {
       id: 'welcome',
       sender: 'sofia',
-      text: 'Olá! Sou a Sofia, Concierge da Central de Reservas Caldas Novas. ✨\n\nPosso te ajudar a encontrar o apartamento ideal, tirar dúvidas sobre regras dos condomínios (como descer com bebidas e coolers), ingressos para os parques aquáticos e capacidade para sua família.\n\nComo posso ajudar você hoje?',
+      text: 'Olá! Sou a Sofia, assistente virtual da Central de Reservas Caldas Novas. ✨\n\nPosso ajudar você a encontrar uma hospedagem e responder dúvidas sobre condomínios, capacidade e ingressos. Como posso ajudar?',
       timestamp: 'Agora',
     },
   ]);
@@ -140,11 +140,11 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
               <div className="flex items-center gap-1.5">
                 <h3 id="sofia-assistant-title" className="font-extrabold text-base leading-tight">Sofia</h3>
                 <span className="px-2 py-0.5 rounded-full bg-white/25 text-[10px] font-bold backdrop-blur-xl border border-white/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.35)]">
-                  Concierge IA CRCN
+                  Assistente virtual
                 </span>
               </div>
               <p className="text-xs text-orange-100 font-medium">
-                Conectada ao catálogo de acomodações
+                Posso ajudar com hospedagens e condomínios.
               </p>
             </div>
           </div>
@@ -272,7 +272,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
           {isLoading && (
             <div className="flex items-center gap-2 text-xs text-neutral-500 pl-11">
               <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
-              <span>Sofia está consultando o catálogo e as regras dos condomínios...</span>
+              <span>Sofia está buscando informações...</span>
             </div>
           )}
 

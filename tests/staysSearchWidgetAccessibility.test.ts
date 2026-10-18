@@ -88,7 +88,7 @@ test('exposes the Sofia assistant shortcut in the mobile search heading', async 
       }),
     );
 
-    const shortcut = getByRole('button', { name: 'Falar com Sofia, concierge virtual' });
+    const shortcut = getByRole('button', { name: 'Falar com Sofia, assistente virtual' });
     assert.match(shortcut.className, /sm:hidden/);
     fireEvent.click(shortcut);
     assert.equal(opened, 1);

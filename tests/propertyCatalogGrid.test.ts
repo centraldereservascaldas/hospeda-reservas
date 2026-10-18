@@ -81,7 +81,7 @@ test('warns when saved accommodations are stale while keeping cards available', 
     }),
   );
 
-  assert.match(screen.getByRole('alert').textContent || '', /dados salvos/);
+  assert.match(screen.getByRole('alert').textContent || '', /informações salvas/);
   assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' }));
 });
 

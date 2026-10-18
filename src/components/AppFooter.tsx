@@ -15,8 +15,7 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
           <div className="space-y-3">
             <LogoCRCN size="md" variant="glass" />
             <p className="text-[11px] text-neutral-500 leading-relaxed">
-              Central de Reservas Caldas Novas oficial. Especialistas em hospedagens termais, flats
-              no diRoma, resorts com ingressos e passeios no Lago de Corumbá.
+              Encontre hospedagens em Caldas Novas e região, com opções próximas a parques e atrações.
             </p>
             <div className="pt-1 text-[11px] text-neutral-700 font-semibold space-y-1">
               <p>📍 Caldas Novas - Goiás, Brasil</p>
@@ -27,7 +26,7 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
           </div>
 
           <div>
-            <h4 className="font-bold text-neutral-900 mb-3">Principais Destinos &amp; Parques</h4>
+            <h4 className="font-bold text-neutral-900 mb-3">Destinos e parques</h4>
             <ul className="space-y-2">
               <li>diRoma Acqua Park</li>
               <li>Hot Park &amp; Praia do Cerrado</li>
@@ -38,7 +37,7 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
           </div>
 
           <div>
-            <h4 className="font-bold text-neutral-900 mb-3">Proprietários &amp; Hospedagem</h4>
+            <h4 className="font-bold text-neutral-900 mb-3">Para proprietários</h4>
             <ul className="space-y-2">
               <li>
                 <button
@@ -46,7 +45,7 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
                   onClick={onCreateListing}
                   className="hover:underline text-left cursor-pointer"
                 >
-                  Cadastre seu Imóvel na Central
+                  Anuncie seu imóvel
                 </button>
               </li>
               <li>Gestão de Flats em Caldas Novas</li>
@@ -56,15 +55,14 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
           </div>
 
           <div>
-            <h4 className="font-bold text-neutral-900 mb-3">Atendimento CRCN</h4>
+            <h4 className="font-bold text-neutral-900 mb-3">Atendimento</h4>
             <div className="p-3.5 bg-white/80 backdrop-blur-md rounded-2xl border border-white/80 shadow-2xs space-y-2">
               <div className="flex items-center gap-2 text-orange-600 font-bold">
                 <ShieldCheck className="w-4 h-4" />
-                <span>Acompanhamento da reserva</span>
+                <span>Suporte para sua reserva</span>
               </div>
               <p className="text-[11px] text-neutral-500 leading-relaxed">
-                Nossa equipe acompanha a confirmação da reserva e orienta sobre o check-in do
-                condomínio contratado.
+                Ajudamos você a acompanhar a confirmação e as orientações de chegada.
               </p>
             </div>
           </div>

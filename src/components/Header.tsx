@@ -301,7 +301,7 @@ export const Header: React.FC<HeaderProps> = ({
                         }`}
                       >
                         <Sparkles className="w-4 h-4 text-orange-500 flex-shrink-0" />
-                        <span className="font-semibold">Explorar Hospedagens</span>
+                        <span className="font-semibold">Explorar hospedagens</span>
                       </button>
 
                       <button
@@ -315,7 +315,7 @@ export const Header: React.FC<HeaderProps> = ({
                       >
                         <div className="flex items-center gap-3">
                           <Briefcase className="w-4 h-4 text-neutral-600 flex-shrink-0" />
-                          <span className="font-semibold">Minhas Reservas & Vouchers</span>
+                          <span className="font-semibold">Minhas reservas e vouchers</span>
                         </div>
                         {tripsCount > 0 && (
                           <span className="bg-orange-500 text-white font-bold px-2 py-0.5 rounded-full text-[10px] shadow-xs">
@@ -344,7 +344,7 @@ export const Header: React.FC<HeaderProps> = ({
                           className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors hover:bg-orange-50 ${currentView === 'host' ? 'bg-orange-50 font-bold text-orange-700' : 'text-neutral-800'}`}
                         >
                           <Briefcase className="h-4 w-4 flex-shrink-0 text-orange-600" />
-                          <span className="font-semibold">Painel do Proprietário</span>
+                          <span className="font-semibold">Painel do proprietário</span>
                         </button>
                       )}
                       {ownerAccessStatus === 'none' && (

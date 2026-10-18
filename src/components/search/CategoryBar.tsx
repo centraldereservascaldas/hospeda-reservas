@@ -239,12 +239,12 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               {viewMode === 'grid' ? (
                 <>
                   <Map className="w-3.5 h-3.5 text-orange-400" />
-                  <span className="hidden sm:inline">Ver Mapa</span>
+                  <span className="hidden sm:inline">Ver mapa</span>
                 </>
               ) : (
                 <>
                   <Grid className="w-3.5 h-3.5 text-orange-400" />
-                  <span className="hidden sm:inline">Ver Lista</span>
+                  <span className="hidden sm:inline">Ver lista</span>
                 </>
               )}
             </button>

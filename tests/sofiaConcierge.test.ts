@@ -201,7 +201,7 @@ test('answers an explicit plural condo-capacity question with each unit capacity
   ];
   const result = buildSofiaFallback('Só quero saber a quantidade de pessoas que cabe nos apartamentos do condomínio Recanto do Bosque', [], units);
 
-  assert.match(result.reply, /3 apartamentos no catálogo/);
+  assert.match(result.reply, /encontrei 3 apartamentos:/);
   assert.match(result.reply, /Apto 906: até 4 hóspedes/);
   assert.match(result.reply, /Apto 1208: até 5 hóspedes/);
   assert.match(result.reply, /Apto 1211: até 5 hóspedes/);

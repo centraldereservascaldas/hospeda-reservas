@@ -14,7 +14,7 @@ export const CondominiumDirectory: React.FC<CondominiumDirectoryProps> = ({ cond
     return (
       <div className="py-20 text-center text-neutral-600">
         <Building className="mx-auto mb-3 h-9 w-9 text-orange-500" />
-        <h2 className="font-bold text-neutral-900">Nenhum condomínio disponível no catálogo</h2>
+        <h2 className="font-bold text-neutral-900">Nenhum condomínio disponível no momento</h2>
         <p className="mt-1 text-sm">Os condomínios aparecem aqui quando estão associados a acomodações ativas.</p>
       </div>
     );

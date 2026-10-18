@@ -360,9 +360,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   >
                     <div>
                       <h4 id={`${fieldId}-terms-title`} className="font-bold">
-                        Condições aprovadas desta acomodação
+                        Condições desta hospedagem
                       </h4>
-                      <p className="mt-1 text-[11px]">Versão {approvedTerms.version}</p>
                     </div>
                     <dl className="space-y-2">
                       {approvedTerms.fields.map(([name, value]) => (

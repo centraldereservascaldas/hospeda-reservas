@@ -28,7 +28,7 @@ test('app footer shows the active currency and opens listing creation', () => {
   );
 
   assert.ok(getByText('BRL'));
-  fireEvent.click(getByRole('button', { name: 'Cadastre seu Imóvel na Central' }));
+  fireEvent.click(getByRole('button', { name: 'Anuncie seu imóvel' }));
   assert.equal(createListingCalls, 1);
   unmount();
   cleanup();

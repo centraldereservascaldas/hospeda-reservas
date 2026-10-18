@@ -98,6 +98,6 @@ test('condominium route does not render the search form and shows the empty dire
     }),
   );
 
-  assert.ok(getByRole('heading', { name: 'Nenhum condomínio disponível no catálogo' }));
+  assert.ok(getByRole('heading', { name: 'Nenhum condomínio disponível no momento' }));
   assert.equal(queryByText('COMPLEXO / RESORT'), null);
 });

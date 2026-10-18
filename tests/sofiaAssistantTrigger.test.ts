@@ -33,9 +33,9 @@ test('Sofia trigger includes its visible text in its accessible name and opens t
   );
 
   const trigger = getByRole('button', {
-    name: /Sofia • Concierge IA.*Tire dúvidas sobre os resorts/,
+    name: /Sofia • Assistente virtual.*Tire dúvidas sobre hospedagens/,
   });
-  assert.match(trigger.textContent || '', /Sofia • Concierge IA/);
+  assert.match(trigger.textContent || '', /Sofia • Assistente virtual/);
   assert.equal(trigger.getAttribute('type'), 'button');
   fireEvent.click(trigger);
   assert.equal(openCalls, 1);

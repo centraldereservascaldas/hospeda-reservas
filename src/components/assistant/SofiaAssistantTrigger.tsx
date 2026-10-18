@@ -30,7 +30,7 @@ export function SofiaAssistantTrigger({
         </div>
         <div className="flex flex-col text-left">
           <span className="leading-tight flex items-center gap-1 font-black">
-            Sofia • Concierge IA
+            Sofia • Assistente virtual
             <Sparkles
               className="w-3 h-3 text-amber-200 animate-spin"
               style={{ animationDuration: '4s' }}
@@ -38,7 +38,7 @@ export function SofiaAssistantTrigger({
             />
           </span>
           <span className="text-[10px] text-orange-100 font-semibold">
-            Tire dúvidas sobre os resorts
+            Tire dúvidas sobre hospedagens
           </span>
         </div>
       </button>
