@@ -143,12 +143,14 @@ class GuestReservationController extends Controller
             ->map(fn (array $record): ?array => $this->mapReservation(
                 $record,
                 $catalog,
+                $guest,
                 $directOrders->get((string) ($record['id'] ?? $record['_id'] ?? '')),
             ))
             ->filter()
             ->values();
 
-        return response()->json(['success' => true, 'data' => $data]);
+        return response()->json(['success' => true, 'data' => $data])
+            ->header('Cache-Control', 'no-store, private');
     }
 
     public function cancel(Request $request, string $reservationId): JsonResponse
@@ -262,7 +264,7 @@ class GuestReservationController extends Controller
         return GuestProfile::query()->find($guest->id)?->stays_client_id;
     }
 
-    private function mapReservation(array $record, array $catalog, ?DirectBookingOrder $directOrder = null): ?array
+    private function mapReservation(array $record, array $catalog, VerifiedGuest $guest, ?DirectBookingOrder $directOrder = null): ?array
     {
         $id = (string) ($record['id'] ?? $record['_id'] ?? '');
         $checkIn = (string) ($record['checkInDate'] ?? '');
@@ -321,8 +323,8 @@ class GuestReservationController extends Controller
             'cancellationRequested' => $directOrder?->status === DirectBookingOrderStatus::CancelamentoSolicitado,
             'createdAt' => $record['creationDate'] ?? '',
             'hostName' => 'Central de Reservas Caldas Novas',
-            'guestName' => $record['bookerDetails']['name'] ?? '',
-            'guestEmail' => $record['bookerDetails']['email'] ?? '',
+            'guestName' => $guest->fullName,
+            'guestEmail' => $guest->email,
             'guestPhone' => '',
             'staysReservationId' => $id,
             'staysLocator' => $record['partnerCode'] ?? '',
