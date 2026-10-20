@@ -71,7 +71,9 @@ export function useAccountWorkspaceData({
         if (cancelled) return;
         setDirectBookingOrders([]);
         setDirectBookingOrdersError(
-          error instanceof Error ? error.message : 'Não foi possível carregar suas compras no site.',
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível carregar suas compras no site.',
         );
       });
     return () => {
