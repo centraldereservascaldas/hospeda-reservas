@@ -85,7 +85,52 @@ class OwnerDashboardController extends Controller
         }
         usort($reservations, fn (array $a, array $b): int => $a['checkIn'] <=> $b['checkIn']);
 
-        return response()->json(['success' => true, 'period' => ['from' => $from, 'to' => $to], 'ownerName' => (string) ($owner['name'] ?? ''), 'totals' => ['debit' => (float) ($owner['debit']['_mcval']['BRL'] ?? 0), 'credit' => (float) ($owner['credit']['_mcval']['BRL'] ?? 0)], 'properties' => $properties, 'reservations' => $reservations]);
+        $propertyById = $properties->keyBy('staysListingId');
+        $reservationById = collect($reservations)->keyBy('id');
+        $entries = [];
+        foreach ($ownerListings as $listing) {
+            $listingId = (string) ($listing['id'] ?? $listing['code'] ?? $listing['_id'] ?? '');
+            $property = $propertyById->get($listingId);
+            $propertyTitle = $property['title'] ?? (string) ($listing['internalName'] ?? 'Acomodação');
+            foreach (($listing['accounts'] ?? []) as $index => $account) {
+                if (! is_array($account)) {
+                    continue;
+                }
+                $date = (string) ($account['date'] ?? '');
+                $type = strtolower((string) ($account['type'] ?? ''));
+                $amount = $account['_mcval']['BRL'] ?? null;
+                if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) || ! in_array($type, ['debit', 'credit'], true) || ! is_numeric($amount)) {
+                    continue;
+                }
+                $reservationId = isset($account['reserveId']) ? (string) $account['reserveId'] : null;
+                $reservation = $reservationId !== null ? $reservationById->get($reservationId) : null;
+                $reservationCode = $reservation['code'] ?? $reservationId;
+                $description = trim((string) ($account['transactionName'] ?? ''));
+                if ($description === '' && $reservation) {
+                    $description = sprintf('%s/%s/%s - %s/%s/%s', substr($reservation['checkIn'], 8, 2), substr($reservation['checkIn'], 5, 2), substr($reservation['checkIn'], 0, 4), substr($reservation['checkOut'], 8, 2), substr($reservation['checkOut'], 5, 2), substr($reservation['checkOut'], 0, 4));
+                }
+                if ($description === '') {
+                    $description = trim((string) ($account['publicNote'] ?? '')) ?: 'Lançamento financeiro';
+                }
+                $publicNote = trim((string) ($account['publicNote'] ?? ''));
+                $entries[] = [
+                    'id' => (string) ($account['_id'] ?? $listingId.'-'.$date.'-'.$type.'-'.$index),
+                    'date' => $date,
+                    'listingId' => $listingId,
+                    'propertyTitle' => $propertyTitle,
+                    'reservationId' => $reservationId,
+                    'reservationCode' => $reservationCode,
+                    'description' => $description,
+                    'publicNote' => $publicNote !== '' ? $publicNote : null,
+                    'type' => $type,
+                    'status' => (string) ($account['status'] ?? ''),
+                    'amount' => (float) $amount,
+                ];
+            }
+        }
+        usort($entries, fn (array $a, array $b): int => $b['date'] <=> $a['date']);
+
+        return response()->json(['success' => true, 'period' => ['from' => $from, 'to' => $to], 'ownerName' => (string) ($owner['name'] ?? ''), 'totals' => ['debit' => (float) ($owner['debit']['_mcval']['BRL'] ?? 0), 'credit' => (float) ($owner['credit']['_mcval']['BRL'] ?? 0)], 'properties' => $properties, 'entries' => $entries, 'reservations' => $reservations]);
     }
 
     public function storeBlock(StoreOwnerCalendarBlockRequest $request): JsonResponse
