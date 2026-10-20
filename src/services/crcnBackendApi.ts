@@ -515,6 +515,19 @@ export interface OwnerDashboardData {
     debit: number;
     credit: number;
   }>;
+  entries: Array<{
+    id: string;
+    date: string;
+    listingId: string;
+    propertyTitle: string;
+    reservationId: string | null;
+    reservationCode: string | null;
+    description: string;
+    publicNote: string | null;
+    type: 'debit' | 'credit';
+    status: string;
+    amount: number;
+  }>;
   reservations: Array<{
     id: string;
     code: string;
