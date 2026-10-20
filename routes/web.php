@@ -5,7 +5,7 @@ use App\Http\Controllers\Api\BookingController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('welcome');
+    return response()->file(public_path('index.html'));
 });
 
 Route::get('/external/v1/content/listings', [AccommodationController::class, 'staysListings']);
@@ -17,3 +17,7 @@ Route::post('/external/v1/booking/search-listings', [AccommodationController::cl
 Route::get('/external/v1/calendar/listing/{id}', [AccommodationController::class, 'legacyCalendar']);
 Route::post('/external/v1/booking/calculate-price', [BookingController::class, 'staysPrice']);
 Route::post('/external/v1/book-request', fn () => response()->json(['error' => 'Use o checkout hospedado da Stays.'], 410));
+
+Route::get('/{path}', function () {
+    return response()->file(public_path('index.html'));
+})->where('path', '^(?!api(?:/|$)|external/v1(?:/|$)).*');

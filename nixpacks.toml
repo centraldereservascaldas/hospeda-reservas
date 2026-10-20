@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["...", "php83Extensions.pdo_pgsql"]
+
+[phases.install]
+cmds = [
+  "composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader",
+  "npm ci"
+]
+
+[phases.build]
+cmds = [
+  "npm run build",
+  "cp -R dist/. public/"
+]
