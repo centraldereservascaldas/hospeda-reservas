@@ -12,6 +12,21 @@ const isOwnerProperty = (value: unknown): boolean =>
   isFiniteNumber(value.debit) &&
   isFiniteNumber(value.credit);
 
+const isOwnerFinancialEntry = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  isIsoDate(value.date) &&
+  typeof value.listingId === 'string' &&
+  typeof value.propertyTitle === 'string' &&
+  (value.reservationId === null || typeof value.reservationId === 'string') &&
+  (value.reservationCode === null || typeof value.reservationCode === 'string') &&
+  typeof value.description === 'string' &&
+  (value.publicNote === null || typeof value.publicNote === 'string') &&
+  (value.type === 'debit' || value.type === 'credit') &&
+  typeof value.status === 'string' &&
+  isFiniteNumber(value.amount) &&
+  value.amount >= 0;
+
 const isOwnerReservation = (value: unknown): boolean =>
   isRecord(value) &&
   typeof value.id === 'string' &&
@@ -51,6 +66,8 @@ export function isOwnerDashboardData(value: unknown): value is OwnerDashboardDat
     isFiniteNumber(value.totals.credit) &&
     Array.isArray(value.properties) &&
     value.properties.every(isOwnerProperty) &&
+    Array.isArray(value.entries) &&
+    value.entries.every(isOwnerFinancialEntry) &&
     Array.isArray(value.reservations) &&
     value.reservations.every(isOwnerReservation)
   );
