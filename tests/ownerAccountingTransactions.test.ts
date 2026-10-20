@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 test('opens accounting entry details in an accessible dialog and closes with Escape', () => {
-  const { getByRole, queryByRole, getByText } = render(
+  const { getByRole, queryByRole } = render(
     React.createElement(OwnerAccountingTransactions, {
       period: { from: '2026-10-01', to: '2026-10-31' },
       properties: [
@@ -59,8 +59,8 @@ test('opens accounting entry details in an accessible dialog and closes with Esc
 
   const dialog = getByRole('dialog', { name: 'Detalhes do lançamento' });
   assert.equal(dialog.getAttribute('aria-modal'), 'true');
-  assert.ok(getByText('Pagamento referente à reserva.'));
-  assert.ok(getByText('ABC123'));
+  assert.match(dialog.textContent ?? '', /Pagamento referente à reserva\\./);
+  assert.match(dialog.textContent ?? '', /ABC123/);
 
   fireEvent.keyDown(dialog, { key: 'Escape' });
   assert.equal(queryByRole('dialog'), null);
