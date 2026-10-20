@@ -59,7 +59,7 @@ test('opens accounting entry details in an accessible dialog and closes with Esc
 
   const dialog = getByRole('dialog', { name: 'Detalhes do lançamento' });
   assert.equal(dialog.getAttribute('aria-modal'), 'true');
-  assert.match(dialog.textContent ?? '', /Pagamento referente à reserva\\./);
+  assert.match(dialog.textContent ?? '', /Pagamento referente à reserva\./);
   assert.match(dialog.textContent ?? '', /ABC123/);
 
   fireEvent.keyDown(dialog, { key: 'Escape' });
