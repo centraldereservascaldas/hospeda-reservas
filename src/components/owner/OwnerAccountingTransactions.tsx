@@ -16,7 +16,7 @@ const accountingCurrency = (value: number): string =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 const accountingDate = (value: string): string => {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return '—';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return '—';
   return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeZone: 'UTC' }).format(
     new Date(value + 'T12:00:00Z'),
   );
@@ -70,7 +70,7 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
         entry.type === 'credit' ? entry.amount.toFixed(2) : '',
       ]),
     ];
-    const csv = '\\uFEFF' + rows.map((row) => row.map(csvCell).join(';')).join('\\r\\n');
+    const csv = '\uFEFF' + rows.map((row) => row.map(csvCell).join(';')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
     link.href = url;
