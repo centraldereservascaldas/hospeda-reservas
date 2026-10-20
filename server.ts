@@ -7,7 +7,12 @@ import { Property } from './src/types';
 import { hasQuoteChanged, normalizeStaysQuote } from './src/utils/staysPricing';
 import { extractStaysImages, mergeStaysImageSources } from './src/utils/staysImages';
 import { normalizePublishedStaysGuestReview, StaysGuestReviewRecord, summarizeStaysReviews } from './src/utils/staysReviews';
-import { normalizeStaysOwners, StaysOwnerSummary } from './src/utils/staysOwners';
+import { isMissingOwnerReviewMetadataError } from './src/utils/ownerApproval';
+import {
+  getStaysOwnerDateRanges,
+  normalizeStaysOwners,
+  StaysOwnerSummary,
+} from './src/utils/staysOwners';
 import { buildSofiaFallback } from './src/utils/sofiaConcierge';
 
 // Node 20+ natively loads the local environment file before configuration is read.
@@ -318,11 +323,18 @@ async function fetchStaysOwnerDirectory(): Promise<StaysOwnerSummary[] | null> {
   if (staysOwnersRequest) return staysOwnersRequest;
 
   staysOwnersRequest = (async () => {
-    const to = new Date().toISOString().slice(0, 10);
-    const fromYear = new Date().getUTCFullYear() - 10;
-    const response = await callStaysExternalApi<unknown>(`/finance/owners?${new URLSearchParams({ from: `${fromYear}-01-01`, to })}`);
-    const owners = response === null ? null : normalizeStaysOwners(response);
-    if (owners) cachedStaysOwners = { owners, expiresAt: Date.now() + 5 * 60 * 1000 };
+    const ownersById = new Map<string, StaysOwnerSummary>();
+    for (const range of getStaysOwnerDateRanges()) {
+      const response = await callStaysExternalApi<unknown>(
+        `/finance/owners?${new URLSearchParams({ from: range.from, to: range.to })}`,
+      );
+      const owners = response === null ? null : normalizeStaysOwners(response);
+      if (!owners) return null;
+      for (const owner of owners) ownersById.set(owner.id, owner);
+    }
+
+    const owners = [...ownersById.values()];
+    cachedStaysOwners = { owners, expiresAt: Date.now() + 5 * 60 * 1000 };
     return owners;
   })();
   try {
@@ -1282,13 +1294,25 @@ app.post('/api/owner/admin/approve', async (req: Request, res: Response) => {
   if (existingLink) return res.status(409).json({ success: false, code: 'stays_owner_already_linked', message: 'Este proprietário já está vinculado a outra conta do site.' });
 
   const reviewedAt = new Date().toISOString();
-  const { data: updated, error: updateError } = await supabaseAdmin
+  let { data: updated, error: updateError } = await supabaseAdmin
     .from('owner_access')
     .update({ status: 'approved', stays_owner_id: staysOwnerId, approved_at: reviewedAt, reviewed_at: reviewedAt, reviewed_by: admin.id })
     .eq('user_id', userId)
     .eq('status', 'pending')
     .select('user_id')
     .maybeSingle();
+  if (updateError && isMissingOwnerReviewMetadataError(updateError)) {
+    console.warn('Owner access audit columns are missing; applying approval without optional review metadata.');
+    const approvalResult = await supabaseAdmin
+      .from('owner_access')
+      .update({ status: 'approved', stays_owner_id: staysOwnerId, approved_at: reviewedAt })
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .select('user_id')
+      .maybeSingle();
+    updated = approvalResult.data;
+    updateError = approvalResult.error;
+  }
   if (updateError || !updated) return res.status(409).json({ success: false, code: 'owner_approval_failed', message: 'Não foi possível concluir a aprovação; atualize a lista e tente novamente.' });
   return res.json({ success: true, status: 'approved' });
 });
@@ -1341,11 +1365,12 @@ app.get('/api/owner/dashboard', async (req: Request, res: Response) => {
 
   const reservations: Array<Record<string, unknown>> = [];
   for (const listing of listings) {
-    for (let skip = 0; skip <= 1000; skip += 100) {
-      const query = new URLSearchParams({ from, to, dateType: 'included', listingId: listing.staysListingId, skip: String(skip), limit: '100' });
-      const page = await callStaysExternalApi<any>(`/booking/reservations?${query}`);
-      if (!Array.isArray(page)) return res.status(502).json({ success: false, code: 'owner_reservations_unavailable', message: 'Não foi possível carregar todas as reservas do período.' });
-      for (const record of page) {
+    for (const reservationType of ['reserved', 'booked', 'contract', 'blocked', 'maintenance']) {
+      for (let skip = 0; skip <= 1000; skip += 20) {
+        const query = new URLSearchParams({ from, to, dateType: 'included', listingId: listing.staysListingId, type: reservationType, skip: String(skip), limit: '20' });
+        const page = await callStaysExternalApi<any>(`/booking/reservations?${query}`);
+        if (!Array.isArray(page)) return res.status(502).json({ success: false, code: 'owner_reservations_unavailable', message: 'Não foi possível carregar todas as reservas do período.' });
+        for (const record of page) {
         const id = String(record?._id || record?.id || '').trim();
         const checkIn = String(record?.checkInDate || '');
         const checkOut = String(record?.checkOutDate || '');
@@ -1354,6 +1379,11 @@ app.get('/api/owner/dashboard', async (req: Request, res: Response) => {
         const status = ['canceled', 'cancelled'].includes(type) ? 'cancelled'
           : ['reserved', 'booked', 'contract'].includes(type) ? 'confirmed'
           : ['blocked', 'maintenance'].includes(type) ? 'blocked' : 'other';
+        const total = Number(record?.price?._f_total ?? record?.price?.hostingDetails?._f_total ?? 0) || 0;
+        const paidAmount = Number(record?.stats?._f_totalPaid);
+        const paymentStatus = !Number.isFinite(paidAmount) ? 'unknown'
+          : paidAmount <= 0 ? 'unpaid'
+          : total > 0 && paidAmount + 0.01 < total ? 'partial' : 'paid';
         const guestName = String(record?.client?.name || [record?.client?.fName, record?.client?.lName].filter(Boolean).join(' ') || record?.guestName || 'Hóspede');
         reservations.push({
           id,
@@ -1365,13 +1395,15 @@ app.get('/api/owner/dashboard', async (req: Request, res: Response) => {
           checkIn,
           checkOut,
           status,
-          total: Number(record?.price?._f_total ?? record?.price?.hostingDetails?._f_total ?? 0) || 0,
+          paymentStatus,
+          total,
           currency: String(record?.price?.currency || 'BRL'),
           nights: Math.max(1, stayNights(checkIn, checkOut)),
         });
       }
-      if (page.length < 100) break;
-      if (skip === 1000) return res.status(502).json({ success: false, code: 'owner_reservations_limit', message: 'Há muitas reservas no período para exibir com segurança. Reduza o intervalo.' });
+        if (page.length < 20) break;
+        if (skip === 1000) return res.status(502).json({ success: false, code: 'owner_reservations_limit', message: 'Há muitas reservas no período para exibir com segurança. Reduza o intervalo.' });
+      }
     }
   }
 
@@ -1386,6 +1418,54 @@ app.get('/api/owner/dashboard', async (req: Request, res: Response) => {
     properties: listings,
     reservations: reservations.sort((a: any, b: any) => String(a.checkIn).localeCompare(String(b.checkIn))),
   });
+});
+
+app.post('/api/owner/calendar/blocks', async (req: Request, res: Response) => {
+  const authentication = await authenticateVerifiedGuest(req);
+  if (!authentication.guest) {
+    return res.status(authentication.status || 401).json({ success: false, code: authentication.code, message: authentication.message });
+  }
+  const access = await getOwnerAccess(authentication.guest.id);
+  if (!access) return res.status(503).json({ success: false, code: 'owner_access_unavailable', message: 'Não foi possível verificar o acesso de proprietário agora.' });
+  if (access.status !== 'approved' || !access.staysOwnerId) return res.status(403).json({ success: false, code: 'owner_access_not_approved', message: 'O acesso ao painel de proprietário ainda não foi aprovado.' });
+
+  const listingId = String(req.body?.listingId || '').trim();
+  const from = String(req.body?.from || '');
+  const to = String(req.body?.to || '');
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+  if (!listingId || listingId.length > 160 || !isIsoDate(from) || !isIsoDate(to) || stayNights(from, to) < 1 || stayNights(from, to) > 366 || reason.length > 140) {
+    return res.status(422).json({ success: false, code: 'calendar_block_invalid', message: 'Informe uma propriedade e um período válido de até 12 meses. A data final precisa ser posterior à inicial.' });
+  }
+  if (!STAYS_CLIENT_ID || !STAYS_CLIENT_SECRET) return res.status(503).json({ success: false, code: 'stays_not_configured', message: 'O calendário da Stays está indisponível no momento.' });
+
+  const ownerResponse = await callStaysExternalApi<any>(`/finance/owners/${encodeURIComponent(access.staysOwnerId)}?${new URLSearchParams({ from, to })}`);
+  if (!ownerResponse) return res.status(502).json({ success: false, code: 'owner_properties_unavailable', message: 'Não foi possível confirmar a propriedade na Stays. Tente novamente.' });
+  const owner = ownerResponse.owner || ownerResponse.data || ownerResponse;
+  const listing = (Array.isArray(owner?.listings) ? owner.listings : []).find((item: any) => [item?.id, item?._id, item?.code].some((id) => String(id || '') === listingId));
+  if (!listing) return res.status(403).json({ success: false, code: 'owner_listing_forbidden', message: 'Essa propriedade não está vinculada ao seu acesso de proprietário.' });
+
+  for (const type of ['reserved', 'booked', 'contract', 'blocked', 'maintenance']) {
+    for (let skip = 0; skip <= 1000; skip += 20) {
+      const query = new URLSearchParams({ from, to, dateType: 'included', listingId, type, skip: String(skip), limit: '20' });
+      const page = await callStaysExternalApi<any>(`/booking/reservations?${query}`);
+      if (!Array.isArray(page)) return res.status(502).json({ success: false, code: 'owner_reservations_unavailable', message: 'Não foi possível verificar a disponibilidade. Nenhum bloqueio foi criado.' });
+      const conflict = page.some((record: any) => {
+        const existingFrom = String(record?.checkInDate || '');
+        const existingTo = String(record?.checkOutDate || '');
+        return isIsoDate(existingFrom) && isIsoDate(existingTo) && from < existingTo && to > existingFrom;
+      });
+      if (conflict) return res.status(409).json({ success: false, code: 'calendar_block_conflict', message: 'Esse período coincide com uma reserva ou bloqueio existente. Atualize o calendário e escolha outras datas.' });
+      if (page.length < 20) break;
+      if (skip === 1000) return res.status(502).json({ success: false, code: 'owner_reservations_limit', message: 'Não foi possível verificar todo o período com segurança.' });
+    }
+  }
+
+  const created = await callStaysExternalApi<any>('/booking/reservations', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'blocked', listingId, checkInDate: from, checkOutDate: to, ...(reason ? { internalNote: reason } : {}) }),
+  });
+  if (!created || (created.type && String(created.type).toLowerCase() !== 'blocked')) return res.status(502).json({ success: false, code: 'calendar_block_failed', message: 'A Stays não confirmou o bloqueio. Atualize o calendário antes de tentar novamente.' });
+  return res.status(201).json({ success: true, status: 'blocked', blockId: String(created._id || created.id || '') });
 });
 
 // 6. POST /api/checkout -> require a verified guest and initiate Stays hosted checkout

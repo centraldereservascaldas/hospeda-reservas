@@ -121,7 +121,7 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({ isOpen, in
       const normalizedEmail = email.trim().toLowerCase();
       if (mode === 'forgot') {
         const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: `${window.location.origin}/auth/confirm`,
         });
         if (recoveryError) throw recoveryError;
         setMessage('Se houver uma conta com esse e-mail, enviaremos um link para redefinir a senha. Confira também a pasta de spam.');
@@ -160,7 +160,11 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({ isOpen, in
       setPassword('');
     } catch (submitError) {
       if (mode === 'signup') localStorage.removeItem('hospeda_pending_email_confirmation');
-      setError(submitError instanceof Error ? submitError.message : 'Não foi possível acessar sua conta.');
+      const errorMessage = submitError instanceof Error ? submitError.message : '';
+      const isNetworkFailure = /failed to fetch|network request failed/i.test(errorMessage);
+      setError(isNetworkFailure
+        ? 'Não foi possível enviar o link agora. Confira sua conexão e tente novamente.'
+        : errorMessage || 'Não foi possível acessar sua conta.');
     } finally {
       setBusy(false);
     }

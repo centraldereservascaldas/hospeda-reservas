@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, ClipboardList, Home, LoaderCircle, RefreshCw, ShieldCheck } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, ClipboardList, Home, LoaderCircle, LockKeyhole, RefreshCw } from 'lucide-react';
 import { OwnerDashboardData } from '../../services/crcnBackendApi';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 
@@ -29,12 +29,34 @@ const statusLabel: Record<string, string> = {
   confirmed: 'Confirmada', cancelled: 'Cancelada', blocked: 'Bloqueio', other: 'Outra',
 };
 
+const paymentStatusLabel: Record<string, string> = {
+  paid: 'Pagamento confirmado',
+  partial: 'Pagamento parcial',
+  unpaid: 'Sem pagamento',
+  unknown: 'Pagamento não informado',
+};
+
+const calendarEntryClass = (reservation: OwnerDashboardData['reservations'][number]): string => {
+  if (reservation.status === 'blocked') return 'bg-red-100 text-red-800';
+  if (reservation.status === 'cancelled') return 'bg-neutral-100 text-neutral-500 line-through';
+  if (reservation.paymentStatus === 'paid' || reservation.paymentStatus === 'partial') return 'bg-blue-100 text-blue-800';
+  if (reservation.status === 'confirmed') return 'bg-amber-100 text-amber-900';
+  return 'bg-neutral-100 text-neutral-700';
+};
+
 export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToken }) => {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [section, setSection] = useState<DashboardSection>('overview');
   const [dashboard, setDashboard] = useState<OwnerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [blockListingId, setBlockListingId] = useState('');
+  const [blockFrom, setBlockFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [blockTo, setBlockTo] = useState(() => new Date(Date.now() + 86400000).toISOString().slice(0, 10));
+  const [blockReason, setBlockReason] = useState('');
+  const [blockSaving, setBlockSaving] = useState(false);
+  const [blockError, setBlockError] = useState('');
+  const [blockSuccess, setBlockSuccess] = useState('');
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -91,9 +113,6 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
     <div className="mx-auto min-h-[75vh] max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
       <header className="flex flex-col justify-between gap-4 border-b border-white/70 pb-5 sm:flex-row sm:items-end">
         <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1 text-xs font-bold text-emerald-800">
-            <ShieldCheck className="h-4 w-4" /> Acesso de proprietário aprovado
-          </div>
           <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">Painel do proprietário</h1>
           <p className="mt-1 text-sm text-neutral-600">{dashboard?.ownerName ? `Olá, ${dashboard.ownerName}. ` : ''}Consulte propriedades, reservas e valores do período.</p>
         </div>
@@ -150,18 +169,87 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             </div>
           </SectionCard>}
 
-          {section === 'calendar' && <SectionCard title="Calendário de reservas" detail="O calendário é montado com as reservas e bloqueios que a Stays retorna para o período. Esta visualização não altera disponibilidade.">
+          {section === 'calendar' && <SectionCard title="Calendário de reservas" detail="Consulte reservas e bloqueios sincronizados com a Stays e bloqueie períodos dos seus imóveis.">
+            <form
+              className="mb-5 grid gap-3 rounded-2xl border border-orange-100 bg-orange-50/55 p-4 sm:grid-cols-2 lg:grid-cols-5"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                if (!dashboard?.properties.length) return;
+                setBlockSaving(true);
+                setBlockError('');
+                setBlockSuccess('');
+                try {
+                  await crcnBackendApi.createOwnerCalendarBlock(accessToken, {
+                    listingId: blockListingId || dashboard.properties[0]!.staysListingId,
+                    from: blockFrom,
+                    to: blockTo,
+                    ...(blockReason.trim() ? { reason: blockReason.trim() } : {}),
+                  });
+                  setBlockSuccess('As datas foram bloqueadas na Stays.');
+                  setBlockReason('');
+                  if (month === blockFrom.slice(0, 7)) {
+                    await loadDashboard();
+                  } else {
+                    setMonth(blockFrom.slice(0, 7));
+                  }
+                } catch (blockRequestError) {
+                  setBlockError(blockRequestError instanceof Error ? blockRequestError.message : 'Não foi possível bloquear essas datas.');
+                } finally {
+                  setBlockSaving(false);
+                }
+              }}
+            >
+              <label className="grid gap-1 text-xs font-bold text-neutral-700 sm:col-span-2 lg:col-span-1">
+                Propriedade
+                <select
+                  value={blockListingId || dashboard.properties[0]?.staysListingId || ''}
+                  onChange={(event) => setBlockListingId(event.target.value)}
+                  required
+                  disabled={dashboard.properties.length === 0 || blockSaving}
+                  className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                >
+                  {dashboard.properties.map((property) => <option key={property.staysListingId} value={property.staysListingId}>{property.title}</option>)}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-bold text-neutral-700">
+                Primeira data bloqueada
+                <input type="date" value={blockFrom} min={new Date().toISOString().slice(0, 10)} onChange={(event) => setBlockFrom(event.target.value)} required disabled={blockSaving} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+              </label>
+              <label className="grid gap-1 text-xs font-bold text-neutral-700">
+                Data de liberação
+                <input type="date" value={blockTo} min={blockFrom} onChange={(event) => setBlockTo(event.target.value)} required disabled={blockSaving} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+              </label>
+              <label className="grid gap-1 text-xs font-bold text-neutral-700 sm:col-span-2 lg:col-span-1">
+                Motivo (opcional)
+                <input type="text" value={blockReason} maxLength={140} onChange={(event) => setBlockReason(event.target.value)} placeholder="Ex.: uso pessoal ou manutenção" disabled={blockSaving} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none placeholder:font-normal focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+              </label>
+              <div className="flex items-end sm:col-span-2 lg:col-span-1">
+                <button type="submit" disabled={blockSaving || dashboard.properties.length === 0} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 text-sm font-extrabold text-white shadow-md shadow-orange-500/20 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60">
+                  {blockSaving ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <LockKeyhole className="h-4 w-4" aria-hidden="true" />}
+                  {blockSaving ? 'Bloqueando…' : 'Bloquear datas'}
+                </button>
+              </div>
+              <p className="text-[11px] text-neutral-600 sm:col-span-2 lg:col-span-5">A data de liberação funciona como checkout: ela não fica bloqueada. O bloqueio será aplicado à disponibilidade real na Stays.</p>
+              {blockError && <p role="alert" className="text-xs font-semibold text-rose-700 sm:col-span-2 lg:col-span-5">{blockError}</p>}
+              {blockSuccess && <p role="status" className="text-xs font-semibold text-emerald-700 sm:col-span-2 lg:col-span-5">{blockSuccess}</p>}
+            </form>
+            {dashboard.properties.length === 0 && <EmptyState message="Não há imóveis vinculados para bloquear datas." />}
+            <div className="mb-3 flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold text-neutral-700" aria-label="Legenda do calendário">
+              <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />Bloqueio</span>
+              <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-blue-500" aria-hidden="true" />Reserva com pagamento</span>
+              <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-amber-500" aria-hidden="true" />Reserva sem pagamento confirmado</span>
+            </div>
             <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
               {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => <div key={day} className="pb-2 text-center text-xs font-bold text-neutral-500">{day}</div>)}
               {calendarDays.map((day) => {
                 const stays = reservations.filter((reservation) => reservation.checkIn <= day.iso && reservation.checkOut > day.iso);
                 return <div key={day.iso} className={`min-h-20 rounded-xl border p-1.5 sm:min-h-24 sm:p-2 ${day.inMonth ? 'border-white/90 bg-white/75' : 'border-transparent bg-white/30 text-neutral-400'}`}>
                   <span className="text-xs font-bold">{day.number}</span>
-                  <div className="mt-1 space-y-1">{stays.slice(0, 2).map((stay) => <div key={`${day.iso}-${stay.id}`} title={`${stay.propertyTitle} · ${statusLabel[stay.status]}`} className={`truncate rounded-md px-1 py-0.5 text-[9px] font-bold sm:text-[10px] ${stay.status === 'confirmed' ? 'bg-orange-100 text-orange-800' : stay.status === 'cancelled' ? 'bg-neutral-100 text-neutral-500 line-through' : 'bg-sky-100 text-sky-800'}`}>{stay.propertyTitle}</div>)}{stays.length > 2 && <div className="text-[9px] font-semibold text-neutral-500">+{stays.length - 2}</div>}</div>
+                  <div className="mt-1 space-y-1">{stays.slice(0, 2).map((stay) => <div key={`${day.iso}-${stay.id}`} title={`${stay.propertyTitle} · ${statusLabel[stay.status]} · ${paymentStatusLabel[stay.paymentStatus]}`} className={`truncate rounded-md px-1 py-0.5 text-[9px] font-bold sm:text-[10px] ${calendarEntryClass(stay)}`}>{stay.propertyTitle}</div>)}{stays.length > 2 && <div className="text-[9px] font-semibold text-neutral-500">+{stays.length - 2}</div>}</div>
                 </div>;
               })}
             </div>
-            <p className="mt-3 text-xs text-neutral-500">Reservas confirmadas, canceladas e bloqueios aparecem identificados por cor. Para editar datas ou tarifas, use os canais oficiais de gestão.</p>
+            <p className="mt-3 text-xs text-neutral-500">As reservas e bloqueios exibidos vêm da Stays. Bloqueios criados aqui afetam a disponibilidade do imóvel nos canais integrados.</p>
           </SectionCard>}
 
           <p className="text-center text-xs text-neutral-500">Informações consultadas na Stays · período de {dateText(dashboard.period.from)} a {dateText(dashboard.period.to)}</p>
@@ -177,7 +265,12 @@ const SectionCard: React.FC<{ title: string; detail: string; children: React.Rea
 
 const PropertyList: React.FC<{ rows: OwnerDashboardData['properties'] }> = ({ rows }) => rows.length ? <div className="divide-y divide-neutral-100">{rows.map((property) => <div key={property.staysListingId} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0"><div className="h-14 w-16 shrink-0 overflow-hidden rounded-xl bg-neutral-100">{property.image && <img src={property.image} alt="" className="h-full w-full object-cover" />}</div><div className="min-w-0"><p className="truncate text-sm font-bold text-neutral-900">{property.title}</p><p className="text-xs text-neutral-500">Código {property.staysListingId}</p></div></div>)}</div> : <EmptyState message="Nenhuma propriedade foi retornada para este perfil neste período." />;
 
-const ReservationList: React.FC<{ rows: OwnerDashboardData['reservations'] }> = ({ rows }) => rows.length ? <div className="divide-y divide-neutral-100">{rows.map((reservation) => <div key={reservation.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-bold text-neutral-900">{reservation.guestName}</p><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${reservation.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : reservation.status === 'cancelled' ? 'bg-neutral-100 text-neutral-600' : 'bg-sky-100 text-sky-800'}`}>{statusLabel[reservation.status]}</span></div><p className="mt-1 truncate text-xs text-neutral-600">{reservation.propertyTitle} · {dateText(reservation.checkIn)} a {dateText(reservation.checkOut)} · {reservation.nights} noite(s)</p><p className="text-[11px] text-neutral-400">Reserva {reservation.code}</p></div><p className="shrink-0 text-sm font-extrabold text-neutral-900">{currencyText(reservation.total, reservation.currency)}</p></div>)}</div> : <EmptyState message="Nenhuma reserva foi retornada para este período." />;
+const ReservationList: React.FC<{ rows: OwnerDashboardData['reservations'] }> = ({ rows }) => rows.length ? <div className="divide-y divide-neutral-100">{rows.map((reservation) => {
+  const isPreReservation = reservation.status === 'confirmed' && reservation.paymentStatus !== 'paid' && reservation.paymentStatus !== 'partial';
+  const badgeLabel = isPreReservation ? 'Pré-reserva' : statusLabel[reservation.status];
+
+  return <div key={reservation.id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-bold text-neutral-900">{reservation.guestName}</p><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${calendarEntryClass(reservation)}`}>{badgeLabel}</span></div><p className="mt-1 truncate text-xs text-neutral-600">{reservation.propertyTitle} · {dateText(reservation.checkIn)} a {dateText(reservation.checkOut)} · {reservation.nights} noite(s)</p><p className="text-[11px] text-neutral-400">Reserva {reservation.code}</p></div><p className="shrink-0 text-sm font-extrabold text-neutral-900">{currencyText(reservation.total, reservation.currency)}</p></div>;
+})}</div> : <EmptyState message="Nenhuma reserva foi retornada para este período." />;
 
 const AmountCard: React.FC<{ label: string; value: string; tone: 'emerald' | 'orange' | 'neutral' }> = ({ label, value, tone }) => <div className={`rounded-2xl border p-4 ${tone === 'emerald' ? 'border-emerald-200 bg-emerald-50/70' : tone === 'orange' ? 'border-orange-200 bg-orange-50/70' : 'border-neutral-200 bg-white/80'}`}><p className="text-xs font-semibold text-neutral-600">{label}</p><p className="mt-1 text-lg font-black text-neutral-950">{value}</p></div>;
 

@@ -7,6 +7,7 @@ import { lazy, Suspense, useState, useRef } from 'react';
 import { Property, SearchFilters, Currency } from './types';
 import { Header } from './components/Header';
 import { AuthCallbackNotice } from './components/account/AuthCallbackNotice';
+import { RecoveryLinkConfirmationPage } from './components/account/RecoveryLinkConfirmationPage';
 import { CategoryBar } from './components/search/CategoryBar';
 import {
   MobileBottomNavigation,
@@ -296,6 +297,10 @@ function MarketplaceApp() {
 }
 
 export default function App() {
+  if (window.location.pathname === '/auth/confirm') {
+    return <RecoveryLinkConfirmationPage />;
+  }
+
   const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})$/.exec(
     window.location.pathname,
   )?.[1];
