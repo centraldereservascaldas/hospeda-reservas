@@ -45,7 +45,7 @@ class BookingApiTest extends TestCase
         $this->postJson('/api/owner/access/request', [])->assertUnauthorized();
     }
 
-    public function test_reserved_stays_record_is_pending_and_has_no_assumed_payment_method(): void
+    public function test_reservations_use_verified_guest_details_and_are_not_cached(): void
     {
         config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key']);
         Http::fake([
@@ -56,6 +56,7 @@ class BookingApiTest extends TestCase
                 'checkInDate' => '2026-11-10',
                 'checkOutDate' => '2026-11-13',
                 'type' => 'reserved',
+                'bookerDetails' => ['name' => 'Unverified Name', 'email' => 'unverified@example.test'],
                 'price' => ['_f_total' => 3001],
             ]]]], 200),
         ]);
@@ -68,7 +69,10 @@ class BookingApiTest extends TestCase
         $this->withToken('valid-access-token')->getJson('/api/my-reservations')
             ->assertOk()
             ->assertJsonPath('data.0.status', 'pending')
-            ->assertJsonPath('data.0.paymentMethod', '');
+            ->assertJsonPath('data.0.paymentMethod', '')
+            ->assertJsonPath('data.0.guestName', 'Guest Example')
+            ->assertJsonPath('data.0.guestEmail', 'guest@example.test')
+            ->assertHeader('Cache-Control', 'no-store, private');
     }
 
     public function test_valid_supabase_session_can_request_owner_access_in_local_database(): void
