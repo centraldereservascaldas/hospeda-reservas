@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, ClipboardList, Home, LoaderCircle, LockKeyhole, RefreshCw } from 'lucide-react';
 import { OwnerDashboardData } from '../../services/crcnBackendApi';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { OwnerAccountingTransactions } from './OwnerAccountingTransactions';
 
 type DashboardSection = 'overview' | 'properties' | 'reservations' | 'calendar' | 'accounting';
 
@@ -167,6 +168,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             <div className="overflow-x-auto rounded-2xl border border-neutral-200/80">
               <table className="w-full min-w-[520px] text-left text-sm"><thead className="bg-neutral-50 text-xs uppercase text-neutral-500"><tr><th className="px-4 py-3">Propriedade</th><th className="px-4 py-3 text-right">Créditos</th><th className="px-4 py-3 text-right">Débitos</th></tr></thead><tbody className="divide-y divide-neutral-100 bg-white/80">{dashboard.properties.map((property) => <tr key={property.staysListingId}><td className="px-4 py-3 font-semibold text-neutral-800">{property.title}</td><td className="px-4 py-3 text-right font-bold text-emerald-700">{currencyText(property.credit, 'BRL')}</td><td className="px-4 py-3 text-right font-bold text-orange-700">{currencyText(property.debit, 'BRL')}</td></tr>)}</tbody></table>
             </div>
+            <OwnerAccountingTransactions entries={dashboard.entries} properties={dashboard.properties} period={dashboard.period} />
           </SectionCard>}
 
           {section === 'calendar' && <SectionCard title="Calendário de reservas" detail="Consulte reservas e bloqueios sincronizados com a Stays e bloqueie períodos dos seus imóveis.">
