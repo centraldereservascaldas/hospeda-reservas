@@ -8,6 +8,7 @@ use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysReservationService;
 use App\Services\Payments\MercadoPagoClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class CheckoutPaymentEndpointTest extends TestCase
@@ -94,8 +95,43 @@ class CheckoutPaymentEndpointTest extends TestCase
             ->assertStatus(503)->assertJsonPath('code', 'gateway_payment_mismatch');
 
         $this->assertNotSame('approved', $order->refresh()->payment_status);
+        $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->status);
         $this->assertSame(0, $order->staysActions()->where('action_type', 'confirm_reservation')->count());
         $this->assertSame('attention_required', DirectBookingPaymentAttempt::query()->sole()->status);
+    }
+
+    #[DataProvider('gatewayIdentityMismatchCases')]
+    public function test_gateway_identity_mismatch_does_not_approve_or_confirm_reservation(string $field, mixed $value): void
+    {
+        $this->enablePayments();
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)
+            ->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        $gateway = $this->mock(MercadoPagoClient::class);
+        $gateway->shouldReceive('createPayment')->once()->andReturn(['id' => '123456789']);
+        $gateway->shouldReceive('getPayment')->once()->andReturn([
+            ...$this->pendingGatewayPayment($order), 'status' => 'approved', $field => $value,
+        ]);
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            'paymentMethod' => 'pix', 'paymentMethodId' => 'pix',
+        ], ['Idempotency-Key' => 'checkout-payment-'.strtolower($field).'-0005', 'X-Checkout-Resume-Token' => 'resume-token'])
+            ->assertStatus(503)->assertJsonPath('code', 'gateway_payment_mismatch');
+
+        $this->assertSame('attention_required', DirectBookingPaymentAttempt::query()->sole()->status);
+        $this->assertNotSame('approved', $order->refresh()->payment_status);
+        $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->status);
+        $this->assertSame(0, $order->staysActions()->where('action_type', 'confirm_reservation')->count());
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function gatewayIdentityMismatchCases(): array
+    {
+        return [
+            'currency' => ['currency_id', 'USD'],
+            'external reference' => ['external_reference', 'another-order-id'],
+            'payment method' => ['payment_method_id', 'visa'],
+        ];
     }
 
     private function enablePayments(): void
