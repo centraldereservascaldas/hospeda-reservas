@@ -2,16 +2,24 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class AccommodationApiTest extends TestCase
 {
+    private const LIVE_CATALOG_CACHE_KEY = 'stays.live-accommodation-catalog.v1';
+
+    private const LIVE_CATALOG_LOCK_KEY = 'stays.live-accommodation-catalog.v1:lock';
+
     protected function setUp(): void
     {
         parent::setUp();
 
         config(['services.stays.client_id' => '', 'services.stays.client_secret' => '']);
+        Cache::forget(self::LIVE_CATALOG_CACHE_KEY);
+        Carbon::setTestNow();
     }
 
     public function test_catalog_returns_local_fallback_without_stays_credentials(): void
@@ -42,6 +50,73 @@ class AccommodationApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('source', 'stays-live')
             ->assertJsonCount(0, 'data');
+    }
+
+    public function test_development_catalog_uses_local_fallback_for_a_valid_empty_stays_result(): void
+    {
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(['*content/listings*' => Http::response([], 200)]);
+
+        $this->getJson('/api/accommodations')
+            ->assertOk()
+            ->assertJsonPath('source', 'local-catalog')
+            ->assertJsonPath('count', 19);
+    }
+
+    public function test_live_catalog_is_shared_across_requests_until_cache_expiration(): void
+    {
+        app()->instance('env', 'production');
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Carbon::setTestNow(now());
+        Http::preventStrayRequests();
+        Http::fake(['*content/listings*' => Http::sequence()
+            ->push([['id' => 'cached-listing', '_mstitle' => ['pt_BR' => 'Primeira versão']]])
+            ->push([['id' => 'cached-listing', '_mstitle' => ['pt_BR' => 'Versão atualizada']]])]);
+
+        $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Primeira versão');
+        $lock = Cache::lock(self::LIVE_CATALOG_LOCK_KEY, 2100);
+        $this->assertTrue($lock->get());
+        $lock->release();
+
+        $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Primeira versão');
+        Http::assertSentCount(1);
+
+        Carbon::setTestNow(now()->addSeconds(301));
+        $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Versão atualizada');
+        Http::assertSentCount(2);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_live_catalog_cache_can_be_invalidated(): void
+    {
+        app()->instance('env', 'production');
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::preventStrayRequests();
+        Http::fake(['*content/listings*' => Http::sequence()
+            ->push([['id' => 'cached-listing', '_mstitle' => ['pt_BR' => 'Versão em cache']]])
+            ->push([['id' => 'cached-listing', '_mstitle' => ['pt_BR' => 'Versão invalidada']]])]);
+
+        $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Versão em cache');
+        Cache::forget(self::LIVE_CATALOG_CACHE_KEY);
+        $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Versão invalidada');
+
+        Http::assertSentCount(2);
+    }
+
+    public function test_upstream_catalog_failure_is_not_cached_or_returned_as_empty(): void
+    {
+        app()->instance('env', 'production');
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::preventStrayRequests();
+        Http::fake(['*content/listings*' => Http::sequence()
+            ->push(['error' => 'unavailable'], 503)
+            ->push([['id' => 'recovered-listing', '_mstitle' => ['pt_BR' => 'Recuperado']]])]);
+
+        $this->getJson('/api/accommodations')->assertServiceUnavailable()->assertJsonPath('source', 'unavailable');
+        $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.id', 'recovered-listing');
+
+        Http::assertSentCount(2);
     }
 
     public function test_production_detail_returns_not_found_only_for_stays_not_found_response(): void

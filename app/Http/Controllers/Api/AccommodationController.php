@@ -5,11 +5,22 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Services\StaysExternalApiClient;
 use App\Services\StaysSimulator;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use RuntimeException;
 
 class AccommodationController extends Controller
 {
+    private const LIVE_CATALOG_CACHE_KEY = 'stays.live-accommodation-catalog.v1';
+
+    private const LIVE_CATALOG_CACHE_TTL_SECONDS = 300;
+
+    private const LIVE_CATALOG_LOCK_LEASE_SECONDS = 2100;
+
+    private const LIVE_CATALOG_LOCK_WAIT_SECONDS = 15;
+
     /** @var array<string, string> */
     private array $amenityNameDictionary = [];
 
@@ -55,32 +66,50 @@ class AccommodationController extends Controller
             return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
         }
 
-        $listings = [];
-        for ($skip = 0; $skip < 5000; $skip += 50) {
-            $page = $this->stays->get('/content/listings', ['limit' => 50, 'skip' => $skip, 'status' => 'active']);
-            if (! is_array($page)) {
-                if (app()->isProduction()) {
-                    return response()->json(['success' => false, 'source' => 'unavailable', 'count' => 0, 'data' => []], 503);
-                }
+        try {
+            $catalog = Cache::get(self::LIVE_CATALOG_CACHE_KEY);
+            if (! is_array($catalog)) {
+                $catalog = Cache::lock(self::LIVE_CATALOG_CACHE_KEY.':lock', self::LIVE_CATALOG_LOCK_LEASE_SECONDS)
+                    ->block(self::LIVE_CATALOG_LOCK_WAIT_SECONDS, fn (): array => Cache::remember(self::LIVE_CATALOG_CACHE_KEY, self::LIVE_CATALOG_CACHE_TTL_SECONDS, function () use ($fallback): array {
+                        $listings = [];
+                        for ($skip = 0; $skip < 5000; $skip += 50) {
+                            $page = $this->stays->get('/content/listings', ['limit' => 50, 'skip' => $skip, 'status' => 'active']);
+                            if (! is_array($page) || ! array_is_list($page)) {
+                                throw new RuntimeException('Stays returned an invalid accommodation catalog page.');
+                            }
+                            foreach ($page as $listing) {
+                                if (! is_array($listing)) {
+                                    throw new RuntimeException('Stays returned an invalid accommodation listing.');
+                                }
+                            }
+                            if ($skip === 4950 && count($page) === 50) {
+                                throw new RuntimeException('Stays accommodation catalog exceeded the pagination limit.');
+                            }
 
-                break;
+                            $listings = [...$listings, ...$page];
+                            if (count($page) < 50) {
+                                break;
+                            }
+                        }
+
+                        $mapped = array_map(fn (array $listing): array => $this->mapListing($listing, $fallback), $listings);
+
+                        return ['success' => true, 'source' => 'stays-live', 'count' => count($mapped), 'data' => $mapped];
+                    }));
             }
-            $listings = [...$listings, ...$page];
-            if (count($page) < 50) {
-                break;
-            }
-        }
-        if ($listings === []) {
+        } catch (RuntimeException|LockTimeoutException) {
             if (app()->isProduction()) {
-                return response()->json(['success' => true, 'source' => 'stays-live', 'count' => 0, 'data' => []]);
+                return response()->json(['success' => false, 'source' => 'unavailable', 'count' => 0, 'data' => []], 503);
             }
 
             return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
         }
 
-        $mapped = array_map(fn (array $listing): array => $this->mapListing($listing, $fallback), $listings);
+        if ($catalog['count'] === 0 && ! app()->isProduction()) {
+            return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
+        }
 
-        return response()->json(['success' => true, 'source' => 'stays-live', 'count' => count($mapped), 'data' => $mapped]);
+        return response()->json($catalog);
     }
 
     public function show(string $id, StaysSimulator $simulator): JsonResponse
