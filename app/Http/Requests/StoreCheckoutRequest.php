@@ -8,6 +8,10 @@ use Illuminate\Validation\Validator;
 
 class StoreCheckoutRequest extends FormRequest
 {
+    private const MARKETING_ATTRIBUTION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+    private const MARKETING_ATTRIBUTION_FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
+
     protected function prepareForValidation(): void
     {
         $this->merge(['idempotencyKey' => $this->header('Idempotency-Key')]);
@@ -68,12 +72,28 @@ class StoreCheckoutRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            if ($validator->errors()->has('quoteTotal')) {
+            if (! $validator->errors()->has('quoteTotal') && MoneyAmount::toCents($this->input('quoteTotal')) === null) {
+                $validator->errors()->add('quoteTotal', 'Informe o total com no máximo duas casas decimais.');
+            }
+
+            if ($this->input('marketingAttribution') === null) {
                 return;
             }
 
-            if (MoneyAmount::toCents($this->input('quoteTotal')) === null) {
-                $validator->errors()->add('quoteTotal', 'Informe o total com no máximo duas casas decimais.');
+            $now = now()->valueOf();
+            $oldestAcceptedTimestamp = $now - self::MARKETING_ATTRIBUTION_TTL_MS;
+            $latestAcceptedTimestamp = $now + self::MARKETING_ATTRIBUTION_FUTURE_TOLERANCE_MS;
+
+            foreach (['firstTouch', 'lastTouch'] as $touch) {
+                $attribute = "marketingAttribution.{$touch}.capturedAt";
+                if ($validator->errors()->has($attribute)) {
+                    continue;
+                }
+
+                $capturedAt = $this->input($attribute);
+                if (! is_numeric($capturedAt) || $capturedAt <= $oldestAcceptedTimestamp || $capturedAt > $latestAcceptedTimestamp) {
+                    $validator->errors()->add($attribute, 'A data da atribuição deve estar dentro dos últimos 30 dias e não pode estar mais de 5 minutos no futuro.');
+                }
             }
         }];
     }

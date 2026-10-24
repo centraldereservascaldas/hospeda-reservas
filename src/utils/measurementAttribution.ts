@@ -28,6 +28,7 @@ export type AttributionParameter =
 
 const STORAGE_KEY = 'crcn.measurementAttribution.v1';
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const MAX_SEARCH_LENGTH = 4096;
 const MAX_VALUE_LENGTH = 100;
 const SAFE_VALUE_PATTERN = /^[A-Za-z0-9._~-]+$/;
@@ -75,8 +76,14 @@ function sanitizeValues(value: unknown): Partial<Record<AttributionParameter, st
   return sanitized;
 }
 
-function sanitizeTouch(value: unknown): AttributionTouch | null {
-  if (!isRecord(value) || !Number.isSafeInteger(value.capturedAt) || !isRecord(value.values)) {
+function sanitizeTouch(value: unknown, now: number): AttributionTouch | null {
+  if (
+    !isRecord(value) ||
+    !Number.isSafeInteger(value.capturedAt) ||
+    (value.capturedAt as number) <= now - TTL_MS ||
+    (value.capturedAt as number) > now + FUTURE_TOLERANCE_MS ||
+    !isRecord(value.values)
+  ) {
     return null;
   }
 
@@ -125,8 +132,8 @@ function readStoredAttribution(now: number): MeasurementAttribution | null {
       return null;
     }
 
-    const firstTouch = sanitizeTouch(parsed.firstTouch);
-    const lastTouch = sanitizeTouch(parsed.lastTouch);
+    const firstTouch = sanitizeTouch(parsed.firstTouch, now);
+    const lastTouch = sanitizeTouch(parsed.lastTouch, now);
     if (!firstTouch || !lastTouch) {
       removeStoredAttribution();
       return null;

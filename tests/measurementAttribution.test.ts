@@ -97,28 +97,72 @@ test('expires the stored first and last touch after 30 days', () => {
   assert.equal(window.sessionStorage.getItem(STORAGE_KEY), null);
 });
 
+test('discards attribution with seconds, expired, or excessively future touch timestamps', () => {
+  const now = 1_800_000_000_000;
+  const invalidTimestamps = [
+    Math.floor(now / 1000),
+    now - 30 * DAY_MS,
+    now + 5 * 60 * 1000 + 1,
+  ];
+
+  for (const capturedAt of invalidTimestamps) {
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        version: 1,
+        expiresAt: now + 30 * DAY_MS,
+        firstTouch: { capturedAt, values: { utm_source: 'google' } },
+        lastTouch: { capturedAt: now, values: { utm_source: 'google' } },
+      }),
+    );
+
+    assert.equal(readMeasurementAttribution({ analytics: true, advertising: true }, now), null);
+    assert.equal(window.sessionStorage.getItem(STORAGE_KEY), null);
+  }
+});
+
+test('accepts the exact future clock tolerance and clears a null stored attribution object', () => {
+  const now = 1_800_000_000_000;
+  window.sessionStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      expiresAt: now + 30 * DAY_MS,
+      firstTouch: { capturedAt: now, values: { utm_source: 'google' } },
+      lastTouch: { capturedAt: now + 5 * 60 * 1000, values: { utm_source: 'google' } },
+    }),
+  );
+
+  assert.ok(readMeasurementAttribution({ analytics: true, advertising: true }, now));
+
+  window.sessionStorage.setItem(STORAGE_KEY, 'null');
+  assert.equal(readMeasurementAttribution({ analytics: true, advertising: true }, now), null);
+  assert.equal(window.sessionStorage.getItem(STORAGE_KEY), null);
+});
+
 test('does not collect without consent and removes a category when consent is revoked', () => {
+  const now = Date.now();
   const search = '?utm_source=search&gclid=click';
-  assert.equal(updateMeasurementAttribution(null, search, 1000), null);
+  assert.equal(updateMeasurementAttribution(null, search, now), null);
   assert.equal(window.sessionStorage.getItem(STORAGE_KEY), null);
 
   window.history.replaceState({}, '', `/${search}`);
   saveMeasurementConsent({ analytics: true, advertising: true });
   assert.deepEqual(
-    readMeasurementAttribution({ analytics: true, advertising: true }, 1000)?.lastTouch.values,
+    readMeasurementAttribution({ analytics: true, advertising: true }, now)?.lastTouch.values,
     { utm_source: 'search', gclid: 'click' },
   );
 
   saveMeasurementConsent({ analytics: false, advertising: true });
-  const advertisingOnly = readMeasurementAttribution({ analytics: false, advertising: true }, 1000);
+  const advertisingOnly = readMeasurementAttribution({ analytics: false, advertising: true }, now);
   assert.deepEqual(advertisingOnly?.firstTouch.values, { gclid: 'click' });
   assert.deepEqual(advertisingOnly?.lastTouch.values, { gclid: 'click' });
 
   saveMeasurementConsent({ analytics: false, advertising: false });
   assert.equal(window.sessionStorage.getItem(STORAGE_KEY), null);
 
-  updateMeasurementAttribution({ analytics: true, advertising: true }, search, 2000);
-  assert.equal(updateMeasurementAttribution(null, search, 3000), null);
+  updateMeasurementAttribution({ analytics: true, advertising: true }, search, now);
+  assert.equal(updateMeasurementAttribution(null, search, now + 1000), null);
   assert.equal(window.sessionStorage.getItem(STORAGE_KEY), null);
 });
 

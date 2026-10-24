@@ -6,6 +6,7 @@ use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
 use App\Services\DirectSaleTermsRegistry;
 use App\Services\Payments\DirectCheckoutPaymentService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
@@ -232,6 +233,7 @@ class BookingApiTest extends TestCase
 
     public function test_checkout_returns_503_and_replays_the_same_order_without_additional_stays_calls(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-24T17:00:00Z'));
         $termsSnapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.'];
         $this->configureApprovedCheckoutTerms($termsSnapshot);
         $requestOrder = [];
@@ -293,6 +295,66 @@ class BookingApiTest extends TestCase
             ->assertJsonValidationErrors('marketingAttribution.firstTouch.values');
     }
 
+    public function test_checkout_rejects_implausible_marketing_attribution_timestamps(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-24T17:00:00Z'));
+        $now = now()->valueOf();
+        $cases = [
+            'seconds instead of milliseconds' => (int) floor($now / 1000),
+            'older than the attribution retention window' => $now - (30 * 24 * 60 * 60 * 1000) - 1,
+            'beyond the future clock tolerance' => $now + (5 * 60 * 1000) + 1,
+        ];
+
+        foreach ($cases as $case => $capturedAt) {
+            $payload = $this->checkoutPayload(3001);
+            $payload['marketingAttribution'] = [
+                'firstTouch' => ['capturedAt' => $capturedAt, 'values' => ['utm_source' => 'google']],
+                'lastTouch' => ['capturedAt' => $now, 'values' => ['utm_source' => 'google']],
+            ];
+
+            $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attribution-time-'.str_replace(' ', '-', $case)])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('marketingAttribution.firstTouch.capturedAt');
+        }
+    }
+
+    public function test_checkout_applies_exact_attribution_timestamp_boundaries_and_accepts_null_or_omitted_attribution(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-24T17:00:00Z'));
+        $now = now()->valueOf();
+        $this->configureApprovedCheckoutTerms(expectedLookupCount: 3);
+        $requestOrder = [];
+        $this->fakeDirectCheckoutRequests(3001, $requestOrder);
+
+        $atOldestBoundary = $this->checkoutPayload(3001);
+        $atOldestBoundary['marketingAttribution'] = [
+            'firstTouch' => ['capturedAt' => $now - (30 * 24 * 60 * 60 * 1000), 'values' => ['utm_source' => 'google']],
+            'lastTouch' => ['capturedAt' => $now, 'values' => ['utm_source' => 'google']],
+        ];
+        $this->postJson('/api/checkout', $atOldestBoundary, ['Idempotency-Key' => 'checkout-attribution-old-boundary-01'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('marketingAttribution.firstTouch.capturedAt');
+
+        $atFutureBoundary = $this->checkoutPayload(3001);
+        $atFutureBoundary['marketingAttribution'] = [
+            'firstTouch' => ['capturedAt' => $now, 'values' => ['utm_source' => 'google']],
+            'lastTouch' => ['capturedAt' => $now + (5 * 60 * 1000), 'values' => ['utm_source' => 'google']],
+        ];
+        $this->postJson('/api/checkout', $atFutureBoundary, ['Idempotency-Key' => 'checkout-attribution-future-boundary-01'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_unconfigured');
+
+        $nullAttribution = $this->checkoutPayload(3001);
+        $nullAttribution['marketingAttribution'] = null;
+        $this->postJson('/api/checkout', $nullAttribution, ['Idempotency-Key' => 'checkout-attribution-null-00001'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_unconfigured');
+
+        $this->postJson('/api/checkout', $this->checkoutPayload(3001), ['Idempotency-Key' => 'checkout-attribution-omitted-01'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_unconfigured');
+    }
+
     private function checkoutPayload(?float $quoteTotal = null, string $termsVersion = 'terms-2026-01'): array
     {
         return array_filter([
@@ -307,14 +369,14 @@ class BookingApiTest extends TestCase
         ], fn (mixed $value): bool => $value !== null);
     }
 
-    private function configureApprovedCheckoutTerms(array $snapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.']): void
+    private function configureApprovedCheckoutTerms(array $snapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.'], int $expectedLookupCount = 1): void
     {
         $this->mockAvailablePaymentMethods();
         config(['direct-booking.enabled' => true, 'cache.default' => 'array']);
         app('cache')->forgetDriver('array');
         $this->mock(DirectSaleTermsRegistry::class)
             ->shouldReceive('findApprovedListing')
-            ->once()
+            ->times($expectedLookupCount)
             ->with('JQ08G')
             ->andReturn([
                 'id' => 'JQ08G',
