@@ -1,6 +1,7 @@
 import { Globe, ShieldCheck } from 'lucide-react';
 import type { Currency } from '../types';
 import { LogoCRCN } from './LogoCRCN';
+import { OPEN_MEASUREMENT_PREFERENCES } from './MeasurementPreferences';
 
 interface AppFooterProps {
   currency: Currency;
@@ -88,6 +89,15 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
             <span>Privacidade</span>
             <span>•</span>
             <span>Termos</span>
+            <span>•</span>
+            <button
+              type="button"
+              data-measurement-preferences-trigger
+              onClick={() => window.dispatchEvent(new Event(OPEN_MEASUREMENT_PREFERENCES))}
+              className="min-h-11 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+            >
+              Preferências de medição
+            </button>
           </div>
 
           <div className="flex items-center gap-4 font-semibold text-neutral-700">

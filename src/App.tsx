@@ -14,6 +14,7 @@ import {
 } from './components/MobileBottomNavigation';
 import type { MainView } from './components/MobileBottomNavigation';
 import { AppFooter } from './components/AppFooter';
+import { MeasurementPreferences } from './components/MeasurementPreferences';
 import { SofiaAssistantTrigger } from './components/assistant/SofiaAssistantTrigger';
 import { getAuthCallbackError } from './utils/authCallback';
 import { MainContentRouter } from './components/MainContentRouter';
@@ -495,17 +496,25 @@ export default function App() {
 
   if (checkoutResumeReference) {
     return (
-      <Suspense
-        fallback={
-          <main className="min-h-screen bg-[#f7f4ee] px-4 py-8 text-neutral-700" role="status">
-            Abrindo seu pedido…
-          </main>
-        }
-      >
-        <CheckoutResumeEntry reference={checkoutResumeReference} />
-      </Suspense>
+      <>
+        <MeasurementPreferences showReopenButton />
+        <Suspense
+          fallback={
+            <main className="min-h-screen bg-[#f7f4ee] px-4 py-8 text-neutral-700" role="status">
+              Abrindo seu pedido…
+            </main>
+          }
+        >
+          <CheckoutResumeEntry reference={checkoutResumeReference} />
+        </Suspense>
+      </>
     );
   }
 
-  return <MarketplaceApp />;
+  return (
+    <>
+      <MarketplaceApp />
+      <MeasurementPreferences />
+    </>
+  );
 }
