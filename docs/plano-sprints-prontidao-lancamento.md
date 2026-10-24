@@ -79,3 +79,17 @@ Cada pacote segue: escopo e critério → subagente implementador → subagente 
 ## Rastreamento
 
 Em cada sprint, manter lista de itens com responsável, estado, evidência do aceite, revisão independente, commit e pendências. Se uma dependência externa impedir o aceite, registrar o bloqueio e prosseguir apenas em itens independentes; não marcar o gate como concluído por testes parciais.
+
+### Progresso em 24/10/2026
+
+| Pacote | Estado e evidência | Commit local |
+| --- | --- | --- |
+| Plano de sprints | Escopo, dependências e gates registrados. | `390b816` |
+| CI do backend | Workflow de testes PHP para pull requests. | `32bfb55` |
+| Ciclo do checkout | Guardas de pagamento, retomada e estados terminais; suíte PHP então com 47 testes e 265 asserções. Sem teste de pagamento ponta a ponta. | `a89a151` |
+| Higiene do worktree | Artefatos locais ignorados; revisão de diff. | `b59a587` |
+| Catálogo e simulador Stays | Revisão independente, filtro de cidades corrigido, testes focados 19/105 e suíte PHP 48/269 após o pacote. | `744620a` |
+| Jornada frontend | Busca, detalhe, checkout e acessibilidade consolidados; risco de atualização do catálogo corrigido e revisto. Lint, Prettier, 330 testes e build passaram. | `1ccdff5` |
+| Runtime em contêiner | SPA, CORS e variáveis públicas no build; testes direcionados 3/18 e rotas API verificadas. Build da imagem e smoke no contêiner pendentes por falta do Docker local. | `b082a65` |
+
+**Sprint 0 ainda aberta:** revisar e integrar a documentação restante; separar atualização incidental de `composer.lock`; validar imagem Docker em ambiente com runtime. Sprints 1–6 não estão aceitas. A escolha e aprovação comercial dos imóveis piloto, contratos e credenciais de sandbox são entradas externas ainda pendentes. Nenhuma cobrança real, publicação ou campanha foi ativada.
