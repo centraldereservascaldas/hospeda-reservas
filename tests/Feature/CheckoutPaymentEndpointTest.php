@@ -9,6 +9,7 @@ use App\Services\DirectStaysReservationService;
 use App\Services\Payments\MercadoPagoClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\TestCase;
 
 class CheckoutPaymentEndpointTest extends TestCase
@@ -36,6 +37,55 @@ class CheckoutPaymentEndpointTest extends TestCase
 
         $this->assertSame(1, DirectBookingPaymentAttempt::query()->count());
         $this->assertSame('123456789', DirectBookingPaymentAttempt::query()->sole()->gateway_payment_id);
+    }
+
+    public function test_replaying_unknown_gateway_submission_does_not_create_duplicate_charge(): void
+    {
+        $this->enablePayments();
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)
+            ->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        $gatewayIdempotencyKey = null;
+        $gateway = $this->mock(MercadoPagoClient::class);
+        $gateway->shouldReceive('createPayment')
+            ->once()
+            ->withArgs(function (string $amount, string $orderId, string $idempotencyKey) use (&$gatewayIdempotencyKey, $order): bool {
+                $gatewayIdempotencyKey = $idempotencyKey;
+
+                return $amount === '3001.00' && $orderId === $order->id;
+            })
+            ->andThrow(new RuntimeException('Gateway response timed out after submission.'));
+
+        $payload = ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix'];
+        $headers = ['Idempotency-Key' => 'checkout-payment-timeout-0001', 'X-Checkout-Resume-Token' => 'resume-token'];
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', $payload, $headers)
+            ->assertStatus(503)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('code', 'gateway_result_unknown')
+            ->assertJsonPath('payment.status', 'unknown');
+
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        $this->assertSame('unknown', $attempt->status);
+        $this->assertSame('gateway_result_unknown', $attempt->error_code);
+        $this->assertSame($gatewayIdempotencyKey, $attempt->gateway_idempotency_key);
+        $this->assertSame(1, $attempt->gateway_submission_count);
+        $this->assertNotNull($attempt->gateway_submission_started_at);
+        $this->assertNull($attempt->gateway_payment_id);
+        $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->refresh()->status);
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', $payload, $headers)
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('code', 'unknown')
+            ->assertJsonPath('replayed', true)
+            ->assertJsonPath('payment.status', 'unknown');
+
+        $attempt->refresh();
+        $this->assertSame(1, DirectBookingPaymentAttempt::query()->count());
+        $this->assertSame(1, $attempt->gateway_submission_count);
+        $this->assertSame($gatewayIdempotencyKey, $attempt->gateway_idempotency_key);
+        $this->assertNull($attempt->gateway_payment_id);
+        $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->refresh()->status);
     }
 
     public function test_reusing_payment_idempotency_key_with_different_payload_returns_conflict(): void
