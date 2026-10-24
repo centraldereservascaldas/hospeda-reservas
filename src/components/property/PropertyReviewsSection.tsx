@@ -27,14 +27,15 @@ export const PropertyReviewsSection: React.FC<PropertyReviewsSectionProps> = ({
     <section
       id="property-reviews"
       aria-labelledby="property-reviews-title"
-      className="scroll-mt-8 pt-8 border-t border-neutral-200"
+      className="scroll-mt-12 pt-8 border-t border-neutral-200"
     >
       {reviews.length > 0 ? (
         <>
           <div className="flex items-center gap-3 mb-6">
             <Star className="w-6 h-6 fill-neutral-900 text-neutral-900" />
             <h2 id="property-reviews-title" className="text-xl font-bold text-neutral-900">
-              {property.rating.toFixed(2)} • {property.reviewCount} avaliações no último ano
+              {property.rating.toFixed(2)} • {property.reviewCount}{' '}
+              {property.reviewCount === 1 ? 'avaliação' : 'avaliações'}
             </h2>
           </div>
 
@@ -71,8 +72,8 @@ export const PropertyReviewsSection: React.FC<PropertyReviewsSectionProps> = ({
                     H
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-neutral-900">{review.authorName}</p>
-                    <p className="text-[11px] text-neutral-400">
+                    <p className="text-sm font-bold text-neutral-900">{review.authorName}</p>
+                    <p className="text-caption text-neutral-400">
                       {review.date}
                       {review.source
                         ? ` · ${reviewSourceLabels[review.source] || review.source}`
@@ -85,11 +86,11 @@ export const PropertyReviewsSection: React.FC<PropertyReviewsSectionProps> = ({
                   {review.rating.toFixed(1)} / 5
                 </div>
                 {review.comment ? (
-                  <p className="text-xs text-neutral-700 leading-relaxed whitespace-pre-line">
+                  <p className="text-sm text-neutral-700 leading-relaxed whitespace-pre-line">
                     {review.comment}
                   </p>
                 ) : (
-                  <p className="text-xs text-neutral-500 italic">
+                  <p className="text-sm text-neutral-500 italic">
                     Hóspede avaliou sem deixar comentário.
                   </p>
                 )}

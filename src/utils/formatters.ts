@@ -10,12 +10,14 @@ export const formatCurrency = (amount: number, currency: Currency = 'BRL'): stri
   const config = rates[currency] || rates.BRL;
   const converted = amount * config.factor;
 
-  return new Intl.NumberFormat(config.locale, {
+  const formatted = new Intl.NumberFormat(config.locale, {
     style: 'currency',
     currency: config.code,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(converted);
+
+  return currency === 'BRL' ? formatted : `≈ ${formatted}`;
 };
 
 export const calculateNights = (checkInStr: string, checkOutStr: string): number => {
@@ -35,8 +37,18 @@ export const formatDateRange = (checkInStr: string, checkOutStr: string): string
   const startDay = start.getDate();
   const endDay = end.getDate();
   const monthNames = [
-    'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
-    'jul', 'ago', 'set', 'out', 'nov', 'dez'
+    'jan',
+    'fev',
+    'mar',
+    'abr',
+    'mai',
+    'jun',
+    'jul',
+    'ago',
+    'set',
+    'out',
+    'nov',
+    'dez',
   ];
   const startMonth = monthNames[start.getMonth()];
   const endMonth = monthNames[end.getMonth()];

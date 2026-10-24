@@ -153,6 +153,36 @@ test('announces catalog failure when the live source rejects', async () => {
   }
 });
 
+test('retries a failed catalog request and replaces the error with live properties', async () => {
+  const originalGetAccommodations = crcnBackendApi.getAccommodations;
+  const originalWarn = console.warn;
+  const liveProperty = { ...STAYS_NET_APARTMENTS[0]!, title: 'Acomodação recuperada' };
+  let attempts = 0;
+  crcnBackendApi.getAccommodations = async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error('catalog unavailable');
+    return [liveProperty];
+  };
+  console.warn = () => undefined;
+
+  try {
+    const { result } = renderHook(() => useAccommodationCatalog());
+    await waitFor(() => assert.equal(result.current.catalogLoadError, true));
+    assert.equal(result.current.catalogLoading, false);
+
+    act(() => result.current.retryCatalog());
+    assert.equal(result.current.catalogLoading, true);
+
+    await waitFor(() => assert.equal(result.current.catalogLoading, false));
+    assert.equal(result.current.catalogLoadError, false);
+    assert.equal(result.current.properties[0]?.title, 'Acomodação recuperada');
+    assert.equal(attempts, 2);
+  } finally {
+    crcnBackendApi.getAccommodations = originalGetAccommodations;
+    console.warn = originalWarn;
+  }
+});
+
 test('does not let a late catalog response replace an active search result', async () => {
   const originalGetAccommodations = crcnBackendApi.getAccommodations;
   let resolveCatalog!: (items: typeof STAYS_NET_APARTMENTS) => void;

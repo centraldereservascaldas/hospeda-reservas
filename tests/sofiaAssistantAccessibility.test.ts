@@ -48,5 +48,7 @@ test('Sofia chat exposes named controls and a polite conversation log', () => {
   assert.equal(log.getAttribute('aria-live'), 'polite');
   assert.equal(log.getAttribute('aria-relevant'), 'additions text');
   assert.equal(document.activeElement, input);
+  assert.match(input.className, /text-base/);
   assert.equal(sendButton.hasAttribute('disabled'), true);
+  assert.match(log.querySelector('p')?.parentElement?.className ?? '', /text-sm/);
 });

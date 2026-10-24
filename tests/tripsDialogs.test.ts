@@ -61,8 +61,15 @@ test('voucher and cancellation dialogs have names, initial focus, Escape and foc
   fireEvent.click(voucherTrigger);
   const voucherDialog = getByRole('dialog', { name: 'Voucher Oficial de Hospedagem' });
   const voucherClose = getByRole('button', { name: 'Fechar voucher' });
+  const voucherPrint = getByRole('button', { name: 'Imprimir / Salvar Voucher PDF' });
   assert.equal(voucherDialog.getAttribute('aria-modal'), 'true');
   assert.equal(document.activeElement, voucherClose);
+  assert.match(voucherDialog.className, /overflow-y-auto/);
+  assert.match(voucherDialog.style.maxHeight, /100dvh/);
+  assert.match(voucherDialog.style.maxHeight, /safe-area-inset-bottom/);
+  assert.match(voucherDialog.parentElement?.getAttribute('style') || '', /safe-area-inset-top/);
+  assert.match(voucherClose.className, /h-11 w-11/);
+  assert.match(voucherPrint.className, /min-h-11/);
   fireEvent.click(voucherClose);
   assert.equal(queryByRole('dialog'), null);
   assert.equal(document.activeElement, voucherTrigger);
@@ -77,6 +84,10 @@ test('voucher and cancellation dialogs have names, initial focus, Escape and foc
     cancellationDialog.getAttribute('aria-describedby'),
     'cancel-reservation-description',
   );
+  assert.match(cancellationDialog.className, /overflow-y-auto/);
+  assert.match(cancellationDialog.style.maxHeight, /safe-area-inset-top/);
+  assert.match(keepTripButton.className, /min-h-11/);
+  assert.match(getByRole('button', { name: 'Confirmar cancelamento' }).className, /min-h-11/);
   assert.equal(document.activeElement, keepTripButton);
   fireEvent.keyDown(document, { key: 'Escape' });
   assert.equal(queryByRole('dialog'), null);

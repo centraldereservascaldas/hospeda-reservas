@@ -57,7 +57,7 @@ test('derives catalog results, categories, saved properties, and empty-catalog s
     true,
   );
   assert.equal(result.current.savedPropertiesList[0]?.id, otherProperty.id);
-  assert.equal(result.current.catalogStatus, 'ready');
+  assert.equal(result.current.catalogStatus, 'stale');
   assert.equal(result.current.isCondominiumView, false);
   assert.ok(result.current.condominiums.length > 0);
 
@@ -69,4 +69,39 @@ test('derives catalog results, categories, saved properties, and empty-catalog s
 
   rerender({ ...options, properties: [property], catalogLoading: false, catalogLoadError: true });
   assert.equal(result.current.catalogStatus, 'stale');
+});
+
+test('condominium directory contains only groups with listings matching active filters', () => {
+  const firstProperty = STAYS_NET_APARTMENTS[0]!;
+  const matchingProperty = {
+    ...firstProperty,
+    complexName: 'Condomínio com piscina',
+    amenities: ['Piscina'],
+  };
+  const otherProperty = {
+    ...STAYS_NET_APARTMENTS[1]!,
+    complexName: 'Condomínio sem piscina',
+    amenities: ['Wi-Fi'],
+  };
+  const options = {
+    properties: [matchingProperty, otherProperty],
+    filters: {
+      ...createDefaultSearchFilters(),
+      category: 'condominiums',
+      amenities: ['Piscina'],
+    },
+    savedPropertyIds: [],
+    catalogLoading: false,
+    catalogLoadError: false,
+  };
+
+  const { result } = renderHook((props) => useExploreCatalogViewModel(props), {
+    initialProps: options,
+  });
+
+  assert.deepEqual(result.current.filteredProperties, [matchingProperty]);
+  assert.deepEqual(
+    result.current.condominiums.map(({ name }) => name),
+    ['Condomínio com piscina'],
+  );
 });

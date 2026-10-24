@@ -35,8 +35,8 @@ test('provides full accessible dates and selected state for availability days', 
       calendarMessage: '',
       checkIn: '2026-11-11',
       checkOut: '2026-11-13',
-      baseNightlyRate: 800,
       onSelectDay: () => {},
+      onRetryCalendar: () => {},
     }),
   );
 
@@ -53,6 +53,7 @@ test('provides full accessible dates and selected state for availability days', 
   assert.equal(selectedDay?.getAttribute('aria-label')?.includes(expectedAccessibleDate), true);
   assert.equal(selectedDay?.getAttribute('aria-label')?.includes('1.200'), true);
   assert.equal(unavailableDay?.hasAttribute('disabled'), true);
+  assert.match(unavailableDay?.className || '', /text-neutral-600/);
 });
 
 test('delegates a chosen available day to the reservation flow', () => {
@@ -65,8 +66,8 @@ test('delegates a chosen available day to the reservation flow', () => {
       calendarMessage: '',
       checkIn: '',
       checkOut: '',
-      baseNightlyRate: 800,
       onSelectDay: (day) => selectedDays.push(day.date),
+      onRetryCalendar: () => {},
     }),
   );
 
@@ -85,8 +86,8 @@ test('announces calendar loading and names the availability region', () => {
       calendarMessage: 'Atualizando disponibilidade...',
       checkIn: '',
       checkOut: '',
-      baseNightlyRate: 800,
       onSelectDay: () => {},
+      onRetryCalendar: () => {},
     }),
   );
 
@@ -95,4 +96,31 @@ test('announces calendar loading and names the availability region', () => {
     'true',
   );
   assert.ok(getByRole('status', { name: '' }));
+});
+
+test('does not highlight a selected range while calendar data is refreshing', () => {
+  render(
+    React.createElement(PropertyAvailabilityStrip, {
+      calendarDays: [
+        { date: '2026-11-11', avail: 1 },
+        { date: '2026-11-12', avail: 1 },
+        { date: '2026-11-13', avail: 1 },
+      ],
+      calendarAvailable: true,
+      isLoading: true,
+      calendarMessage: 'Atualizando disponibilidade...',
+      checkIn: '2026-11-11',
+      checkOut: '2026-11-13',
+      onSelectDay: () => {},
+      onRetryCalendar: () => {},
+    }),
+  );
+
+  const inRangeDate = document.querySelector<HTMLButtonElement>(
+    'button[aria-label*="12 de novembro"]',
+  );
+  assert.ok(inRangeDate);
+  assert.equal(inRangeDate.disabled, true);
+  assert.doesNotMatch(inRangeDate.className, /bg-orange-100/);
+  assert.match(inRangeDate.className, /text-neutral-600/);
 });

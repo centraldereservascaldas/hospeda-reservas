@@ -4,11 +4,92 @@
   --color-focus-ring: #ea580c;
   --color-page: #f8fafc;
   --color-glass-border: rgba(255, 255, 255, 0.85);
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
 }
 
 :is(button, a, input, select, textarea, [role="button"], [role="tab"]):focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 3px;
+}
+
+.property-detail-back-button:focus-visible {
+  outline-offset: -2px;
+}
+
+.property-booking-panel {
+  container: property-booking-panel / inline-size;
+}
+
+.property-guest-selector {
+  container: property-guest-selector / inline-size;
+}
+
+.property-guest-selector-list {
+  scrollbar-width: thin;
+}
+
+@container property-guest-selector (max-width: 300px) {
+  .property-guest-selector-list > div {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .property-guest-selector-list > div > span {
+    padding-top: 0.25rem;
+  }
+
+  .property-guest-selector-list > div > div {
+    align-self: flex-end;
+  }
+}
+
+@media (max-height: 420px) {
+  .property-guest-selector {
+    padding: 12px;
+  }
+
+  .property-guest-selector > div:first-child {
+    margin: -12px -12px 8px;
+    padding: 12px;
+  }
+
+  .property-guest-selector > div:last-child {
+    margin-top: 8px;
+    padding-top: 8px;
+  }
+
+  .property-guest-selector-list > div {
+    padding-block: 1px;
+  }
+}
+
+.property-booking-dates {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.property-booking-dates > button {
+  min-width: 0;
+}
+
+.property-booking-dates > button > span:first-child {
+  min-width: 0;
+}
+
+.property-booking-dates > button + button {
+  border-left: 1px solid rgb(229 229 229 / 0.8);
+}
+
+@container property-booking-panel (max-width: 320px) {
+  .property-booking-dates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .property-booking-dates > button + button {
+    border-top: 1px solid rgb(229 229 229 / 0.8);
+    border-left: 0;
+  }
 }
 
 @keyframes enter {

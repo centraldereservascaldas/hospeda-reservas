@@ -7,11 +7,6 @@ import type { AccountModalMode } from '../hooks/useSupabaseSession';
 import type { AppOverlayBookingPayload } from '../types/booking';
 import { DeferredModal } from './DeferredModal';
 
-const PropertyDetailModal = React.lazy(() =>
-  import('./property/PropertyDetailModal').then(({ PropertyDetailModal }) => ({
-    default: PropertyDetailModal,
-  })),
-);
 const CondominiumDetailModal = React.lazy(() =>
   import('./condominium/CondominiumDetailModal').then(({ CondominiumDetailModal }) => ({
     default: CondominiumDetailModal,
@@ -47,20 +42,15 @@ export interface AppOverlayLayerProps {
   filters: SearchFilters;
   defaultFilters: SearchFilters;
   setFilters: Dispatch<SetStateAction<SearchFilters>>;
-  selectedProperty: Property | null;
   selectedCondominium: CondominiumSummary | null;
   bookingPayload: AppOverlayBookingPayload | null;
   accountModalMode: AccountModalMode;
-  savedPropertyIds: string[];
-  catalogFocusRef: RefObject<HTMLElement | null>;
-  filteredPropertiesCount: number;
+  accountReturnFocusRef?: RefObject<HTMLButtonElement | null>;
+  properties: Property[];
   isSofiaOpen: boolean;
   isSearchOpen: boolean;
   isFilterOpen: boolean;
   isCreateListingOpen: boolean;
-  onClosePropertyDetail: () => void;
-  onStartBooking: (payload: AppOverlayBookingPayload) => void;
-  onToggleSave: (propertyId: string) => void;
   onCloseCondominium: () => void;
   onCloseSofia: () => void;
   onSelectPropertyFromSofia: (property: Property) => void;
@@ -79,20 +69,15 @@ export function AppOverlayLayer({
   filters,
   defaultFilters,
   setFilters,
-  selectedProperty,
   selectedCondominium,
   bookingPayload,
   accountModalMode,
-  savedPropertyIds,
-  catalogFocusRef,
-  filteredPropertiesCount,
+  accountReturnFocusRef,
+  properties,
   isSofiaOpen,
   isSearchOpen,
   isFilterOpen,
   isCreateListingOpen,
-  onClosePropertyDetail,
-  onStartBooking,
-  onToggleSave,
   onCloseCondominium,
   onCloseSofia,
   onSelectPropertyFromSofia,
@@ -107,21 +92,6 @@ export function AppOverlayLayer({
 }: AppOverlayLayerProps) {
   return (
     <>
-      <DeferredModal active={selectedProperty !== null}>
-        <PropertyDetailModal
-          property={selectedProperty}
-          initialCheckIn={filters.checkIn}
-          initialCheckOut={filters.checkOut}
-          initialGuests={filters.guests}
-          onClose={onClosePropertyDetail}
-          returnFocusRef={catalogFocusRef}
-          currency={currency}
-          isSaved={selectedProperty ? savedPropertyIds.includes(selectedProperty.id) : false}
-          onToggleSave={onToggleSave}
-          onStartBooking={onStartBooking}
-        />
-      </DeferredModal>
-
       <DeferredModal active={selectedCondominium !== null}>
         <CondominiumDetailModal condominium={selectedCondominium} onClose={onCloseCondominium} />
       </DeferredModal>
@@ -150,6 +120,7 @@ export function AppOverlayLayer({
           isOpen={accountModalMode !== null}
           initialMode={accountModalMode || 'login'}
           onClose={onCloseAccount}
+          returnFocusRef={accountReturnFocusRef}
         />
       </DeferredModal>
 
@@ -170,9 +141,18 @@ export function AppOverlayLayer({
           onClose={onCloseFilter}
           filters={filters}
           onApplyFilters={setFilters}
-          onResetFilters={() => setFilters(defaultFilters)}
+          onResetFilters={() =>
+            setFilters((current) => ({
+              ...defaultFilters,
+              destination: current.destination,
+              destinationPropertyId: current.destinationPropertyId,
+              checkIn: current.checkIn,
+              checkOut: current.checkOut,
+              guests: current.guests,
+            }))
+          }
           currency={currency}
-          matchingCount={filteredPropertiesCount}
+          properties={properties}
         />
       </DeferredModal>
 

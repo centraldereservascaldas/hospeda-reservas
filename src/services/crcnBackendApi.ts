@@ -12,12 +12,29 @@ import {
   isStaysOwnerSummary,
   isStaysCalendarDay,
   isDirectBookingOrder,
+  isDirectBookingOrderListItem,
   isDirectBookingOperationsOrder,
   isDirectBookingOperationsWebhook,
 } from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
 import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
 import { saveCheckoutResumeToken } from '../utils/checkoutResumeStorage';
+import { matchesPropertyDestination } from '../utils/propertySearchFilters';
+import { apiFetch } from './apiFetch';
+
+const API_REQUEST_TIMEOUT_MS = 20_000;
+const STAYS_SEARCH_PAGE_SIZE = 20;
+
+async function withApiRequestTimeout<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await request(controller.signal);
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+}
 
 export interface SearchAccommodationsParams {
   from?: string;
@@ -97,16 +114,21 @@ export interface DirectBookingOrderSummary {
   quoteTotal: string;
   currency: 'BRL';
   paymentStatus: string | null;
-  resumeToken?: string | null;
   expiresAt: string | null;
   createdAt: string | null;
 }
+
+export type DirectBookingOrderListItem = Omit<DirectBookingOrderSummary, 'guestName'>;
 
 export interface CheckoutResumeCredentials {
   reference: string;
   token: string;
   path: string;
+  expiresAt: string;
 }
+
+export type CheckoutAccessCredentials =
+  { type: 'authenticated'; accessToken: string } | { type: 'resume-token'; resumeToken: string };
 
 export interface CheckoutPaymentAttemptSummary {
   status:
@@ -239,7 +261,10 @@ const isCheckoutResumeCredentials = (value: unknown): value is CheckoutResumeCre
   /^[A-Za-z0-9]{40}$/.test(value.reference) &&
   typeof value.token === 'string' &&
   /^[A-Za-z0-9]{64}$/.test(value.token) &&
-  value.path === `/checkout/${value.reference}`;
+  value.path === `/checkout/${value.reference}` &&
+  typeof value.expiresAt === 'string' &&
+  Number.isFinite(Date.parse(value.expiresAt)) &&
+  Date.parse(value.expiresAt) > Date.now();
 
 const isCheckoutPaymentCapabilities = (value: unknown): value is CheckoutPaymentCapabilities =>
   isRecord(value) &&
@@ -441,11 +466,17 @@ export interface DirectBookingOperationsOrder {
   paymentMethod: string | null;
   gatewayPaymentId: string | null;
   staysReservationId: string | null;
+  hasResumeToken?: boolean;
+  resumeTokenExpiresAt?: string | null;
+  resumeTokenRevocation?: {
+    reviewedBy: string | null;
+    at: string | null;
+  } | null;
   paymentApprovedWithoutConfirmedReservation: boolean;
   latePaymentAfterHold: boolean;
   staysActionFailed: boolean;
   confirmationEmail: {
-    status: 'pending' | 'queued' | 'processing' | 'sent' | 'failed';
+    status: 'pending' | 'queued' | 'processing' | 'sent' | 'failed' | 'skipped';
     attempts: number;
     lastAttemptAt: string | null;
     queuedAt: string | null;
@@ -459,6 +490,11 @@ export interface DirectBookingOperationsOrder {
     reviewedBy: string | null;
     at: string | null;
   } | null;
+  manualGatewayRefundReview: {
+    reviewedBy: string | null;
+    at: string | null;
+  } | null;
+  createdAt: string | null;
   updatedAt: string | null;
   lastEvent: {
     event?: string;
@@ -466,6 +502,9 @@ export interface DirectBookingOperationsOrder {
     source?: string;
     code?: string;
     at?: string;
+    previous_gateway_status?: string;
+    gateway_status?: string;
+    gateway_updated_at?: string;
   } | null;
   issue: {
     source: 'stays' | 'payment' | 'webhook' | string;
@@ -552,7 +591,7 @@ class CrcnBackendApiService {
 
   public async getResorts(): Promise<Array<{ id: string; name: string }>> {
     try {
-      const res = await fetch('/api/resorts');
+      const res = await apiFetch('/api/resorts');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (!res.headers.get('content-type')?.includes('application/json')) {
         throw new Error('O servidor respondeu com conteúdo diferente de JSON.');
@@ -582,12 +621,14 @@ class CrcnBackendApiService {
 
   // 1. GET /api/accommodations
   public async getAccommodations(): Promise<Property[]> {
-    const res = await fetch('/api/accommodations');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json: unknown = await res.json();
+    const json: unknown = await withApiRequestTimeout(async (signal) => {
+      const res = await apiFetch('/api/accommodations', { signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    });
     if (
       !isRecord(json) ||
-      json.source !== 'stays-live' ||
+      (json.source !== 'stays-live' && json.source !== 'stays-simulated') ||
       !Array.isArray(json.data) ||
       !json.data.every(isProperty)
     ) {
@@ -597,9 +638,9 @@ class CrcnBackendApiService {
     if (accommodations.length > 0) {
       try {
         localStorage.setItem('hospeda_properties', JSON.stringify(accommodations));
-        localStorage.setItem('hospeda_properties_source', 'stays-live');
+        localStorage.setItem('hospeda_properties_source', json.source);
       } catch (error) {
-        console.warn('Unable to cache the live accommodation catalog:', error);
+        console.warn('Unable to cache the accommodation catalog:', error);
       }
     } else {
       try {
@@ -615,9 +656,11 @@ class CrcnBackendApiService {
   // 2. GET /api/accommodations/:id
   public async getAccommodationById(id: string): Promise<Property | null> {
     try {
-      const res = await fetch(`/api/accommodations/${encodeURIComponent(id)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: unknown = await res.json();
+      const json: unknown = await withApiRequestTimeout(async (signal) => {
+        const res = await apiFetch(`/api/accommodations/${encodeURIComponent(id)}`, { signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      });
       if (!isRecord(json) || (json.data !== null && !isProperty(json.data))) {
         throw new Error('A acomodação retornou dados inválidos.');
       }
@@ -634,7 +677,7 @@ class CrcnBackendApiService {
           if (index >= 0) cached[index] = property;
           else cached.push(property);
           localStorage.setItem('hospeda_properties', JSON.stringify(cached));
-          localStorage.setItem('hospeda_properties_source', 'stays-live');
+          localStorage.setItem('hospeda_properties_source', property.dataSource ?? 'stays-live');
         } catch (error) {
           console.warn('Unable to persist refreshed accommodation gallery:', error);
         }
@@ -653,29 +696,86 @@ class CrcnBackendApiService {
     data: Property[];
   }> {
     try {
-      const res = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: unknown = await res.json();
-      if (
-        !isRecord(json) ||
-        !isFiniteNumber(json.total) ||
-        !Number.isInteger(json.total) ||
-        json.total < 0 ||
-        !Array.isArray(json.data) ||
-        !json.data.every(isProperty)
-      ) {
-        throw new Error('A pesquisa retornou uma resposta inválida.');
+      const initialSkip = Math.max(0, Math.trunc(params.skip ?? 0));
+      const requestedResultCount =
+        params.limit === undefined
+          ? Number.POSITIVE_INFINITY
+          : Math.max(0, Math.trunc(params.limit));
+      const requestedNights =
+        params.from && params.to
+          ? Math.round(
+              (Date.parse(`${params.to}T00:00:00Z`) - Date.parse(`${params.from}T00:00:00Z`)) /
+                86_400_000,
+            )
+          : null;
+      const propertiesById = new Map<string, Property>();
+      let pageOffset = initialSkip;
+
+      while (propertiesById.size < requestedResultCount) {
+        const pageLimit = Math.min(
+          STAYS_SEARCH_PAGE_SIZE,
+          requestedResultCount - propertiesById.size,
+        );
+        const pageParams = { ...params, limit: pageLimit, skip: pageOffset };
+        const json: unknown = await withApiRequestTimeout(async (signal) => {
+          const res = await apiFetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pageParams),
+            signal,
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        });
+
+        if (
+          !isRecord(json) ||
+          !isFiniteNumber(json.total) ||
+          !Number.isInteger(json.total) ||
+          json.total < 0 ||
+          !Array.isArray(json.data) ||
+          json.data.length > pageLimit ||
+          !json.data.every(isProperty) ||
+          (params.from &&
+            params.to &&
+            ((json.source !== 'stays-live' && json.source !== 'stays-simulated') ||
+              json.from !== params.from ||
+              json.to !== params.to ||
+              json.guests !== (params.guests ?? 1)))
+        ) {
+          throw new Error('A pesquisa retornou uma resposta inválida.');
+        }
+
+        let addedProperties = 0;
+        for (const item of json.data) {
+          const property = sanitizePropertyMedia(item);
+          const normalizedProperty =
+            requestedNights !== null &&
+            property.calculatedPrice &&
+            property.calculatedPrice.nights !== requestedNights
+              ? { ...property, calculatedPrice: undefined }
+              : property;
+          if (!propertiesById.has(normalizedProperty.id)) {
+            propertiesById.set(normalizedProperty.id, normalizedProperty);
+            addedProperties += 1;
+          }
+        }
+
+        pageOffset += json.data.length;
+        if (json.data.length < pageLimit) break;
+        if (addedProperties === 0) {
+          throw new Error('A paginação da pesquisa retornou anúncios repetidos.');
+        }
       }
-      return { total: json.total, data: json.data.map(sanitizePropertyMedia) };
+
+      const data = [...propertiesById.values()];
+      return { total: data.length, data };
     } catch (err) {
-      console.warn('Falling back to local search filtering:', err);
+      console.warn('Accommodation search failed:', err);
       if (params.from && params.to) {
         // A static catalog cannot confirm availability or provide a date-specific quote.
-        return { total: 0, data: [] };
+        // Let the caller show an availability error and offer a retry instead of implying no stays exist.
+        throw err;
       }
       const { STAYS_NET_APARTMENTS } = await import('../data/staysApartments');
       let filtered = STAYS_NET_APARTMENTS;
@@ -683,9 +783,8 @@ class CrcnBackendApiService {
         filtered = filtered.filter((p) => p.maxGuests >= (params.guests || 1));
       }
       if (params.destination) {
-        const q = params.destination.toLowerCase();
-        filtered = filtered.filter(
-          (p) => p.title.toLowerCase().includes(q) || p.subtitle.toLowerCase().includes(q),
+        filtered = filtered.filter((property) =>
+          matchesPropertyDestination(property, params.destination || ''),
         );
       }
       if (params.propertyId) {
@@ -712,11 +811,14 @@ class CrcnBackendApiService {
       const query = new URLSearchParams();
       if (from) query.set('from', from);
       if (to) query.set('to', to);
-      const res = await fetch(
-        `/api/accommodations/${encodeURIComponent(id)}/calendar?${query.toString()}`,
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: unknown = await res.json();
+      const json: unknown = await withApiRequestTimeout(async (signal) => {
+        const res = await apiFetch(
+          `/api/accommodations/${encodeURIComponent(id)}/calendar?${query.toString()}`,
+          { signal },
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      });
       if (!isRecord(json) || !Array.isArray(json.data) || !json.data.every(isStaysCalendarDay)) {
         return [];
       }
@@ -736,22 +838,46 @@ class CrcnBackendApiService {
     promocode?: string;
   }): Promise<CalculatedPriceResponse | null> {
     try {
-      const res = await fetch('/api/price', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          listingIds: [payload.listingId],
-          from: payload.from,
-          to: payload.to,
-          guests: payload.guests || 2,
-          promocode: payload.promocode,
-        }),
+      const json: unknown = await withApiRequestTimeout(async (signal) => {
+        const res = await apiFetch('/api/price', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            listingIds: [payload.listingId],
+            from: payload.from,
+            to: payload.to,
+            guests: payload.guests || 2,
+            promocode: payload.promocode,
+          }),
+          signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: unknown = await res.json();
       if (!isCalculatedPriceResponse(json)) {
         throw new Error('A resposta de preço retornou dados inválidos.');
       }
+
+      const requestedCheckIn = isIsoDate(payload.from)
+        ? Date.parse(`${payload.from}T00:00:00.000Z`)
+        : Number.NaN;
+      const requestedCheckOut = isIsoDate(payload.to)
+        ? Date.parse(`${payload.to}T00:00:00.000Z`)
+        : Number.NaN;
+      const requestedNights = (requestedCheckOut - requestedCheckIn) / 86400000;
+      const matchesRequestedListing =
+        json.listingId === payload.listingId || json.staysListingId === payload.listingId;
+
+      if (
+        !matchesRequestedListing ||
+        !Number.isInteger(requestedNights) ||
+        requestedNights < 1 ||
+        json.nights !== requestedNights ||
+        json.currency !== 'BRL'
+      ) {
+        throw new Error('A cotação não corresponde ao imóvel, período ou moeda solicitados.');
+      }
+
       return json;
     } catch (err) {
       console.warn('Error calculating price on backend:', err);
@@ -764,7 +890,7 @@ class CrcnBackendApiService {
     accessToken: string,
   ): Promise<{ success: boolean; message?: string } | null> {
     try {
-      const res = await fetch('/api/auth/sync-stays', {
+      const res = await apiFetch('/api/auth/sync-stays', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -789,7 +915,7 @@ class CrcnBackendApiService {
 
   public async createCheckout(payload: CheckoutRequestPayload): Promise<CheckoutResponse | null> {
     try {
-      const res = await fetch('/api/checkout', {
+      const res = await apiFetch('/api/checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -846,7 +972,7 @@ class CrcnBackendApiService {
       if (json.success && (!res.ok || !order || !resume || order.status !== 'pre_reservado'))
         return null;
       if (res.ok && !json.success) return null;
-      if (resume) saveCheckoutResumeToken(resume.reference, resume.token);
+      if (resume) saveCheckoutResumeToken(resume.reference, resume.token, resume.expiresAt);
 
       return {
         success: json.success,
@@ -865,13 +991,20 @@ class CrcnBackendApiService {
 
   public async createCheckoutPayment(
     reference: string,
-    resumeToken: string,
+    credentials: CheckoutAccessCredentials | string,
     expectedAmount: string,
     payload: CheckoutPaymentRequestPayload,
   ): Promise<CheckoutPaymentResult> {
+    const checkoutCredentials: CheckoutAccessCredentials =
+      typeof credentials === 'string'
+        ? { type: 'resume-token', resumeToken: credentials }
+        : credentials;
     if (
       !/^[A-Za-z0-9]{40}$/.test(reference) ||
-      !/^[A-Za-z0-9]{64}$/.test(resumeToken) ||
+      (checkoutCredentials.type === 'resume-token' &&
+        !/^[A-Za-z0-9]{64}$/.test(checkoutCredentials.resumeToken)) ||
+      (checkoutCredentials.type === 'authenticated' &&
+        checkoutCredentials.accessToken.trim() === '') ||
       !/^[A-Za-z0-9._~-]{16,128}$/.test(payload.idempotencyKey) ||
       !/^\d{1,8}\.\d{2}$/.test(expectedAmount) ||
       Number(expectedAmount) <= 0
@@ -882,13 +1015,19 @@ class CrcnBackendApiService {
     const { idempotencyKey, ...paymentData } = payload;
 
     try {
-      const res = await fetch(`/api/checkout/${encodeURIComponent(reference)}/payments`, {
+      const authenticated = checkoutCredentials.type === 'authenticated';
+      const endpoint = authenticated
+        ? `/api/my-direct-booking-orders/${encodeURIComponent(reference)}/checkout/payments`
+        : `/api/checkout/${encodeURIComponent(reference)}/payments`;
+      const res = await apiFetch(endpoint, {
         method: 'POST',
         cache: 'no-store',
         headers: {
           'Content-Type': 'application/json',
           'Idempotency-Key': idempotencyKey,
-          'X-Checkout-Resume-Token': resumeToken,
+          ...(checkoutCredentials.type === 'authenticated'
+            ? { Authorization: `Bearer ${checkoutCredentials.accessToken}` }
+            : { 'X-Checkout-Resume-Token': checkoutCredentials.resumeToken }),
         },
         body: JSON.stringify(paymentData),
       });
@@ -937,7 +1076,7 @@ class CrcnBackendApiService {
     if (!listingId.trim() || listingId.length > 100) return { kind: 'unavailable' };
 
     try {
-      const res = await fetch(`/api/checkout/terms/${encodeURIComponent(listingId)}`, {
+      const res = await apiFetch(`/api/checkout/terms/${encodeURIComponent(listingId)}`, {
         cache: 'no-store',
       });
       if (!res.ok) return { kind: 'unavailable' };
@@ -956,7 +1095,7 @@ class CrcnBackendApiService {
     if (!listingId.trim() || listingId.length > 100) return { kind: 'unavailable' };
 
     try {
-      const res = await fetch(`/api/checkout/readiness/${encodeURIComponent(listingId)}`, {
+      const res = await apiFetch(`/api/checkout/readiness/${encodeURIComponent(listingId)}`, {
         cache: 'no-store',
       });
       if (!res.ok) return { kind: 'unavailable' };
@@ -971,15 +1110,35 @@ class CrcnBackendApiService {
     }
   }
 
-  public async resumeCheckout(reference: string, token: string): Promise<CheckoutResumeResult> {
-    if (!/^[A-Za-z0-9]{40}$/.test(reference) || !/^[A-Za-z0-9]{64}$/.test(token)) {
+  public async resumeCheckout(
+    reference: string,
+    credentials: CheckoutAccessCredentials | string,
+  ): Promise<CheckoutResumeResult> {
+    const checkoutCredentials: CheckoutAccessCredentials =
+      typeof credentials === 'string'
+        ? { type: 'resume-token', resumeToken: credentials }
+        : credentials;
+    if (
+      !/^[A-Za-z0-9]{40}$/.test(reference) ||
+      (checkoutCredentials.type === 'resume-token' &&
+        !/^[A-Za-z0-9]{64}$/.test(checkoutCredentials.resumeToken)) ||
+      (checkoutCredentials.type === 'authenticated' &&
+        checkoutCredentials.accessToken.trim() === '')
+    ) {
       return { kind: 'not-found' };
     }
 
     try {
-      const res = await fetch(`/api/checkout/${encodeURIComponent(reference)}`, {
+      const authenticated = checkoutCredentials.type === 'authenticated';
+      const endpoint = authenticated
+        ? `/api/my-direct-booking-orders/${encodeURIComponent(reference)}/checkout`
+        : `/api/checkout/${encodeURIComponent(reference)}`;
+      const res = await apiFetch(endpoint, {
         cache: 'no-store',
-        headers: { 'X-Checkout-Resume-Token': token },
+        headers:
+          checkoutCredentials.type === 'authenticated'
+            ? { Authorization: `Bearer ${checkoutCredentials.accessToken}` }
+            : { 'X-Checkout-Resume-Token': checkoutCredentials.resumeToken },
       });
       if (res.status === 404) return { kind: 'not-found' };
       if (!res.ok) return { kind: 'unavailable' };
@@ -994,7 +1153,7 @@ class CrcnBackendApiService {
   }
 
   public async getMyReservations(accessToken: string): Promise<Reservation[]> {
-    const res = await fetch('/api/my-reservations', {
+    const res = await apiFetch('/api/my-reservations', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1014,8 +1173,10 @@ class CrcnBackendApiService {
     }));
   }
 
-  public async getMyDirectBookingOrders(accessToken: string): Promise<DirectBookingOrderSummary[]> {
-    const res = await fetch('/api/my-direct-booking-orders', {
+  public async getMyDirectBookingOrders(
+    accessToken: string,
+  ): Promise<DirectBookingOrderListItem[]> {
+    const res = await apiFetch('/api/my-direct-booking-orders', {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     });
@@ -1027,7 +1188,7 @@ class CrcnBackendApiService {
           : 'Não foi possível carregar suas compras no site.',
       );
     }
-    if (!Array.isArray(json.data) || !json.data.every(isDirectBookingOrder)) {
+    if (!Array.isArray(json.data) || !json.data.every(isDirectBookingOrderListItem)) {
       throw new Error('A API retornou dados inválidos para as compras no site.');
     }
     return json.data;
@@ -1041,7 +1202,7 @@ class CrcnBackendApiService {
       throw new Error('Referência do pedido inválida.');
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/my-direct-booking-orders/${encodeURIComponent(publicReference)}/cancel`,
       {
         method: 'POST',
@@ -1069,7 +1230,7 @@ class CrcnBackendApiService {
     reservationId: string,
     accessToken: string,
   ): Promise<ReservationCancellationResult> {
-    const res = await fetch(`/api/my-reservations/${encodeURIComponent(reservationId)}/cancel`, {
+    const res = await apiFetch(`/api/my-reservations/${encodeURIComponent(reservationId)}/cancel`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -1094,7 +1255,7 @@ class CrcnBackendApiService {
   }
 
   public async getOwnerAccess(accessToken: string): Promise<OwnerAccessStatus> {
-    const res = await fetch('/api/owner/access', {
+    const res = await apiFetch('/api/owner/access', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1111,7 +1272,7 @@ class CrcnBackendApiService {
   }
 
   public async requestOwnerAccess(accessToken: string): Promise<OwnerAccessStatus> {
-    const res = await fetch('/api/owner/access/request', {
+    const res = await apiFetch('/api/owner/access/request', {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -1134,7 +1295,7 @@ class CrcnBackendApiService {
     to: string,
   ): Promise<OwnerDashboardData> {
     const query = new URLSearchParams({ from, to });
-    const res = await fetch(`/api/owner/dashboard?${query}`, {
+    const res = await apiFetch(`/api/owner/dashboard?${query}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1162,7 +1323,7 @@ class CrcnBackendApiService {
   }
 
   public async getOwnerAdminStatus(accessToken: string): Promise<boolean> {
-    const res = await fetch('/api/owner/admin/status', {
+    const res = await apiFetch('/api/owner/admin/status', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1177,7 +1338,7 @@ class CrcnBackendApiService {
   }
 
   public async getOwnerAccessRequests(accessToken: string): Promise<OwnerAccessRequest[]> {
-    const res = await fetch('/api/owner/admin/requests', {
+    const res = await apiFetch('/api/owner/admin/requests', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1200,7 +1361,7 @@ class CrcnBackendApiService {
     webhookPage = 1,
   ): Promise<DirectBookingOperationsPage> {
     const params = new URLSearchParams({ page: String(page), webhookPage: String(webhookPage) });
-    const res = await fetch(`/api/owner/admin/direct-booking-orders?${params}`, {
+    const res = await apiFetch(`/api/owner/admin/direct-booking-orders?${params}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1244,7 +1405,7 @@ class CrcnBackendApiService {
   }
 
   public async retryDirectBookingWebhook(accessToken: string, webhookId: string): Promise<void> {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/owner/admin/direct-booking-webhooks/${encodeURIComponent(webhookId)}/retry`,
       {
         method: 'POST',
@@ -1269,7 +1430,7 @@ class CrcnBackendApiService {
       throw new Error('Referência do pedido inválida.');
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/start-manual-cancellation`,
       {
         method: 'POST',
@@ -1303,7 +1464,7 @@ class CrcnBackendApiService {
       throw new Error('Referência do pedido inválida.');
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/verify-manual-stays-cancellation`,
       {
         method: 'POST',
@@ -1335,7 +1496,7 @@ class CrcnBackendApiService {
       throw new Error('Referência do pedido inválida.');
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/verify-manual-gateway-refund`,
       {
         method: 'POST',
@@ -1358,9 +1519,40 @@ class CrcnBackendApiService {
     }
   }
 
+  public async revokeDirectBookingResumeToken(
+    accessToken: string,
+    publicReference: string,
+  ): Promise<void> {
+    if (!/^[A-Za-z0-9]{40}$/.test(publicReference)) {
+      throw new Error('Referência do pedido inválida.');
+    }
+
+    const res = await apiFetch(
+      `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/revoke-resume-token`,
+      {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const json: unknown = await res.json();
+    if (
+      !res.ok ||
+      !isRecord(json) ||
+      json.success !== true ||
+      (json.status !== 'revoked' && json.status !== 'already_revoked')
+    ) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível revogar a credencial de retomada.',
+      );
+    }
+  }
+
   public async searchStaysOwners(accessToken: string, query: string): Promise<StaysOwnerSummary[]> {
     const params = new URLSearchParams({ q: query });
-    const res = await fetch(`/api/owner/admin/stays-owners?${params}`, {
+    const res = await apiFetch(`/api/owner/admin/stays-owners?${params}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1382,7 +1574,7 @@ class CrcnBackendApiService {
     userId: string,
     staysOwnerId: string,
   ): Promise<void> {
-    const res = await fetch('/api/owner/admin/approve', {
+    const res = await apiFetch('/api/owner/admin/approve', {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, staysOwnerId, identityVerified: true }),
@@ -1400,7 +1592,7 @@ class CrcnBackendApiService {
   // 7. GET /api/stays/status
   public async getStaysStatus(): Promise<StaysStatusResponse | null> {
     try {
-      const res = await fetch('/api/stays/status');
+      const res = await apiFetch('/api/stays/status');
       if (!res.ok) return null;
       const json: unknown = await res.json();
       if (
@@ -1431,7 +1623,7 @@ class CrcnBackendApiService {
     history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
   ): Promise<SofiaChatResponse> {
     try {
-      const res = await fetch('/api/sofia/chat', {
+      const res = await apiFetch('/api/sofia/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, history }),

@@ -1,11 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Sparkles, 
-  Send, 
-  X, 
-  ChevronRight, 
-  Filter
-} from 'lucide-react';
+import { Sparkles, Send, X, ChevronRight, Filter } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { formatCurrency } from '../../utils/formatters';
@@ -82,10 +76,13 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
     setIsLoading(true);
 
     try {
-      const response = await crcnBackendApi.chatWithSofia(text, messages.slice(-10).map((item) => ({
-        role: item.sender === 'sofia' ? 'assistant' : 'user',
-        content: item.text,
-      })));
+      const response = await crcnBackendApi.chatWithSofia(
+        text,
+        messages.slice(-10).map((item) => ({
+          role: item.sender === 'sofia' ? 'assistant' : 'user',
+          content: item.text,
+        })),
+      );
       const sofiaMsg: ChatMessage = {
         id: `sofia-${Date.now()}`,
         sender: 'sofia',
@@ -115,7 +112,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-60 bg-white/20 backdrop-blur-sm flex items-end sm:items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
-      <div 
+      <div
         ref={dialogRef}
         data-dialog-focus-root
         role="dialog"
@@ -138,8 +135,10 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h3 id="sofia-assistant-title" className="font-extrabold text-base leading-tight">Sofia</h3>
-                <span className="px-2 py-0.5 rounded-full bg-white/25 text-[10px] font-bold backdrop-blur-xl border border-white/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.35)]">
+                <h3 id="sofia-assistant-title" className="font-extrabold text-base leading-tight">
+                  Sofia
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-white/25 text-[11px] font-bold backdrop-blur-xl border border-white/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.35)]">
                   Assistente virtual
                 </span>
               </div>
@@ -153,7 +152,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
             type="button"
             aria-label="Fechar assistente Sofia"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 border border-white/35 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45)] backdrop-blur-xl flex items-center justify-center transition-colors cursor-pointer"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/35 bg-white/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.45)] backdrop-blur-xl transition-colors hover:bg-white/35"
           >
             <X className="w-5 h-5" />
           </button>
@@ -184,7 +183,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                 <div className={`max-w-[85%] space-y-2.5 ${isSofia ? 'text-left' : 'text-right'}`}>
                   {/* Bubble */}
                   <div
-                    className={`p-3.5 sm:p-4 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-xs ${
+                    className={`p-3.5 sm:p-4 rounded-2xl text-sm leading-relaxed shadow-xs ${
                       isSofia
                         ? 'bg-white/45 backdrop-blur-lg text-neutral-800 border border-white/70 shadow-[0_8px_24px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.65)] rounded-tl-xs'
                         : 'liquid-glass-accent text-white rounded-tr-xs font-medium'
@@ -192,25 +191,30 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                   >
                     <p className="whitespace-pre-line">{msg.text}</p>
                     {/* Filter Suggestion Button */}
-                    {isSofia && msg.suggestedFilters && Object.values(msg.suggestedFilters).some((value) => value !== undefined && value !== '') && onApplyFilters && (
-                      <div className="mt-3 pt-2.5 border-t border-white/70 flex items-center justify-between">
-                        <span className="text-[11px] text-neutral-500 font-medium">
-                          Deseja ver na vitrine principal?
-                        </span>
-                        <button
-                          onClick={() => {
-                            if (msg.suggestedFilters) {
-                              onApplyFilters(msg.suggestedFilters);
-                              onClose();
-                            }
-                          }}
-                          className="px-3 py-1 rounded-xl liquid-glass-pill hover:bg-white/90 text-orange-700 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 border border-orange-200/70"
-                        >
-                          <Filter className="w-3 h-3 text-orange-600" />
-                          <span>Aplicar filtros no site</span>
-                        </button>
-                      </div>
-                    )}
+                    {isSofia &&
+                      msg.suggestedFilters &&
+                      Object.values(msg.suggestedFilters).some(
+                        (value) => value !== undefined && value !== '',
+                      ) &&
+                      onApplyFilters && (
+                        <div className="mt-3 pt-2.5 border-t border-white/70 flex items-center justify-between">
+                          <span className="text-[11px] text-neutral-500 font-medium">
+                            Deseja ver na vitrine principal?
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (msg.suggestedFilters) {
+                                onApplyFilters(msg.suggestedFilters);
+                                onClose();
+                              }
+                            }}
+                            className="flex min-h-11 items-center gap-1 rounded-xl border border-orange-200/70 px-3 py-1 text-xs font-bold text-orange-700 transition-colors hover:bg-white/90"
+                          >
+                            <Filter className="w-3 h-3 text-orange-600" />
+                            <span>Aplicar filtros no site</span>
+                          </button>
+                        </div>
+                      )}
                   </div>
 
                   {/* Property Cards Embedded */}
@@ -237,17 +241,22 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                               {getPublicPropertyTitle(prop.title)}
                             </h4>
                             <p className="text-[11px] text-neutral-500 truncate">
-                              {prop.location.neighborhood || 'Caldas Novas'} • Até {prop.maxGuests} hóspedes
+                              {prop.location.neighborhood || 'Caldas Novas'} • Até {prop.maxGuests}{' '}
+                              hóspedes
                             </p>
                             <div className="mt-1 flex items-center justify-between">
                               <span className="text-xs font-black text-neutral-900">
                                 {Number.isFinite(prop.pricePerNight) && prop.pricePerNight > 0 ? (
                                   <>
                                     {formatCurrency(prop.pricePerNight, currency)}{' '}
-                                    <span className="text-[10px] font-normal text-neutral-500">/noite</span>
+                                    <span className="text-[11px] font-normal text-neutral-500">
+                                      /noite
+                                    </span>
                                   </>
                                 ) : (
-                                  <span className="text-[10px] font-semibold text-neutral-500">Consulte valores nas datas</span>
+                                  <span className="text-[11px] font-semibold text-neutral-500">
+                                    Consulte valores nas datas
+                                  </span>
                                 )}
                               </span>
                               <span className="text-[11px] font-bold text-orange-600 flex items-center gap-0.5">
@@ -261,9 +270,7 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
                     </div>
                   )}
 
-                  <span className="text-[10px] text-neutral-400 block px-1">
-                    {msg.timestamp}
-                  </span>
+                  <span className="text-[11px] text-neutral-400 block px-1">{msg.timestamp}</span>
                 </div>
               </div>
             );
@@ -293,15 +300,15 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
             aria-label="Mensagem para Sofia"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Pergunte sobre condomínios, regras de bebidas, ingressos..."
-            className="min-w-0 flex-1 rounded-2xl border border-white/75 bg-white/40 px-4 py-3 text-xs text-neutral-900 shadow-[inset_0_1px_3px_rgba(15,23,42,0.03),0_2px_8px_rgba(15,23,42,0.03)] backdrop-blur-lg outline-none transition-all placeholder:text-neutral-500 focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:bg-white/60 sm:text-sm"
+            placeholder="Pergunte sobre hospedagens, condomínios ou passeios..."
+            className="min-h-11 min-w-0 flex-1 rounded-2xl border border-white/75 bg-white/40 px-4 py-3 text-base text-neutral-900 shadow-[inset_0_1px_3px_rgba(15,23,42,0.03),0_2px_8px_rgba(15,23,42,0.03)] backdrop-blur-lg outline-none transition-all placeholder:text-neutral-500 focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 focus:bg-white/60 sm:text-sm"
           />
 
           <button
             type="submit"
             aria-label="Enviar mensagem para Sofia"
             disabled={!inputValue.trim() || isLoading}
-            className="liquid-glass-accent p-3 rounded-2xl text-white font-bold shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-40 disabled:hover:scale-100 flex-shrink-0"
+            className="liquid-glass-accent flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl text-white font-bold shadow-md transition-transform hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100"
           >
             <Send className="w-4 h-4" />
           </button>

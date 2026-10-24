@@ -60,6 +60,49 @@ test('sanitizes media from the Laravel catalog, detail, and search responses', a
   }
 });
 
+test('accepts simulated catalog and dated search responses without treating them as live', async () => {
+  const originalFetch = globalThis.fetch;
+  const simulatedListing = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    simulatedData: true,
+    dataSource: 'stays-simulated' as const,
+  };
+  globalThis.fetch = async (input) => {
+    const path = String(input);
+    const payload = path.includes('/search')
+      ? {
+          success: true,
+          source: 'stays-simulated',
+          total: 1,
+          from: '2026-11-02',
+          to: '2026-11-04',
+          guests: 2,
+          data: [simulatedListing],
+        }
+      : { success: true, source: 'stays-simulated', total: 1, data: [simulatedListing] };
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  try {
+    const catalog = await crcnBackendApi.getAccommodations();
+    const search = await crcnBackendApi.searchAccommodations({
+      from: '2026-11-02',
+      to: '2026-11-04',
+      guests: 2,
+    });
+
+    assert.equal(catalog[0]?.simulatedData, true);
+    assert.equal(localStorage.getItem('hospeda_properties_source'), 'stays-simulated');
+    assert.equal(search.data[0]?.dataSource, 'stays-simulated');
+  } finally {
+    globalThis.fetch = originalFetch;
+    localStorage.clear();
+  }
+});
+
 test('sanitizes media before Stays listings are persisted or returned', async () => {
   const originalFetch = globalThis.fetch;
   const unsafeListing = {

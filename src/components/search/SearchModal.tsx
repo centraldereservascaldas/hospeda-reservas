@@ -12,6 +12,22 @@ import {
 import { SearchFilters } from '../../types';
 import { StaysSearchWidget, toBrDate } from './StaysSearchWidget';
 import { useDialogFocus } from '../useDialogFocus';
+import { countOccupancyGuests } from '../../utils/guestCounts';
+
+function toLocalIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToIsoDate(dateValue: string, days: number): string {
+  const date = new Date(`${dateValue}T12:00:00`);
+  date.setDate(date.getDate() + days);
+
+  return toLocalIsoDate(date);
+}
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -23,6 +39,7 @@ interface SearchModalProps {
     checkIn: string;
     checkOut: string;
     persons: number;
+    guests?: SearchFilters['guests'];
     destination?: string;
     propertyId?: string;
     surpriseMe?: boolean;
@@ -40,6 +57,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const fieldId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
+  const tabPanelRef = useRef<HTMLDivElement>(null);
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
   const focusRing =
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600';
@@ -53,7 +71,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [children, setChildren] = useState(filters.guests.children);
   const [infants, setInfants] = useState(filters.guests.infants);
   const [pets, setPets] = useState(filters.guests.pets);
-  const totalGuests = adults + children;
+  const [searchError, setSearchError] = useState('');
+  const todayIso = toLocalIsoDate(new Date());
+  const checkOutMin = checkIn ? addDaysToIsoDate(checkIn, 1) : todayIso;
+  const totalGuests = countOccupancyGuests({ adults, children, infants });
   const tabs = [
     { id: 'destination', label: 'Destino' },
     { id: 'dates', label: 'Datas' },
@@ -88,6 +109,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     setInfants(filters.guests.infants);
     setPets(filters.guests.pets);
   }, [filters, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !tabPanelRef.current) return;
+
+    tabPanelRef.current.scrollTop = 0;
+  }, [activeTab, isOpen]);
 
   if (!isOpen) return null;
 
@@ -130,6 +157,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   ];
 
   const handleApply = () => {
+    const hasPartialDateRange = Boolean(checkIn) !== Boolean(checkOut);
+    const hasInvalidDateRange = Boolean(
+      checkIn && (checkIn < todayIso || (checkOut && checkOut <= checkIn)),
+    );
+    if (hasPartialDateRange || hasInvalidDateRange) {
+      setSearchError('Escolha datas futuras e um check-out posterior ao check-in.');
+      setActiveTab('dates');
+      return;
+    }
+
+    const guests = { adults, children, infants, pets };
     onApplyFilters({
       ...filters,
       destination,
@@ -137,12 +175,15 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         destination === filters.destination ? filters.destinationPropertyId : '',
       checkIn,
       checkOut,
-      guests: {
-        adults,
-        children,
-        infants,
-        pets,
-      },
+      guests,
+    });
+    onSearchInApp({
+      checkIn,
+      checkOut,
+      persons: Math.max(1, totalGuests),
+      guests,
+      destination,
+      propertyId: destination === filters.destination ? filters.destinationPropertyId : '',
     });
     onClose();
   };
@@ -155,7 +196,16 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     setChildren(0);
     setInfants(0);
     setPets(0);
+    setSearchError('');
     onResetFilters();
+    onSearchInApp({
+      checkIn: '',
+      checkOut: '',
+      persons: 1,
+      guests: { adults: 1, children: 0, infants: 0, pets: 0 },
+      destination: '',
+      propertyId: '',
+    });
   };
 
   const brCheckIn = toBrDate(checkIn);
@@ -163,7 +213,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const externalStaysUrl = `https://www.centraldereservascaldas.com.br/pt/search?from=${encodeURIComponent(brCheckIn)}&to=${encodeURIComponent(brCheckOut)}&persons=${encodeURIComponent(Math.max(1, totalGuests))}&wpl=`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 sm:pt-16 px-4 bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 [@media(max-height:400px)]:pt-2 sm:pt-16 px-4 bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200">
       <div
         ref={dialogRef}
         data-dialog-focus-root
@@ -171,20 +221,23 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         aria-modal="true"
         aria-labelledby={`${fieldId}-title`}
         tabIndex={-1}
-        className="w-full max-w-3xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl border border-neutral-200/90 overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200"
+        className="w-full max-w-3xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl border border-neutral-200/90 overflow-hidden flex flex-col max-h-[90dvh] sm:max-h-[85vh] [@media(max-height:400px)]:max-h-[calc(100dvh-1rem)] animate-in zoom-in-95 duration-200"
       >
-        <h2 id={`${fieldId}-title`} className="sr-only">
-          Buscar hospedagens
-        </h2>
         {/* Header Tabs with Crisp Glass pills */}
-        <div className="p-4 sm:p-5 border-b border-neutral-200 bg-white/95 backdrop-blur-md flex items-center justify-between">
+        <div className="relative flex flex-col items-stretch gap-3 border-b border-neutral-200 bg-white/95 p-4 backdrop-blur-md [@media(max-height:400px)]:gap-2 [@media(max-height:400px)]:p-2 min-[480px]:flex-row min-[480px]:items-center min-[480px]:justify-between sm:p-5">
+          <h2
+            id={`${fieldId}-title`}
+            className="pr-12 text-base font-bold text-neutral-950 min-[480px]:sr-only"
+          >
+            Buscar hospedagens
+          </h2>
           <div
             ref={tabListRef}
             role="tablist"
             aria-label="Tipo de busca"
             tabIndex={-1}
             onKeyDown={handleTabKeyDown}
-            className="flex flex-wrap items-center gap-1.5 bg-neutral-100 p-1.5 rounded-full text-xs font-semibold border border-neutral-200"
+            className="grid w-full grid-cols-[0.9fr_1.1fr] items-center gap-1.5 rounded-2xl border border-neutral-200 bg-neutral-100 p-1.5 text-xs font-semibold min-[480px]:flex min-[480px]:w-auto min-[480px]:flex-wrap min-[480px]:rounded-full"
           >
             <button
               type="button"
@@ -195,7 +248,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               aria-controls={`${fieldId}-tabpanel`}
               tabIndex={activeTab === 'destination' ? 0 : -1}
               onClick={() => setActiveTab('destination')}
-              className={`px-4 py-2 rounded-full transition-all cursor-pointer ${focusRing} ${
+              className={`flex min-h-11 items-center justify-center rounded-xl px-2 py-2 transition-all cursor-pointer min-[480px]:rounded-full min-[480px]:px-3 sm:px-4 ${focusRing} ${
                 activeTab === 'destination'
                   ? 'bg-white text-neutral-950 shadow-sm font-bold'
                   : 'text-neutral-700 hover:text-neutral-950'
@@ -212,7 +265,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               aria-controls={`${fieldId}-tabpanel`}
               tabIndex={activeTab === 'dates' ? 0 : -1}
               onClick={() => setActiveTab('dates')}
-              className={`px-4 py-2 rounded-full transition-all cursor-pointer ${focusRing} ${
+              className={`flex min-h-11 items-center justify-center rounded-xl px-2 py-2 transition-all cursor-pointer min-[480px]:rounded-full min-[480px]:px-3 sm:px-4 ${focusRing} ${
                 activeTab === 'dates'
                   ? 'bg-white text-neutral-950 shadow-sm font-bold'
                   : 'text-neutral-700 hover:text-neutral-950'
@@ -229,7 +282,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               aria-controls={`${fieldId}-tabpanel`}
               tabIndex={activeTab === 'guests' ? 0 : -1}
               onClick={() => setActiveTab('guests')}
-              className={`px-4 py-2 rounded-full transition-all cursor-pointer ${focusRing} ${
+              className={`flex min-h-11 items-center justify-center rounded-xl px-2 py-2 transition-all cursor-pointer min-[480px]:rounded-full min-[480px]:px-3 sm:px-4 ${focusRing} ${
                 activeTab === 'guests'
                   ? 'bg-white text-neutral-950 shadow-sm font-bold'
                   : 'text-neutral-700 hover:text-neutral-950'
@@ -246,7 +299,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               aria-controls={`${fieldId}-tabpanel`}
               tabIndex={activeTab === 'stays_engine' ? 0 : -1}
               onClick={() => setActiveTab('stays_engine')}
-              className={`px-4 py-2 rounded-full transition-all cursor-pointer flex items-center gap-1.5 ${focusRing} ${
+              className={`flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-2 py-2 transition-all cursor-pointer min-[480px]:rounded-full min-[480px]:px-3 sm:px-4 ${focusRing} ${
                 activeTab === 'stays_engine'
                   ? 'bg-gradient-to-r from-orange-700 to-amber-700 text-white shadow-sm font-bold'
                   : 'text-orange-800 hover:text-orange-950 font-bold'
@@ -262,7 +315,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             type="button"
             aria-label="Fechar busca de hospedagens"
             onClick={onClose}
-            className={`w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 flex items-center justify-center text-neutral-600 hover:text-neutral-950 transition-colors cursor-pointer shadow-2xs ${focusRing}`}
+            className={`absolute right-4 top-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-neutral-100 text-neutral-600 shadow-2xs transition-colors hover:bg-neutral-200 hover:text-neutral-950 [@media(max-height:400px)]:right-2 [@media(max-height:400px)]:top-0 min-[480px]:static ${focusRing}`}
           >
             <X className="w-4 h-4" />
           </button>
@@ -270,11 +323,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
         {/* Tab Body */}
         <div
+          ref={tabPanelRef}
           id={`${fieldId}-tabpanel`}
           role="tabpanel"
           aria-labelledby={`${fieldId}-tab-${activeTab}`}
           tabIndex={0}
-          className="p-6 overflow-y-auto max-h-[55vh]"
+          className="p-6 [@media(max-height:400px)]:p-3 overflow-y-auto max-h-[55vh]"
         >
           {/* TAB: BOOKING SEARCH */}
           {activeTab === 'stays_engine' && (
@@ -314,14 +368,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     value={destination}
                     onChange={(e) => setDestination(e.target.value)}
                     placeholder="Ex: Trancoso, Rio de Janeiro, Campos do Jordão..."
-                    className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-neutral-300 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none transition-all"
+                    className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-neutral-300 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none transition-all"
                   />
                   {destination && (
                     <button
                       type="button"
                       aria-label="Limpar destino"
                       onClick={() => setDestination('')}
-                      className={`absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 ${focusRing}`}
+                      className={`absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 ${focusRing}`}
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -361,12 +415,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
           {/* TAB 2: DATES */}
           {activeTab === 'dates' && (
-            <div className="space-y-6">
-              <h3 className="text-base font-bold text-neutral-900">
+            <div className="space-y-6 [@media(max-height:400px)]:space-y-3">
+              <h3 className="text-base font-bold text-neutral-900 [@media(max-height:400px)]:sr-only">
                 Selecione as datas da sua estadia
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 [@media(max-height:400px)]:gap-2">
                 <div className="space-y-1.5">
                   <label
                     htmlFor={`${fieldId}-check-in`}
@@ -379,8 +433,16 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     <input
                       id={`${fieldId}-check-in`}
                       type="date"
+                      min={todayIso}
                       value={checkIn}
-                      onChange={(e) => setCheckIn(e.target.value)}
+                      onChange={(e) => {
+                        const nextCheckIn = e.target.value;
+                        setCheckIn(nextCheckIn);
+                        if (nextCheckIn && checkOut && checkOut <= nextCheckIn) {
+                          setCheckOut(addDaysToIsoDate(nextCheckIn, 1));
+                        }
+                        setSearchError('');
+                      }}
                       className="w-full pl-10 pr-4 py-3 rounded-xl border border-neutral-300 focus:border-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none"
                     />
                   </div>
@@ -398,13 +460,23 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     <input
                       id={`${fieldId}-check-out`}
                       type="date"
+                      min={checkOutMin}
                       value={checkOut}
-                      onChange={(e) => setCheckOut(e.target.value)}
+                      onChange={(e) => {
+                        setCheckOut(e.target.value);
+                        setSearchError('');
+                      }}
                       className="w-full pl-10 pr-4 py-3 rounded-xl border border-neutral-300 focus:border-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none"
                     />
                   </div>
                 </div>
               </div>
+
+              {searchError && (
+                <p role="alert" className="text-sm font-semibold text-red-700">
+                  {searchError}
+                </p>
+              )}
 
               {/* Quick Preset Buttons */}
               <div>
@@ -428,7 +500,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         setCheckIn(start.toISOString().split('T')[0]);
                         setCheckOut(end.toISOString().split('T')[0]);
                       }}
-                      className={`px-3.5 py-2 rounded-xl border border-neutral-200 hover:border-neutral-900 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-all cursor-pointer ${focusRing}`}
+                      className={`inline-flex min-h-11 items-center justify-center rounded-xl border border-neutral-200 px-3.5 py-2 text-left text-xs font-medium text-neutral-700 transition-all hover:border-neutral-900 hover:bg-neutral-50 cursor-pointer ${focusRing}`}
                     >
                       {preset.label}
                     </button>
@@ -453,7 +525,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     aria-label="Diminuir número de adultos"
                     disabled={adults <= 1}
                     onClick={() => setAdults(Math.max(1, adults - 1))}
-                    className={`w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
+                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
@@ -467,7 +539,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     type="button"
                     aria-label="Aumentar número de adultos"
                     onClick={() => setAdults(adults + 1)}
-                    className={`w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
+                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -486,7 +558,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     aria-label="Diminuir número de crianças"
                     disabled={children <= 0}
                     onClick={() => setChildren(Math.max(0, children - 1))}
-                    className={`w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
+                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
@@ -500,7 +572,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     type="button"
                     aria-label="Aumentar número de crianças"
                     onClick={() => setChildren(children + 1)}
-                    className={`w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
+                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -519,7 +591,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     aria-label="Diminuir número de bebês"
                     disabled={infants <= 0}
                     onClick={() => setInfants(Math.max(0, infants - 1))}
-                    className={`w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
+                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
@@ -533,7 +605,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     type="button"
                     aria-label="Aumentar número de bebês"
                     onClick={() => setInfants(infants + 1)}
-                    className={`w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
+                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -552,7 +624,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     aria-label="Diminuir número de animais de estimação"
                     disabled={pets <= 0}
                     onClick={() => setPets(Math.max(0, pets - 1))}
-                    className={`w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
+                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
                   >
                     <Minus className="w-3.5 h-3.5" />
                   </button>
@@ -566,7 +638,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     type="button"
                     aria-label="Aumentar número de animais de estimação"
                     onClick={() => setPets(pets + 1)}
-                    className={`w-8 h-8 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
+                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -577,11 +649,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         </div>
 
         {/* Footer controls */}
-        <div className="p-4 sm:p-5 border-t border-neutral-100 bg-neutral-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="p-4 [@media(max-height:400px)]:p-2 sm:p-5 border-t border-neutral-100 bg-neutral-50/50 flex flex-col [@media(max-height:400px)]:flex-row sm:flex-row items-center justify-between gap-3 [@media(max-height:400px)]:gap-2">
           <div className="flex items-center gap-3">
             <button
               onClick={handleClear}
-              className={`text-xs font-semibold text-neutral-600 underline hover:text-neutral-900 cursor-pointer ${focusRing}`}
+              className={`inline-flex min-h-11 items-center justify-center rounded-full px-2 text-xs font-semibold text-neutral-600 underline hover:text-neutral-900 cursor-pointer ${focusRing}`}
             >
               Limpar tudo
             </button>
@@ -590,7 +662,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               href={externalStaysUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={`text-xs text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1 ${focusRing}`}
+              className={`text-xs text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1 [@media(max-height:400px)]:hidden ${focusRing}`}
               title="Abrir pesquisa com esses mesmos parâmetros em centraldereservascaldas.com.br"
             >
               <span>Abrir portal de reservas</span>
@@ -600,10 +672,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
           <button
             onClick={handleApply}
-            className={`w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-orange-700 to-amber-700 text-white text-sm font-bold shadow-md shadow-orange-500/30 hover:shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20 ${focusRing}`}
+            aria-label="Buscar hospedagens termais"
+            className={`min-h-11 w-full [@media(max-height:400px)]:w-auto [@media(max-height:400px)]:min-w-0 [@media(max-height:400px)]:flex-1 [@media(max-height:400px)]:px-2 sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-orange-700 to-amber-700 text-white text-sm font-bold shadow-md shadow-orange-500/30 hover:shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20 ${focusRing}`}
           >
             <Search className="w-4 h-4 stroke-[2.5]" />
-            <span>Buscar hospedagens termais</span>
+            <span className="[@media(max-height:400px)]:hidden">Buscar hospedagens termais</span>
+            <span className="hidden [@media(max-height:400px)]:inline">Buscar</span>
           </button>
         </div>
       </div>

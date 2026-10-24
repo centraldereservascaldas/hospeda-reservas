@@ -22,6 +22,19 @@ interface OwnerAccessAdminViewProps {
   accessToken: string;
 }
 
+type ConfirmationEmailStatus = NonNullable<
+  DirectBookingOperationsOrder['confirmationEmail']
+>['status'];
+
+const confirmationEmailStatusLabels: Record<ConfirmationEmailStatus, string> = {
+  pending: 'pendente',
+  queued: 'na fila',
+  processing: 'enviando',
+  sent: 'enviado',
+  failed: 'falhou',
+  skipped: 'não enviado: reserva não está mais confirmada',
+};
+
 export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ accessToken }) => {
   const [requests, setRequests] = useState<OwnerAccessRequest[]>([]);
   const [operationsOrders, setOperationsOrders] = useState<DirectBookingOperationsOrder[]>([]);
@@ -123,7 +136,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
             type="button"
             onClick={() => setOperationsRefreshKey((value) => value + 1)}
             disabled={operationsLoading}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/80 bg-white/75 px-4 py-2.5 text-sm font-bold text-neutral-700 shadow-sm backdrop-blur-xl hover:bg-white disabled:opacity-60"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/80 bg-white/75 px-4 py-2.5 text-sm font-bold text-neutral-700 shadow-sm backdrop-blur-xl hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-60"
           >
             <RefreshCw
               className={`h-4 w-4 ${operationsLoading ? 'animate-spin' : ''}`}
@@ -155,8 +168,8 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
           <>
             {!operationsError && unmatchedWebhookTotal > 0 && unmatchedWebhooks.length === 0 && (
               <p role="alert">
-                A API informa {unmatchedWebhookTotal} notificação(ões) pendente(s), mas não retornou
-                os registros. Atualize a fila para tentar novamente.
+                Há {unmatchedWebhookTotal} notificação(ões) pendente(s) sem detalhes disponíveis.
+                Atualize a fila para tentar novamente.
               </p>
             )}
             {unmatchedWebhooks.length > 0 && (
@@ -197,7 +210,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
                       type="button"
                       onClick={() => setWebhookPage((page) => Math.max(1, page - 1))}
                       disabled={operationsLoading || webhookPage <= 1}
-                      className="inline-flex items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Anterior
                     </button>
@@ -205,7 +218,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
                       type="button"
                       onClick={() => setWebhookPage((page) => Math.min(webhookLastPage, page + 1))}
                       disabled={operationsLoading || webhookPage >= webhookLastPage}
-                      className="inline-flex items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Próxima <ChevronRight className="h-4 w-4" aria-hidden="true" />
                     </button>
@@ -241,7 +254,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
                       type="button"
                       onClick={() => setOperationsPage((page) => Math.max(1, page - 1))}
                       disabled={operationsLoading || operationsPage <= 1}
-                      className="inline-flex items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Anterior
                     </button>
@@ -251,7 +264,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
                         setOperationsPage((page) => Math.min(operationsLastPage, page + 1))
                       }
                       disabled={operationsLoading || operationsPage >= operationsLastPage}
-                      className="inline-flex items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Próxima <ChevronRight className="h-4 w-4" aria-hidden="true" />
                     </button>
@@ -282,7 +295,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
             type="button"
             onClick={() => setRefreshKey((value) => value + 1)}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl border border-white/80 bg-white/75 px-4 py-2.5 text-sm font-bold text-neutral-700 shadow-sm backdrop-blur-xl hover:bg-white disabled:opacity-60"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/80 bg-white/75 px-4 py-2.5 text-sm font-bold text-neutral-700 shadow-sm backdrop-blur-xl hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-60"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Atualizar
           </button>
@@ -373,6 +386,71 @@ const webhookStatusLabels: Record<DirectBookingOperationsWebhook['status'], stri
   processing: 'Em processamento',
 };
 
+const getSuggestedNextAction = (order: DirectBookingOperationsOrder): string | null => {
+  if (order.status === 'reembolso_pendente') {
+    if (!order.staysCancellationConfirmed) {
+      return order.staysReservationId
+        ? 'Consulte a Stays para confirmar que a reserva foi cancelada.'
+        : 'Localize a reserva correspondente na Stays e confirme o cancelamento antes de avançar.';
+    }
+
+    if (!order.gatewayRefundConfirmed) {
+      return order.gatewayPaymentId
+        ? 'Consulte o Mercado Pago para confirmar o estorno. A verificação não envia uma nova solicitação de reembolso.'
+        : 'Localize a tentativa de pagamento correspondente no Mercado Pago e confirme o estorno; não solicite outro reembolso.';
+    }
+
+    return 'As duas conferências aparecem concluídas, mas o pedido permanece nesta fila. Atualize a fila e revise o histórico operacional.';
+  }
+
+  if (order.lastEvent?.code === 'payment_state_changed_during_reservation_release') {
+    return 'A Stays confirmou o cancelamento da pré-reserva enquanto o pagamento mudava. Reconcilie o pagamento no gateway e trate a reserva com a equipe antes de informar o hóspede.';
+  }
+
+  if (
+    order.status === 'atencao_operacional' &&
+    order.latePaymentAfterHold &&
+    order.paymentStatus === 'approved' &&
+    order.staysReservationId !== null
+  ) {
+    return 'Verifique a disponibilidade e a reserva na Stays. Registre a revisão do pagamento tardio quando o pedido permitir; não confirme nem cancele automaticamente.';
+  }
+
+  if (order.paymentApprovedWithoutConfirmedReservation) {
+    return 'Compare o pagamento aprovado no gateway com a reserva na Stays. Mantenha a confirmação ao hóspede suspensa até conciliar os dois registros.';
+  }
+
+  if (order.status === 'contestado') {
+    return 'Confira o estado e os prazos da contestação no gateway e reconcilie a situação da reserva na Stays antes de responder ao hóspede.';
+  }
+
+  if (order.status === 'cancelamento_solicitado') {
+    return 'Revise a política aplicável e a solicitação do hóspede. Registre o encaminhamento manual após decidir os próximos passos na Stays e no gateway.';
+  }
+
+  if (order.status === 'liberacao_pendente') {
+    return 'Consulte o estado da reserva na Stays antes de repetir ou considerar concluída a liberação da pré-reserva.';
+  }
+
+  if (order.issue?.source === 'stays') {
+    return 'Confira a ação e a mensagem da Stays e consulte o estado atual da reserva antes de qualquer repetição.';
+  }
+
+  if (order.issue?.source === 'payment' || order.issue?.source === 'webhook') {
+    return 'Consulte o estado autoritativo do pagamento no gateway e reconcilie o pedido antes de iniciar outra tentativa.';
+  }
+
+  if (order.issue?.source === 'email') {
+    return 'Confira o estado da outbox e a entrega do e-mail. Não recrie a reserva nem o pagamento para reenviar a comunicação.';
+  }
+
+  if (order.status === 'atencao_operacional') {
+    return 'Revise o último evento e os registros de gateway e Stays para identificar a divergência antes de agir.';
+  }
+
+  return null;
+};
+
 const DirectBookingOperationsCard: React.FC<{
   order: DirectBookingOperationsOrder;
   accessToken: string;
@@ -385,6 +463,8 @@ const DirectBookingOperationsCard: React.FC<{
   const [staysCancellationError, setStaysCancellationError] = useState('');
   const [verifyingGatewayRefund, setVerifyingGatewayRefund] = useState(false);
   const [gatewayRefundError, setGatewayRefundError] = useState('');
+  const [revokingResumeToken, setRevokingResumeToken] = useState(false);
+  const [resumeTokenRevocationError, setResumeTokenRevocationError] = useState('');
 
   const startManualCancellation = async (): Promise<void> => {
     setStartingManualCancellation(true);
@@ -442,6 +522,28 @@ const DirectBookingOperationsCard: React.FC<{
     }
   };
 
+  const revokeResumeToken = async (): Promise<void> => {
+    const confirmed = window.confirm(
+      'Revogar o link invalida a retomada como visitante. O titular ainda poderá acessar o pedido depois de entrar com o e-mail confirmado correspondente. Esta ação não cancela reserva nem pagamento. Continuar?',
+    );
+    if (!confirmed) return;
+
+    setRevokingResumeToken(true);
+    setResumeTokenRevocationError('');
+    try {
+      await crcnBackendApi.revokeDirectBookingResumeToken(accessToken, order.publicReference);
+      onUpdated();
+    } catch (error) {
+      setResumeTokenRevocationError(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível revogar a credencial de retomada.',
+      );
+    } finally {
+      setRevokingResumeToken(false);
+    }
+  };
+
   const latePaymentCancellationReview =
     order.status === 'atencao_operacional' &&
     order.latePaymentAfterHold &&
@@ -449,6 +551,28 @@ const DirectBookingOperationsCard: React.FC<{
     order.staysReservationId !== null;
   const canStartManualCancellation =
     order.status === 'cancelamento_solicitado' || latePaymentCancellationReview;
+  const suggestedNextAction = getSuggestedNextAction(order);
+  const resumeTokenExpiresAt = order.resumeTokenExpiresAt
+    ? Date.parse(order.resumeTokenExpiresAt)
+    : Number.NaN;
+  const hasValidResumeTokenExpiration = Number.isFinite(resumeTokenExpiresAt);
+  const hasActiveResumeToken =
+    order.hasResumeToken === true &&
+    hasValidResumeTokenExpiration &&
+    resumeTokenExpiresAt > Date.now();
+  const hasExpiredResumeToken = hasValidResumeTokenExpiration && resumeTokenExpiresAt <= Date.now();
+  const resumeTokenStatus =
+    order.hasResumeToken === true
+      ? !hasValidResumeTokenExpiration
+        ? 'sem validade configurada'
+        : hasActiveResumeToken
+          ? 'ativa'
+          : 'expirada'
+      : order.resumeTokenRevocation
+        ? 'revogada'
+        : hasExpiredResumeToken
+          ? 'expirada'
+          : 'indisponível';
 
   return (
     <article className="rounded-2xl border border-amber-200/80 bg-white p-4 shadow-sm sm:p-5">
@@ -463,7 +587,7 @@ const DirectBookingOperationsCard: React.FC<{
             </span>
           </div>
           <p className="mt-2 text-sm font-bold text-neutral-800">{order.guestName}</p>
-          <p className="text-xs text-neutral-600">{order.guestEmail}</p>
+          <p className="break-all text-xs text-neutral-600">{order.guestEmail}</p>
         </div>
         <p className="text-lg font-black text-neutral-950">
           {operationsMoney.format(Number(order.quoteTotal))}
@@ -484,6 +608,61 @@ const DirectBookingOperationsCard: React.FC<{
             <li role="alert">Uma ação de integração com a Stays falhou e requer conferência.</li>
           )}
         </ul>
+      )}
+      {suggestedNextAction && (
+        <p className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-950">
+          <strong className="font-bold">Próximo passo sugerido:</strong> {suggestedNextAction}
+        </p>
+      )}
+      {(order.hasResumeToken === true ||
+        order.resumeTokenExpiresAt ||
+        order.resumeTokenRevocation) && (
+        <section
+          className="mt-4 space-y-3 border-t border-neutral-100 pt-4"
+          aria-label="Credencial de retomada do visitante"
+        >
+          <div className="text-xs leading-5 text-neutral-700">
+            <p>
+              Retomada como visitante:{' '}
+              <strong className="font-semibold text-neutral-900">{resumeTokenStatus}</strong>
+              {order.resumeTokenExpiresAt && hasValidResumeTokenExpiration && (
+                <>
+                  {hasExpiredResumeToken ? ' · expirou em ' : ' · válida até '}
+                  {operationsDateTime.format(new Date(order.resumeTokenExpiresAt))}
+                </>
+              )}
+            </p>
+            {order.resumeTokenRevocation && (
+              <p className="text-neutral-600">
+                Revogada por ID{' '}
+                <span className="break-all font-mono text-neutral-800">
+                  {order.resumeTokenRevocation.reviewedBy ?? 'indisponível'}
+                </span>
+                {order.resumeTokenRevocation.at && (
+                  <> · {operationsDateTime.format(new Date(order.resumeTokenRevocation.at))}</>
+                )}
+                .
+              </p>
+            )}
+          </div>
+          {resumeTokenRevocationError && (
+            <p className="text-xs font-semibold text-rose-800" role="alert">
+              {resumeTokenRevocationError}
+            </p>
+          )}
+          {hasActiveResumeToken && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => void revokeResumeToken()}
+                disabled={revokingResumeToken}
+                className="min-h-11 rounded-xl border border-rose-300 px-3 py-2 text-xs font-bold text-rose-800 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-50"
+              >
+                {revokingResumeToken ? 'Revogando link…' : 'Revogar link de visitante'}
+              </button>
+            </div>
+          )}
+        </section>
       )}
       <dl className="mt-4 grid gap-3 border-t border-neutral-200 pt-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
         <div>
@@ -511,13 +690,13 @@ const DirectBookingOperationsCard: React.FC<{
           </dd>
         </div>
       </dl>
-      {(order.issue || order.gatewayPaymentId) && (
+      {(order.issue || order.gatewayPaymentId || order.confirmationEmail) && (
         <div className="mt-3 space-y-2 break-words border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
           {order.confirmationEmail && (
             <p>
               E-mail de confirmação:{' '}
               <strong className="font-semibold text-neutral-700">
-                {order.confirmationEmail.status}
+                {confirmationEmailStatusLabels[order.confirmationEmail.status]}
               </strong>
               {' · '}
               {order.confirmationEmail.attempts} tentativa(s)
@@ -543,24 +722,33 @@ const DirectBookingOperationsCard: React.FC<{
             </div>
           )}
           {order.gatewayPaymentId && (
-            <p>
+            <p className="break-all">
               ID do gateway: <span className="font-mono">{order.gatewayPaymentId}</span>
             </p>
           )}
         </div>
       )}
-      {(order.updatedAt || order.lastEvent) && (
-        <p className="mt-3 border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
+      {(order.createdAt || order.updatedAt || order.lastEvent) && (
+        <p className="mt-3 break-words border-t border-neutral-100 pt-3 text-[11px] text-neutral-500 [overflow-wrap:anywhere]">
+          {order.createdAt && (
+            <span>Pedido criado {operationsDateTime.format(new Date(order.createdAt))}</span>
+          )}
           {order.lastEvent?.event && (
             <span>
-              Último evento:{' '}
+              {order.createdAt ? ' · ' : ''}Último evento:{' '}
               <strong className="font-semibold text-neutral-700">{order.lastEvent.event}</strong>
             </span>
           )}
           {order.lastEvent?.at && (
             <span>
-              {order.lastEvent.event ? ' · ' : ''}
+              {order.lastEvent.event || order.createdAt ? ' · ' : ''}
               {operationsDateTime.format(new Date(order.lastEvent.at))}
+            </span>
+          )}
+          {order.lastEvent?.previous_gateway_status && order.lastEvent.gateway_status && (
+            <span>
+              {' · '}Estado do gateway: {order.lastEvent.previous_gateway_status} →{' '}
+              {order.lastEvent.gateway_status}
             </span>
           )}
           {order.updatedAt && (
@@ -590,7 +778,7 @@ const DirectBookingOperationsCard: React.FC<{
                   type="button"
                   onClick={() => setConfirmingManualCancellation(false)}
                   disabled={startingManualCancellation}
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+                  className="min-h-11 rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:opacity-50"
                 >
                   Voltar
                 </button>
@@ -598,7 +786,7 @@ const DirectBookingOperationsCard: React.FC<{
                   type="button"
                   onClick={() => void startManualCancellation()}
                   disabled={startingManualCancellation}
-                  className="rounded-xl bg-neutral-950 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60"
+                  className="min-h-11 rounded-xl bg-neutral-950 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
                 >
                   {startingManualCancellation
                     ? 'Registrando…'
@@ -613,7 +801,7 @@ const DirectBookingOperationsCard: React.FC<{
               <button
                 type="button"
                 onClick={() => setConfirmingManualCancellation(true)}
-                className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                className="min-h-11 rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
               >
                 {latePaymentCancellationReview
                   ? 'Registrar revisão de pagamento tardio'
@@ -643,6 +831,18 @@ const DirectBookingOperationsCard: React.FC<{
                 : ''}
               {order.manualCancellationReview.at
                 ? ` · ${operationsDateTime.format(new Date(order.manualCancellationReview.at))}`
+                : ''}
+              .
+            </p>
+          )}
+          {order.manualGatewayRefundReview && (
+            <p className="text-[11px] leading-5 text-neutral-600">
+              Estorno conferido por ID{' '}
+              <span className="font-mono text-neutral-800">
+                {order.manualGatewayRefundReview.reviewedBy ?? 'indisponível'}
+              </span>
+              {order.manualGatewayRefundReview.at
+                ? ` · ${operationsDateTime.format(new Date(order.manualGatewayRefundReview.at))}`
                 : ''}
               .
             </p>
@@ -682,7 +882,7 @@ const DirectBookingOperationsCard: React.FC<{
                   type="button"
                   onClick={() => void verifyGatewayRefund()}
                   disabled={verifyingGatewayRefund || !order.gatewayPaymentId}
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-50"
+                  className="min-h-11 rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-50"
                 >
                   {verifyingGatewayRefund
                     ? 'Consultando Mercado Pago…'
@@ -694,7 +894,7 @@ const DirectBookingOperationsCard: React.FC<{
                   type="button"
                   onClick={() => void verifyStaysCancellation()}
                   disabled={verifyingStaysCancellation || !order.staysReservationId}
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-50"
+                  className="min-h-11 rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-50"
                 >
                   {verifyingStaysCancellation
                     ? 'Consultando Stays…'
@@ -707,6 +907,30 @@ const DirectBookingOperationsCard: React.FC<{
       )}
     </article>
   );
+};
+
+const getUnmatchedWebhookNextAction = (webhook: DirectBookingOperationsWebhook): string => {
+  if (webhook.canRetry) {
+    return 'Reprocesse esta notificação pelo botão abaixo. A conciliação consulta o pagamento no gateway e não cria outra cobrança.';
+  }
+
+  if (webhook.status === 'failed') {
+    return 'O limite de novas conciliações foi atingido. Confira o pagamento diretamente no Mercado Pago e localize o pedido correspondente antes de qualquer ação.';
+  }
+
+  if (webhook.status === 'received') {
+    return 'A notificação foi recebida e aguarda processamento. Não gere outra cobrança; confira o pagamento no Mercado Pago se ela continuar sem pedido vinculado.';
+  }
+
+  if (webhook.status === 'queued') {
+    return 'A conciliação está na fila. Aguarde o processamento e não gere outra cobrança.';
+  }
+
+  if (webhook.status === 'retrying') {
+    return 'O sistema tentará conciliar novamente. Aguarde a próxima tentativa e não gere outra cobrança.';
+  }
+
+  return 'A conciliação está processando esta notificação. Aguarde a atualização do pedido e não gere outra cobrança.';
 };
 
 const UnmatchedWebhookCard: React.FC<{
@@ -763,6 +987,10 @@ const UnmatchedWebhookCard: React.FC<{
           </dd>
         </div>
       </dl>
+      <p className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs leading-5 text-sky-950">
+        <strong className="font-bold">Próximo passo sugerido:</strong>{' '}
+        {getUnmatchedWebhookNextAction(webhook)}
+      </p>
       {retryError && (
         <p className="mt-3 text-sm font-semibold text-rose-800" role="alert">
           {retryError}
@@ -774,7 +1002,7 @@ const UnmatchedWebhookCard: React.FC<{
             type="button"
             onClick={() => void retryWebhook()}
             disabled={isRetrying}
-            className="inline-flex items-center gap-2 rounded-xl bg-neutral-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-neutral-950 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
           >
             {isRetrying ? (
               <LoaderCircle className="h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
@@ -897,7 +1125,7 @@ const OwnerRequestCard: React.FC<{
               setError('');
             }}
             placeholder="Pesquise pelo nome ou ID (mín. 2 caracteres)"
-            className="w-full rounded-xl border border-neutral-200 bg-white/90 py-3 pl-10 pr-3 text-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+            className="min-h-11 w-full rounded-xl border border-neutral-200 bg-white/90 py-3 pl-10 pr-3 text-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
           />
         </div>
         {searching && (
@@ -914,14 +1142,15 @@ const OwnerRequestCard: React.FC<{
               <button
                 key={owner.id}
                 type="button"
+                aria-pressed={selectedOwnerId === owner.id}
                 onClick={() => setSelectedOwnerId(owner.id)}
-                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition ${selectedOwnerId === owner.id ? 'bg-orange-50 ring-1 ring-orange-300' : 'hover:bg-neutral-50'}`}
+                className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 ${selectedOwnerId === owner.id ? 'bg-orange-50 ring-1 ring-orange-300' : 'hover:bg-neutral-50'}`}
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-bold text-neutral-800">
                     {owner.name}
                   </span>
-                  <span className="block truncate text-[11px] text-neutral-500">
+                  <span className="block truncate text-xs text-neutral-500">
                     ID {owner.id} ·{' '}
                     {owner.propertyCount === undefined
                       ? 'Quantidade de imóveis indisponível'
@@ -937,12 +1166,12 @@ const OwnerRequestCard: React.FC<{
         )}
       </div>
 
-      <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-xs leading-relaxed text-neutral-700">
+      <label className="mt-4 flex min-h-11 cursor-pointer items-start gap-2.5 rounded-xl px-2 py-2 text-xs leading-relaxed text-neutral-700">
         <input
           type="checkbox"
           checked={identityVerified}
           onChange={(event) => setIdentityVerified(event.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-orange-600"
+          className="mt-0.5 h-5 w-5 shrink-0 accent-orange-600"
         />
         <span>
           Confirmei a identidade do solicitante por um canal oficial da Central e verifiquei que ele
@@ -959,7 +1188,7 @@ const OwnerRequestCard: React.FC<{
           type="button"
           onClick={() => void handleApprove()}
           disabled={!identityVerified || !selectedOwnerId || saving}
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2.5 text-sm font-extrabold text-white shadow-md shadow-orange-500/20 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-2.5 text-sm font-extrabold text-white shadow-md shadow-orange-500/20 transition hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:opacity-45"
         >
           {saving ? (
             <LoaderCircle className="h-4 w-4 animate-spin" />

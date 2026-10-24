@@ -28,7 +28,10 @@ test('app footer shows the active currency and opens listing creation', () => {
   );
 
   assert.ok(getByText('BRL'));
-  fireEvent.click(getByRole('button', { name: 'Anuncie seu imóvel' }));
+  const createListingButton = getByRole('button', { name: 'Anuncie seu imóvel' });
+  assert.match(createListingButton.className, /min-h-11/);
+  assert.match(createListingButton.className, /text-sm/);
+  fireEvent.click(createListingButton);
   assert.equal(createListingCalls, 1);
   unmount();
   cleanup();

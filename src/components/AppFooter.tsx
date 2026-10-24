@@ -10,16 +10,26 @@ interface AppFooterProps {
 export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
   return (
     <footer className="border-t border-white/60 bg-white/40 backdrop-blur-2xl text-xs text-neutral-600">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-10">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-3">
             <LogoCRCN size="md" variant="glass" />
-            <p className="text-[11px] text-neutral-500 leading-relaxed">
-              Encontre hospedagens em Caldas Novas e região, com opções próximas a parques e atrações.
+            <p className="text-caption text-neutral-500 leading-relaxed">
+              Encontre hospedagens em Caldas Novas e região, com opções próximas a parques e
+              atrações.
             </p>
-            <div className="pt-1 text-[11px] text-neutral-700 font-semibold space-y-1">
+            <div className="pt-1 text-caption text-neutral-700 font-semibold space-y-1">
               <p>📍 Caldas Novas - Goiás, Brasil</p>
-              <p>✉️ centraldereservascn@gmail.com</p>
+              <p>
+                <span aria-hidden="true">✉️ </span>
+                <a
+                  href="mailto:centraldereservascn@gmail.com"
+                  aria-label="Enviar e-mail para a CRCN"
+                  className="underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                >
+                  centraldereservascn@gmail.com
+                </a>
+              </p>
               <p>CENTRAL DE RESERVAS CALDAS NOVAS CRCN LTDA</p>
               <p>CNPJ 67.314.679/0001-64</p>
             </div>
@@ -43,7 +53,7 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
                 <button
                   type="button"
                   onClick={onCreateListing}
-                  className="hover:underline text-left cursor-pointer"
+                  className="inline-flex min-h-11 items-center text-sm text-left cursor-pointer hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
                 >
                   Anuncie seu imóvel
                 </button>
@@ -61,16 +71,16 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
                 <ShieldCheck className="w-4 h-4" />
                 <span>Suporte para sua reserva</span>
               </div>
-              <p className="text-[11px] text-neutral-500 leading-relaxed">
+              <p className="text-caption text-neutral-500 leading-relaxed">
                 Ajudamos você a acompanhar a confirmação e as orientações de chegada.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="pt-6 border-t border-neutral-200/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-500 text-[11px]">
-          <div className="flex items-center gap-2">
-            <span>
+        <div className="pt-6 border-t border-neutral-200/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-neutral-500 text-caption">
+          <div className="flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+            <span className="min-w-0 max-w-full">
               © {new Date().getFullYear()} Central de Reservas Caldas Novas. Todos os direitos
               reservados.
             </span>

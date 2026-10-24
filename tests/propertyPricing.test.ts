@@ -18,6 +18,7 @@ const quote = (overrides: Partial<CalculatedPriceResponse> = {}): CalculatedPric
   discount: 50,
   total: 1060,
   currency: 'BRL',
+  source: 'stays-live',
   breakdown: {
     dailyRateText: 'Diária',
     cleaningFeeText: 'Limpeza',
@@ -69,6 +70,34 @@ test('uses live quote totals and hides counter fees from the separate fee list',
   assert.equal(pricing.serviceFee, 30);
   assert.equal(pricing.totalAmount, 1060);
   assert.deepEqual(pricing.visibleFees, [liveQuote.fees?.[0]]);
+});
+
+test('uses simulated quote totals so the demo detail can be reviewed', () => {
+  const simulatedQuote = quote({ source: 'stays-simulated', total: 851, baseTotal: 700 });
+  const pricing = calculatePropertyPricing({
+    nightlyRate: 999,
+    cleaningFee: 999,
+    serviceFeeRate: 0.5,
+    nights: 2,
+    quote: simulatedQuote,
+  });
+
+  assert.equal(pricing.baseSubtotal, 700);
+  assert.equal(pricing.totalAmount, 851);
+});
+
+test('ignores an unsuccessful quote and falls back to the known reference rate', () => {
+  const pricing = calculatePropertyPricing({
+    nightlyRate: 245,
+    cleaningFee: 35,
+    serviceFeeRate: 0,
+    nights: 2,
+    quote: quote({ success: false, total: 0, dailyRate: 0 }),
+  });
+
+  assert.equal(pricing.baseSubtotal, 490);
+  assert.equal(pricing.cleaningFee, 35);
+  assert.equal(pricing.totalAmount, 525);
 });
 
 test('formats PMS fee labels and falls back to BRL amounts', () => {

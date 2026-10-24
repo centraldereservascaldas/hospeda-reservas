@@ -51,7 +51,6 @@ function renderOverlayActions(options: { scrollCatalog?: () => void } = {}) {
       setFilters,
       setIsSofiaOpen: setIsSofiaOpenWithTracking,
       setBookingPayload: setBookingPayloadWithTracking,
-      onClosePropertyDetail: () => calls.push('close-detail'),
       onSelectProperty: (property) => calls.push(`select:${property.id}`),
       scrollCatalog: options.scrollCatalog,
     });
@@ -131,7 +130,7 @@ test('closes property detail before handing the booking payload to checkout stat
 
   act(() => hook.result.current.handleStartBooking(payload));
 
-  assert.deepEqual(hook.result.current.calls, ['close-detail', 'set-booking-payload']);
+  assert.deepEqual(hook.result.current.calls, ['set-booking-payload']);
   assert.equal(hook.result.current.bookingPayload, payload);
 });
 

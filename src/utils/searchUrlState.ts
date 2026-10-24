@@ -1,5 +1,6 @@
 import { CATEGORIES } from '../data/mockProperties';
 import type { SearchFilters } from '../types';
+import { getAmenityFilterIdentity } from './propertyAmenities';
 
 const DEFAULTS: SearchFilters = {
   destination: '',
@@ -76,17 +77,28 @@ function parseBoolean(value: string | null): boolean {
   return value === '1' || value?.toLowerCase() === 'true';
 }
 
-function parseList(params: URLSearchParams, key: string, allowed?: Set<string>): string[] {
-  return [
-    ...new Set(
-      params
-        .getAll(key)
-        .map((value) => value.trim())
-        .filter(
-          (value) => value.length > 0 && value.length <= 80 && (!allowed || allowed.has(value)),
-        ),
-    ),
-  ].slice(0, 20);
+function parseList(
+  params: URLSearchParams,
+  key: string,
+  allowed?: Set<string>,
+  getIdentity: (value: string) => string = (value) => value,
+): string[] {
+  const values: string[] = [];
+  const identities = new Set<string>();
+
+  for (const rawValue of params.getAll(key)) {
+    const value = rawValue.trim();
+    if (value.length === 0 || value.length > 80 || (allowed && !allowed.has(value))) continue;
+
+    const identity = getIdentity(value);
+    if (!identity || identities.has(identity)) continue;
+
+    identities.add(identity);
+    values.push(value);
+    if (values.length === 20) break;
+  }
+
+  return values;
 }
 
 export function createDefaultSearchFilters(): SearchFilters {
@@ -140,7 +152,7 @@ export function parseSearchFilters(search: string): SearchFilters {
   }
 
   filters.propertyTypes = parseList(params, 'type', PROPERTY_TYPE_IDS);
-  filters.amenities = parseList(params, 'amenity');
+  filters.amenities = parseList(params, 'amenity', undefined, getAmenityFilterIdentity);
   filters.minBedrooms = parseInteger(params.get('minBedrooms'), 0, 0, 30);
   filters.minBaths = parseInteger(params.get('minBaths'), 0, 0, 30);
   filters.superhostOnly = parseBoolean(params.get('superhost'));

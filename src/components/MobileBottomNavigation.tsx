@@ -44,7 +44,8 @@ export function MobileBottomNavigation({
   return (
     <nav
       aria-label="Navegação principal"
-      className="sm:hidden fixed bottom-3 left-4 right-4 z-40 bg-white/75 backdrop-blur-2xl border border-white/80 rounded-3xl px-6 py-2.5 flex items-center justify-between shadow-[0_12px_36px_rgba(249,115,22,0.15)]"
+      className="sm:hidden fixed left-4 right-4 z-40 bg-white/75 backdrop-blur-2xl border border-white/80 rounded-3xl px-6 py-2.5 max-[400px]:px-2 [@media(max-height:400px)]:py-1 flex items-center justify-between shadow-[0_12px_36px_rgba(249,115,22,0.15)]"
+      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
     >
       {items.map(({ view, label, icon: Icon, hasActivity }) => (
         <button
@@ -52,7 +53,7 @@ export function MobileBottomNavigation({
           type="button"
           aria-current={currentView === view ? 'page' : undefined}
           onClick={() => onNavigate(view)}
-          className={`flex flex-col items-center gap-1 text-[10px] font-bold cursor-pointer transition-all relative ${
+          className={`relative flex min-h-11 min-w-11 flex-col items-center justify-center gap-1 rounded-2xl text-sm max-[400px]:text-xs font-bold transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 ${
             currentView === view ? 'text-orange-600 scale-105' : 'text-neutral-500'
           }`}
         >

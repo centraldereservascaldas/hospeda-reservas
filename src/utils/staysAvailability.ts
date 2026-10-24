@@ -6,6 +6,40 @@ export type StaysCalendarDay = {
   prices?: Array<{ minStay?: number; _mcval?: Record<string, number> }>;
 };
 
+export interface StaysCalendarDisplayRate {
+  amount: number;
+  minStay?: number;
+  hasAlternatives: boolean;
+}
+
+export function getStaysCalendarDisplayRate(
+  day: StaysCalendarDay,
+  stayNights?: number,
+): StaysCalendarDisplayRate | null {
+  const rates = (day.prices ?? []).flatMap((price) => {
+    const amount = price._mcval?.BRL;
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return [];
+
+    return [{ amount, minStay: price.minStay }];
+  });
+
+  const applicableRates =
+    stayNights === undefined
+      ? rates
+      : rates.filter((rate) => rate.minStay === undefined || rate.minStay <= stayNights);
+  if (applicableRates.length === 0) return null;
+
+  const sortedRates = [...applicableRates].sort(
+    (first, second) => first.amount - second.amount || (first.minStay ?? 0) - (second.minStay ?? 0),
+  );
+  const selectedRate = sortedRates[0]!;
+  const hasAlternatives = sortedRates.some(
+    (rate) => rate.amount !== selectedRate.amount || rate.minStay !== selectedRate.minStay,
+  );
+
+  return { ...selectedRate, hasAlternatives };
+}
+
 const DAY_MS = 86_400_000;
 
 export function isCalendarRangeAvailable(
@@ -28,6 +62,9 @@ export function isCalendarRangeAvailable(
     if (!day || !Number.isFinite(Number(day.avail)) || Number(day.avail) < 1) return false;
   }
 
-  const minStay = Number(checkIn.prices?.[0]?.minStay || 0);
+  const minimumStayOptions = (checkIn.prices ?? [])
+    .map((price) => Number(price.minStay ?? 0))
+    .filter((minStay) => Number.isFinite(minStay) && minStay >= 0);
+  const minStay = minimumStayOptions.length ? Math.min(...minimumStayOptions) : 0;
   return !minStay || (end - start) / DAY_MS >= minStay;
 }

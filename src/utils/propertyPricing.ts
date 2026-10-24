@@ -8,6 +8,22 @@ type PropertyPricingInput = {
   quote: CalculatedPriceResponse | null;
 };
 
+export function isConfirmedPropertyQuote(
+  quote: CalculatedPriceResponse | null,
+): quote is CalculatedPriceResponse {
+  return Boolean(
+    quote?.success &&
+    (quote.source === 'stays-live' || quote.source === 'stays-simulated') &&
+    quote.currency === 'BRL' &&
+    Number.isFinite(quote.total) &&
+    quote.total > 0 &&
+    Number.isFinite(quote.dailyRate) &&
+    quote.dailyRate > 0 &&
+    Number.isInteger(quote.nights) &&
+    quote.nights > 0,
+  );
+}
+
 export function calculatePropertyPricing({
   nightlyRate,
   cleaningFee,
@@ -15,16 +31,17 @@ export function calculatePropertyPricing({
   nights,
   quote,
 }: PropertyPricingInput) {
-  const baseSubtotal = quote ? quote.baseTotal : nightlyRate * nights;
-  const discount = quote ? quote.discount : 0;
-  const calculatedCleaningFee = quote ? quote.cleaningFee : cleaningFee;
-  const serviceFee = quote
-    ? quote.serviceFee
+  const confirmedQuote = isConfirmedPropertyQuote(quote) ? quote : null;
+  const baseSubtotal = confirmedQuote ? confirmedQuote.baseTotal : nightlyRate * nights;
+  const discount = confirmedQuote ? confirmedQuote.discount : 0;
+  const calculatedCleaningFee = confirmedQuote ? confirmedQuote.cleaningFee : cleaningFee;
+  const serviceFee = confirmedQuote
+    ? confirmedQuote.serviceFee
     : Math.round((baseSubtotal - discount) * serviceFeeRate);
-  const totalAmount = quote
-    ? quote.total
+  const totalAmount = confirmedQuote
+    ? confirmedQuote.total
     : baseSubtotal - discount + calculatedCleaningFee + serviceFee;
-  const visibleFees = getVisiblePropertyFees(quote?.fees || []);
+  const visibleFees = getVisiblePropertyFees(confirmedQuote?.fees || []);
 
   return {
     baseSubtotal,

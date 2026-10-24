@@ -41,6 +41,7 @@ function renderSearchHook(
     random?: () => number;
     scrollCatalog?: () => void;
     initialProperties?: Property[];
+    initialFilters?: SearchFilters;
   } = {},
 ) {
   const scrollCatalog = options.scrollCatalog ?? (() => undefined);
@@ -51,7 +52,9 @@ function renderSearchHook(
 
   return renderHook(() => {
     const [properties, setProperties] = useState<Property[]>(options.initialProperties ?? []);
-    const [filters, setFilters] = useState<SearchFilters>(createDefaultSearchFilters);
+    const [filters, setFilters] = useState<SearchFilters>(
+      options.initialFilters ?? createDefaultSearchFilters(),
+    );
     const restoreSearchFromUrlRef = useRef<(restoredFilters: SearchFilters) => void>(
       () => undefined,
     );
@@ -108,6 +111,7 @@ test('applies filters and replaces the catalogue after a normal search, includin
   assert.equal(hook.result.current.filters.checkOut, '2027-05-04');
   assert.equal(hook.result.current.filters.destination, 'Caldas Novas');
   assert.equal(hook.result.current.filters.guests.adults, 3);
+  assert.equal(hook.result.current.availabilitySearchState, 'success');
   assert.equal(scrollCount, 1);
 
   let emptyScrollCount = 0;
@@ -125,17 +129,21 @@ test('applies filters and replaces the catalogue after a normal search, includin
     });
   });
   assert.deepEqual(emptySearch.result.current.properties, []);
+  assert.equal(emptySearch.result.current.availabilitySearchState, 'success');
   assert.equal(emptyScrollCount, 1);
 });
 
-test('retains the current catalogue if a normal search fails and still scrolls to the results', async () => {
+test('hides unconfirmed catalogue results after a failed search and retries the last query', async () => {
   const originalWarn = console.warn;
   console.warn = () => undefined;
   let scrollCount = 0;
+  let attempt = 0;
   const hook = renderSearchHook({
     initialProperties: [property],
     searchAccommodations: async () => {
-      throw new Error('search unavailable');
+      attempt += 1;
+      if (attempt === 1) throw new Error('search unavailable');
+      return { total: 1, data: [property] };
     },
     scrollCatalog: () => {
       scrollCount += 1;
@@ -150,11 +158,99 @@ test('retains the current catalogue if a normal search fails and still scrolls t
         persons: 2,
       });
     });
-    assert.deepEqual(hook.result.current.properties, [property]);
+    assert.deepEqual(hook.result.current.properties, []);
+    assert.equal(hook.result.current.availabilitySearchState, 'error');
     assert.equal(scrollCount, 1);
+
+    await act(async () => {
+      await hook.result.current.retryLastSearch();
+    });
+
+    assert.deepEqual(hook.result.current.properties, [property]);
+    assert.equal(hook.result.current.availabilitySearchState, 'success');
+    assert.equal(attempt, 2);
   } finally {
     console.warn = originalWarn;
   }
+});
+
+test('clears stale date quotes and returns to catalogue browsing when dates are removed', async () => {
+  const priorDatedQuote = {
+    ...property,
+    calculatedPrice: {
+      nights: 3,
+      dailyRate: 300,
+      basePrice: 900,
+      cleaningFee: 0,
+      serviceFee: 0,
+      totalAmount: 900,
+      currency: 'BRL',
+    },
+  };
+  const initialFilters = {
+    ...createDefaultSearchFilters(),
+    checkIn: '2027-05-01',
+    checkOut: '2027-05-04',
+  };
+  const hook = renderSearchHook({
+    initialProperties: [priorDatedQuote],
+    initialFilters,
+    searchAccommodations: async (params) => {
+      assert.deepEqual(params, {
+        from: '',
+        to: '',
+        guests: 1,
+        destination: undefined,
+        propertyId: undefined,
+      });
+      return { total: 1, data: [priorDatedQuote] };
+    },
+  });
+
+  await act(async () => {
+    await hook.result.current.handleStaysWidgetSearch({
+      checkIn: '',
+      checkOut: '',
+      persons: 1,
+      guests: { adults: 1, children: 0, infants: 0, pets: 0 },
+    });
+  });
+
+  assert.equal(hook.result.current.availabilitySearchState, 'idle');
+  assert.equal(hook.result.current.properties[0]?.calculatedPrice, undefined);
+  assert.equal(hook.result.current.filters.checkIn, '');
+  assert.equal(hook.result.current.filters.checkOut, '');
+});
+
+test('rejects incomplete search dates without sending an availability request', async () => {
+  let searchCount = 0;
+  const hook = renderSearchHook({
+    initialProperties: [property],
+    searchAccommodations: async () => {
+      searchCount += 1;
+      return { total: 1, data: [property] };
+    },
+  });
+
+  await act(async () => {
+    await hook.result.current.handleStaysWidgetSearch({
+      checkIn: '2027-05-01',
+      checkOut: '',
+      persons: 1,
+    });
+  });
+
+  assert.equal(searchCount, 0);
+  assert.deepEqual(hook.result.current.properties, []);
+  assert.equal(hook.result.current.availabilitySearchState, 'invalid-dates');
+  assert.equal(hook.result.current.filters.checkIn, '2027-05-01');
+  assert.equal(hook.result.current.filters.checkOut, '');
+
+  await act(async () => {
+    await hook.result.current.retryLastSearch();
+  });
+  assert.equal(searchCount, 0);
+  assert.equal(hook.result.current.filters.checkIn, '2027-05-01');
 });
 
 test('tries surprise candidates in order and uses the first results with positive official quotes', async () => {
@@ -199,16 +295,23 @@ test('tries surprise candidates in order and uses the first results with positiv
     candidates.slice(0, 3).map(({ checkIn, checkOut }) => [checkIn, checkOut]),
   );
   assert.deepEqual(hook.result.current.properties, [quotedProperty]);
+  assert.equal(hook.result.current.availabilitySearchState, 'success');
   assert.equal(hook.result.current.filters.checkIn, candidates[2]!.checkIn);
   assert.equal(hook.result.current.filters.checkOut, candidates[2]!.checkOut);
   assert.equal(hook.result.current.filters.destination, '');
 });
 
-test('excludes unquoted properties and leaves dates unchanged when surprise candidates have no quote', async () => {
+test('excludes unquoted properties and clears prior dates when surprise candidates have no quote', async () => {
   const initialProperty = STAYS_NET_APARTMENTS[1]!;
+  const initialFilters = {
+    ...createDefaultSearchFilters(),
+    checkIn: '2027-05-01',
+    checkOut: '2027-05-04',
+  };
   let callCount = 0;
   const hook = renderSearchHook({
     initialProperties: [initialProperty],
+    initialFilters,
     searchAccommodations: async () => {
       callCount += 1;
       return {
@@ -228,8 +331,44 @@ test('excludes unquoted properties and leaves dates unchanged when surprise cand
   });
   assert.equal(callCount, 3);
   assert.deepEqual(hook.result.current.properties, []);
+  assert.equal(hook.result.current.availabilitySearchState, 'success');
   assert.equal(hook.result.current.filters.checkIn, '');
   assert.equal(hook.result.current.filters.checkOut, '');
+});
+
+test('keeps surprise search in error when some date candidates fail without a confirmed quote', async () => {
+  const originalWarn = console.warn;
+  console.warn = () => undefined;
+  let callCount = 0;
+  const hook = renderSearchHook({
+    searchAccommodations: async () => {
+      callCount += 1;
+      if (callCount === 2) {
+        return {
+          total: 1,
+          data: [{ ...property, calculatedPrice: { totalAmount: 0 } } as Property],
+        };
+      }
+      throw new Error(`candidate ${callCount} unavailable`);
+    },
+  });
+
+  try {
+    await act(async () => {
+      await hook.result.current.handleStaysWidgetSearch({
+        checkIn: '',
+        checkOut: '',
+        persons: 1,
+        surpriseMe: true,
+      });
+    });
+  } finally {
+    console.warn = originalWarn;
+  }
+
+  assert.equal(callCount, 3);
+  assert.deepEqual(hook.result.current.properties, []);
+  assert.equal(hook.result.current.availabilitySearchState, 'error');
 });
 
 test('ranks surprise results, breaks ties with the official quote, and takes five from the top ten', async () => {

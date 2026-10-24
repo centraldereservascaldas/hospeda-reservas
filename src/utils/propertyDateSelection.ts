@@ -30,3 +30,24 @@ export function selectAvailabilityDay(
 
   return { checkIn: selectedDay.date, checkOut: currentCheckOut, message: '' };
 }
+
+export function selectAvailabilityRange(
+  calendar: StaysCalendarDay[],
+  checkIn: string,
+  checkOut: string,
+): PropertyDateSelection {
+  const arrival = calendar.find((day) => day.date === checkIn);
+  if (!arrival || arrival.avail < 1 || arrival.closedToArrival) {
+    return {
+      checkIn,
+      checkOut: '',
+      message: 'Esta data não está disponível para check-in.',
+    };
+  }
+
+  if (!isCalendarRangeAvailable(calendar, checkIn, checkOut)) {
+    return { checkIn, checkOut: '', message: invalidRangeMessage };
+  }
+
+  return { checkIn, checkOut, message: '' };
+}

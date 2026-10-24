@@ -1,20 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
+import type { CheckoutAccessCredentials } from '../../services/crcnBackendApi';
 import {
   loadMercadoPagoSdk,
   type MercadoPagoCardFormInstance,
 } from '../../services/mercadoPagoSdk';
-import { getCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
+import { clearCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
 
 const moneyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
   currency: 'BRL',
 });
+const maximumCardInstallments = 1;
 
 interface MercadoPagoCardFormProps {
   reference: string;
   amount: string;
   publicKey: string;
+  credentials: CheckoutAccessCredentials | null;
+  isPixAvailable: boolean;
   onAttemptFinished: () => void;
 }
 
@@ -34,6 +38,8 @@ export function MercadoPagoCardForm({
   reference,
   amount,
   publicKey,
+  credentials,
+  isPixAvailable,
   onAttemptFinished,
 }: MercadoPagoCardFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -42,6 +48,7 @@ export function MercadoPagoCardForm({
   const isSubmittingRef = useRef(false);
   const [formStatus, setFormStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOneTimePaymentAvailable, setIsOneTimePaymentAvailable] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [installmentSummary, setInstallmentSummary] = useState<string | null>(null);
   const [sdkRetryKey, setSdkRetryKey] = useState(0);
@@ -75,8 +82,7 @@ export function MercadoPagoCardForm({
       return;
     }
 
-    const resumeToken = getCheckoutResumeToken(reference);
-    if (!resumeToken) {
+    if (!credentials) {
       setSubmitError('Esta sessão não tem a credencial para continuar o pagamento.');
       return;
     }
@@ -85,7 +91,7 @@ export function MercadoPagoCardForm({
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await crcnBackendApi.createCheckoutPayment(reference, resumeToken, amount, {
+      const result = await crcnBackendApi.createCheckoutPayment(reference, credentials, amount, {
         paymentMethod: 'card',
         paymentMethodId: cardData.paymentMethodId,
         token: cardData.token,
@@ -101,6 +107,10 @@ export function MercadoPagoCardForm({
       });
       if (result.kind === 'response' && result.success) return;
 
+      if (result.kind === 'not-found' && credentials.type === 'resume-token') {
+        clearCheckoutResumeToken(reference);
+      }
+
       setSubmitError(
         result.kind === 'response'
           ? result.message
@@ -115,7 +125,7 @@ export function MercadoPagoCardForm({
       setIsSubmitting(false);
       onAttemptFinishedRef.current();
     }
-  }, [amount, reference]);
+  }, [amount, credentials, reference]);
 
   useEffect(() => {
     onAttemptFinishedRef.current = onAttemptFinished;
@@ -148,15 +158,51 @@ export function MercadoPagoCardForm({
             onInstallmentsReceived: (error, response) => {
               if (error || !response?.payer_costs?.length) {
                 setInstallmentSummary(null);
+                setIsOneTimePaymentAvailable(false);
                 return;
               }
 
+              const supportedInstallments = new Set(
+                response.payer_costs
+                  .map((cost) => Number(cost.installments))
+                  .filter(
+                    (installments) =>
+                      Number.isInteger(installments) &&
+                      installments >= 1 &&
+                      installments <= maximumCardInstallments,
+                  ),
+              );
+              const installmentsSelect = formRef.current?.querySelector<HTMLSelectElement>(
+                `#${cardFormFields.installments.id}`,
+              );
+
+              if (installmentsSelect) {
+                for (const option of Array.from(installmentsSelect.options)) {
+                  const installments = Number(option.value);
+                  if (
+                    option.value !== '' &&
+                    (!Number.isInteger(installments) || !supportedInstallments.has(installments))
+                  ) {
+                    option.remove();
+                  }
+                }
+              }
+
+              const selectedInstallments = supportedInstallments.values().next().value;
+              if (selectedInstallments === undefined || !installmentsSelect) {
+                setInstallmentSummary(null);
+                setIsOneTimePaymentAvailable(false);
+                return;
+              }
+
+              installmentsSelect.value = String(selectedInstallments);
+              setIsOneTimePaymentAvailable(true);
               const selected = response.payer_costs.find(
-                (cost) => cost.installments === Number(cardForm?.getCardFormData().installments),
+                (cost) => Number(cost.installments) === selectedInstallments,
               );
               setInstallmentSummary(
                 selected
-                  ? `${selected.installments}x de ${moneyFormatter.format(selected.installment_amount)} · total ${moneyFormatter.format(selected.total_amount)}`
+                  ? `${selectedInstallments}x de ${moneyFormatter.format(selected.installment_amount)} · total ${moneyFormatter.format(selected.total_amount)}`
                   : null,
               );
             },
@@ -298,6 +344,13 @@ export function MercadoPagoCardForm({
               {installmentSummary}
             </p>
           )}
+          {!isOneTimePaymentAvailable && formStatus === 'ready' && (
+            <p className="text-xs text-neutral-600" role="status">
+              {isPixAvailable
+                ? 'Este cartão não oferece pagamento em uma parcela. Tente outro cartão ou escolha Pix.'
+                : 'Este cartão não oferece pagamento em uma parcela. Tente outro cartão compatível.'}
+            </p>
+          )}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -362,7 +415,7 @@ export function MercadoPagoCardForm({
         <button
           id="checkout-card-submit"
           type="submit"
-          disabled={formStatus !== 'ready' || isSubmitting}
+          disabled={formStatus !== 'ready' || isSubmitting || !isOneTimePaymentAvailable}
           className="w-full rounded-full bg-neutral-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting ? 'Enviando pagamento…' : 'Pagar com cartão'}

@@ -4,6 +4,8 @@ import type { Property, SearchFilters } from '../types';
 import type { AppOverlayBookingPayload } from '../types/booking';
 import { scrollIntoViewRespectingMotion } from '../utils/motion';
 
+export const CHECKOUT_MODAL_HISTORY_ENTRY = '__crcnCheckoutModalEntry';
+
 export interface AppOverlaySuggestedFilters {
   destination?: string;
   guests?: number;
@@ -14,7 +16,6 @@ interface UseAppOverlayActionsOptions {
   setFilters: Dispatch<SetStateAction<SearchFilters>>;
   setIsSofiaOpen: Dispatch<SetStateAction<boolean>>;
   setBookingPayload: Dispatch<SetStateAction<AppOverlayBookingPayload | null>>;
-  onClosePropertyDetail: () => void;
   onSelectProperty: (property: Property) => void;
   scrollCatalog?: () => void;
 }
@@ -29,7 +30,6 @@ export function useAppOverlayActions({
   setFilters,
   setIsSofiaOpen,
   setBookingPayload,
-  onClosePropertyDetail,
   onSelectProperty,
   scrollCatalog = scrollToAccommodationCatalog,
 }: UseAppOverlayActionsOptions) {
@@ -42,10 +42,17 @@ export function useAppOverlayActions({
 
   const handleStartBooking = useCallback(
     (payload: AppOverlayBookingPayload) => {
-      onClosePropertyDetail();
+      const state: Record<string, unknown> =
+        window.history.state && typeof window.history.state === 'object'
+          ? { ...window.history.state }
+          : {};
+      delete state[CHECKOUT_MODAL_HISTORY_ENTRY];
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.history.replaceState(state, '', currentUrl);
+      window.history.pushState({ ...state, [CHECKOUT_MODAL_HISTORY_ENTRY]: true }, '', currentUrl);
       setBookingPayload(payload);
     },
-    [onClosePropertyDetail, setBookingPayload],
+    [setBookingPayload],
   );
 
   const handleAssistantApplyFilters = useCallback(

@@ -5,7 +5,7 @@ import { calculateNights } from '../../utils/formatters';
 import type { CalculatedPriceResponse } from '../../services/crcnBackendApi';
 import { isCalendarRangeAvailable } from '../../utils/staysAvailability';
 import type { StaysCalendarDay } from '../../utils/staysAvailability';
-import { calculatePropertyPricing } from '../../utils/propertyPricing';
+import { calculatePropertyPricing, isConfirmedPropertyQuote } from '../../utils/propertyPricing';
 import { getSyncedPropertyReviews } from '../../utils/propertyReviews';
 import { scrollIntoViewRespectingMotion } from '../../utils/motion';
 import { PropertyReviewsSection } from './PropertyReviewsSection';
@@ -24,8 +24,14 @@ import { PropertyPhotoGrid } from './PropertyPhotoGrid';
 import { PropertyDetailActions } from './PropertyDetailActions';
 import { useDialogFocus } from '../useDialogFocus';
 import { usePropertyAvailability } from './usePropertyAvailability';
-import { selectAvailabilityDay } from '../../utils/propertyDateSelection';
+import { selectAvailabilityDay, selectAvailabilityRange } from '../../utils/propertyDateSelection';
+import {
+  getAccommodationIdFromPath,
+  mergeSearchFiltersIntoUrl,
+  parseSearchFilters,
+} from '../../utils/searchUrlState';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
+import { countOccupancyGuests } from '../../utils/guestCounts';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -49,6 +55,7 @@ interface PropertyDetailModalProps {
     discount: number;
     quote: CalculatedPriceResponse;
   }) => void;
+  presentation?: 'dialog' | 'page';
 }
 
 export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
@@ -62,25 +69,25 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   isSaved,
   onToggleSave,
   onStartBooking,
+  presentation = 'dialog',
 }) => {
+  const isDialog = presentation === 'dialog';
   const detailCloseRef = useRef<HTMLButtonElement>(null);
-  const detailDialogRef = useDialogFocus(property !== null, onClose, {
-    initialFocusRef: detailCloseRef,
+  const detailTitleRef = useRef<HTMLHeadingElement>(null);
+  const detailDialogRef = useDialogFocus(property !== null && isDialog, onClose, {
+    initialFocusRef: detailTitleRef,
     returnFocusRef,
   });
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const propertyId = property?.id;
-  const defaultCheckIn = initialCheckIn || todayIso;
-  const defaultCheckOut =
-    initialCheckOut ||
-    new Date(new Date(`${defaultCheckIn}T12:00:00`).getTime() + 2 * 86400000)
-      .toISOString()
-      .slice(0, 10);
+  const pageTitle = property ? `${getPublicPropertyTitle(property.title)} | Hospeda Reservas` : '';
+  const defaultCheckIn = initialCheckIn;
+  const defaultCheckOut = initialCheckOut;
   // Booking state
   const [checkIn, setCheckIn] = useState<string>(defaultCheckIn);
   const [checkOut, setCheckOut] = useState<string>(defaultCheckOut);
-  const [adults, setAdults] = useState<number>(initialGuests.adults || 2);
+  const [adults, setAdults] = useState<number>(Math.max(1, initialGuests.adults));
   const [children, setChildren] = useState<number>(initialGuests.children);
   const [infants, setInfants] = useState<number>(initialGuests.infants);
   const [pets, setPets] = useState<number>(initialGuests.pets);
@@ -90,45 +97,75 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [activeDateField, setActiveDateField] = useState<'checkIn' | 'checkOut'>('checkIn');
   const [displayedMonth, setDisplayedMonth] = useState(() => {
-    const date = new Date(`${defaultCheckIn}T12:00:00`);
+    const date = new Date(`${defaultCheckIn || todayIso}T12:00:00`);
     return new Date(date.getFullYear(), date.getMonth(), 1);
   });
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const [calendarInteractionMessage, setCalendarInteractionMessage] = useState('');
+  const hasEditedBookingContextRef = useRef(false);
+  const hasExplicitDateSelectionRef = useRef(Boolean(initialCheckIn && initialCheckOut));
+  const latestBookingContextRef = useRef({ checkIn, checkOut, adults, children, infants, pets });
+  latestBookingContextRef.current = { checkIn, checkOut, adults, children, infants, pets };
+  useEffect(() => {
+    if (isDialog || !pageTitle) return;
+    const previousTitle = document.title;
+    document.title = pageTitle;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [isDialog, pageTitle, propertyId]);
+  useEffect(() => {
+    if (!isDialog && propertyId) detailTitleRef.current?.focus();
+  }, [isDialog, propertyId]);
   const {
     staysPrice,
     calendarDays,
+    calendarCoverageEnd,
     calendarAvailable,
     calendarMessage: availabilityMessage,
     isLoadingCalendar,
+    isExtendingCalendar,
+    calendarExtensionMessage,
+    loadCalendarThrough,
+    retryCalendarExtension,
+    retryCalendar,
+    retryPrice,
     isCalculatingPrice,
+    priceRequestFailed,
   } = usePropertyAvailability({
     property,
     checkIn,
     checkOut,
-    guests: adults + children + infants,
+    guests: countOccupancyGuests({ adults, children, infants }),
     todayIso,
   });
 
   useEffect(() => {
+    if (!isDatePickerOpen || !calendarCoverageEnd) return;
+    const displayedYear = displayedMonth.getFullYear();
+    const displayedMonthIndex = displayedMonth.getMonth();
+    if (!Number.isFinite(displayedYear) || !Number.isFinite(displayedMonthIndex)) return;
+    const monthEnd = new Date(displayedYear, displayedMonthIndex + 1, 0);
+    const monthEndIso = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, '0')}-${String(monthEnd.getDate()).padStart(2, '0')}`;
+    if (monthEndIso > calendarCoverageEnd) void loadCalendarThrough(monthEndIso);
+  }, [calendarCoverageEnd, displayedMonth, isDatePickerOpen, loadCalendarThrough]);
+
+  useEffect(() => {
     if (!propertyId) return;
-    const nextCheckIn = initialCheckIn || todayIso;
+    const nextCheckIn = initialCheckIn;
     const requestedCheckOut = initialCheckOut;
-    const nextCheckOut =
-      requestedCheckOut > nextCheckIn
-        ? requestedCheckOut
-        : new Date(new Date(`${nextCheckIn}T12:00:00`).getTime() + 2 * 86400000)
-            .toISOString()
-            .slice(0, 10);
+    const nextCheckOut = requestedCheckOut > nextCheckIn ? requestedCheckOut : '';
+    hasEditedBookingContextRef.current = false;
+    hasExplicitDateSelectionRef.current = Boolean(initialCheckIn && initialCheckOut);
     setCheckIn(nextCheckIn);
     setCheckOut(nextCheckOut);
-    setAdults(initialGuests.adults || 2);
+    setAdults(Math.max(1, initialGuests.adults));
     setChildren(initialGuests.children);
     setInfants(initialGuests.infants);
     setPets(initialGuests.pets);
-    setDisplayedMonth(new Date(`${nextCheckIn}T12:00:00`));
+    setDisplayedMonth(new Date(`${nextCheckIn || todayIso}T12:00:00`));
   }, [
     propertyId,
     todayIso,
@@ -140,6 +177,62 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     initialGuests.pets,
   ]);
 
+  useEffect(() => {
+    if (isDialog || !propertyId || !hasEditedBookingContextRef.current) return;
+
+    const currentUrl = new URL(window.location.href);
+    const currentFilters = parseSearchFilters(currentUrl.search);
+    currentUrl.search = mergeSearchFiltersIntoUrl(currentUrl.search, {
+      ...currentFilters,
+      checkIn: hasExplicitDateSelectionRef.current ? checkIn : '',
+      checkOut: hasExplicitDateSelectionRef.current ? checkOut : '',
+      guests: { adults, children, infants, pets },
+    });
+
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`,
+    );
+  }, [adults, children, checkIn, checkOut, infants, isDialog, pets, propertyId]);
+
+  useEffect(() => {
+    if (isDialog || !propertyId) return;
+
+    const preserveBookingContextOnCatalogReturn = () => {
+      const pathname = window.location.pathname;
+      const isCatalogRoute = pathname === '/' || /^\/[a-z]{2}\/search\/?$/i.test(pathname);
+      if (!isCatalogRoute || getAccommodationIdFromPath(pathname)) return;
+
+      const url = new URL(window.location.href);
+      const currentFilters = parseSearchFilters(url.search);
+      const {
+        checkIn: latestCheckIn,
+        checkOut: latestCheckOut,
+        ...guests
+      } = latestBookingContextRef.current;
+      const search = mergeSearchFiltersIntoUrl(url.search, {
+        ...currentFilters,
+        checkIn: hasExplicitDateSelectionRef.current ? latestCheckIn : '',
+        checkOut: hasExplicitDateSelectionRef.current ? latestCheckOut : '',
+        guests,
+      });
+      const nextSearch = search ? `?${search}` : '';
+      if (nextSearch === url.search) return;
+
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${url.pathname}${nextSearch}${url.hash}`,
+      );
+    };
+
+    window.addEventListener('popstate', preserveBookingContextOnCatalogReturn, true);
+    return () => {
+      window.removeEventListener('popstate', preserveBookingContextOnCatalogReturn, true);
+    };
+  }, [isDialog, propertyId]);
+
   const openPhotoGallery = (index = 0) => {
     setActivePhotoIndex(index);
     setShowAllPhotos(true);
@@ -148,7 +241,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const openDatePicker = (field: 'checkIn' | 'checkOut') => {
     setActiveDateField(field);
     const selectedDate = field === 'checkIn' ? checkIn : checkOut || checkIn;
-    const date = new Date(`${selectedDate}T12:00:00`);
+    const date = new Date(`${selectedDate || todayIso}T12:00:00`);
     setDisplayedMonth(new Date(date.getFullYear(), date.getMonth(), 1));
     setIsDatePickerOpen(true);
   };
@@ -161,14 +254,19 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     const trigger = guestSelectorTriggerRef.current;
     if (trigger) {
       const bounds = trigger.getBoundingClientRect();
-      const popoverHeight = 300;
-      const popoverWidth = Math.min(320, Math.max(280, bounds.width), window.innerWidth - 24);
+      const popoverHeight = Math.min(420, window.innerHeight - 16);
+      const maxPopoverWidth = window.innerHeight <= 420 ? 360 : 320;
+      const popoverWidth = Math.min(
+        maxPopoverWidth,
+        Math.max(280, bounds.width),
+        window.innerWidth - 24,
+      );
       const top =
         window.innerHeight - bounds.bottom >= popoverHeight + 16
           ? bounds.bottom + 8
           : bounds.top >= popoverHeight + 16
             ? bounds.top - popoverHeight - 8
-            : Math.max(12, (window.innerHeight - popoverHeight) / 2);
+            : Math.max(8, (window.innerHeight - popoverHeight) / 2);
       const left = Math.min(Math.max(12, bounds.left), window.innerWidth - popoverWidth - 12);
       setGuestPopoverPosition({ top, left, width: popoverWidth });
     }
@@ -194,50 +292,108 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       nights,
       quote: staysPrice,
     });
-  const totalGuests = adults + children + infants;
+  const totalGuests = countOccupancyGuests({ adults, children, infants });
   const guestLimit = Math.max(1, Number(property.maxGuests) || 1);
   const selectedRangeAvailable =
     calendarAvailable && isCalendarRangeAvailable(calendarDays, checkIn, checkOut);
   const chooseDate = (date: Date) => {
     const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     if (activeDateField === 'checkIn') {
+      const selectedDay = calendarDays.find((day) => day.date === dateValue);
+      if (
+        !calendarAvailable ||
+        !selectedDay ||
+        selectedDay.avail < 1 ||
+        selectedDay.closedToArrival
+      ) {
+        setCalendarInteractionMessage('Esta data não está disponível para check-in.');
+        return;
+      }
+      hasEditedBookingContextRef.current = true;
+      hasExplicitDateSelectionRef.current = true;
       setCheckIn(dateValue);
-      if (checkOut && dateValue >= checkOut) setCheckOut('');
+      if (checkOut && !isCalendarRangeAvailable(calendarDays, dateValue, checkOut)) {
+        setCheckOut('');
+      }
       setCalendarInteractionMessage('');
       setActiveDateField('checkOut');
       return;
     }
-    if (dateValue <= checkIn) {
-      setCheckIn(dateValue);
-      setCheckOut('');
-      setCalendarInteractionMessage('');
-      setActiveDateField('checkOut');
+    if (!isCalendarRangeAvailable(calendarDays, checkIn, dateValue)) {
+      setCalendarInteractionMessage(
+        'Esse período inclui uma data indisponível ou não atende à estadia mínima.',
+      );
       return;
     }
+    hasEditedBookingContextRef.current = true;
+    hasExplicitDateSelectionRef.current = true;
     setCheckOut(dateValue);
+    setCalendarInteractionMessage('');
     setIsDatePickerOpen(false);
   };
 
   const selectCalendarDay = (day: StaysCalendarDay) => {
     const selection = selectAvailabilityDay(calendarDays, checkIn, checkOut, day);
+    hasEditedBookingContextRef.current = true;
+    hasExplicitDateSelectionRef.current = true;
     setCheckIn(selection.checkIn);
     setCheckOut(selection.checkOut);
     setCalendarInteractionMessage(selection.message);
   };
-  const handleShare = () => {
-    navigator.clipboard?.writeText(window.location.href);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
+  const chooseDateRange = (arrival: Date, departure: Date) => {
+    const dateToIso = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const selection = selectAvailabilityRange(
+      calendarDays,
+      dateToIso(arrival),
+      dateToIso(departure),
+    );
+    if (selection.message) {
+      setCalendarInteractionMessage(selection.message);
+      return;
+    }
+
+    hasEditedBookingContextRef.current = true;
+    hasExplicitDateSelectionRef.current = true;
+    setCheckIn(selection.checkIn);
+    setCheckOut(selection.checkOut);
+    setCalendarInteractionMessage('');
+    setIsDatePickerOpen(false);
+  };
+  const handleShare = async () => {
+    const url = new URL(window.location.href);
+    const currentFilters = parseSearchFilters(url.search);
+    const search = mergeSearchFiltersIntoUrl(url.search, {
+      ...currentFilters,
+      checkIn: hasExplicitDateSelectionRef.current ? checkIn : '',
+      checkOut: hasExplicitDateSelectionRef.current ? checkOut : '',
+      guests: { adults, children, infants, pets },
+    });
+    url.search = search;
+
+    try {
+      if (!navigator.clipboard?.writeText) {
+        setShareStatus('error');
+        return;
+      }
+      await navigator.clipboard.writeText(url.toString());
+      setShareStatus('copied');
+      window.setTimeout(() => setShareStatus('idle'), 2500);
+    } catch {
+      setShareStatus('error');
+    }
   };
 
   const handleProceedBooking = () => {
     if (
-      !staysPrice ||
-      staysPrice.source !== 'stays-live' ||
+      !hasExplicitDateSelectionRef.current ||
+      property.simulatedData ||
+      !isConfirmedPropertyQuote(staysPrice) ||
       isCalculatingPrice ||
       !selectedRangeAvailable
-    )
+    ) {
       return;
+    }
     onStartBooking({
       property,
       checkIn,
@@ -254,41 +410,70 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
   return (
     <div
-      ref={detailDialogRef}
-      data-dialog-focus-root
-      tabIndex={-1}
-      role="dialog"
-      aria-modal="true"
+      ref={isDialog ? detailDialogRef : undefined}
+      data-dialog-focus-root={isDialog ? '' : undefined}
+      tabIndex={isDialog ? -1 : undefined}
+      role={isDialog ? 'dialog' : 'region'}
+      aria-modal={isDialog ? 'true' : undefined}
       aria-labelledby="property-detail-title"
-      className="fixed inset-0 z-50 overflow-y-auto bg-white/25 backdrop-blur-xl animate-in fade-in duration-200"
+      className={
+        isDialog
+          ? 'fixed inset-0 z-50 overflow-y-auto bg-white/25 backdrop-blur-xl animate-in fade-in duration-200'
+          : 'mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8'
+      }
     >
-      <div className="min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start">
-        <div className="relative w-full max-w-5xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-neutral-200/90 animate-in zoom-in-95 duration-200">
+      <div
+        className={
+          isDialog ? 'min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start' : ''
+        }
+      >
+        <div
+          className={
+            isDialog
+              ? 'relative w-full max-w-5xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-neutral-200/90 animate-in zoom-in-95 duration-200'
+              : 'relative w-full'
+          }
+        >
           {/* Top Bar Navigation Crisp Glass */}
-          <div className="sticky top-0 z-30 px-6 py-4 bg-white/95 backdrop-blur-xl border-b border-neutral-200 flex items-center justify-between">
+          <div className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-neutral-200 bg-white/95 px-3 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
             <button
               ref={detailCloseRef}
               type="button"
               onClick={onClose}
-              aria-label="Fechar detalhes da acomodação"
-              className="h-9 w-9 shrink-0 rounded-full bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 backdrop-blur-md flex items-center justify-center text-neutral-700 hover:text-neutral-950 shadow-2xs transition-all cursor-pointer hover:scale-105"
+              aria-label={isDialog ? 'Fechar detalhes da acomodação' : 'Voltar para resultados'}
+              className="property-detail-back-button flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-neutral-100 text-neutral-700 shadow-2xs backdrop-blur-md transition-colors hover:bg-neutral-200 hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
             >
-              <X className="w-5 h-5" />
+              {isDialog ? (
+                <X aria-hidden="true" className="w-5 h-5" />
+              ) : (
+                <span aria-hidden="true">←</span>
+              )}
             </button>
 
             <PropertyDetailActions
+              propertyTitle={displayTitle}
               isSaved={isSaved}
-              copiedLink={copiedLink}
+              shareStatus={shareStatus}
               onShare={handleShare}
               onToggleSave={() => onToggleSave(property.id)}
             />
           </div>
 
-          <div className="p-6 sm:p-10 space-y-8">
+          <div className="p-4 sm:p-8 lg:p-10 space-y-8">
+            {property.simulatedData && (
+              <p
+                role="status"
+                className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+              >
+                Ambiente de simulação: preços e disponibilidade são fictícios. Reservas e pagamentos
+                não são realizados.
+              </p>
+            )}
             <PropertyDetailHeader
               property={property}
               hasReviews={hasReviews}
               onShowReviews={scrollToReviews}
+              titleRef={detailTitleRef}
             />
 
             <PropertyPhotoGrid
@@ -297,41 +482,16 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               onOpenGallery={openPhotoGallery}
             />
 
-            {/* Main content grid: 2 cols on desktop */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-              {/* Left Column: Details, Host, Amenities, Sleeping */}
-              <div className="lg:col-span-2 space-y-8 divide-y divide-neutral-100">
-                <PropertyOverviewSection property={property} />
-
-                <PropertyAmenitiesSection
-                  listingAmenities={property.listingAmenities}
-                  propertyAmenities={property.propertyAmenities}
-                  staysSynced={property.staysSynced}
-                />
-
-                <PropertyAvailabilityStrip
-                  calendarDays={calendarDays}
-                  calendarAvailable={calendarAvailable}
-                  isLoading={isLoadingCalendar}
-                  calendarMessage={calendarInteractionMessage || availabilityMessage}
-                  checkIn={checkIn}
-                  checkOut={checkOut}
-                  baseNightlyRate={property.pricePerNight}
-                  onSelectDay={selectCalendarDay}
-                />
-
-                <PropertyLocationSection title={displayTitle} location={property.location} />
-                <PropertyHostSection host={property.host} />
-              </div>
-
-              {/* Right Column: Booking */}
-              <div className="lg:col-span-1">
+            {/* Booking comes first on mobile and stays in the right column on desktop. */}
+            <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
+              <div className="min-w-0 lg:col-start-3 lg:col-span-1 lg:row-start-1">
                 <PropertyBookingPanel
                   property={property}
                   currency={currency}
                   hasReviews={hasReviews}
                   checkIn={checkIn}
                   checkOut={checkOut}
+                  hasExplicitDateSelection={hasExplicitDateSelectionRef.current}
                   isDatePickerOpen={isDatePickerOpen}
                   activeDateField={activeDateField}
                   onOpenDatePicker={openDatePicker}
@@ -342,7 +502,13 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   infants={infants}
                   nights={nights}
                   staysPrice={staysPrice}
+                  calendarAvailable={calendarAvailable}
+                  calendarCoverageEnd={calendarCoverageEnd}
+                  isLoadingCalendar={isLoadingCalendar}
                   isCalculatingPrice={isCalculatingPrice}
+                  priceRequestFailed={priceRequestFailed}
+                  onRetryCalendar={retryCalendar}
+                  onRetryPrice={retryPrice}
                   selectedRangeAvailable={selectedRangeAvailable}
                   pricing={{
                     baseSubtotal,
@@ -354,6 +520,30 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   }}
                   onProceedBooking={handleProceedBooking}
                 />
+              </div>
+
+              <div className="min-w-0 space-y-8 divide-y divide-neutral-100 lg:col-start-1 lg:col-span-2 lg:row-start-1">
+                <PropertyOverviewSection property={property} />
+
+                <PropertyAmenitiesSection
+                  listingAmenities={property.listingAmenities}
+                  propertyAmenities={property.propertyAmenities}
+                  amenities={property.amenities}
+                />
+
+                <PropertyAvailabilityStrip
+                  calendarDays={calendarDays}
+                  calendarAvailable={calendarAvailable}
+                  isLoading={isLoadingCalendar}
+                  calendarMessage={calendarInteractionMessage || availabilityMessage}
+                  checkIn={checkIn}
+                  checkOut={checkOut}
+                  onRetryCalendar={retryCalendar}
+                  onSelectDay={selectCalendarDay}
+                />
+
+                <PropertyLocationSection title={displayTitle} location={property.location} />
+                <PropertyHostSection host={property.host} />
               </div>
             </div>
 
@@ -379,9 +569,18 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         adults={adults}
         children={children}
         infants={infants}
-        onAdultsChange={setAdults}
-        onChildrenChange={setChildren}
-        onInfantsChange={setInfants}
+        onAdultsChange={(value) => {
+          hasEditedBookingContextRef.current = true;
+          setAdults(value);
+        }}
+        onChildrenChange={(value) => {
+          hasEditedBookingContextRef.current = true;
+          setChildren(value);
+        }}
+        onInfantsChange={(value) => {
+          hasEditedBookingContextRef.current = true;
+          setInfants(value);
+        }}
         onClose={() => setIsGuestSelectorOpen(false)}
       />
 
@@ -393,9 +592,19 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         displayedMonth={displayedMonth}
         today={today}
         todayIso={todayIso}
+        calendarDays={calendarDays}
+        isExtendingCalendar={isExtendingCalendar}
+        calendarExtensionMessage={calendarExtensionMessage}
+        calendarAvailable={calendarAvailable}
+        isLoadingCalendar={isLoadingCalendar}
+        availabilityMessage={availabilityMessage}
+        interactionMessage={calendarInteractionMessage}
+        onRetryCalendar={retryCalendar}
+        onRetryCalendarExtension={retryCalendarExtension}
         onActiveDateFieldChange={setActiveDateField}
         onDisplayedMonthChange={setDisplayedMonth}
         onChooseDate={chooseDate}
+        onChooseDateRange={chooseDateRange}
         onClose={() => setIsDatePickerOpen(false)}
       />
 
@@ -410,3 +619,9 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     </div>
   );
 };
+
+type PropertyDetailPageProps = Omit<PropertyDetailModalProps, 'presentation'>;
+
+export function PropertyDetailPage(props: PropertyDetailPageProps) {
+  return <PropertyDetailModal {...props} presentation="page" />;
+}

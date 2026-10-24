@@ -79,3 +79,89 @@ test('counts active filters using the existing filter-pill rules', () => {
     8,
   );
 });
+
+test('matches translated Stays amenity names despite accent and punctuation differences', () => {
+  const liveProperty = {
+    ...property,
+    amenities: ['Ar condicionado', 'Internet Wi-Fi', 'Piscina aquecida'],
+  };
+  const filters = {
+    ...createDefaultSearchFilters(),
+    amenities: ['Ar-condicionado', 'Wi-Fi', 'Piscina'],
+  };
+
+  assert.deepEqual(filterPropertiesBySearchFilters([liveProperty], filters), [liveProperty]);
+});
+
+test('filters by apartment and condominium amenities when the general list is empty', () => {
+  const liveProperty = {
+    ...property,
+    amenities: ['   '],
+    listingAmenities: ['Internet Wi-Fi'],
+    propertyAmenities: ['Sauna'],
+  };
+  const filters = {
+    ...createDefaultSearchFilters(),
+    amenities: ['Wi-Fi', 'Sauna'],
+  };
+
+  assert.deepEqual(filterPropertiesBySearchFilters([liveProperty], filters), [liveProperty]);
+  assert.deepEqual(
+    filterPropertiesBySearchFilters([{ ...liveProperty, propertyAmenities: ['Piscina'] }], filters),
+    [],
+  );
+});
+
+test('filters by apartment amenities even when the general catalog list is populated', () => {
+  const liveProperty = {
+    ...property,
+    amenities: ['Piscina aquecida'],
+    listingAmenities: ['Wi-Fi fibra óptica'],
+  };
+  const filters = {
+    ...createDefaultSearchFilters(),
+    amenities: ['Wi-Fi'],
+  };
+
+  assert.deepEqual(filterPropertiesBySearchFilters([liveProperty], filters), [liveProperty]);
+});
+
+test('uses confirmed nightly quotes for price filters on dated searches', () => {
+  const filters = {
+    ...createDefaultSearchFilters(),
+    checkIn: '2027-05-01',
+    checkOut: '2027-05-04',
+    minPrice: 400,
+    maxPrice: 500,
+  };
+  const quotedProperty = {
+    ...property,
+    pricePerNight: 250,
+    calculatedPrice: {
+      nights: 3,
+      dailyRate: 450,
+      basePrice: 1350,
+      cleaningFee: 0,
+      serviceFee: 0,
+      totalAmount: 1350,
+      currency: 'BRL',
+    },
+  };
+  const unquotedProperty = {
+    ...property,
+    id: 'without-date-quote',
+    pricePerNight: 450,
+    calculatedPrice: undefined,
+  };
+
+  assert.deepEqual(filterPropertiesBySearchFilters([quotedProperty], filters), [quotedProperty]);
+  assert.deepEqual(filterPropertiesBySearchFilters([unquotedProperty], filters), []);
+  assert.deepEqual(
+    filterPropertiesBySearchFilters([unquotedProperty], {
+      ...filters,
+      minPrice: 0,
+      maxPrice: 5000,
+    }),
+    [unquotedProperty],
+  );
+});

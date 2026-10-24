@@ -21,13 +21,13 @@ export const PropertyLocationSection: React.FC<PropertyLocationSectionProps> = (
           <h3 id="property-location-title" className="text-lg font-bold text-neutral-900">
             Onde você estará
           </h3>
-          <p className="text-xs text-neutral-600 mt-0.5">
+          <p className="text-sm text-neutral-600 mt-0.5">
             {location.neighborhood
               ? `${location.neighborhood}, Caldas Novas - GO`
               : 'Caldas Novas - GO'}
           </p>
         </div>
-        <span className="text-xs font-bold text-orange-600 flex items-center gap-1 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200">
+        <span className="text-caption font-bold text-orange-600 flex items-center gap-1 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-200">
           <MapPin className="w-3.5 h-3.5 text-orange-500" />
           Região das Águas Termais
         </span>
@@ -48,19 +48,22 @@ export const PropertyLocationSection: React.FC<PropertyLocationSectionProps> = (
             Não há coordenadas disponíveis para mostrar o mapa desta acomodação.
           </div>
         )}
-        {mapLinks && (
+      </div>
+      {mapLinks && (
+        <div className="mt-2 flex justify-end">
           <a
             href={mapLinks.externalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white/95 px-3 py-1.5 text-xs font-bold text-neutral-900 shadow-md transition-colors hover:bg-white"
+            aria-label={`Abrir localização de ${title} no Google Maps (abre em nova aba)`}
+            className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-neutral-200 bg-white/95 px-3 py-1.5 text-sm font-bold text-neutral-900 shadow-md transition-colors hover:bg-white"
           >
             <span>Abrir no Google Maps</span>
-            <MapPin className="h-3.5 w-3.5 text-orange-600" />
+            <MapPin className="h-4 w-4 text-orange-600" />
           </a>
-        )}
-      </div>
-      <p className="mt-2 text-[11px] text-neutral-500">
+        </div>
+      )}
+      <p className="mt-2 text-caption text-neutral-500">
         A localização exibida pode ser aproximada para proteger a privacidade do anfitrião.
       </p>
     </section>
