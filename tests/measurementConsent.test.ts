@@ -20,7 +20,7 @@ const { MeasurementPreferences } = await import('../src/components/MeasurementPr
 
 const { loadGtmIfConsented, readMeasurementConsent, saveMeasurementConsent } =
   await import('../src/utils/measurementConsent.ts');
-const { emitConfirmedPurchase } = await import('../src/utils/measurementEvents.ts');
+const { emitConfirmedPurchase, emitFunnelEvent } = await import('../src/utils/measurementEvents.ts');
 
 afterEach(() => {
   cleanup();
@@ -140,4 +140,23 @@ test('purchase fails closed when cryptographic hashing is unavailable or rejects
   } finally {
     if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto);
   }
+});
+
+test('funnel events require consent and a loaded tag, validate item IDs and omit free text', () => {
+  assert.equal(emitFunnelEvent({ event: 'search', has_dates: true, guests: 2 }), false);
+  saveMeasurementConsent({ analytics: true, advertising: true });
+  assert.equal(emitFunnelEvent({ event: 'search', has_dates: true, guests: 2 }), false);
+  loadGtmIfConsented({ analytics: true, advertising: true }, 'GTM-ABC123');
+  assert.equal(emitFunnelEvent({ event: 'search', has_dates: true, guests: 2 }), true);
+  assert.equal(emitFunnelEvent({ event: 'view_item', items: [{ item_id: 'JQ08G' }] }), true);
+  assert.equal(emitFunnelEvent({ event: 'begin_checkout', items: [{ item_id: 'JQ08G' }] }), true);
+  assert.equal(emitFunnelEvent({ event: 'add_payment_info', payment_type: 'pix' }), true);
+  assert.equal(emitFunnelEvent({ event: 'view_item', items: [{ item_id: 'bad/email@example.test' }] }), false);
+  const events = (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
+  assert.deepEqual(events.filter((event) => ['search', 'view_item', 'begin_checkout', 'add_payment_info'].includes(String(event.event))), [
+    { event: 'search', has_dates: true, guests: 2 },
+    { event: 'view_item', items: [{ item_id: 'JQ08G' }] },
+    { event: 'begin_checkout', items: [{ item_id: 'JQ08G' }] },
+    { event: 'add_payment_info', payment_type: 'pix' },
+  ]);
 });

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { afterEach } from 'node:test';
 import { JSDOM } from 'jsdom';
+import type { ReactNode } from 'react';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
 import type { Property, SearchFilters } from '../src/types';
 import { createDefaultSearchFilters } from '../src/utils/searchUrlState.ts';
@@ -292,8 +293,9 @@ test('deep link loads an accommodation absent from the current catalog', async (
   }
 });
 
-test('catalog refresh does not replace an open detail with a stale catalog record', async () => {
+test('catalog refresh preserves enriched detail without repeating view_item', async () => {
   const property = STAYS_NET_APARTMENTS[0]!;
+  const anotherProperty = STAYS_NET_APARTMENTS[1]!;
   const refreshedImage = 'https://cdn.stays.net/refreshed-detail.jpg';
   const originalGetAccommodationById = crcnBackendApi.getAccommodationById;
   let detailRequests = 0;
@@ -301,9 +303,20 @@ test('catalog refresh does not replace an open detail with a stale catalog recor
     detailRequests += 1;
     return { ...property, images: [...property.images, refreshedImage] };
   };
+  window.localStorage.setItem(
+    'crcn.measurementConsent.v1',
+    JSON.stringify({ analytics: true, advertising: true }),
+  );
+  const gtmScript = document.createElement('script');
+  gtmScript.id = 'crcn-gtm-script';
+  document.head.append(gtmScript);
+  const dataLayer: Array<Record<string, unknown>> = [];
+  (window as Window & { dataLayer?: unknown[] }).dataLayer = dataLayer;
   window.history.replaceState(null, '', `/apartamento/${property.staysListingId}`);
 
   try {
+    const StrictModeWrapper = ({ children }: { children: ReactNode }) =>
+      React.createElement(React.StrictMode, null, children);
     const { result } = renderHook(() => {
       const [properties, setProperties] = React.useState<Property[]>([property]);
       const [selectedProperty, setSelectedProperty] = React.useState<Property | null>(null);
@@ -316,8 +329,14 @@ test('catalog refresh does not replace an open detail with a stale catalog recor
         setFilters,
         restoreSearchFromUrlRef,
       });
-      return { selectedProperty, setProperties, propertyRouteStatus: routing.propertyRouteStatus };
-    });
+      return {
+        selectedProperty,
+        setProperties,
+        propertyRouteStatus: routing.propertyRouteStatus,
+        handleClosePropertyDetail: routing.handleClosePropertyDetail,
+        handleSelectProperty: routing.handleSelectProperty,
+      };
+    }, { wrapper: StrictModeWrapper });
 
     await waitFor(() =>
       assert.ok(result.current.selectedProperty?.images.includes(refreshedImage)),
@@ -327,8 +346,23 @@ test('catalog refresh does not replace an open detail with a stale catalog recor
     assert.ok(result.current.selectedProperty?.images.includes(refreshedImage));
     assert.equal(result.current.propertyRouteStatus, 'idle');
     assert.equal(detailRequests, 1);
+    assert.deepEqual(dataLayer.filter((event) => event.event === 'view_item'), [
+      { event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] },
+    ]);
+
+    act(() => result.current.handleClosePropertyDetail());
+    act(() => result.current.handleSelectProperty(property));
+    act(() => result.current.handleSelectProperty(anotherProperty));
+    assert.deepEqual(dataLayer.filter((event) => event.event === 'view_item'), [
+      { event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] },
+      { event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] },
+      { event: 'view_item', items: [{ item_id: anotherProperty.staysListingId || anotherProperty.id }] },
+    ]);
   } finally {
     crcnBackendApi.getAccommodationById = originalGetAccommodationById;
+    window.localStorage.removeItem('crcn.measurementConsent.v1');
+    gtmScript.remove();
+    delete (window as Window & { dataLayer?: unknown[] }).dataLayer;
   }
 });
 

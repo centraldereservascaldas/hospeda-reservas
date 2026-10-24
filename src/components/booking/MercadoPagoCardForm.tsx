@@ -6,6 +6,7 @@ import {
   type MercadoPagoCardFormInstance,
 } from '../../services/mercadoPagoSdk';
 import { clearCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
+import { emitFunnelEvent } from '../../utils/measurementEvents';
 
 const moneyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -46,6 +47,7 @@ export function MercadoPagoCardForm({
   const cardFormRef = useRef<MercadoPagoCardFormInstance | null>(null);
   const onAttemptFinishedRef = useRef(onAttemptFinished);
   const isSubmittingRef = useRef(false);
+  const paymentInfoEmittedRef = useRef(false);
   const [formStatus, setFormStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOneTimePaymentAvailable, setIsOneTimePaymentAvailable] = useState(false);
@@ -88,6 +90,9 @@ export function MercadoPagoCardForm({
     }
 
     isSubmittingRef.current = true;
+    if (!paymentInfoEmittedRef.current) {
+      paymentInfoEmittedRef.current = emitFunnelEvent({ event: 'add_payment_info', payment_type: 'card' });
+    }
     setIsSubmitting(true);
     setSubmitError(null);
     try {

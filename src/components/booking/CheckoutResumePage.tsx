@@ -9,7 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
-import { emitConfirmedPurchase } from '../../utils/measurementEvents';
+import { emitConfirmedPurchase, emitFunnelEvent } from '../../utils/measurementEvents';
 import type {
   CheckoutAccessCredentials,
   CheckoutResumeResponse,
@@ -241,6 +241,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const pixPaymentSubmissionInFlightRef = useRef(false);
+  const pixPaymentInfoEmittedRef = useRef(false);
   const pixPaymentIdempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -342,6 +343,9 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
     }
 
     pixPaymentSubmissionInFlightRef.current = true;
+    if (!pixPaymentInfoEmittedRef.current) {
+      pixPaymentInfoEmittedRef.current = emitFunnelEvent({ event: 'add_payment_info', payment_type: 'pix' });
+    }
     setIsStartingPixPayment(true);
     setPaymentStartError(null);
     try {

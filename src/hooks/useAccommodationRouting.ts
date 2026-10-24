@@ -3,6 +3,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Property, SearchFilters } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
 import { getAccommodationIdFromPath, parseSearchFilters } from '../utils/searchUrlState';
+import { emitFunnelEvent } from '../utils/measurementEvents';
 
 interface UseAccommodationRoutingOptions {
   properties: Property[];
@@ -54,6 +55,7 @@ export function useAccommodationRouting({
 }: UseAccommodationRoutingOptions) {
   const selectedPropertyRef = useRef(selectedProperty);
   selectedPropertyRef.current = selectedProperty;
+  const routedViewItemIdRef = useRef<string | null>(null);
   const [propertyRouteStatus, setPropertyRouteStatus] = useState<PropertyRouteStatus>(() =>
     getAccommodationIdFromPath(window.location.pathname) ? 'loading' : 'idle',
   );
@@ -76,6 +78,14 @@ export function useAccommodationRouting({
   useEffect(() => {
     let isEffectActive = true;
 
+    const emitRoutedViewItem = (property: Property) => {
+      const itemId = property.staysListingId || property.id;
+      if (routedViewItemIdRef.current === itemId) return;
+
+      routedViewItemIdRef.current = itemId;
+      emitFunnelEvent({ event: 'view_item', items: [{ item_id: itemId }] });
+    };
+
     const selectPropertyFromRoute = (targetId: string) => {
       setPropertyRouteStatus('loading');
       const found = properties.find(
@@ -84,6 +94,7 @@ export function useAccommodationRouting({
       if (found) {
         setSelectedProperty(found);
         setPropertyRouteStatus('idle');
+        emitRoutedViewItem(found);
         refreshSelectedProperty(found);
         return;
       }
@@ -95,6 +106,7 @@ export function useAccommodationRouting({
         if (property) {
           setSelectedProperty(property);
           setPropertyRouteStatus('idle');
+          emitRoutedViewItem(property);
         } else {
           setPropertyRouteStatus('unavailable');
         }
@@ -115,6 +127,7 @@ export function useAccommodationRouting({
         }
         selectPropertyFromRoute(targetId);
       } else {
+        routedViewItemIdRef.current = null;
         setPropertyRouteStatus('idle');
       }
     };
@@ -136,6 +149,7 @@ export function useAccommodationRouting({
         selectPropertyFromRoute(targetId);
         window.scrollTo(0, 0);
       } else {
+        routedViewItemIdRef.current = null;
         setPropertyRouteStatus('idle');
         setSelectedProperty(null);
         const returnScrollY = getSavedReturnScrollY();
@@ -183,6 +197,7 @@ export function useAccommodationRouting({
   ]);
 
   const handleSelectProperty = (property: Property) => {
+    emitFunnelEvent({ event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] });
     setPropertyRouteStatus('idle');
     setSelectedProperty(property);
     refreshSelectedProperty(property);
@@ -227,6 +242,7 @@ export function useAccommodationRouting({
     setPropertyRouteStatus('idle');
     setSelectedProperty(null);
     if (isPropertyRoute) {
+      routedViewItemIdRef.current = null;
       window.history.replaceState(
         null,
         '',

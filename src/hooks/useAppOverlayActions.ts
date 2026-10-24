@@ -3,6 +3,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { Property, SearchFilters } from '../types';
 import type { AppOverlayBookingPayload } from '../types/booking';
 import { scrollIntoViewRespectingMotion } from '../utils/motion';
+import { emitFunnelEvent } from '../utils/measurementEvents';
 
 export const CHECKOUT_MODAL_HISTORY_ENTRY = '__crcnCheckoutModalEntry';
 
@@ -42,6 +43,7 @@ export function useAppOverlayActions({
 
   const handleStartBooking = useCallback(
     (payload: AppOverlayBookingPayload) => {
+      emitFunnelEvent({ event: 'begin_checkout', items: [{ item_id: payload.property.staysListingId || payload.property.id }] });
       const state: Record<string, unknown> =
         window.history.state && typeof window.history.state === 'object'
           ? { ...window.history.state }

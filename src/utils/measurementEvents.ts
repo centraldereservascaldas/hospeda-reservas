@@ -19,6 +19,8 @@ const pendingPurchases = new Set<string>();
 const PURCHASE_STORAGE_PREFIX = 'crcn.purchaseEmitted.v1.';
 
 export function emitFunnelEvent(event: FunnelEvent): boolean {
+  if ('items' in event && !/^[A-Za-z0-9_-]+$/.test(event.items[0]?.item_id ?? '')) return false;
+  if (event.event === 'search' && (!Number.isInteger(event.guests) || event.guests < 1 || event.guests > 30)) return false;
   const consent = readMeasurementConsent();
   if (!consent?.analytics || !consent.advertising) return false;
   if (!document.getElementById('crcn-gtm-script')) return false;

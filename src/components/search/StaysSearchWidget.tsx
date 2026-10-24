@@ -14,6 +14,7 @@ import {
 import { SearchFilters } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { countOccupancyGuests } from '../../utils/guestCounts';
+import { emitFunnelEvent } from '../../utils/measurementEvents';
 
 interface StaysSearchWidgetProps {
   onSearchInApp: (searchParams: {
@@ -840,6 +841,11 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
             pets: currentGuests.pets,
           }
       : undefined;
+    emitFunnelEvent({
+      event: 'search',
+      has_dates: !surpriseMe && Boolean(checkIn && checkOut),
+      guests: guests ? countOccupancyGuests(guests) : personCount,
+    });
     onSearchInApp({
       checkIn,
       checkOut,
