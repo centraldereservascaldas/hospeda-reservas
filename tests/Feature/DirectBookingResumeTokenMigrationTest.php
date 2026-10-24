@@ -12,6 +12,30 @@ class DirectBookingResumeTokenMigrationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_down_drops_expiration_index_before_column(): void
+    {
+        $this->assertTrue(Schema::hasIndex('direct_booking_orders', ['resume_token_expires_at']));
+        $migration = require database_path('migrations/2026_10_14_172057_add_resume_token_expiration_to_direct_booking_orders_table.php');
+
+        $migration->down();
+
+        $this->assertFalse(Schema::hasColumn('direct_booking_orders', 'resume_token_expires_at'));
+        $this->assertFalse(Schema::hasIndex('direct_booking_orders', ['resume_token_expires_at']));
+    }
+
+    public function test_down_drops_expiration_column_when_legacy_schema_has_no_index(): void
+    {
+        Schema::table('direct_booking_orders', function (Blueprint $table): void {
+            $table->dropIndex(['resume_token_expires_at']);
+        });
+        $this->assertFalse(Schema::hasIndex('direct_booking_orders', ['resume_token_expires_at']));
+        $migration = require database_path('migrations/2026_10_14_172057_add_resume_token_expiration_to_direct_booking_orders_table.php');
+
+        $migration->down();
+
+        $this->assertFalse(Schema::hasColumn('direct_booking_orders', 'resume_token_expires_at'));
+    }
+
     public function test_legacy_tokens_receive_creation_based_expiry_and_expired_token_is_pruned_without_deleting_order(): void
     {
         $this->travelTo('2026-10-24 12:00:00');
@@ -28,6 +52,7 @@ class DirectBookingResumeTokenMigrationTest extends TestCase
         $migration->up();
 
         $this->assertTrue(Schema::hasColumn('direct_booking_orders', 'resume_token_expires_at'));
+        $this->assertTrue(Schema::hasIndex('direct_booking_orders', ['resume_token_expires_at']));
         $this->assertDatabaseHas('direct_booking_orders', ['id' => '00000000-0000-4000-8000-000000000001', 'resume_token_expires_at' => '2026-10-01 12:00:00']);
         $this->assertDatabaseHas('direct_booking_orders', ['id' => '00000000-0000-4000-8000-000000000002', 'resume_token_expires_at' => '2026-10-31 12:00:00']);
 

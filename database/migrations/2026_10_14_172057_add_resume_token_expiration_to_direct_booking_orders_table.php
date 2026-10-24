@@ -62,6 +62,14 @@ return new class extends Migration
      */
     public function down(): void
     {
+        // SQLite requires the column index to be removed first; legacy schemas may not have it.
+        if (method_exists(Schema::getFacadeRoot(), 'hasIndex')
+            && Schema::hasIndex('direct_booking_orders', ['resume_token_expires_at'])) {
+            Schema::table('direct_booking_orders', function (Blueprint $table): void {
+                $table->dropIndex(['resume_token_expires_at']);
+            });
+        }
+
         Schema::table('direct_booking_orders', function (Blueprint $table): void {
             $table->dropColumn('resume_token_expires_at');
         });
