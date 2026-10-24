@@ -120,4 +120,61 @@ class DirectBookingEmailLifecycleTest extends TestCase
         $this->artisan('direct-booking:recover-confirmation-emails')->assertSuccessful();
         Queue::assertPushed(SendDirectBookingConfirmationEmail::class, 1);
     }
+
+    public function test_confirmation_emails_older_than_retry_window_are_terminal_and_not_requeued(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+
+        $failedOrder = $this->createConfirmedOrder('order-email-expired-failed');
+        $queuedOrder = $this->createConfirmedOrder('order-email-expired-queued');
+        $failedEmail = DirectBookingEmail::query()->create([
+            'direct_booking_order_id' => $failedOrder->id,
+            'notification_type' => DirectBookingEmail::TYPE_BOOKING_CONFIRMED,
+            'status' => 'failed',
+            'next_attempt_at' => now()->subMinute(),
+        ]);
+        $queuedEmail = DirectBookingEmail::query()->create([
+            'direct_booking_order_id' => $queuedOrder->id,
+            'notification_type' => DirectBookingEmail::TYPE_BOOKING_CONFIRMED,
+            'status' => 'queued',
+            'queued_at' => now()->subHours(25),
+        ]);
+        foreach ([$failedEmail, $queuedEmail] as $email) {
+            $email->forceFill(['created_at' => now()->subHours(25)])->save();
+        }
+
+        Queue::fake();
+
+        $this->artisan('direct-booking:recover-confirmation-emails')->assertSuccessful();
+
+        foreach ([$failedEmail, $queuedEmail] as $email) {
+            $this->assertDatabaseHas('direct_booking_emails', [
+                'id' => $email->id,
+                'status' => 'failed',
+                'error_code' => 'mail_retry_window_expired',
+                'next_attempt_at' => null,
+                'queued_at' => null,
+            ]);
+        }
+        Queue::assertNothingPushed();
+    }
+
+    private function createConfirmedOrder(string $idempotencyKey): DirectBookingOrder
+    {
+        return DirectBookingOrder::query()->create([
+            'status' => DirectBookingOrderStatus::Confirmado,
+            'idempotency_key' => $idempotencyKey,
+            'public_reference' => bin2hex(random_bytes(20)),
+            'request_fingerprint' => hash('sha256', $idempotencyKey),
+            'listing_id' => 'JQ08G', 'stays_listing_id' => 'JQ08G',
+            'check_in' => '2026-11-10', 'check_out' => '2026-11-13',
+            'guests' => ['adults' => 2], 'guest_name' => 'Test Guest',
+            'guest_email' => 'test@example.test', 'guest_phone' => '11999999999',
+            'quote_total' => '3001.00', 'currency' => 'BRL', 'quote_snapshot' => [],
+            'accepted_terms_version' => 'terms-test-1', 'accepted_terms_snapshot' => [],
+            'terms_accepted_at' => now(), 'origin' => 'website',
+            'payment_status' => 'approved', 'reservation_status' => 'booked',
+            'operational_events' => [],
+        ]);
+    }
 }
