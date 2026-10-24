@@ -15,9 +15,9 @@ Aplicar as melhorias da auditoria do frontend por etapas pequenas e verificávei
 - Classes `animate-in`, `fade-in`, `zoom-in-95` e `slide-in-from-bottom` foram implementadas em `src/index.css` no commit `b373211`. O build confirmou as regras geradas e o suporte a movimento reduzido.
 - Diversos modais não têm semântica de diálogo, associação completa de labels, nome em botões de ícone ou gerenciamento de foco consistente.
 
-## Progresso atual
+## Progresso e histórico de checkpoints
 
-O trabalho é feito em commits locais pequenos, revisados e validados. A branch permanece sem push; as contagens dos checkpoints abaixo usam a referência local de `origin/main`, sem fetch.
+Os checkpoints abaixo registram o estado observado em cada data, inclusive contagens de testes, artefatos e pendências daquele momento; não descrevem necessariamente o HEAD ou o worktree atual. Para o estado vigente, conferir o Git e executar novamente as verificações correspondentes. O trabalho é feito em commits locais revisados; as contagens históricas de distância para `origin/main` não incluem fetch posterior.
 
 ### Checkpoint anterior — ações de overlay em hook (2026-10-13)
 
@@ -535,3 +535,871 @@ O `.env` local tem `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` sem valor. Ass
 Gates no checkout integrado: `npm run lint`, `npm run format:check`, `npx tsx --test --test-concurrency=1 tests/*.test.ts` (193/193), `npm run build` e `git diff --check` passaram. Build: JS inicial 360,85 kB / 107,50 kB gzip, CSS 108,52 / 15,83, Supabase 226,85 / 58,83 e detalhe 51,67 / 13,86. Comparado ao checkpoint anterior, o JS inicial caiu 4,72 kB / 1,42 kB gzip; são tamanhos de artefato, não Web Vitals. Os commits são locais, sem push, merge ou deploy.
 
 Residuais explicitados: o `.env` local não configura o cliente Supabase, então login por email/senha, sessão persistida e checkout autenticado não podem receber smoke manual confiável aqui; decisão: usar ambiente/conta de QA e parar antes de criar reserva ou pagar. Leitor de tela e walkthrough integral de teclado em 320/375 CSS px não foram executados nesta rodada; testes de foco e verificações anteriores de viewport/axe são evidência parcial, e a decisão é completar esses percursos quando houver sessão de browser e tecnologia assistiva disponíveis. O CSS contém regra `prefers-reduced-motion` e houve emulação em checkpoint anterior, mas não comparação visual pareada nesta rodada; decisão: manter suporte e registrar comparação manual antes de afirmar equivalência visual. O texto malformado de LG11J é dado editorial Stays e precisa correção na origem. Nenhuma dessas lacunas justifica alterar contratos de autenticação, Stays ou reserva no frontend.
+
+### Continuação da auditoria — busca datada e filtros de preço (2026-10-17)
+
+A documentação da Stays descreve `/booking/search-listings` como fonte de anúncios reserváveis para o intervalo e apresenta `bookingPrice` como cotação. O backend agora preserva resultados reserváveis sem total válido, mas omite `calculatedPrice`; assim, o frontend mostra preço ainda não confirmado em vez de interpretar o objeto sintético de total zero como preço indisponível. A busca mantém o anúncio visível, e nenhuma disponibilidade foi inferida a partir do preço.
+
+Na visualização por condomínios, os estados de loading e erro de uma busca datada agora substituem o diretório para não manter resultados anteriores visíveis durante uma nova consulta. O estado vazio após busca bem-sucedida também continua usando a mensagem de disponibilidade apropriada. Com intervalo de preço ativo em uma busca com datas, a comparação usa somente a diária da cotação positiva; anúncio sem cotação fica fora desse intervalo e segue visível quando nenhum filtro de preço foi selecionado. Isso evita filtrar com uma tarifa de referência como se fosse a cotação da estadia.
+
+Validação: testes direcionados de busca/roteador/filtros passaram 9/9; `tests/Feature/AccommodationApiTest.php` passou 10/10; `npm run lint`, Pint, Prettier nos arquivos alterados e `git diff --check` passaram. Os testes são locais e isolados; não houve sandbox, servidor, browser visual, reserva ou pagamento. A inspeção visual manual segue pendente. Nenhum contrato Laravel/Stays, commit, push, merge ou deploy foi alterado nesta etapa.
+
+### Continuação da auditoria — filtros no diretório de condomínios (2026-10-17)
+
+A barra permitia abrir filtros na categoria “Condomínios”, mas o diretório era construído a partir do catálogo bruto e não mostrava os chips ativos. Isso fazia o diretório ignorar filtros de comodidades, preço e capacidade, além de esconder ações para removê-los. A categoria agora corresponde a anúncios associados a um condomínio; o diretório é agrupado a partir dos anúncios filtrados, e os chips ativos/removíveis aparecem também nessa visualização. O caminho de lista e mapa continua recebendo a mesma coleção filtrada, e a sincronização já coberta mantém rota, hash e parâmetros externos da URL.
+
+Validação: 26 testes direcionados passaram, incluindo categorização, view model do catálogo, filtros removíveis no diretório, sincronização de URL e preço nos marcadores do mapa; `npm run lint`, `npm run build`, Prettier nos arquivos com formatação atual e `git diff --check` passaram. Nenhum servidor ou sandbox foi iniciado. Inspeção visual manual, validação em viewport estreito e leitor de tela permanecem pendentes.
+
+### Continuação da auditoria — estado do detalhe na URL (2026-10-17)
+
+A página de detalhe agora atualiza a query string ao alterar datas ou composição de hóspedes, usando `replaceState` para manter a URL compartilhável e preservar rota, hash e parâmetros externos. Datas sugeridas pelo calendário padrão não entram na URL até haver seleção explícita; assim, abrir um anúncio sem datas não cria uma busca datada artificial. O estado inicial também respeita um adulto quando esse é o valor recebido, em vez de substituir silenciosamente por dois.
+
+Validação: os testes de detalhe e roteamento passaram 22/22, incluindo atualização da URL antes de copiar, compartilhamento de datas/hóspedes, preservação de parâmetros, deep link, retorno à lista/posição e um adulto sem datas explícitas. `npm run lint`, `npm run build`, Prettier no teste alterado e `git diff --check` passaram. Sem sandbox, servidor, inspeção visual, reserva ou pagamento; o browser visual continua pendente.
+
+### Continuação da auditoria — guarda de cotação e imagem principal (2026-10-17)
+
+A condição visual do CTA de reserva agora exige a mesma evidência que a ação final: intervalo confirmado, cotação marcada como sucesso, fonte Stays ao vivo, total finito e positivo, e ausência de recálculo em andamento. Isso impede que uma resposta inconsistente com `success=false` apresente “Continuar para reserva” habilitado, embora o handler já recusasse o avanço. A foto principal do detalhe recebe prioridade alta e carregamento eager por estar no primeiro viewport; as demais fotos permanecem sem prioridade elevada.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 15/15, incluindo a resposta Stays `success=false`; `npm run lint`, `npm run build` e `git diff --check` passaram. O teste ainda emite avisos de fetch para URLs relativas em casos sem mocks, sem falhas. Nenhum servidor, sandbox, reserva, pagamento ou publicação foi acionado. A inspeção visual e o leitor de tela continuam pendentes.
+
+### Continuação da auditoria — feedback do seletor de datas (2026-10-17)
+
+Mensagens de seleção inválida eram enviadas somente ao calendário da página sob o diálogo de datas. O seletor agora recebe e anuncia a mensagem no próprio modal com `role=status`/`aria-live=polite`; o nome do mês também é anunciado após navegação entre meses. Os rótulos dos dias da semana mudaram de `neutral-400` para `neutral-600` para melhorar legibilidade do texto pequeno.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 16/16, incluindo a presença e semântica da mensagem dentro do diálogo; `npm run lint`, `npm run build`, Prettier no teste alterado e `git diff --check` passaram. A checagem Prettier global dos componentes continua apontando diferenças legadas, que não foram reformatadas em massa. Sem servidor, sandbox, reserva, pagamento ou publicação; inspeção visual e leitor de tela seguem pendentes.
+
+### Continuação da auditoria — anúncios do seletor de hóspedes (2026-10-17)
+
+Os valores de adultos, crianças e bebês mantêm região viva e agora fornecem um nome acessível contextual, por exemplo “Adultos: 3”, para que mudanças não sejam anunciadas apenas como um número sem categoria.
+
+Validação: teste de interação do seletor de hóspedes passou 1/1; `npm run lint`, `npm run build`, Prettier no teste e `git diff --check` passaram. Nenhuma inspeção de browser, servidor, sandbox, reserva ou pagamento foi iniciada.
+
+### Continuação da auditoria — navegação de datas por teclado (2026-10-17)
+
+O calendário de datas aceita setas esquerda/direita para navegar por dia e cima/baixo para navegar por semana. A navegação pula dias que não são selecionáveis para o campo atual e move o foco junto ao mês quando necessário; o texto de ajuda informa o suporte ao teclado. O foco não altera datas nem inicia uma reserva sem ativação explícita.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 16/16, incluindo navegação diária, semanal e salto sobre data indisponível; lint/TypeScript, build, Prettier no teste e `git diff --check` passaram. Os casos de teste sem mocks ainda registram avisos esperados de URLs relativas `/api/*`. Inspeção visual real, viewport 320/375 e leitor de tela permanecem pendentes.
+
+### Continuação da auditoria — retentativa de cotação (2026-10-17)
+
+Quando o calendário confirma o intervalo e a cotação ao vivo falha ou não retorna preço positivo, a interface agora diferencia “Cotação indisponível” de “Disponibilidade indisponível” e oferece “Tentar cotação novamente”. O hook repete apenas o cálculo de preço para as mesmas datas/hóspedes; o CTA permanece bloqueado até chegar uma cotação Stays válida. O status de preço também é uma região viva para anunciar carregamento/resultado.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 17/17, incluindo falha inicial, retentativa e habilitação do CTA somente após cotação válida; lint/TypeScript, build, Prettier no teste e `git diff --check` passaram. Avisos de fetch com URLs relativas ocorrem nos casos sem mocks já existentes. Nenhuma reserva, pagamento, chamada real, servidor ou sandbox foi iniciado.
+
+### Continuação da auditoria — foco ao remover filtros (2026-10-17)
+
+Ao remover um chip ativo, o foco de teclado agora segue para o próximo chip na mesma posição; ao remover o último, volta ao botão de abrir filtros. Isso mantém a sequência de remoção operável sem mouse e evita que o foco caia no documento após o item focado sair do DOM.
+
+Validação: `tests/activeSearchFilters.test.ts` passou 5/5, incluindo remoção consecutiva e retorno ao acionador; `npm run lint`, `npm run build`, Prettier no teste e `git diff --check` passaram. Nenhuma verificação de browser, servidor, sandbox, reserva ou pagamento ocorreu nesta etapa.
+
+### Continuação da auditoria — controles do carrossel nos cartões (2026-10-17)
+
+Os botões de miniaturas agora expõem `aria-pressed` para indicar a foto ativa e todos os controles do carrossel/favorito têm contorno de foco explícito. A troca da miniatura atualiza o estado acessível junto com o conteúdo visual; tarifa de referência e comodidades existentes já tinham cobertura e permaneceram intactas.
+
+Validação: `tests/propertyCatalogGrid.test.ts` passou 8/8, inclusive estado da foto selecionada e classes de foco; `npm run lint`, `npm run build`, Prettier no teste e `git diff --check` passaram. Não foi feita inspeção visual no browser.
+
+### Continuação da auditoria — foco visível na barra de descoberta (2026-10-17)
+
+Os controles de categoria, paginação de categorias, filtros, alternância de mapa/lista e switch de total com taxas agora têm indicadores de foco explícitos. O switch não depende mais do outline removido por `focus:outline-none`; o foco usa um contorno com contraste adequado ao fundo de cada controle.
+
+Validação: testes de categoria e cartões passaram 12/12; `npm run lint`, `npm run build`, Prettier no teste alterado e `git diff --check` passaram. Inspeção visual de browser e contraste calculado em telas renderizadas seguem pendentes.
+
+### Continuação da auditoria — estimativas de preço sem cotação válida (2026-10-17)
+
+A validação de cotação passou a ser compartilhada entre cálculo e apresentação do resumo. Respostas não bem-sucedidas, sem fonte Stays ao vivo, total/diária não positivos ou noites inválidas não alimentam taxas e total como se fossem cotação. Sem cotação válida, uma estimativa só é apresentada se o anúncio tiver tarifa de referência conhecida; sem tarifa e sem cotação, o resumo não exibe um total zero fictício. Taxas estimadas são identificadas como estimadas.
+
+Validação: testes de preço e detalhe passaram 22/22, incluindo resposta falha com fallback para tarifa conhecida e ausência de total zero quando não há preço; `npm run lint`, `npm run build`, Prettier nos testes alterados e `git diff --check` passaram. Nenhum dado real, reserva, pagamento, servidor, sandbox ou publicação foi utilizado.
+
+### Continuação da auditoria — navegação por teclado no calendário (2026-10-17)
+
+O calendário de reserva agora expõe a estrutura acessível de grade com cabeçalhos de dias e semanas. Somente um dia disponível entra na sequência de Tab; setas movem o foco e atualizam a parada móvel, pulando datas bloqueadas. A parada de Tab inicial usa a data ativa quando ela está disponível no mês, ou o primeiro dia selecionável. Células vazias de alinhamento visual ficam ocultas para tecnologia assistiva. A aparência dos dias bloqueados, a confirmação de disponibilidade e as regras de seleção permanecem iguais.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 18/18, cobrindo grade nomeada, sete cabeçalhos, parada única de Tab, movimentação do ponto de tabulação com setas e datas bloqueadas. `npm run build` e ESLint do componente passaram; Prettier e `git diff --check` passaram no diff final. A suíte imprime avisos de fetch relativo `/api/*` em casos existentes sem mocks; não houve falhas. Sem sandbox, servidor, reserva, pagamento ou publicação. Validação por leitor de tela e inspeção visual seguem pendentes.
+
+### Continuação da auditoria — retorno ao catálogo sem deslocar a rolagem (2026-10-17)
+
+Ao voltar do detalhe, o App devolvia o foco ao landmark principal. O foco nativo pode deslocar a viewport e competir com a rolagem de catálogo restaurada pelo roteador. O retorno agora move foco com `preventScroll`, preservando a posição salva e mantendo a navegação por teclado.
+
+Validação: `tests/accommodationRouting.test.ts` e `tests/focus.test.ts` passaram 9/9; o teste do utilitário confirma `preventScroll`. `npm run lint`, `npm run build`, Prettier nos arquivos alterados e `git diff --check` passaram. Nenhuma rota, query string, reserva, pagamento ou contrato de API mudou. Browser visual permanece desligado conforme o estado atual da porta local; leitor de tela segue pendente.
+
+### Continuação da auditoria — calendário da busca por teclado (2026-10-17)
+
+O calendário compartilhado da busca agora apresenta grade acessível, sete cabeçalhos de dias e uma única data disponível na sequência de Tab. As setas navegam dia/semana, pulam datas anteriores ao mínimo e atravessam meses mantendo o foco; a seleção e os limites de datas continuam os mesmos. Em telas baixas, o popover limita sua altura à viewport e permite rolagem interna. Este calendário é genérico e não marca indisponibilidade de um imóvel específico antes da busca: os resultados continuam vindo da consulta de disponibilidade e o detalhe confirma o calendário do anúncio.
+
+Validação: `tests/staysSearchWidgetAccessibility.test.ts` passou 9/9, cobrindo foco móvel, navegação diária e semanal, mudança de mês, Escape, retorno ao acionador e altura de viewport estreita. `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Sem sandbox, servidor, inspeção visual, reserva ou pagamento; os testes não fazem chamadas de disponibilidade por imóvel.
+
+### Continuação da auditoria — contexto de disponibilidade e cotação (2026-10-17)
+
+O estado de calendário e cotação agora é associado ao imóvel/intervalo consultado; a cotação também inclui a quantidade de hóspedes. Ao mudar hóspedes ou imóvel, uma resposta anterior é imediatamente ocultada e o CTA permanece bloqueado até a nova cotação válida. O calendário também volta ao estado de confirmação pendente ao trocar de imóvel ou check-in. Respostas que chegam depois do descarte do efeito continuam ignoradas.
+
+Validação: `tests/propertyAvailabilityHook.test.ts` passou 3/3, incluindo troca de hóspedes e de imóvel com respostas concorrentes; `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Sem alteração de contratos da API ou critérios de disponibilidade. Nenhuma requisição real, reserva, pagamento, servidor ou sandbox foi iniciado.
+
+### Continuação da auditoria — preço anunciado ao focar cartões (2026-10-17)
+
+O controle principal de cada cartão agora associa o preço visível como descrição acessível. Ao navegar por teclado ou leitor de tela, a pessoa recebe o título do imóvel e o contexto de preço (cotação por noite/total, tarifa de referência, preço pendente ou indisponível) ao focar “Ver detalhes”. Lista e mapa continuam usando o mesmo resolvedor de preço.
+
+Validação: testes de cartão, resolvedor e mapa passaram 15/15, incluindo preço pendente e total com taxas associado ao botão do imóvel. `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram; nenhuma API ou dado foi alterado.
+
+### Continuação da auditoria — preservar rascunhos do formulário de busca (2026-10-17)
+
+O formulário de busca antes copiava novamente todos os filtros aplicados sempre que qualquer filtro mudava. Uma mudança independente de categoria podia apagar datas editadas mas ainda não enviadas. Agora os campos locais só ressincronizam quando mudam datas, hóspedes ou destino; mudanças de categoria/facetas mantêm o rascunho, enquanto remover datas/destino externamente continua sincronizando esses campos.
+
+Validação: `tests/staysSearchWidgetAccessibility.test.ts` passou 10/10, inclusive uma data editada mantida após mudança de categoria. `npm run lint`, `npm run build`, Prettier nos dois arquivos alterados e `git diff --check` passaram. A sincronização do formulário depende dos valores relevantes de data, hóspedes e destino, sem reagir a mudanças de identidade do objeto de hóspedes causadas por filtros independentes. Sem alteração na busca/API ou disponibilidade; não houve sandbox, servidor, reserva, pagamento ou publicação.
+
+### Continuação da auditoria — comodidades consistentes no mapa (2026-10-17)
+
+O cartão de imóvel aberto a partir de um marcador agora resume até três comodidades registradas, com indicação “mais N” quando há outras. O cartão da lista usa o mesmo resolvedor: ambos removem espaços vazios e duplicatas e não inventam características ausentes. Preço e CTA do popup continuam a usar o resolvedor de cotação compartilhado.
+
+Validação: testes de cartão e mapa passaram 12/12, cobrindo deduplicação, limite/contagem e comodidades apresentadas no popup. `npm run lint`, `npm run build`, Prettier nos arquivos alterados e `git diff --check` passaram. A inspeção visual no browser segue pendente; nenhum servidor, sandbox, reserva, pagamento ou publicação foi iniciado.
+
+### Continuação da auditoria — retorno localizado do detalhe (2026-10-17)
+
+Ao abrir uma acomodação a partir de `/pt/search`, a rota do detalhe agora mantém o prefixo `/pt` (`/pt/apartment/{id}`). Ao fechar um deep link localizado sem entrada de catálogo no histórico, o retorno vai a `/pt/search`, preservando query, hash e filtros compartilhados. Rotas sem prefixo mantêm os caminhos atuais.
+
+Validação: `tests/accommodationRouting.test.ts` passou 8/8, incluindo deep link localizado e preservação de query/hash. `npm run lint`, `npm run build` e Prettier nos arquivos alterados passaram. Não houve sandbox, servidor, reserva, pagamento ou publicação; verificação visual de navegação permanece pendente.
+
+### Continuação da auditoria — anúncio de busca sem disponibilidade (2026-10-17)
+
+Quando a busca concluía sem resultados, a mensagem de disponibilidade vazia não era anunciada como mudança de estado para leitores de tela. O resultado vazio agora usa `role="status"` e `aria-live="polite"`. A cobertura também diferencia falta de disponibilidade de resultados removidos apenas pelos filtros ativos e confirma que o botão de nova tentativa aciona a consulta registrada.
+
+Validação: `tests/availabilitySearchState.test.ts`, `tests/mainContentRouter.test.ts` e `tests/accommodationSearchHook.test.ts` passaram 21/21; `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Os testes de componente com JSDOM imprimiram avisos preexistentes por `/api/resorts` relativo sem servidor; não houve chamadas reais de disponibilidade, servidor, sandbox, reserva ou pagamento.
+
+### Continuação da auditoria — foco de teclado nos controles do mapa (2026-10-17)
+
+O contêiner do mapa, zoom, enquadramento, abertura do OpenStreetMap e fechamento do resumo selecionado agora mostram um contorno de foco explícito para teclado. A lista e o detalhe do imóvel mantêm o mesmo conteúdo e comportamento.
+
+Validação: `tests/interactiveMapPricing.test.ts` passou 4/4, incluindo foco visível nos controles. `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Não foi possível inspecionar visualmente o resultado: a porta local 3000 não tinha servidor ativo e o CUA reportou o Mac bloqueado. Não iniciei servidor nem sandbox.
+
+### Continuação da auditoria — teclado do mapa sem interceptar marcadores (2026-10-17)
+
+As setas agora movem o mapa somente quando o próprio canvas está focado; ao focar um marcador, as teclas não deslocam o mapa por propagação do evento. O mapa expõe uma instrução acessível associada ao canvas: setas para mover e Tab para acessar imóveis/controles.
+
+Validação: `tests/interactiveMapPricing.test.ts` passou 5/5, comprovando que ArrowRight altera a posição do marcador apenas quando o canvas tem o evento de teclado. `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Sem inspeção visual, servidor ou sandbox.
+
+### Continuação da auditoria — filtros ativos para datas e hóspedes (2026-10-17)
+
+O grupo de filtros ativos agora representa também o intervalo de datas e a composição não padrão de hóspedes, com ações de remoção e limpeza mesmo quando esses são os únicos parâmetros escolhidos. Remover datas refaz a consulta sem período e limpa cotação antiga; remover hóspedes volta à composição padrão e, se houver datas, refaz a confirmação de disponibilidade. A sincronização já existente reflete as alterações na URL.
+
+Validação: testes de chips, roteamento de conteúdo e serialização/sincronização de URL passaram 19/19; `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Os testes JSDOM do roteador emitiram avisos conhecidos por `/api/resorts` relativo sem servidor, sem falhas. Não houve servidor, sandbox, chamada real, reserva ou pagamento.
+
+Checagem visual posterior em Chromium local a 1200 CSS px: o grupo exibiu chips de datas e composição de hóspedes em linhas sem sobreposição. Remover datas retirou `from`/`to` da URL e manteve hóspedes; remover hóspedes voltou a omitir a composição padrão da query. O catálogo mostrou estado vazio/erro conforme o backend Laravel estava indisponível em 127.0.0.1:8000; isso não valida resultados reais. O Vite temporário foi encerrado após a checagem; não foi iniciada reserva ou pagamento.
+
+### Continuação da auditoria — cabeçalho do detalhe em telas estreitas (2026-10-17)
+
+O cabeçalho do detalhe agora reduz os recuos em mobile, limita o botão de compartilhar e mantém espaçamento entre voltar, compartilhar e salvar. O contorno de foco do botão voltar foi reduzido para um deslocamento de 1 px, sem remover a indicação para teclado.
+
+Validação: `npm run build` e `git diff --check` passaram. Chromium local confirmou que, em 320 px e 375 px, as ações cabem na barra com 12 px de margem interna; o foco permanece visível com deslocamento de 1 px. A página inteira também ficou sem overflow horizontal em 320 px. O diálogo de datas coube na viewport e, com o backend Laravel indisponível, mostrou erro explícito, datas bloqueadas e ação de nova tentativa; isso confirma o fallback visual, não a disponibilidade real do imóvel. Nenhuma reserva, pagamento ou publicação foi realizada.
+
+### Continuação da auditoria — seleção de intervalo por toque no calendário (2026-10-17)
+
+No calendário do detalhe, um toque e arrasto a partir do check-in agora mostra a prévia do intervalo; ao soltar, seleciona check-in e check-out em um único gesto. A seleção só é aplicada quando a chegada está aberta e todas as noites respeitam disponibilidade e estadia mínima; intervalos inválidos preservam as datas existentes e anunciam o motivo. Toques simples e navegação por teclado continuam disponíveis. A instrução aparece somente quando o campo ativo é check-in.
+
+Validação: testes direcionados de seleção de datas e detalhe passaram 23/23; `npm run lint`, `npm run build`, Prettier nos arquivos alterados e `git diff --check` passaram. Chromium local a 320 px confirmou a prévia visual e a seleção de 20–23 e depois 24–27/10 usando calendário simulado somente na aba; o backend Laravel estava indisponível. O Vite temporário foi encerrado. Nenhuma chamada Stays real, reserva, pagamento ou publicação foi realizada.
+
+### Continuação da auditoria — cobertura progressiva do calendário (2026-10-17)
+
+Ao avançar além da janela inicial de 90 dias, o detalhe agora consulta os próximos intervalos pelo endpoint de calendário já existente. As datas sem confirmação permanecem sem seleção e não são apresentadas como indisponibilidade confirmada; erros de extensão mostram carregamento e permitem nova tentativa. A consulta avança em blocos, sem mudança no contrato Laravel/Stays.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não foram executados testes de sandbox nem inspeção visual nesta etapa; a checagem manual do calendário com meses além da janela inicial continua pendente. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — contexto e falha da busca com datas (2026-10-17)
+
+O adaptador de busca agora propaga falhas quando datas foram informadas, em vez de convertê-las em uma lista vazia que aparentava ausência de disponibilidade. Além da origem `stays-live`, a resposta precisa corresponder ao check-in, check-out e número de hóspedes solicitados; respostas de outro contexto são rejeitadas para evitar exibir disponibilidade ou preço cotado para uma pesquisa diferente. Cotações individuais cujo número de noites não corresponde ao intervalo também são removidas, deixando o preço pendente sem esconder o imóvel confirmado como disponível. O hook existente apresenta o estado de erro e a ação de nova tentativa; a busca sem datas conserva o fallback local.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Testes e sandbox não foram executados conforme a orientação vigente; o comportamento de erro/retry e a correspondência de contexto ainda precisam de validação manual. Nenhuma rota ou resposta do backend foi alterada, e nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — deduplicação de comodidades nos cartões (2026-10-17)
+
+O resumo compartilhado por lista e mapa agora identifica duplicatas ignorando diferenças de caixa, acentos e pontuação, mas mantém a primeira descrição original para exibição. Isso evita contar a mesma comodidade duas vezes quando as fontes do anúncio e do condomínio usam grafias distintas.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Testes e inspeção visual não foram executados conforme a orientação vigente; a revisão manual das variações do catálogo permanece pendente. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — sincronização de rota do detalhe (2026-10-17)
+
+O carregamento de um imóvel por link direto agora só atualiza a tela se a rota ainda apontar para aquele imóvel quando a resposta chegar. A navegação do navegador para uma rota de detalhe também busca o imóvel quando ele não está no catálogo carregado. Isso evita que uma resposta atrasada reabra um detalhe depois de o visitante voltar à busca.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. A regressão foi coberta no arquivo de testes, mas os testes não foram executados conforme a orientação vigente; não houve inspeção visual nem uso do sandbox. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — separar viagem de filtros do imóvel (2026-10-17)
+
+Os chips de destino, datas e hóspedes agora aparecem no grupo “Sua viagem”; preço, tipo, comodidades e características do imóvel ficam em “Filtros do imóvel”. “Limpar filtros” só aparece quando há refinamentos do imóvel e limpa apenas esses refinamentos, mantendo a viagem e o modo de categoria. Assim o botão não aparece como ação sem efeito quando apenas datas/hóspedes estão ativos. A URL continua sincronizada pelo mesmo estado e lista/mapa continuam usando os mesmos filtros derivados. O foco após limpar é movido para um critério restante ou para o acionador de filtros.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Os testes de interface foram atualizados, mas não executados; inspeção visual não realizada conforme a orientação vigente. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — foco ao abrir detalhe (2026-10-17)
+
+Na página do imóvel, o foco programático agora vai para o título em vez do botão “Voltar para resultados”, removendo o aro de foco laranja que aparecia no controle ao abrir a rota. No modo diálogo, o título também recebe o foco inicial; a sequência de Tab continua começando pelos controles interativos. O foco de retorno ao elemento que abriu o diálogo segue gerenciado pelo hook compartilhado.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. As asserções de foco foram adicionadas ao teste de acessibilidade, mas nenhum teste ou inspeção visual foi executado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — affordance de localização (2026-10-17)
+
+A localização resumida no cabeçalho deixou de parecer clicável porque não tinha ação associada. O link funcional para o Google Maps agora nomeia o imóvel e informa que será aberta uma nova aba, para que a ação externa fique clara também com leitor de tela.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não houve execução de testes ou inspeção visual. Nenhuma API, reserva, pagamento ou publicação foi alterada.
+
+### Continuação da auditoria — mapa sem marcadores visíveis (2026-10-17)
+
+Quando os resultados não têm coordenadas utilizáveis, o mapa agora explica que os imóveis seguem acessíveis na lista. Quando há coordenadas, mas os imóveis ficaram fora da área após mover o mapa, a tela explica o estado e oferece “Mostrar todos no mapa”, reenquadrando os resultados. A mensagem só aparece depois da medição inicial do mapa para evitar um estado vazio transitório.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Um teste cobrindo anúncios sem coordenadas foi adicionado, mas não executado conforme a orientação de não usar testes de sandbox; não houve inspeção visual. Nenhuma API, reserva, pagamento ou publicação foi alterada.
+
+### Continuação da auditoria — busca surpresa com falhas parciais (2026-10-17)
+
+Na busca “Surpreenda-me”, uma única consulta bem-sucedida sem preço confirmado podia fazer a UI declarar que não havia resultados, mesmo que as demais datas tivessem falhado. O estado vazio agora só é considerado conclusivo quando todas as datas candidatas foram consultadas; falhas parciais sem cotação mantêm o estado de erro e a opção de tentar novamente. Um teste de regressão foi adicionado sem execução.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Testes e inspeção visual não foram realizados conforme a orientação vigente. A busca continua usando o contrato existente e não inicia reserva ou pagamento.
+
+### Continuação da auditoria — transparência de conversão monetária (2026-10-17)
+
+Os valores exibidos em USD/EUR usam fatores de conversão locais e fixos; agora aparecem com o indicador `≈` para não parecerem uma cotação exata. O seletor de moeda informa que a conversão é aproximada, e o checkout esclarece junto ao total que o pagamento é processado em BRL. A moeda e os valores enviados ao backend não foram alterados.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Foi adicionada uma asserção de formatação, mas nenhum teste ou inspeção visual foi executado; não houve pagamento real.
+
+### Continuação da auditoria — navegação no topo do checkout (2026-10-17)
+
+O cabeçalho do checkout exibia “Voltar e fechar checkout” e “Fechar checkout”, dois controles com a mesma ação. Mantive apenas “Voltar para acomodação” e direcionei o foco inicial ao título do diálogo; o gerenciamento de foco e seu retorno ao acionador continuam no hook compartilhado.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não há teste específico de renderização deste cabeçalho e nenhum teste ou inspeção visual foi executado. Nenhum pedido, reserva ou pagamento foi criado.
+
+### Continuação da auditoria — alternativa de pagamento compatível (2026-10-17)
+
+O aviso do formulário de cartão agora só sugere Pix quando Pix está realmente habilitado para aquele pedido. Quando não está, a mensagem orienta a tentar outro cartão compatível, sem anunciar uma alternativa inexistente. A disponibilidade vem do estado de pagamento já validado no pedido; nenhum contrato foi alterado.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não há teste específico desta mensagem condicional; nenhum teste, pagamento ou inspeção visual foi executado.
+
+### Continuação da auditoria — retentativa de prontidão do checkout (2026-10-17)
+
+Falhas ao carregar condições ou prontidão agora deixam uma ação “Tentar novamente” no checkout. Durante a nova consulta, o controle permanece no DOM e anuncia o estado; ao terminar, o foco vai para a mensagem atualizada para evitar que desapareça para teclado/leitor de tela. Respostas válidas que indicam configuração desabilitada agora explicam separadamente se a compra, os termos ou o pagamento ainda não estão habilitados. O CTA segue bloqueado até termos, preço e forma de pagamento estarem prontos.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não há teste específico desta interação e nenhum teste ou inspeção visual foi executado. Nenhum pedido, reserva ou pagamento foi iniciado.
+
+### Continuação da auditoria — corrida ao estender o calendário (2026-10-17)
+
+Extensões do calendário agora são identificadas pelo imóvel/contexto. Uma consulta antiga deixa de bloquear a extensão do imóvel aberto em seguida, e pedidos para avançar mais meses durante uma consulta atual atualizam o destino até o último mês solicitado. A retentativa também só reutiliza o destino associado ao contexto atual; o endpoint e o contrato permanecem iguais.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Nenhum teste ou sandbox foi executado e não houve inspeção visual. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — limite da faixa de preço nos filtros (2026-10-17)
+
+O campo de preço máximo aceitava R$ 15.000, enquanto o estado de busca e a URL limitam o filtro a R$ 5.000. O campo agora respeita o mesmo teto e mantém mínimo/máximo dentro desse intervalo; o texto explicita que o critério é definido em reais antes de taxas.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Nenhum teste ou inspeção visual foi executado. Nenhuma API, reserva, pagamento ou publicação foi alterada.
+
+### Continuação da auditoria — moeda da cotação Stays nos cartões (2026-10-17)
+
+O endpoint Laravel selecionava valores `_mctotal.BRL`, mas marcava a cotação com `mainCurrency` do anúncio. Agora o payload identifica os valores BRL como BRL. A diária usa `_mcsubtotal.BRL` quando Stays fornece esse subtotal; se ele não vier, a diária do anúncio só é aceita quando a moeda principal é BRL. Sem diária BRL confiável, o imóvel continua no resultado, mas não recebe cotação exibível. Isso mantém a UI e os filtros de preço alinhados sem mudar o contrato da resposta. A referência da Stays mostra totais indexados por moeda e `mainCurrency` no objeto de cotação: https://stays.net/external-api/.
+
+Validação: lint PHP, Pint direcionado, build frontend, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes ou sandbox nem fiz inspeção visual. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — estados da rota compartilhável do imóvel (2026-10-17)
+
+Links de detalhe agora mostram um estado de carregamento enquanto o imóvel é resolvido fora do catálogo atual. Se não houver acomodação para renderizar, a página apresenta uma mensagem neutra de falha ao abrir, com ações para tentar novamente ou voltar à busca, em vez de mostrar o catálogo sob a URL do imóvel. A mensagem não atribui a falha a imóvel removido porque o adaptador pode converter falha de rede em fallback local. A rota e os parâmetros existentes são preservados.
+
+Validação: build, ESLint direcionado, Prettier nos arquivos alterados e `git diff --check` passaram. Nenhum teste ou sandbox foi executado e não houve inspeção visual. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — contagem de hóspedes entre busca e checkout (2026-10-17)
+
+A busca datada e o filtro local contavam adultos e crianças, enquanto a cotação do detalhe e o checkout também contavam bebês. Agora a capacidade usa a mesma contagem nos filtros, busca, cotação e checkout: adultos + crianças + bebês; pets permanecem fora da ocupação, como no backend. Os seletores que não editam bebês mostram essa informação junto ao número de pessoas preservado.
+
+Validação: build, ESLint direcionado, Prettier nos arquivos novos/alterados e `git diff --check` passaram. Nenhum teste ou sandbox foi executado nem houve inspeção visual. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — preço após seleção explícita de datas (2026-10-17)
+
+No detalhe, quando as datas eram informadas pelo link ou escolhidas no calendário, a tarifa de referência e uma estimativa calculada a partir dela ainda apareciam enquanto a cotação ao vivo não estava confirmada. O painel agora mostra preço em consulta, não confirmado ou indisponível conforme o estado; oculta o detalhamento estimado para datas explícitas e mantém a referência somente antes dessa seleção. A reserva continua condicionada à cotação Stays confirmada.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — remoção da categoria ativa (2026-10-17)
+
+A categoria selecionada já filtrava os mesmos imóveis na lista e no mapa e era preservada na URL, mas não aparecia no resumo de critérios ativos. Agora o resumo mostra a categoria pelo rótulo legível e permite removê-la diretamente, voltando a “Todos os espaços”; a seleção visual da barra de categorias continua sincronizada pelo mesmo estado.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual. Nenhuma busca externa, reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — confirmação de disponibilidade nos cartões (2026-10-17)
+
+Resultados de uma busca datada que retornaram com sucesso agora exibem “Disponível para as datas selecionadas” tanto no cartão da lista quanto no resumo do imóvel aberto no mapa. O selo depende do estado de sucesso da busca com datas; fica oculto no catálogo geral e durante loading/erro, evitando inferir disponibilidade a partir de uma tarifa ou de dados antigos. A descrição acessível do botão principal do cartão inclui essa confirmação.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor local está parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — busca datada no primeiro render (2026-10-17)
+
+Ao abrir a home com intervalo válido na URL, o estado de disponibilidade começava como `idle` e só mudava para `loading` no efeito seguinte. Isso permitia um render transitório do catálogo geral — inclusive do diretório de condomínios — antes da confirmação do período. O estado inicial agora reconhece as datas da URL e começa em carregamento, mantendo o catálogo geral visível apenas quando não há período solicitado.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor local continua parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — alvos de toque do mapa (2026-10-17)
+
+Os controles principais do mapa — zoom, enquadramento, abrir mapa externo, fechar o resumo e “Ver detalhes” — agora oferecem área mínima próxima de 44 px e foco visível. O botão “Mostrar todos no mapa” segue a mesma altura mínima. Os marcadores de preço continuam compactos para preservar a leitura quando há imóveis próximos.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — proporção das fotos dos cartões em mobile (2026-10-17)
+
+As imagens quadradas dos cartões ocupavam cerca de uma largura completa de altura no catálogo mobile, empurrando preço e disponibilidade para baixo e reduzindo a quantidade de imóveis comparáveis por viewport. A área da foto agora usa proporção 4:3 com o mesmo recorte preenchido.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. O ganho efetivo de conteúdo visível ainda precisa de conferência em viewport real. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — acesso antecipado à reserva no detalhe mobile (2026-10-17)
+
+No mobile, o painel de datas, hóspedes e cotação ficava depois da descrição, comodidades, disponibilidade, localização e anfitrião. Ele agora aparece logo após as fotos, reduzindo o caminho até consultar o período e a cotação. No desktop, continua na coluna direita; a ordem do DOM também segue a nova ordem mobile para manter leitura e foco coerentes.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — carrossel dos cartões em telas touch (2026-10-17)
+
+As setas de fotos do cartão agora ficam visíveis em telas touch, onde não há hover, e aparecem por hover/foco em telas maiores. Favoritar e avançar/voltar fotos têm alvos mínimos de 44 px; os indicadores de foto mantêm tamanho compacto, mas continuam com 24 px ou mais.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — ação para corrigir busca sem disponibilidade (2026-10-17)
+
+Os estados de busca datada sem resultados e de falha agora podem abrir diretamente o modal de busca, permitindo ajustar datas e hóspedes sem voltar ao topo da página. A consulta continua com a ação de retentativa; resultados disponíveis ocultados apenas por filtros locais continuam orientando a remoção desses filtros.
+
+Validação: `npm run build`, ESLint nos três componentes envolvidos, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — mesma cotação para cartão e filtro de preço (2026-10-17)
+
+O cartão e o mapa já exigiam uma cotação positiva e bem formada, mas o filtro de preço só verificava se total e diária eram maiores que zero, sem conferir moeda BRL nem valores finitos/noites. Agora ambos usam a mesma validação de cotação. Em busca com datas, anúncios sem cotação BRL válida não entram em um intervalo de preço como se a tarifa fosse confiável; continuam visíveis sem esse refinamento.
+
+Validação: `npm run build`, ESLint nos utilitários de preço/filtros, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — moeda da faixa de preço nos filtros ativos (2026-10-17)
+
+O modal informa que o intervalo de preço é definido em reais por noite, e a URL armazena esses mesmos limites BRL. O chip ativo agora também mantém valores em BRL, mesmo quando os preços dos cartões estão em USD ou EUR aproximados, para o critério aplicado permanecer claro e coerente entre busca, lista, mapa e link compartilhado.
+
+Validação: `npm run build`, ESLint nos componentes de filtros ativos e roteador, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — alvos de toque na busca e reserva mobile (2026-10-17)
+
+Os controles principais para avançar categorias, abrir filtros/mapa, alterar hóspedes e navegar meses tinham alvos de 32–36 px. Eles agora têm pelo menos 44×44 px, os botões de remover critérios têm 24×24 px e a barra de categorias reserva espaço para as setas maiores, mantendo cartões completos em telas estreitas.
+
+Validação: `npm run build`, ESLint nos sete componentes de busca/reserva e `git diff --check` passaram; Prettier passou nos demais arquivos tocados. `CategoryBar.tsx` já falha no Prettier também na versão do `HEAD`, então não reformattei o componente inteiro para evitar ruído fora do escopo. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — foco ao retornar à lista de imóveis (2026-10-17)
+
+Ao abrir o detalhe como página, o conteúdo da lista desmonta; ao voltar, a restauração de foco ia sempre para o elemento `<main>`, mesmo quando a navegação começou por um cartão ou pelo botão “Ver detalhes” no mapa. A origem agora registra o id do imóvel focado no estado da entrada de histórico e, ao retornar, o foco volta ao acionador desse imóvel. Se o resultado não estiver mais no DOM, o foco retorna à região principal do catálogo. A restauração da posição vertical existente permanece.
+
+Validação: `npm run build`, ESLint nos quatro arquivos TypeScript envolvidos e `git diff --check` passaram; Prettier passou no hook de rota, nos acionadores e no plano. `App.tsx` já falha no Prettier também na versão do `HEAD`, então não reformattei o arquivo inteiro. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — preço diário e estado de confirmação do calendário (2026-10-17)
+
+O resumo de disponibilidade classificava falha/consulta como “Indisponível” e preenchia preço diário ausente com a tarifa base do imóvel. Agora os estados ficam distintos (“Consultando”, “Sincronizado”, “Não confirmado”); cada dia mostra cotação apenas quando o calendário fornece um valor BRL positivo, ou “Consultar”/“preço não confirmado”. As regras de bloqueio e seleção continuam baseadas na disponibilidade confirmada do calendário.
+
+Validação: `npm run build`, ESLint nos componentes do calendário, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — retentativa da disponibilidade no resumo do calendário (2026-10-17)
+
+Quando o pedido do calendário falhava, a faixa de 14 dias mostrava o erro, mas a única retentativa estava dentro do seletor de datas. O resumo agora oferece “Tentar novamente” ao lado da mensagem quando a disponibilidade não foi confirmada; em carregamento o CTA não aparece, e mensagens de seleção inválida com calendário confirmado não acionam retry.
+
+Validação: `npm run build`, ESLint nos componentes do calendário, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — mínimo de uma noite na busca (2026-10-17)
+
+O calendário genérico da busca permitia escolher checkout no mesmo dia do check-in, embora o envio recusasse a pesquisa depois. Agora a primeira data de checkout selecionável é o dia seguinte à entrada; o atalho “Hoje” fica desativado quando não atende ao mínimo. Ao alterar check-in e invalidar o checkout atual, o checkout padrão continua sendo dois dias depois.
+
+Validação: `npm run build`, ESLint no componente de busca, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — mínimo de uma noite no modal de busca (2026-10-17)
+
+O modal de busca aceitava datas anteriores a hoje e checkout no mesmo dia do check-in, apesar do seletor principal já exigir ao menos uma noite. Agora o check-in tem hoje como data mínima e a validação do envio também rejeita intervalos passados carregados anteriormente; o checkout começa no dia seguinte ao check-in, e um checkout já selecionado é ajustado para uma noite quando a nova entrada o invalida. As datas continuam opcionais.
+
+Validação: `npm run build`, ESLint no modal, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — datas antigas em busca restaurada (2026-10-17)
+
+O formulário principal limitava novas escolhas ao dia atual, mas um link ou histórico com check-in passado ainda podia ser enviado e iniciar consulta à API. O formulário agora informa o problema antes do envio, e a busca central valida formato, datas presentes, mínimo de uma noite e check-in a partir de hoje antes de chamar a API, inclusive nas restaurações pela URL.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — filtros de comodidades coerentes com o catálogo (2026-10-17)
+
+O filtro expunha lareira, vista para o mar, pé na areia, café da manhã e política de pets sem correspondência nos campos de comodidades do catálogo de hospedagens em Caldas Novas; em contrapartida, omitia amenidades presentes como parque aquático, sauna, academia, varanda e hidromassagem. As opções agora priorizam as comodidades observadas no catálogo. O matching reconhece variações equivalentes (por exemplo, jacuzzi/hidro/banheira, cozinha/copa, estacionamento/garagem/vaga e varanda/sacada). Valores de comodidades já ativos em links ou filtros permanecem visíveis para que possam ser removidos.
+
+Na amostra do catálogo estático local, as 11 opções atuais encontram ao menos dois imóveis cada; os números não representam validação do catálogo Stays ao vivo. Build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — alvos e nomes acessíveis no cabeçalho do detalhe (2026-10-17)
+
+No cabeçalho fixo da página de imóvel, Voltar media 36×36 px e Compartilhar/Salvar ficavam abaixo do alvo recomendado de toque. Os três agora têm altura/largura mínimas de 44 px quando aplicável, foco visível com espaçamento e nomes acessíveis que identificam o imóvel. O estado `aria-pressed` de Salvar continua expondo se o imóvel está nos favoritos.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — cotação vinculada ao pedido (2026-10-17)
+
+O cliente aceitava qualquer moeda e não comparava imóvel e número de noites da resposta com a solicitação de preço. O serviço agora descarta cotação que não corresponda ao imóvel solicitado, ao intervalo calculado ou à moeda BRL esperada pelo backend. A validação central de preço confirmado também exige BRL, e o painel e a ação de reserva compartilham essa regra. Uma resposta inconsistente fica sem cotação confirmada e não habilita a reserva.
+
+Validação: `npm run build`, ESLint nos quatro arquivos TypeScript alterados, Prettier nos arquivos de código e no plano, e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — limite de espera das consultas (2026-10-17)
+
+Busca, catálogo, calendário, cotação e resolução de link do imóvel podiam ficar em carregamento indefinidamente se a requisição não encerrasse. Essas operações agora abortam após 20 segundos. A busca datada chega ao estado de erro e oferece retry, o calendário permanece não confirmado com opção de tentar novamente, e preço não confirmado não libera a reserva. A carga do catálogo também pode concluir em erro e usar o retry existente.
+
+Validação: `npm run build`, ESLint no serviço, Prettier no serviço e no plano, e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — contexto da busca nos estados vazios (2026-10-17)
+
+As mensagens de loading, erro e ausência de resultados exibiam as datas sem ano e não informavam a quantidade de hóspedes usada na busca. Agora mostram o período completo e a ocupação (adultos, crianças e bebês) para o cliente confirmar o contexto, inclusive quando filtros locais escondem resultados que tinham disponibilidade confirmada.
+
+Validação: `npm run build`, ESLint nos dois componentes alterados, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — hóspedes na confirmação dos resultados (2026-10-17)
+
+O selo de disponibilidade na lista e no resumo do mapa mencionava apenas as datas, embora a pesquisa também confirme a ocupação. Agora os dois mostram datas selecionadas e número de hóspedes, e a descrição acessível de cada marcador inclui essa mesma confirmação. O número vem da contagem usada pelo filtro e pelo pedido de disponibilidade.
+
+Validação: `npm run build`, ESLint nos quatro componentes alterados, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — dados atualizados no cartão do mapa (2026-10-17)
+
+Quando um catálogo sincronizado atualizava dados de um imóvel já selecionado no mapa, os marcadores usavam o novo objeto, mas o cartão aberto podia manter preço e comodidades anteriores. O cartão agora acompanha a versão atual do mesmo imóvel e fecha se ele sair dos resultados válidos.
+
+Validação: `npm run build`, ESLint no mapa, Prettier no mapa e no plano, e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — anúncio acessível dos resultados disponíveis (2026-10-17)
+
+Ao concluir uma busca, cartões e marcadores apareciam visualmente, mas a mudança não anunciava a contagem para leitores de tela. Uma região `status` discreta agora informa o número de acomodações visíveis; em buscas datadas, inclui também período e hóspedes, e sem datas deixa explícito que a disponibilidade ainda depende do período.
+
+Validação: `npm run build`, ESLint nos dois componentes, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — relação acessível entre marcador e resumo (2026-10-17)
+
+Selecionar um marcador abria um cartão visual sem expor a relação com o botão que o controla nem um nome para navegação por regiões. O marcador selecionado agora informa o estado expandido e aponta para o resumo; o resumo passa a ser uma região nomeada pelo título do imóvel.
+
+Validação: `npm run build`, ESLint no mapa, Prettier no mapa e no plano, e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — anúncio de resultados no diretório de condomínios (2026-10-17)
+
+A busca bem-sucedida escondia a mensagem visual de estado porque a tela já mostrava cartões, deixando no DOM somente a região `status` que anuncia contagem e contexto. A rota do diretório de condomínios não montava esse componente quando havia resultados; agora o mesmo estado acompanha o diretório e anuncia as acomodações filtradas em buscas com datas.
+
+Validação: `npm run build`, ESLint nos dois componentes, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — precisão do filtro de hidromassagem (2026-10-17)
+
+O sinônimo `banheira` fazia um anúncio com banheira termal comum entrar no filtro “Hidromassagem”, e a busca por `hidro` podia corresponder ao termo “hidrotermais”. Removi a equivalência ampla com banheira e passei a exigir palavras completas, preservando variações simples de plural. “Banheira de hidromassagem” continua correspondendo pelo termo específico.
+
+Validação: `npm run build`, ESLint no utilitário e consumidores, Prettier nos arquivos relacionados e no plano, e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — seleção do período por arraste na busca (2026-10-17)
+
+O calendário do detalhe já permitia arrastar o toque do check-in até o check-out, mas a busca da home exigia abrir dois calendários separados. No calendário de entrada, agora é possível arrastar entre as datas; ao soltar, entrada e saída são preenchidas juntas, o intervalo fica destacado durante o gesto e o diálogo fecha. Toque simples, teclado e o calendário de saída permanecem disponíveis; o gesto só é habilitado no calendário de entrada.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. O gesto ainda precisa de confirmação manual em dispositivo com toque. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — ano explícito nos filtros de viagem (2026-10-17)
+
+O chip de datas ativas mostrava apenas dia e mês, embora a URL aceite períodos futuros em anos diferentes. Agora o resumo exibe o ano em cada data, mantendo o período reconhecível também ao compartilhar ou revisar uma busca longa.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — taxas na cotação da busca (2026-10-17)
+
+A rota Laravel de busca transformava `bookingPrice._mctotal.BRL` diretamente no preço total do cartão e descartava `feesIncluded`. O checkout próprio já distingue taxas incluídas das não incluídas. A busca agora exige esse indicador e dados de taxas coerentes antes de marcar o valor como cotação confirmada; quando as taxas não estão incluídas, soma as taxas BRL ao total. A diária continua derivada do subtotal ou da diária informada, descontando taxas incluídas quando necessário. A referência oficial da [API Stays](https://stays.net/external-api/) mostra `feesIncluded` e `fees` na resposta de busca e preço; a regra de soma segue a semântica já adotada pelo serviço de checkout local.
+
+Validação: `php -l`, Pint no controlador, `npm run build` e `git diff --check` passaram. Não executei testes nem consulta autenticada Stays; o servidor permanece parado. A validação com payloads reais da conta e a revisão visual do cartão seguem pendentes. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — retorno de deep link ao catálogo (2026-10-17)
+
+Ao fechar um imóvel aberto diretamente por URL, a rota do catálogo era adicionada ao histórico, então o botão Voltar do navegador reabria o mesmo imóvel. O retorno agora substitui a entrada do deep link pela rota do catálogo, preservando filtros, query e hash; quando o imóvel foi aberto pela busca, o fluxo existente continua voltando pela entrada anterior e restaurando posição e foco.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — confirmação de datas no detalhe (2026-10-17)
+
+O detalhe usa uma faixa padrão para consultar calendário e preço, mas essa faixa podia habilitar a reserva, aparecer como cotação completa ou entrar no link compartilhado antes de qualquer confirmação da pessoa. A ação de reserva agora exige uma seleção explícita, o estado é redefinido ao trocar de imóvel, o painel mantém apenas a tarifa de referência até a confirmação e o link só inclui as datas depois dessa seleção.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — botão voltar do checkout em mobile (2026-10-17)
+
+O botão “Voltar para acomodação” tinha área de toque de 32×32 px e não declarava foco visível. Agora tem área de 44×44 px, contorno de foco e o cabeçalho reduz recuos e tipografia em telas estreitas para reservar espaço ao título.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — comodidades duplicadas em links compartilhados (2026-10-17)
+
+URLs podiam conter rótulos equivalentes para a mesma comodidade (por exemplo, jacuzzi, hidromassagem e hidro). Como todos ativam o mesmo critério de busca, apareciam vários chips e remover só um mantinha o filtro efetivamente ativo. A leitura dos parâmetros agora reconhece a identidade canônica usada pelo matching e conserva somente o primeiro rótulo, que também será preservado pelo link sincronizado.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — resumo de preço no checkout em telas estreitas (2026-10-17)
+
+O resumo do imóvel usava recuos grandes no celular, e as linhas de diária, taxas e total não reservavam espaço para o valor. Agora o cartão reduz o padding em telas pequenas, permite que nomes longos quebrem em mais de uma linha e mantém cada valor monetário inteiro e alinhado à direita. A identificação do imóvel também pode encolher sem empurrar a imagem nem alargar o diálogo.
+
+Validação: build, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. A revisão em dispositivo de 320 px continua pendente. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — resultados completos da busca por disponibilidade (2026-10-17)
+
+A [Stays limita `/booking/search-listings` a 20 anúncios por requisição](https://stays.net/external-api/), enquanto o catálogo atual contém mais anúncios e a interface filtra localmente a lista recebida. O adaptador de busca agora percorre páginas com `skip` até uma página incompleta, preserva a validação de disponibilidade e noites cotadas, remove IDs repetidos e só retorna o conjunto depois de completar a paginação. Se uma página da busca datada falhar, o resultado inteiro continua em erro, sem apresentar uma lista parcial como completa. Busca com `limit` explícito mantém esse limite.
+
+Validação: `npm run build`, ESLint no serviço, Prettier e `git diff --check` passaram. Não executei testes, chamadas Stays reais ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — destino no fallback local da busca (2026-10-17)
+
+O catálogo local aplicava o destino apenas a título/subtítulo, diferente da busca normal que também inclui cidade, estado, bairro e condomínio. A regra agora é compartilhada entre o filtro de resultados e o fallback local, mantendo os mesmos imóveis visíveis durante uma falha da API.
+
+Validação: build, ESLint nos arquivos alterados, Prettier e `git diff --check` passaram. Não executei testes, sandbox, chamadas Stays reais ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — separação entre banheira e hidromassagem (2026-10-17)
+
+Uma regressão reintroduziu `banheira` como sinônimo de jacuzzi/hidromassagem, apesar da correção anterior para banheiras termais comuns. Os filtros agora tratam banheira como comodidade própria; “banheira de hidromassagem” continua correspondendo aos dois critérios pelo texto específico.
+
+Validação: build, ESLint no utilitário, Prettier e `git diff --check` passaram. Não executei testes, sandbox, chamadas Stays reais ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — regras de estadia na faixa de disponibilidade (2026-10-17)
+
+A faixa rápida habilitava qualquer data posterior como check-out, ainda que o intervalo tivesse noite bloqueada ou não atendesse à estadia mínima; também permitia interação com dados antigos durante atualização. Agora usa `isCalendarRangeAvailable`, como o seletor completo, e desabilita dias durante carregamento ou quando a disponibilidade não foi confirmada. O cálculo da estadia mínima considera as opções `prices[].minStay` do check-in, sem depender da ordem do array documentado pela [Stays](https://stays.net/external-api/).
+
+Validação: build, ESLint nos arquivos do calendário, Prettier e `git diff --check` passaram. Não executei testes, sandbox, chamadas Stays reais ou inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — datas legíveis no resumo do checkout (2026-10-17)
+
+O resumo mostrava as datas como strings ISO e sempre usava “noites”, dificultando a leitura rápida. Agora exibe datas localizadas em português com elementos `<time>` que preservam o ISO como valor semântico, permite quebra em telas estreitas e ajusta o singular para uma noite.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — limites do arraste no calendário da busca (2026-10-17)
+
+Os dias adjacentes ao mês visível aparecem desativados e não aceitam clique, mas os eventos de toque no elemento da grade ainda permitiam iniciar ou concluir um intervalo nesses dias. O gesto agora respeita o mesmo limite do clique: só começa e termina em datas selecionáveis do mês visível, e o preview não avança por células desativadas.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. O arraste ainda precisa de confirmação em dispositivo touch. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — clareza da confirmação de disponibilidade (2026-10-17)
+
+Os cartões e o resumo do mapa informavam “Disponível para as datas e N hóspedes”, uma frase ambígua. Agora deixam explícito que a acomodação está disponível nas datas selecionadas para o número de hóspedes da busca, tanto visualmente quanto no nome acessível dos marcadores do mapa.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — contador de tipos de imóvel ativos (2026-10-17)
+
+Cada tipo de imóvel selecionado aparece como um chip removível, mas o badge de Filtros contava qualquer conjunto de tipos como uma única seleção. O contador agora soma cada tipo ativo, mantendo o número anunciado no botão alinhado às opções individuais exibidas e removíveis.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — retorno do checkout ao imóvel (2026-10-17)
+
+Ao abrir o checkout, a ação fechava a página do imóvel e alterava a rota antes de mostrar o diálogo. O botão “Voltar para acomodação” terminava no catálogo. Agora o detalhe permanece montado e a URL do imóvel é mantida sob o checkout; ao fechar o diálogo, a página e o controle de reserva que o abriu continuam disponíveis, permitindo também o retorno de foco do diálogo ao acionador.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhum pedido, reserva ou pagamento foi criado.
+
+### Continuação da auditoria — histórico do diálogo de checkout (2026-10-17)
+
+Com o detalhe preservado sob o checkout, Voltar do navegador ainda removia a rota do imóvel sem fechar o diálogo. A abertura do checkout agora cria uma entrada de histórico na mesma URL; Voltar/Escape fecham o checkout sem sair do detalhe, e Avançar pode restaurar o diálogo enquanto a sessão mantém os dados do pedido. Ao retornar à mesma rota, o roteador preserva a instância atual do imóvel em vez de reiniciar seu carregamento.
+
+Validação: `npm run build`, ESLint direcionado, Prettier nos arquivos compatíveis e `git diff --check` passaram. Não executei testes, sandbox ou inspeção visual; o servidor permanece parado. Nenhum pedido, reserva ou pagamento foi criado.
+
+### Continuação da auditoria — recuperação do catálogo sem resultados (2026-10-17)
+
+O botão de recuperação prometia restaurar todas as acomodações, mas mantinha as datas e os hóspedes da busca. A ação agora limpa todos os filtros e consulta novamente o catálogo sem datas, com a ocupação padrão. O texto explica o efeito e o botão atende ao alvo mínimo de toque e mostra foco visível.
+
+Validação: `npm run build`, ESLint direcionado, Prettier nos arquivos compatíveis e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — preço não confirmado nos marcadores do mapa (2026-10-17)
+
+Quando a busca por datas ainda não tem cotação, os cartões explicam que é preciso consultar o preço, mas os marcadores do mapa mostravam apenas um travessão. Os estados sem valor confirmado agora exibem “Consultar” ou “Ver preço” no marcador; o rótulo acessível continua informando o estado completo e não mostra tarifa de referência como preço confirmado.
+
+Validação: build, ESLint direcionado, Prettier nos arquivos compatíveis e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — alvos de toque dos filtros ativos (2026-10-17)
+
+Os chips dos filtros ativos permitiam remover critérios com botões de 24×24 px também em telas touch, dificultando desfazer datas, hóspedes ou comodidades. Os botões de remoção agora têm alvos de 44×44 px em telas menores e mantêm 24×24 px em telas maiores; “Limpar filtros” também recebe uma área vertical de 44 px no mobile. O indicador visual continua no ícone e o foco de teclado permanece explícito.
+
+Validação: build, ESLint direcionado, Prettier nos arquivos compatíveis e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor permanece parado. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — transparência de descontos no detalhe (2026-10-17)
+
+O detalhamento da cotação confirmada mostrava subtotal, taxas e total, mas omitia `discount` da resposta Stays, deixando uma diferença sem explicação. Agora exibe a linha “Desconto” com o valor negativo antes das taxas; cotações sem desconto não ganham uma linha vazia. Um teste isolado confirma a linha com desconto e sua ausência quando o desconto é zero.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram; `tests/propertyPriceBreakdown.test.ts` passou 2/2 e o fluxo de reserva com disponibilidade/cotação passou 1/1 localmente. Corrigi duas expectativas antigas desse fluxo: cotação falha não deve exibir “Estimativa” para as datas selecionadas, e indisponibilidade não confirmada deve ter o mesmo nome acessível da interface. Não executei teste de sandbox nem inspeção visual. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — comodidades no cartão com dados divididos (2026-10-17)
+
+Os cartões leem a lista geral de comodidades, enquanto o detalhe também apresenta comodidades do apartamento e do condomínio. Quando a lista geral vinha vazia ou só com espaços, os cartões ocultavam os dados que estavam disponíveis no detalhe. Agora usam as listas específicas como fallback, mantendo a lista geral quando há itens válidos. Um teste cobre esse fallback e confirma as três primeiras comodidades registradas.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram; `tests/propertyCatalogGrid.test.ts` passou 10/10 localmente. Não executei teste de sandbox nem inspeção visual. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — fallback para rejeição inesperada no checkout (2026-10-17)
+
+Os serviços de checkout convertem falhas de rede em estados indisponíveis, mas uma rejeição inesperada no carregamento de termos ou prontidão deixava o modal preso em “Verificando” e sem retentativa. O efeito agora captura rejeições, encerra o loading, informa que as condições não puderam ser carregadas e habilita “Tentar novamente”; após uma retentativa, o foco retorna à mensagem atualizada.
+
+Validação: `npm run build`, ESLint direcionado, Prettier e `git diff --check` passaram; o teste local de rejeição das duas consultas passou 1/1. Não executei teste de sandbox nem inspeção visual. Nenhum pedido, reserva ou pagamento foi criado.
+
+### Continuação da auditoria — seleção de datas por arraste no calendário de busca (2026-10-17)
+
+O calendário do imóvel já permitia selecionar check-in e check-out arrastando o dedo. No calendário da busca, o gesto não atualizava porque a consulta de disponibilidade lia o atributo na camada do botão, enquanto ele estava na célula ao redor. A busca agora encontra a célula selecionável sob o dedo, pré-visualiza o intervalo e grava as duas datas ao soltar.
+
+Validação: os testes focados de calendário, busca, retry, disponibilidade vazia e filtros passaram 31/31; ESLint direcionado, Prettier, `git diff --check` e `npm run build` passaram. Não executei teste de sandbox nem inspeção visual. Nenhuma reserva, pagamento ou publicação foi iniciada.
+
+### Continuação da auditoria — alvos de toque nas retentativas do calendário (2026-10-18)
+
+As duas ações de retentativa no calendário do imóvel tinham padding compacto, abaixo da altura mínima de 44 px usada nos controles touch do fluxo. Ambas agora têm altura mínima de 44 px e alinhamento central, tanto para recarregar o calendário quanto para estender o período consultado. Os alvos para fechar e navegar entre meses já usam 44 px no código atual.
+
+Validação: 76 testes locais focados em filtros, roteamento, busca, calendário, disponibilidade e detalhe passaram; `npm run lint`, Prettier, `git diff --check` e `npm run build` passaram. Atualizei fixtures e expectativas antigas para refletir as props e os nomes acessíveis atuais. Inspecionei a página em 320 px, mas o DOM servido era de uma versão anterior do código (classes `h-9` onde a fonte atual já usa `h-11`) e não havia processo ativo na porta 3000; não considero essa captura validação visual da versão atual. As chamadas da API daquela página retornaram 500, e o calendário exibiu estado bloqueado e retry, sem permitir seleção não confirmada. Não executei teste de sandbox, reserva, pagamento ou publicação.
+
+### Continuação da auditoria — comodidades consistentes entre cartão, filtro e mapa (2026-10-18)
+
+O catálogo e os filtros já usavam as comodidades do apartamento/condomínio como fallback quando a lista geral estava vazia, mas o resumo do marcador selecionado no mapa ainda consultava apenas a lista geral. O mapa agora usa o mesmo helper compartilhado, então a comodidade mostrada no cartão também aparece no resumo do mapa e continua compatível com os filtros. O teste do mapa também foi atualizado para aceitar o preço junto da unidade “/ noite”, como a interface apresenta.
+
+Validação: 22 testes locais de mapa, filtros e cartões passaram; os 26 testes de calendário de busca, acessibilidade e catálogo também passaram nesta etapa. `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Não fiz inspeção visual porque o servidor local segue parado; nenhum teste de sandbox, reserva, pagamento ou publicação foi executado.
+
+### Reauditoria — detalhe como página e retorno à busca (2026-10-18)
+
+O estado atual implementa o detalhe como página navegável: a rota direta e a navegação por cartão carregam `PropertyDetailPage`, com semântica de região nomeada e sem diálogo modal. Testes cobrem URL Stays/localizada, datas e hóspedes compartilhados, retorno por histórico, preservação da busca, posição e foco; o detalhe bloqueia a reserva até datas explícitas, calendário disponível e cotação confirmada.
+
+Validação nesta reauditoria: os testes focados de rota e detalhe passaram 30/30. Os avisos de fallback do calendário/cotação vieram de chamadas relativas sem servidor no ambiente JSDOM; os testes ainda passaram e os casos substituem a API onde a resposta importa. A inspeção visual em navegador não foi repetida porque a porta 3000 está sem servidor ativo. Não executei sandbox, reserva, pagamento ou publicação.
+
+### Continuação da auditoria — alvos de toque no painel de reserva (2026-10-18)
+
+O botão de hóspedes e a ação “Tentar cotação novamente” tinham a área clicável menor que 44 px, embora o espaço ao redor parecesse maior. O próprio botão de hóspedes e o retry agora têm altura mínima de 44 px, incluindo no painel do detalhe.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 21/21; `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. O JSDOM emitiu logs esperados de fallback para chamadas relativas de calendário/cotação em testes que não substituem esses serviços; isso não causou falha. Sem inspeção visual, sandbox, reserva, pagamento ou publicação.
+
+### Revalidação — suíte local do fluxo de busca e catálogo (2026-10-18)
+
+Na suíte serial, encontrei uma expectativa desatualizada no teste do modal de busca: o texto atual valida “um check-out posterior ao check-in”, enquanto o teste esperava “check-out posteriores”. Corrigi somente a expectativa. A suíte passou 268/270; os dois casos restantes estão em `reservationApiValidation.test.ts`, nos contratos de checkout direto, fora do escopo desta revisão de UX e sem alteração nesses arquivos.
+
+O teste corrigido do modal passou dentro da suíte. A execução foi local, serial e sem sandbox; nenhum servidor, checkout real, reserva ou pagamento foi iniciado. Prettier no teste e `git diff --check` passaram.
+
+### Continuação da auditoria — contraste e confirmação visual dos calendários (2026-10-18)
+
+Escureci os rótulos de datas desabilitadas nos calendários da busca, do detalhe e da faixa de disponibilidade, e o texto de datas bloqueadas no detalhe. Na faixa de disponibilidade, o intervalo só recebe o destaque de estadia válida quando os dados estão confirmados e todas as noites estão disponíveis; durante atualização ou diante de uma noite bloqueada, o destaque não contradiz o estado real. O gesto de arrastar com toque na busca e no detalhe segue coberto por testes.
+
+Validação: os testes focados de calendário, detalhe e busca passaram 36/36; `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. O JSDOM registrou os fallbacks esperados para chamadas relativas de disponibilidade e preço sem servidor. Não fiz inspeção visual porque o servidor local está parado. Não executei sandbox, reserva, pagamento ou publicação.
+
+### Continuação da auditoria — alvo touch dos dias do calendário do imóvel (2026-10-18)
+
+Os botões dos dias no seletor do imóvel tinham 40 px de altura. Agora têm 44 px, mantendo a grade, a seleção por toque/teclado e o gesto de arraste existentes. Acrescentei uma regressão que verifica a altura mínima em todas as datas renderizadas no portal do diálogo.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 22/22; `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Os logs de fallback do calendário e da cotação são esperados em testes JSDOM sem servidor. Não fiz inspeção visual, não executei sandbox, reserva ou pagamento e não publiquei.
+
+### Continuação da auditoria — alvos de toque no calendário da busca (2026-10-18)
+
+Na grade de sete colunas do calendário da busca, a altura dos dias dependia da largura da coluna e ficava abaixo de 44 px em telas estreitas. Os botões agora têm altura mínima de 44 px, preservando a largura adaptada à viewport para evitar overflow horizontal. O teste de acessibilidade verifica esse mínimo e o teste de arraste touch confirma que a seleção continua funcional.
+
+Validação: `tests/staysSearchWidgetAccessibility.test.ts` passou 11/11; `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Não fiz inspeção visual em dispositivo; o servidor local está parado. Não executei sandbox, reserva, pagamento ou publicação.
+
+### Reauditoria — consistência do preço na lista e no mapa (2026-10-18)
+
+Revisei o caminho de cotação do `/api/search` até cartões e marcadores: a resposta datada exige origem, datas e hóspedes correspondentes; cotações com noites diferentes do período são descartadas; sem preço válido os resultados continuam identificados como disponíveis, mas mostram preço pendente. Lista e mapa usam o mesmo resolvedor de exibição e o mesmo valor confirmado. Não encontrei divergência que justificasse mudança de código nesta etapa.
+
+Validação: 18 testes de cotação, exibição no cartão/mapa, taxas e conversão passaram. O navegador existente preservava conteúdo de uma sessão anterior, e não havia processo na porta 3000; portanto, não o usei como verificação visual do código atual. Não executei sandbox, reserva, pagamento ou publicação.
+
+### Continuação da auditoria — remoção de filtro sincronizada à URL (2026-10-18)
+
+Acrescentei um teste integrado entre `ActiveSearchFilters` e `useSearchUrlSync`: remover uma comodidade apaga esse critério da URL e mantém datas, composição de hóspedes e categoria. A suíte também confirma que a lista aplica em conjunto os filtros de catálogo restantes.
+
+Validação: 19 testes de chips, URL e filtros passaram; lint, Prettier e `git diff --check` passaram. O servidor local segue parado; não fiz inspeção visual, sandbox, reserva ou pagamento.
+
+### Continuação da auditoria — imóvel selecionado no mapa após refinar filtros (2026-10-18)
+
+Adicionei uma regressão para a transição em que um imóvel estava aberto no mapa e deixa de corresponder aos filtros. O painel do marcador acompanha o mesmo conjunto filtrado da lista e fecha quando o imóvel sai dos resultados.
+
+Validação: 27 testes de mapa, chips, URL e filtros passaram; lint, Prettier e `git diff --check` passaram. O servidor local permanece parado; não fiz inspeção visual, sandbox, reserva ou pagamento.
+
+### Continuação da auditoria — contagem ao editar filtros (2026-10-18)
+
+O botão do modal de filtros mostrava uma contagem baseada nos critérios já aplicados, mesmo enquanto a pessoa alterava um rascunho local. Agora o modal calcula a contagem a cada alteração usando `filterPropertiesBySearchFilters`, a mesma regra da lista; o texto também singulariza “1 acomodação”. A busca e as propriedades passadas ao modal continuam respeitando os resultados confirmados disponíveis.
+
+Validação: os testes de sincronização do modal, camada de overlays e filtragem passaram 9/9; `npm run lint`, `npm run build`, Prettier e `git diff --check` passaram. Sem inspeção visual porque o servidor local está parado; não executei sandbox, reserva ou pagamento.
+
+### Regressão — rascunho do modal de busca após atualização externa (2026-10-18)
+
+O modal já copiava novamente destino, datas e hóspedes quando os filtros externos mudavam enquanto ele permanecia aberto. Acrescentei cobertura para evitar que um rascunho antigo volte a ser aplicado depois de uma atualização por histórico ou outro critério externo.
+
+Validação: `tests/searchModalAccessibility.test.ts` passou 5/5; lint, Prettier e `git diff --check` passaram. Sem inspeção visual porque o servidor segue parado; não executei sandbox, reserva ou pagamento.
+
+### Continuação da auditoria — ações responsivas do modal de filtros (2026-10-18)
+
+Em telas estreitas, “Limpar tudo” e “Mostrar resultados” tentavam dividir o rodapé; os botões também não tinham altura mínima de 44 px. No mobile, as ações agora ficam empilhadas, “Mostrar resultados” ocupa a largura disponível e ambos os controles mantêm alvo de toque mínimo; em telas maiores, o rodapé retorna ao arranjo horizontal. Foi adicionada regressão estrutural para esses critérios.
+
+Validação: `tests/filterModalSync.test.ts` passou 3/3; inspeção visual não realizada porque o servidor permanece parado. A primeira tentativa com `node --test` não suporta os imports TypeScript/ESM deste projeto; a suíte passou pelo runner configurado (`tsx`). Não executei sandbox, reserva ou pagamento.
+
+### Continuação da auditoria — retry de disponibilidade no painel de reserva (2026-10-18)
+
+Quando a consulta de disponibilidade falhava, o painel mantinha a reserva bloqueada corretamente, mas para tentar de novo era preciso abrir o seletor de datas. O painel agora oferece uma ação direta para repetir a consulta; ela aparece somente após falha, some durante o carregamento e deixa de aparecer quando a disponibilidade é confirmada. A seleção e a reserva continuam bloqueadas até a confirmação.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 23/23, incluindo falha, retry direto e recuperação. Os avisos de fallback de calendário e preço no JSDOM vieram de outros casos sem mocks de API e não causaram falha. Inspeção visual não realizada porque o servidor segue parado; não executei sandbox, reserva ou pagamento.
+
+### Continuação da auditoria — contexto exato da busca datada (2026-10-18)
+
+A camada `crcnBackendApi.searchAccommodations` já rejeita resultados datados sem origem Stays ao vivo e valida se entrada, saída e total de hóspedes da resposta correspondem à consulta. Acrescentei regressão para respostas com divergência em cada um desses três campos, protegendo a confirmação de disponibilidade contra contexto alheio. O roteador também esconde os cartões enquanto carrega ou falha, e a interface oferece retry/alteração da busca.
+
+Validação focada: os testes de busca datada passaram 3/3. A suíte completa de `tests/reservationApiValidation.test.ts` passou 17/19; duas falhas na execução atual tratam de validação geral de API e retomada de checkout (linhas 347 e 443), sem relação com a busca datada. Não alterei esses casos ou contratos de checkout. ESLint, Prettier e `git diff --check` passaram; inspeção visual não realizada porque o servidor segue parado. Nenhum sandbox, reserva ou pagamento foi executado.
+
+### Reauditoria — preço e comodidades em lista, mapa e busca (2026-10-18)
+
+Revalidei o preço exibido em cartões e marcadores, incluindo tarifas de referência, cotações por período, totais com taxas e cotações ausentes; as duas superfícies usam `getPropertyDisplayPrice`. As comodidades resumidas também mantêm o fallback para dados do imóvel/condomínio. A filtragem, a mensagem de estado vazio, o bloqueio de resultados anteriores durante carregamento/erro e a recuperação por retry continuam cobertos. Não encontrei divergência atual que exija mudança de regra.
+
+Validação: 38 testes serializados de catálogo, mapa, preço, filtros e estados de busca passaram. Avisos de fallback de `/api/resorts` ocorreram em JSDOM sem API local; não causaram falhas. A porta 3000 está sem processo, então não houve inspeção visual. Nenhum sandbox, reserva ou pagamento foi executado.
+
+### Reauditoria — filtros, URL e histórico do navegador (2026-10-18)
+
+Revalidei chips removíveis, aplicação do rascunho no modal, serialização e restauração dos critérios, preservação de parâmetros externos/rota/hash, retorno do detalhe por `popstate` e estados de loading/erro sem resultados antigos. Os critérios ativos e a mesma coleção filtrada continuam ligados ao catálogo/mapa pelo estado compartilhado; os testes não apontaram divergência que justifique alterar os handlers.
+
+Validação: 32 testes serializados de filtros, URL, roteamento, modal e roteador passaram. Os avisos de resorts relativos no JSDOM são esperados sem servidor e não causaram falha. Nenhuma inspeção visual foi possível com o servidor local parado; não executei sandbox, reserva ou pagamento.
+
+### Continuação — contexto atualizado ao voltar do detalhe (2026-10-18)
+
+Uma regressão reproduziu perda de contexto: depois de alterar datas e hóspedes na página do imóvel, o botão/gesto Voltar restaurava a query antiga da entrada de catálogo, apesar de o link atual do imóvel já conter a seleção recente. Antes do roteador tratar `popstate`, a página agora atualiza a query da rota de catálogo com o contexto de reserva atual e mantém parâmetros de rastreamento, hash e estado de retorno. A URL compartilhada do imóvel continua sincronizada.
+
+Validação: a suíte serial de detalhe/roteamento passou 32/32, incluindo a regressão que primeiro falhou com a query antiga e passou com a correção. ESLint, TypeScript/build, Prettier e `git diff --check` passaram. Inspeção visual não feita porque a porta 3000 continua parada. Nenhum sandbox, reserva ou pagamento foi executado.
+
+### Continuação — alvos de toque nos diálogos de datas e hóspedes (2026-10-18)
+
+A auditoria dos controles do painel encontrou o botão “Aplicar” do seletor de hóspedes e as abas Check-in/Check-out do calendário com menos de 44 px de altura. Os três agora têm altura mínima de 44 px; a suíte também protege os controles de navegação mensal e os dias do calendário.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 23/23. ESLint, Prettier, TypeScript/build e `git diff --check` passaram. Os avisos de fallback de calendário/preço vieram de casos JSDOM sem backend e não causaram falha. Sem inspeção visual porque o servidor continua parado. Nenhum sandbox, reserva ou pagamento foi executado.
+
+### Reauditoria — estados concorrentes de calendário e cotação no detalhe (2026-10-18)
+
+Revisei o caso em que calendário e cotação terminam em ordens diferentes. A seleção da cotação é vinculada a imóvel, datas e hóspedes; a API também rejeita respostas de outro imóvel, quantidade de noites ou moeda. O CTA só habilita com seleção explícita, cobertura completa do calendário, intervalo disponível e cotação Stays válida. Falha de calendário bloqueia a reserva e oferece retry; falha de cotação preserva o bloqueio e oferece retry próprio. A decomposição do total só aparece após cotação confirmada. Não encontrei estado contraditório que justificasse alteração de código.
+
+Validação desta etapa: revisão estática de `usePropertyAvailability`, painel de reserva, decomposição de preço, validação da API e testes existentes. Não executei testes, build ou inspeção visual nesta etapa; a porta 3000 permanece parada. Nenhum sandbox, reserva, pagamento ou publicação foi iniciado.
+
+### Continuação — ajuste mínimo do check-out ao trocar a entrada (2026-10-18)
+
+Ao escolher um novo check-in posterior ao check-out atual, o formulário principal ajustava a saída para duas noites depois, embora a busca aceite estadias de uma noite e o seletor manual habilite o dia seguinte. Agora usa o próximo dia como saída padrão, mantendo a menor estadia permitida e reduzindo a alteração implícita do período. Seleções de intervalo por arraste e check-outs que continuam válidos não mudam.
+
+Validação: ESLint, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local continua parado. Nenhum sandbox, reserva ou pagamento foi iniciado.
+
+### Continuação — vazio de filtros locais sem apagar busca (2026-10-18)
+
+Quando a consulta da Stays retornava anúncios, mas os refinamentos locais removiam todos da lista, a tela podia mostrar um estado genérico de busca vazia ou disponibilidade. Agora esse caso explica que há resultados para a busca e oferece “Limpar filtros do catálogo”. A ação limpa categoria e refinamentos locais de preço, tipo, comodidades, quartos, banheiros e anfitrião, preservando destino, datas e hóspedes. O estado de indisponibilidade real continua oferecendo alteração de datas/hóspedes.
+
+Validação: ESLint direcionado e `npm run build` passaram. A checagem Prettier dos arquivos-alvo apontou uma formatação legada em `src/App.tsx` (imports e callback de foco fora deste ajuste); a formatação nova do catálogo foi corrigida. `git diff --check` passou. Não executei testes, sandbox ou inspeção visual; o servidor local continua parado.
+
+### Continuação — captura do ponteiro no arraste do calendário de busca (2026-10-18)
+
+O calendário de busca atualiza a prévia do intervalo usando coordenadas do dedo, mas o pop-up podia deixar de receber o fim do gesto se o dedo saísse da área durante o arraste. O dia inicial agora captura o ponteiro touch; o pop-up continua resolvendo a data sob o dedo e recebe o encerramento/cancelamento do gesto. Os limites de datas selecionáveis e o comportamento por clique permanecem iguais.
+
+Validação: ESLint direcionado, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção em dispositivo touch; o servidor local permanece parado. Nenhum sandbox, reserva, pagamento ou publicação foi iniciado.
+
+### Continuação — alvos touch dos campos de preço nos filtros (2026-10-18)
+
+Os campos numéricos de preço mínimo e máximo tinham altura de linha pequena dentro de um contêiner maior, mas o próprio controle recebia o foco e a interação. Ambos agora têm altura mínima de 44 px. Os limites, os valores em reais e a regra de preço por noite antes de taxas permanecem iguais.
+
+Validação: ESLint, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local continua parado.
+
+### Continuação — alvo touch da retentativa de prontidão no checkout (2026-10-18)
+
+O botão “Tentar novamente” que consulta a prontidão da compra no checkout tinha altura mínima de 40 px. Ajustei para 44 px, mantendo a trava enquanto a consulta está ativa. Não acionei a consulta de prontidão por navegador, nem iniciei pedido, pré-reserva ou pagamento.
+
+Validação: ESLint, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local continua parado.
+
+### Continuação — marcadores coincidentes no mapa de acomodações (2026-10-18)
+
+A inspeção do catálogo local encontrou dois anúncios com coordenadas idênticas em Lacqua DiRoma IV. Os marcadores agora se distribuem ao redor do ponto original e recebem linhas de conexão discretas, evitando que um anúncio fique totalmente sob o outro; o texto de ajuda do mapa também informa esse afastamento. Cada anúncio segue com seu próprio botão e detalhes.
+
+Validação: ESLint, Prettier, `npm run build` e `git diff --check` passaram. A duplicidade foi confirmada nos dados locais; não fiz inspeção visual porque o servidor permanece parado. Não executei testes, sandbox, reserva ou pagamento.
+
+### Continuação — alvos touch dos dados de contato no checkout (2026-10-18)
+
+Os campos de nome, e-mail e telefone tinham altura efetiva aproximada de 42 px. Agora têm altura mínima de 44 px, facilitando o preenchimento por toque sem mexer nos labels, nas regras de validação ou no fluxo do checkout.
+
+Validação: ESLint, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local continua parado. Não iniciei pedido, pré-reserva ou pagamento.
+
+### Continuação — alvo touch do link de localização (2026-10-18)
+
+O link “Abrir no Google Maps” na seção de localização tinha uma altura menor que os outros controles touch da página. Agora tem no mínimo 44 px e mantém o conteúdo centralizado, sem alterar o destino externo nem a indicação acessível de nova aba.
+
+Validação: ESLint, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local continua parado. Nenhum sandbox, reserva ou pagamento foi iniciado.
+
+### Continuação — alvos touch dos marcadores de preço no mapa (2026-10-18)
+
+Os marcadores de preço clicáveis no mapa tinham menos de 44 px de altura, dificultando a seleção em telas touch. Agora mantêm o conteúdo centralizado e em uma linha, com altura mínima de 44 px; rótulos, valores e seleção de acomodação permanecem iguais.
+
+Validação: ESLint, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local continua parado. Nenhum sandbox, reserva ou pagamento foi iniciado.
+
+### Continuação — alvo touch da retentativa do catálogo salvo (2026-10-18)
+
+No estado de catálogo salvo/desatualizado, “Tentar atualizar” tinha altura mínima de 40 px. Aumentei para 44 px, preservando o comportamento de desabilitar enquanto a atualização está em andamento e mantendo o alvo em uma linha.
+
+Validação: ESLint, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local continua parado. Nenhum sandbox, reserva ou pagamento foi iniciado.
+
+### Continuação — alvo touch do atalho da Sofia na busca (2026-10-18)
+
+O atalho mobile para abrir a concierge Sofia tinha altura mínima de 40 px. Alinhei o botão ao mínimo de 44 px já usado nos outros controles touch de busca, sem alterar sua posição ou comportamento.
+
+Validação: ESLint, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local continua parado. Nenhum sandbox, reserva ou pagamento foi iniciado.
+
+### Continuação — estado vazio sem duplicidade ou falsa confirmação (2026-10-18)
+
+Na revisão do catálogo, o modo grade podia renderizar ao mesmo tempo o estado vazio do roteador de disponibilidade e o estado próprio dos cartões quando os filtros locais removiam todos os imóveis. Além disso, o texto compartilhado dizia que a disponibilidade estava confirmada mesmo sem datas. O roteador agora deixa a grade tratar esse vazio em modo lista; mapa e diretório de condomínios continuam exibindo uma ação contextual. A mensagem só afirma disponibilidade confirmada quando há intervalo selecionado; sem datas, informa apenas que há acomodações no catálogo.
+
+Validação: ESLint direcionado, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local permanece parado. Nenhum sandbox, reserva, pagamento ou publicação foi iniciado.
+
+### Continuação — controles acessíveis no diretório de condomínios (2026-10-18)
+
+Os botões de avançar/voltar fotos no diretório tinham 32 px e não exibiam foco visível explícito. Agora têm alvos de 44 × 44 px e contorno no foco de teclado; a ação principal sobre a foto também ganhou indicação de foco. O botão “Ver detalhes do condomínio” recebeu altura mínima de 44 px. Os nomes acessíveis e as ações não mudaram.
+
+Validação: ESLint direcionado, `npm run build` e `git diff --check` passaram. O arquivo já tinha formatação Prettier legada, que não foi reformatada em massa. Não executei testes nem inspeção visual; o servidor local permanece parado. Nenhum sandbox, reserva, pagamento ou publicação foi iniciado.
+
+### Continuação — vazio do mapa quando os filtros removem todos os imóveis (2026-10-18)
+
+Com zero imóveis após os filtros, o mapa era montado sem propriedades e mostrava uma mensagem incorreta de falta de coordenadas. Agora o estado vazio do mapa explica quando nenhum resultado corresponde à busca e oferece acesso à busca para ajustar critérios; quando há imóveis no catálogo mas os filtros locais os removeram, mantém a ação para limpar esses filtros. O mapa só é montado quando há pelo menos um resultado filtrado. Falta real de coordenadas continua tratada pelo mapa quando existem imóveis.
+
+Validação: ESLint direcionado, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local permanece parado. Nenhum sandbox, reserva, pagamento ou publicação foi iniciado.
+
+### Continuação — vazio do diretório de condomínios sem mensagem conflitante (2026-10-18)
+
+Quando havia imóveis na busca bruta, mas os filtros locais removiam todos, o diretório também era montado vazio e dizia que nenhum condomínio existia no catálogo. Agora o diretório fica oculto nesse caso, deixando somente a mensagem que identifica filtros sem correspondência e permite limpá-los. A mensagem genérica do diretório continua disponível quando o catálogo realmente não contém resultados.
+
+Validação: ESLint direcionado, Prettier, `npm run build` e `git diff --check` passaram. Não executei testes nem inspeção visual; o servidor local permanece parado. Nenhum sandbox, reserva, pagamento ou publicação foi iniciado.
+
+### Complemento de tipagem — callbacks do estado vazio (2026-10-18)
+
+A checagem completa de lint/TypeScript inclui os fixtures de componentes. Atualizei os objetos compartilhados de `MainContentRouter` e `PropertyCatalogGrid` para fornecer o callback de limpar filtros que a nova ação exige. Nenhum caso de teste foi executado ou criado.
+
+Validação: `npm run lint`, `git diff --check` e build passaram; a verificação de Prettier nos arquivos de produção relacionados passou. Não executei a suíte de testes, sandbox ou inspeção visual; o servidor local permanece parado.
+
+### Continuação — contraste do preço no calendário de disponibilidade (2026-10-18)
+
+Os preços pequenos da faixa de disponibilidade usavam orange-600 sobre superfícies claras (3,56:1 sobre branco), e o preço selecionado usava orange-100 sobre orange-600 (3,11:1). Agora os preços não selecionados usam orange-700; o dia selecionado também usa fundo orange-700 com texto branco. Os contrastes sólidos correspondentes são 5,18:1 no branco, 4,52:1 no fundo orange-100 do intervalo e 5,18:1 no dia selecionado. O rótulo do dia selecionado deixou de usar opacidade.
+
+Validação: ESLint direcionado, Prettier, `npm run build` e `git diff --check` passaram. Os valores foram calculados para cores sólidas; a composição final de superfícies e contraste real ainda depende de inspeção visual. Não executei testes, sandbox ou servidor.
+
+### Continuação — condições das tarifas diárias no calendário do imóvel (2026-10-18)
+
+A API de calendário pode retornar diversas tarifas no mesmo dia, cada uma vinculada a um mínimo de noites, e a ordem do array não define qual tarifa deve ser apresentada. A faixa agora escolhe deterministicamente a tarifa BRL mais baixa, informa o mínimo correspondente e usa “Desde” quando há alternativas. O texto auxiliar deixa explícito que a tarifa é por noite e que o total com taxas depende do período selecionado. A cotação do painel continua responsável pelo total final.
+
+Validação: `tests/staysAvailability.test.ts` passou 7/7 casos, incluindo escolha independente da ordem, condição de mínimo igual com tarifas alternativas e descarte de BRL inválido. ESLint direcionado, Prettier, `npm run build` e `git diff --check` passaram. A interpretação do campo `minStay` segue a [referência oficial da API Stays](https://stays.net/external-api/), que o define como mínimo de noites para aplicar a tarifa. O teste foi local, sem sandbox, Stays, servidor, reservas ou pagamentos; inspeção visual permanece pendente.
+
+### Continuação — tarifa diária compatível com a duração selecionada (2026-10-18)
+
+Depois que o visitante escolhe um intervalo válido, a faixa agora desconsidera opções cujo `minStay` excede a duração da estadia. Se nenhuma tarifa do calendário se aplica àquele número de noites, a faixa mostra “Consultar” em vez de sugerir uma tarifa incompatível. Antes da seleção completa, continua mostrando a menor tarifa disponível com seu mínimo de noites.
+
+Validação: `tests/staysAvailability.test.ts` passou 9/9, incluindo intervalo de duas noites com tarifa de cinco noites excluída e ausência de tarifa compatível. ESLint, Prettier, TypeScript/build e `git diff --check` passaram. Testes locais isolados, sem sandbox ou API Stays; nenhuma reserva ou pagamento foi iniciado. Inspeção visual permanece pendente.
+
+### Revalidação integrada — busca, vazios e tarifa de calendário (2026-10-18)
+
+Executei em conjunto os testes locais de estado de busca, roteador, lista, faixa de disponibilidade e regras de tarifas: 34/34 passaram. Dois casos do roteador emitiram o fallback esperado de `/api/resorts` no JSDOM sem servidor; isso não foi uma chamada externa nem afetou os resultados. `npm run lint`, `npm run build`, Prettier direcionado e `git diff --check` também passaram. Nenhum sandbox, servidor, API Stays, reserva ou pagamento foi usado; inspeção visual e toque em dispositivo continuam pendentes.
+
+### Continuação — indicador de foco no cabeçalho do imóvel (2026-10-18)
+
+Na captura do cabeçalho, o contorno de foco do botão Voltar avançava sobre a área visual de Compartilhar; as ações também ampliavam os controles no hover. O foco continua visível dentro do botão Voltar, e a barra não aplica mais escala aos três controles, evitando que invadam visualmente o espaço dos vizinhos. Na inspeção do detalhe surgiu outro foco nativo azul no título, que agora usa contorno laranja com largura limitada ao texto (`w-fit max-w-full`), mantendo a quebra em telas estreitas.
+
+Validação: `tests/propertyDetailBookingAccessibility.test.ts` passou 23/23; `npm run lint`, `npm run build`, Prettier nos componentes e `git diff --check` passaram. A inspeção visual com Vite em 320 px e 1280 px confirmou que as ações não se sobrepõem e o foco do título fica ao redor do texto. O Vite foi encerrado ao final. As chamadas `/api/*` receberam `ECONNREFUSED` porque o backend Laravel não foi iniciado; portanto, essa inspeção confirma o layout com os dados locais, não o estado integrado de cotação/disponibilidade. O `prettier --check src/index.css` continua apontando diferenças de formatação preexistentes em outras regras do arquivo. Nenhum sandbox, reserva ou pagamento foi usado.
+
+### Continuação — prioridade das comodidades nos cartões e filtros (2026-10-18)
+
+Os cartões exibiam os três primeiros itens da lista geral, podendo esconder comodidades do apartamento, como Wi-Fi e ar-condicionado, atrás de itens do condomínio. Agora o resumo agrega as três fontes de comodidades e ordena primeiro as do apartamento, depois a lista geral e por fim as do condomínio; remove entradas vazias e duplicatas normalizadas. Como filtros, cartões e mapa usam o helper compartilhado, a busca também encontra comodidades específicas do apartamento mesmo quando a lista geral já contém outros itens.
+
+Validação: 8 testes locais de comodidades e filtros passaram; `npm run lint`, `npm run build`, Prettier direcionado e `git diff --check` passaram. Não iniciei servidor nem usei sandbox, Stays, reservas ou pagamentos; inspeção visual permanece pendente.
+
+### Revalidação — filtros, URL e roteamento do catálogo (2026-10-18)
+
+Os testes locais de chips removíveis, rascunho/contagem do modal, serialização de URL, filtros, histórico, mapa e estado vazio passaram 38/38. A fixture da contagem agora isola também comodidades do apartamento e do condomínio, para não herdar atributos reais do anúncio-base. O filtro mantém critérios de viagem ao remover uma comodidade e o mapa acompanha o conjunto filtrado.
+
+Validação: suíte focada, lint/TypeScript, build, Prettier direcionado e `git diff --check` passaram. Os fallbacks de `/api/resorts` em JSDOM ocorreram sem servidor, sem afetar os resultados. Não iniciei servidor, sandbox ou fluxos de reserva/pagamento; inspeção visual permanece pendente.
+
+### Continuação — falha de cotação no detalhe do imóvel (2026-10-18)
+
+O detalhe oferecia retry quando a API de preço rejeitava, mas apresentava a mesma mensagem usada para uma resposta sem cotação. O hook agora diferencia falha de transporte/API de uma resposta vazia, limpa o erro ao iniciar nova tentativa ou trocar o contexto, e o painel explica que não conseguiu consultar o preço mantendo a reserva bloqueada até uma cotação válida. O retry recupera o fluxo assim que a cotação confirma.
+
+Validação: testes locais do hook e do detalhe passaram 28/28; `npm run lint`, `npm run build`, Prettier direcionado e `git diff --check` passaram. Alguns casos JSDOM imprimem logs esperados de fallback de `/api/*` sem servidor e não afetam os testes. Não usei sandbox, servidor, Stays, reservas ou pagamentos; inspeção visual integrada permanece pendente.
+
+### Continuação — revisão de textos do visitante e fotos Stays (2026-10-18)
+
+A revisão ampliada removeu rótulos de implementação e termos técnicos de estados vazios, busca, conta, checkout, assistente, rodapé e viagens. O checkout mantém a versão aprovada nos dados enviados, mas não exibe o identificador interno ao visitante. Mensagens de erro de conta, cancelamento e pedidos não exibem mensagens cruas do backend; os detalhes ficam nos logs. Descrições e avaliações recebidas da Stays permanecem sem edição. Badges dependentes de dados locais foram limitados a anúncios sincronizados; o detalhe deixou de afirmar uma seleção oficial sem fonte que comprove isso. Testes existentes foram alinhados aos novos textos e a fixture do mapa passou a isolar os campos que verifica.
+
+Na validação local autenticada e somente leitura, `GET /api/accommodations/LG03J` retornou HTTP 200 com `staysSynced: true` e 34 imagens sob `crcn.stays.net`. O proxy Vite retornou as mesmas 34 imagens; na página aberta localmente, as cinco imagens renderizadas carregaram do host Stays. `GET /api/accommodations` retornou 56 anúncios e todos continham imagens Stays. A causa da galeria inicial com uma única foto foi o Laravel não estar iniciado; após carregar a configuração raiz local no processo e iniciar Laravel, a página atualizou com a galeria completa. As chaves necessárias estavam presentes na configuração canônica, sem copiar valores para o `.env` do subsistema.
+
+Validação: `npm run lint`, `npm run build`, Prettier nos arquivos tocados e `git diff --check` passaram. A última execução completa, antes do ajuste de uma expectativa de copy, ficou em 292/295; os 99 testes focados executados depois passaram. Restam duas falhas na execução completa em `tests/reservationApiValidation.test.ts` (linhas 347 e 443), relacionadas à validação/contrato do checkout e fora da revisão de microcopy. O endpoint local de condições do checkout respondeu HTTP 503 para LG03J, então o checkout permanece bloqueado e a revisão não iniciou reserva, pagamento ou chamada de escrita à Stays. Nenhum sandbox foi usado.
