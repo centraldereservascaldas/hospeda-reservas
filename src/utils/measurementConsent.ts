@@ -1,3 +1,5 @@
+import { updateMeasurementAttribution } from './measurementAttribution';
+
 export interface MeasurementConsent {
   analytics: boolean;
   advertising: boolean;
@@ -34,6 +36,7 @@ export function saveMeasurementConsent(consent: MeasurementConsent): void {
   } catch {
     // The choice still applies to the current page.
   }
+  updateMeasurementAttribution(consent);
 }
 
 export function loadGtmIfConsented(consent: MeasurementConsent, configuredId: string): boolean {
