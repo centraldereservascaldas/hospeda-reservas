@@ -269,7 +269,7 @@ export function MainContentRouter({
             </p>
           )}
           {!isCondominiumView && (
-            <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 min-[360px]:hidden [@media(max-height:400px)]:mb-1 [@media(max-height:400px)]:grid">
+            <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 min-[400px]:hidden [@media(max-height:400px)]:mb-1 [@media(max-height:400px)]:grid">
               <button
                 type="button"
                 onClick={onOpenSearch}
@@ -291,7 +291,7 @@ export function MainContentRouter({
             </div>
           )}
           {!isCondominiumView && (
-            <div className="mb-4 sm:mb-8 max-[359px]:hidden [@media(max-height:400px)]:hidden">
+            <div className="mb-4 sm:mb-8 max-[399px]:hidden [@media(max-height:400px)]:hidden">
               <StaysSearchWidget
                 variant="hero"
                 currentFilters={filters}

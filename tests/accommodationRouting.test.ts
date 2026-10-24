@@ -322,7 +322,7 @@ test('catalog refresh does not replace an open detail with a stale catalog recor
     await waitFor(() =>
       assert.ok(result.current.selectedProperty?.images.includes(refreshedImage)),
     );
-    act(() => result.current.setProperties([{ ...property, name: 'Catalog updated' }]));
+    act(() => result.current.setProperties([{ ...property, title: 'Catalog updated' }]));
 
     assert.ok(result.current.selectedProperty?.images.includes(refreshedImage));
     assert.equal(result.current.propertyRouteStatus, 'idle');

@@ -94,7 +94,7 @@ test('explore route renders the property catalog and delegates selection', () =>
   assert.deepEqual(selectedProperties, [STAYS_NET_APARTMENTS[0]!.id]);
 });
 
-test('very narrow explore layout keeps search and Sofia actions while deferring the full search form', () => {
+test('mobile explore layout keeps search and Sofia actions through 390px while deferring the full search form', () => {
   let openedSearch = 0;
   let openedAssistant = 0;
   const { getAllByRole, getByRole } = render(
@@ -118,10 +118,10 @@ test('very narrow explore layout keeps search and Sofia actions while deferring 
 
   assert.equal(searchButton.textContent, 'Datas e hóspedes');
   assert.match(searchButton.className, /min-h-11/);
-  assert.match(searchButton.parentElement?.className ?? '', /min-\[360px\]:hidden/);
+  assert.match(searchButton.parentElement?.className ?? '', /min-\[400px\]:hidden/);
   assert.match(
     inlineSearch.parentElement?.parentElement?.parentElement?.className ?? '',
-    /max-\[359px\]:hidden/,
+    /max-\[399px\]:hidden/,
   );
 
   fireEvent.click(searchButton);
