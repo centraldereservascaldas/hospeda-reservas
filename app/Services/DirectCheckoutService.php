@@ -114,6 +114,10 @@ class DirectCheckoutService
         if (! is_array($availableListing)) {
             return ['order' => null, 'code' => 'dates_unavailable', 'message' => 'Este imóvel não está disponível para as datas selecionadas. Nenhum pedido, reserva ou cobrança foi iniciado.', 'status' => 409, 'replayed' => false];
         }
+        $liveCapacity = $availableListing['_i_maxGuests'] ?? $availableListing['maxGuests'] ?? null;
+        if (is_numeric($liveCapacity) && (int) $liveCapacity < $guestCount) {
+            return ['order' => null, 'code' => 'invalid_guest_count', 'message' => 'A quantidade de hóspedes excede a capacidade atual deste imóvel. Nenhum pedido, reserva ou cobrança foi iniciado.', 'status' => 422, 'replayed' => false];
+        }
 
         $quoteListingIds = array_values(array_unique(array_filter([
             $staysListingId,

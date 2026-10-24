@@ -203,6 +203,33 @@ class BookingApiTest extends TestCase
         $this->assertDatabaseCount('direct_booking_stays_actions', 0);
     }
 
+    public function test_checkout_rejects_live_capacity_below_requested_guests(): void
+    {
+        $this->configureApprovedCheckoutTerms();
+        $requestOrder = [];
+        $this->fakeDirectCheckoutRequests(3001, $requestOrder, availabilityResponse: [['id' => 'JQ08G', '_i_maxGuests' => 1]]);
+
+        $this->postJson('/api/checkout', $this->checkoutPayload(3001), ['Idempotency-Key' => 'checkout-live-capacity-01'])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'invalid_guest_count');
+        $this->assertSame(['POST /booking/search-listings'], $requestOrder);
+        $this->assertDatabaseCount('direct_booking_orders', 0);
+    }
+
+    public function test_checkout_accepts_single_listing_quote_without_identifier(): void
+    {
+        $this->configureApprovedCheckoutTerms();
+        $requestOrder = [];
+        $this->fakeDirectCheckoutRequests(3001, $requestOrder, [
+            'bookingPrice' => ['_mctotal' => ['BRL' => 3001], 'feesIncluded' => true, 'fees' => []],
+        ]);
+
+        $this->postJson('/api/checkout', $this->checkoutPayload(3001), ['Idempotency-Key' => 'checkout-single-quote-01'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_unconfigured');
+        $this->assertDatabaseCount('direct_booking_orders', 1);
+    }
+
     public function test_checkout_returns_503_and_replays_the_same_order_without_additional_stays_calls(): void
     {
         $termsSnapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.'];
@@ -283,7 +310,7 @@ class BookingApiTest extends TestCase
     }
 
     /** @param list<string> $requestOrder */
-    private function fakeDirectCheckoutRequests(float $total, array &$requestOrder, ?array $quoteResponse = null): void
+    private function fakeDirectCheckoutRequests(float $total, array &$requestOrder, ?array $quoteResponse = null, ?array $availabilityResponse = null): void
     {
         config([
             'services.stays.client_id' => 'client',
@@ -293,12 +320,12 @@ class BookingApiTest extends TestCase
         ]);
         app('cache')->forgetDriver('array');
         Http::preventStrayRequests();
-        Http::fake(function (ClientRequest $request) use ($total, &$requestOrder, $quoteResponse) {
+        Http::fake(function (ClientRequest $request) use ($total, &$requestOrder, $quoteResponse, $availabilityResponse) {
             $path = parse_url($request->url(), PHP_URL_PATH);
             $requestOrder[] = $request->method().' '.str_replace('/external/v1', '', (string) $path);
 
             return match (true) {
-                str_ends_with((string) $path, '/booking/search-listings') => Http::response([['id' => 'JQ08G']], 200),
+                str_ends_with((string) $path, '/booking/search-listings') => Http::response($availabilityResponse ?? [['id' => 'JQ08G']], 200),
                 str_ends_with((string) $path, '/booking/calculate-price') => Http::response($quoteResponse ?? [['_idlisting' => 'JQ08G', 'bookingPrice' => ['mainCurrency' => 'BRL', '_mctotal' => ['BRL' => $total], 'feesIncluded' => true, 'fees' => []]]], 200),
                 default => Http::response([], 404),
             };

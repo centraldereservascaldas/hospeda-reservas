@@ -21,7 +21,7 @@ class DirectSaleTermsRegistry
     /** @return array<string, mixed>|null */
     public function findApprovedListing(string $listingId): ?array
     {
-        $catalog = json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
+        $catalog = $this->catalog();
         $property = collect($catalog)->first(fn (array $item): bool => in_array($listingId, [$item['id'] ?? '', $item['staysListingId'] ?? ''], true));
         $pilotListingIds = config('direct-booking.pilot_listing_ids', []);
         if (! is_array($pilotListingIds)) {
@@ -41,11 +41,17 @@ class DirectSaleTermsRegistry
             || $configuredPilotListings->count() !== count($pilotListingIds)
             || $property === null
             || ! in_array($property['id'] ?? null, $pilotListingIds, true)
-            || ! $this->hasDisplayableTermsSnapshot($property)) {
+            || $configuredPilotListings->contains(fn (array $pilotListing): bool => ! $this->hasDisplayableTermsSnapshot($pilotListing))) {
             return null;
         }
 
         return $property;
+    }
+
+    /** @return list<array<string, mixed>> */
+    protected function catalog(): array
+    {
+        return json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
     }
 
     /** @param array<string, mixed> $property */
