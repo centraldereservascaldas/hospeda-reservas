@@ -42,6 +42,10 @@ return [
         'timeout' => (int) env('STAYS_TIMEOUT', 10),
     ],
 
+    'stays_simulator' => [
+        'enabled' => (bool) env('STAYS_SIMULATOR_ENABLED', false),
+    ],
+
     'mercadopago' => [
         'public_key' => env('VITE_MERCADO_PAGO_PUBLIC_KEY'),
         'access_token' => env('MERCADO_PAGO_ACCESS_TOKEN'),
