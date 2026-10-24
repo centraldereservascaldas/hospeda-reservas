@@ -113,6 +113,71 @@ class DirectStaysReservationTest extends TestCase
             ->assertNotFound();
     }
 
+    public function test_checkout_rejects_35_minute_hold_without_creating_stays_client_or_reservation(): void
+    {
+        config(['direct-booking.reservation_hold_minutes' => 35]);
+        $this->approvedTerms();
+        Http::fake(function (ClientRequest $request) {
+            if ($checkoutResponse = $this->checkoutStaysResponse($request)) {
+                return $checkoutResponse;
+            }
+
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            if (str_ends_with((string) $path, '/booking/clients')) {
+                return Http::response(['_id' => 'client-35'], 201);
+            }
+            if (str_ends_with((string) $path, '/booking/reservations')) {
+                return Http::response($this->reservationFrom($request->data(), 'reservation-35'), 201);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $response = $this->postJson('/api/checkout', $this->checkoutPayload(), ['Idempotency-Key' => 'direct-reserve-hold-035'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_too_short_for_pix');
+
+        $order = DirectBookingOrder::query()->where('public_reference', $response->json('order.publicReference'))->firstOrFail();
+        $this->assertNull($order->stays_client_id);
+        $this->assertNull($order->stays_reservation_id);
+        $this->assertSame(0, DirectBookingStaysAction::query()->count());
+        Http::assertNotSent(fn (ClientRequest $request): bool => $request->method() === 'POST'
+            && preg_match('~/booking/(clients|reservations)$~', (string) parse_url($request->url(), PHP_URL_PATH)) === 1);
+    }
+
+    public function test_checkout_accepts_36_minute_hold_and_creates_reserved_in_stays(): void
+    {
+        config(['direct-booking.reservation_hold_minutes' => 36]);
+        $this->approvedTerms();
+        Http::fake(function (ClientRequest $request) {
+            if ($checkoutResponse = $this->checkoutStaysResponse($request)) {
+                return $checkoutResponse;
+            }
+
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            if (str_ends_with((string) $path, '/booking/clients')) {
+                return $request->method() === 'GET' ? Http::response([], 200) : Http::response(['_id' => 'client-36'], 201);
+            }
+            if (str_ends_with((string) $path, '/booking/reservations')) {
+                return $request->method() === 'POST'
+                    ? Http::response($this->reservationFrom($request->data(), 'reservation-36'), 201)
+                    : Http::response([], 404);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $response = $this->postJson('/api/checkout', $this->checkoutPayload(), ['Idempotency-Key' => 'direct-reserve-hold-036'])
+            ->assertCreated()
+            ->assertJsonPath('code', 'pre_reserved');
+
+        $order = DirectBookingOrder::query()->where('public_reference', $response->json('order.publicReference'))->firstOrFail();
+        $this->assertSame('client-36', $order->stays_client_id);
+        $this->assertSame('reservation-36', $order->stays_reservation_id);
+        $this->assertSame('reserved', $order->reservation_status);
+        $this->assertSame('succeeded', DirectBookingStaysAction::query()->where('action_type', 'create_reservation')->value('status'));
+    }
+
     public function test_reservation_timeout_is_reconciled_without_repeating_post(): void
     {
         $this->approvedTerms();
