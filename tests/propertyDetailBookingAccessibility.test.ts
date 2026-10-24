@@ -254,15 +254,16 @@ test('calendar day buttons keep a 44px minimum touch height', () => {
   const dayButtons = document.querySelectorAll<HTMLButtonElement>('[data-calendar-date] button');
   assert.ok(dayButtons.length > 0);
   const calendarDialog = getByRole('dialog', { name: 'Escolha as datas' });
+  assert.match(calendarDialog.className, /p-0/);
   assert.match(calendarDialog.querySelector('.max-w-sm')?.className || '', /p-3/);
   assert.match(calendarDialog.querySelector('[role="grid"]')?.className || '', /-mx-3/);
   for (const button of dayButtons) {
     assert.match(button.className, /h-11/);
   }
   for (const week of calendarDialog.querySelectorAll<HTMLElement>(
-    '[role="row"][class*="gap-0.5"]',
+    '[role="row"]:has([data-calendar-date])',
   )) {
-    assert.match(week.className, /gap-0\.5/);
+    assert.match(week.className, /gap-0(?:\s|$)/);
   }
   for (const dateField of ['Check-in', 'Check-out']) {
     assert.match(getByRole('button', { name: new RegExp(dateField) }).className, /min-h-11/);

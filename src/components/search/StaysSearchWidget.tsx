@@ -107,10 +107,11 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    const width = Math.min(320, window.innerWidth - 16);
+    const gutter = window.innerWidth <= 336 ? 0 : 8;
+    const width = Math.min(320, window.innerWidth - gutter * 2);
     const maxHeight = Math.max(0, window.innerHeight - 16);
     const height = Math.min(440, maxHeight);
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+    const left = Math.max(gutter, Math.min(rect.left, window.innerWidth - width - gutter));
     const below = rect.bottom + 8;
     const top = below + height <= window.innerHeight ? below : Math.max(8, rect.top - height - 8);
     setPosition({ left, top, width, maxHeight });
@@ -329,7 +330,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
             data-dialog-focus-portal
             role="dialog"
             aria-label={`Calendário de ${label.toLowerCase()}`}
-            className="fixed z-[1000] overflow-y-auto overscroll-contain rounded-3xl border border-white/90 bg-white/80 p-4 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl"
+            className="fixed z-[1000] overflow-y-auto overscroll-contain rounded-3xl border border-white/90 bg-white/80 p-4 [@media(max-width:639px)]:p-1 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl"
             style={{
               left: position.left,
               top: position.top,
@@ -390,7 +391,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
                 <div
                   key={`week-${weekIndex}`}
                   role="row"
-                  className="grid grid-cols-7 gap-1 text-center"
+                  className="grid grid-cols-7 gap-0 text-center"
                 >
                   {calendarDays.slice(weekIndex * 7, weekIndex * 7 + 7).map((date) => {
                     const dateValue = isoDate(date);

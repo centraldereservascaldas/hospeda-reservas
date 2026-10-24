@@ -219,7 +219,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
       data-dialog-focus-root
       id="stay-dates-dialog"
       tabIndex={-1}
-      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-white/25 p-4 backdrop-blur-xl animate-in fade-in duration-150 sm:items-center"
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-white/25 p-0 backdrop-blur-xl animate-in fade-in duration-150 sm:items-center sm:p-4"
       onPointerUp={handleTouchRangePointerUp}
       onPointerMove={handleTouchRangePointerMove}
       onPointerCancel={clearTouchRange}
@@ -311,7 +311,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
             <div
               key={`week-${weekIndex}`}
               role="row"
-              className="grid grid-cols-7 gap-0.5 text-center"
+              className="grid grid-cols-7 gap-0 text-center"
             >
               {week.map((date, dayIndex) => {
                 if (!date) {
