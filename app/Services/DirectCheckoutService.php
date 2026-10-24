@@ -151,6 +151,7 @@ class DirectCheckoutService
                     'resume_token' => Str::random(64),
                     'resume_token_expires_at' => now()->addDays($resumeTokenTtlDays),
                     'request_fingerprint' => $fingerprint,
+                    'marketing_attribution' => $input['marketingAttribution'] ?? null,
                     'listing_id' => (string) ($property['id'] ?? $input['listingId']),
                     'stays_listing_id' => $staysListingId,
                     'check_in' => $input['from'],
@@ -235,6 +236,7 @@ class DirectCheckoutService
     private function requestFingerprint(array $input): string
     {
         unset($input['idempotencyKey']);
+        unset($input['marketingAttribution']);
         $input = $this->canonicalize($input);
 
         return hash_hmac('sha256', json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), (string) config('app.key'));

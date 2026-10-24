@@ -237,6 +237,16 @@ class BookingApiTest extends TestCase
         $requestOrder = [];
         $this->fakeDirectCheckoutRequests(3001, $requestOrder);
         $payload = $this->checkoutPayload(3001);
+        $payload['marketingAttribution'] = [
+            'firstTouch' => [
+                'capturedAt' => 1792861200000,
+                'values' => ['utm_source' => 'google', 'utm_campaign' => 'summer_launch', 'gclid' => 'click-id-123'],
+            ],
+            'lastTouch' => [
+                'capturedAt' => 1792861300000,
+                'values' => ['utm_source' => 'meta', 'utm_medium' => 'paid_social', 'fbclid' => 'meta-click-456'],
+            ],
+        ];
 
         $first = $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attempt-00003'])
             ->assertServiceUnavailable()
@@ -249,9 +259,14 @@ class BookingApiTest extends TestCase
         $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->firstOrFail();
         $this->assertModelExists($order);
         $this->assertSame($termsSnapshot, $order->accepted_terms_snapshot);
+        $this->assertSame($payload['marketingAttribution'], $order->marketing_attribution);
         $this->assertSame(1, DirectBookingOrder::query()->count());
 
-        $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attempt-00003'])
+        $replayedPayload = [...$payload, 'marketingAttribution' => [
+            ...$payload['marketingAttribution'],
+            'lastTouch' => ['capturedAt' => 1792861400000, 'values' => ['utm_source' => 'email']],
+        ]];
+        $this->postJson('/api/checkout', $replayedPayload, ['Idempotency-Key' => 'checkout-attempt-00003'])
             ->assertServiceUnavailable()
             ->assertJsonPath('code', 'reservation_hold_unconfigured')
             ->assertJsonPath('order.publicReference', $publicReference)
@@ -263,6 +278,19 @@ class BookingApiTest extends TestCase
 
         $this->assertSame(['POST /booking/search-listings', 'POST /booking/calculate-price'], $requestOrder);
         $this->assertSame(1, DirectBookingOrder::query()->count());
+    }
+
+    public function test_checkout_rejects_unapproved_marketing_attribution_fields(): void
+    {
+        $payload = $this->checkoutPayload(3001);
+        $payload['marketingAttribution'] = [
+            'firstTouch' => ['capturedAt' => 1792861200000, 'values' => ['utm_source' => 'google', 'email' => 'guest@example.test']],
+            'lastTouch' => ['capturedAt' => 1792861300000, 'values' => ['utm_source' => 'google']],
+        ];
+
+        $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attribution-invalid-01'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('marketingAttribution.firstTouch.values');
     }
 
     private function checkoutPayload(?float $quoteTotal = null, string $termsVersion = 'terms-2026-01'): array
