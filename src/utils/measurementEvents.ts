@@ -4,6 +4,7 @@ import { readMeasurementConsent } from './measurementConsent';
 type FunnelEvent =
   | { event: 'search'; has_dates: boolean; guests: number }
   | { event: 'view_item'; items: [{ item_id: string }] }
+  | { event: 'view_item_list'; items: Array<{ item_id: string }> }
   | { event: 'begin_checkout'; items: [{ item_id: string }] }
   | { event: 'add_payment_info'; payment_type: 'pix' | 'card' }
   | {
@@ -19,8 +20,15 @@ const pendingPurchases = new Set<string>();
 const PURCHASE_STORAGE_PREFIX = 'crcn.purchaseEmitted.v1.';
 
 export function emitFunnelEvent(event: FunnelEvent): boolean {
-  if ('items' in event && !/^[A-Za-z0-9_-]+$/.test(event.items[0]?.item_id ?? '')) return false;
-  if (event.event === 'search' && (!Number.isInteger(event.guests) || event.guests < 1 || event.guests > 30)) return false;
+  if ('items' in event && event.items.some((item) => !/^[A-Za-z0-9_-]+$/.test(item.item_id))) {
+    return false;
+  }
+  if (event.event === 'view_item_list' && event.items.length === 0) return false;
+  if (
+    event.event === 'search' &&
+    (!Number.isInteger(event.guests) || event.guests < 1 || event.guests > 30)
+  )
+    return false;
   const consent = readMeasurementConsent();
   if (!consent?.analytics || !consent.advertising) return false;
   if (!document.getElementById('crcn-gtm-script')) return false;
@@ -28,6 +36,17 @@ export function emitFunnelEvent(event: FunnelEvent): boolean {
   if (!dataLayer) return false;
   dataLayer.push(event);
   return true;
+}
+
+export function emitViewItemList(itemIds: string[]): boolean {
+  if (itemIds.length === 0 || itemIds.some((itemId) => !/^[A-Za-z0-9_-]+$/.test(itemId))) {
+    return false;
+  }
+
+  return emitFunnelEvent({
+    event: 'view_item_list',
+    items: itemIds.map((itemId) => ({ item_id: itemId })),
+  });
 }
 
 export async function emitConfirmedPurchase(order: DirectBookingOrderSummary): Promise<boolean> {

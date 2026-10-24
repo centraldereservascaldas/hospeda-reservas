@@ -20,7 +20,8 @@ const { MeasurementPreferences } = await import('../src/components/MeasurementPr
 
 const { loadGtmIfConsented, readMeasurementConsent, saveMeasurementConsent } =
   await import('../src/utils/measurementConsent.ts');
-const { emitConfirmedPurchase, emitFunnelEvent } = await import('../src/utils/measurementEvents.ts');
+const { emitConfirmedPurchase, emitFunnelEvent, emitViewItemList } =
+  await import('../src/utils/measurementEvents.ts');
 
 afterEach(() => {
   cleanup();
@@ -58,17 +59,26 @@ test('revocation persists and prevents loading on the next page', () => {
 
 test('preference UI refuses by default and can be reopened after saving', () => {
   const view = render(React.createElement(MeasurementPreferences, { showReopenButton: true }));
-  assert.equal(document.activeElement, view.getByRole('heading', { name: 'Preferências de medição' }));
+  assert.equal(
+    document.activeElement,
+    view.getByRole('heading', { name: 'Preferências de medição' }),
+  );
   fireEvent.click(view.getByRole('button', { name: 'Recusar' }));
   assert.deepEqual(readMeasurementConsent(), { analytics: false, advertising: false });
   const reopen = view.getByRole('button', { name: 'Preferências de medição' });
   assert.equal(document.activeElement, reopen);
   fireEvent.click(reopen);
-  assert.equal(document.activeElement, view.getByRole('heading', { name: 'Preferências de medição' }));
+  assert.equal(
+    document.activeElement,
+    view.getByRole('heading', { name: 'Preferências de medição' }),
+  );
   fireEvent.click(view.getByRole('checkbox', { name: 'Permitir medição e publicidade' }));
   fireEvent.click(view.getByRole('button', { name: 'Salvar escolhas' }));
   assert.deepEqual(readMeasurementConsent(), { analytics: true, advertising: true });
-  assert.equal(document.activeElement, view.getByRole('button', { name: 'Preferências de medição' }));
+  assert.equal(
+    document.activeElement,
+    view.getByRole('button', { name: 'Preferências de medição' }),
+  );
 });
 
 test('purchase requires consent, a loaded tag, confirmed payment and a valid BRL total, and emits once', async () => {
@@ -95,18 +105,22 @@ test('purchase requires consent, a loaded tag, confirmed payment and a valid BRL
   assert.equal(await emitConfirmedPurchase({ ...order, quoteTotal: 'NaN' }), false);
   assert.equal(await emitConfirmedPurchase(order), true);
   assert.equal(await emitConfirmedPurchase(order), false);
-  const events = (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
+  const events =
+    (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
   const purchases = events.filter((event) => event.event === 'purchase');
   assert.equal(purchases.length, 1);
   assert.match(String(purchases[0]?.transaction_id), /^crcn_[a-f0-9]{64}$/);
   assert.notEqual(purchases[0]?.transaction_id, order.publicReference);
-  assert.deepEqual({ ...purchases[0], transaction_id: undefined }, {
-    event: 'purchase',
-    transaction_id: undefined,
-    currency: 'BRL',
-    value: 850,
-    items: [{ item_id: 'JQ08G' }],
-  });
+  assert.deepEqual(
+    { ...purchases[0], transaction_id: undefined },
+    {
+      event: 'purchase',
+      transaction_id: undefined,
+      currency: 'BRL',
+      value: 850,
+      items: [{ item_id: 'JQ08G' }],
+    },
+  );
 });
 
 test('purchase fails closed when cryptographic hashing is unavailable or rejects', async () => {
@@ -132,10 +146,17 @@ test('purchase fails closed when cryptographic hashing is unavailable or rejects
     assert.equal(await emitConfirmedPurchase(order), false);
     Object.defineProperty(globalThis, 'crypto', {
       configurable: true,
-      value: { subtle: { digest: async () => { throw new Error('unavailable'); } } },
+      value: {
+        subtle: {
+          digest: async () => {
+            throw new Error('unavailable');
+          },
+        },
+      },
     });
     assert.equal(await emitConfirmedPurchase(order), false);
-    const events = (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
+    const events =
+      (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
     assert.equal(events.filter((event) => event.event === 'purchase').length, 0);
   } finally {
     if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto);
@@ -151,12 +172,44 @@ test('funnel events require consent and a loaded tag, validate item IDs and omit
   assert.equal(emitFunnelEvent({ event: 'view_item', items: [{ item_id: 'JQ08G' }] }), true);
   assert.equal(emitFunnelEvent({ event: 'begin_checkout', items: [{ item_id: 'JQ08G' }] }), true);
   assert.equal(emitFunnelEvent({ event: 'add_payment_info', payment_type: 'pix' }), true);
-  assert.equal(emitFunnelEvent({ event: 'view_item', items: [{ item_id: 'bad/email@example.test' }] }), false);
-  const events = (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
-  assert.deepEqual(events.filter((event) => ['search', 'view_item', 'begin_checkout', 'add_payment_info'].includes(String(event.event))), [
-    { event: 'search', has_dates: true, guests: 2 },
-    { event: 'view_item', items: [{ item_id: 'JQ08G' }] },
-    { event: 'begin_checkout', items: [{ item_id: 'JQ08G' }] },
-    { event: 'add_payment_info', payment_type: 'pix' },
-  ]);
+  assert.equal(
+    emitFunnelEvent({ event: 'view_item', items: [{ item_id: 'bad/email@example.test' }] }),
+    false,
+  );
+  const events =
+    (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
+  assert.deepEqual(
+    events.filter((event) =>
+      ['search', 'view_item', 'begin_checkout', 'add_payment_info'].includes(String(event.event)),
+    ),
+    [
+      { event: 'search', has_dates: true, guests: 2 },
+      { event: 'view_item', items: [{ item_id: 'JQ08G' }] },
+      { event: 'begin_checkout', items: [{ item_id: 'JQ08G' }] },
+      { event: 'add_payment_info', payment_type: 'pix' },
+    ],
+  );
+});
+
+test('view_item_list requires a nonempty safe list, consent and GTM', () => {
+  assert.equal(emitViewItemList(['JQ08G', 'LG02J']), false);
+  saveMeasurementConsent({ analytics: true, advertising: true });
+  assert.equal(emitViewItemList(['JQ08G', 'LG02J']), false);
+  loadGtmIfConsented({ analytics: true, advertising: true }, 'GTM-ABC123');
+
+  assert.equal(emitViewItemList([]), false);
+  assert.equal(emitViewItemList(['JQ08G', 'guest@example.test']), false);
+  assert.equal(emitViewItemList(['JQ08G', 'LG02J']), true);
+
+  const events =
+    (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
+  assert.deepEqual(
+    events.filter((event) => event.event === 'view_item_list'),
+    [
+      {
+        event: 'view_item_list',
+        items: [{ item_id: 'JQ08G' }, { item_id: 'LG02J' }],
+      },
+    ],
+  );
 });

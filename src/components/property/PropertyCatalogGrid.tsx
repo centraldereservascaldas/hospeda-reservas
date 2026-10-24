@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
 import type { Currency, Property } from '../../types';
+import { emitViewItemList } from '../../utils/measurementEvents';
 import { CatalogLoadNotice } from './CatalogLoadNotice';
 import { PropertyCard } from './PropertyCard';
 
@@ -40,6 +42,23 @@ export function PropertyCatalogGrid({
   onResetFilters,
   onClearCatalogFilters,
 }: PropertyCatalogGridProps) {
+  const emittedListIdentityRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (status !== 'ready' && status !== 'stale') return;
+
+    const itemIds = properties.map((property) => property.staysListingId || property.id);
+    if (itemIds.length === 0) {
+      emittedListIdentityRef.current = null;
+      return;
+    }
+
+    const identity = JSON.stringify(itemIds);
+    if (emittedListIdentityRef.current === identity) return;
+
+    if (emitViewItemList(itemIds)) emittedListIdentityRef.current = identity;
+  });
+
   if (status === 'loading') {
     return <CatalogLoadNotice status="loading" isRefreshing={false} onRetry={onRetryCatalog} />;
   }

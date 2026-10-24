@@ -16,10 +16,15 @@ const React = (await import('react')).default;
 const { render, cleanup, fireEvent, screen } = await import('@testing-library/react');
 const { PropertyCatalogGrid } = await import('../src/components/property/PropertyCatalogGrid.tsx');
 const { STAYS_NET_APARTMENTS } = await import('../src/data/staysApartments.ts');
+const { loadGtmIfConsented, saveMeasurementConsent } =
+  await import('../src/utils/measurementConsent.ts');
 
 afterEach(() => {
   cleanup();
   document.body.innerHTML = '';
+  document.head.innerHTML = '';
+  window.localStorage.clear();
+  delete (window as Window & { dataLayer?: unknown[] }).dataLayer;
 });
 
 const commonProps = {
@@ -80,6 +85,69 @@ test('renders a catalog grid for matching accommodations', () => {
   );
 
   assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' }));
+});
+
+test('emits view_item_list only for displayed results and ignores catalog rerenders with the same IDs', () => {
+  saveMeasurementConsent({ analytics: true, advertising: true });
+  loadGtmIfConsented({ analytics: true, advertising: true }, 'GTM-ABC123');
+  const dataLayer: Array<Record<string, unknown>> = [];
+  (window as Window & { dataLayer?: unknown[] }).dataLayer = dataLayer;
+  const property = STAYS_NET_APARTMENTS[0]!;
+
+  const { rerender } = render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'loading',
+      properties: [property],
+    }),
+  );
+  assert.equal(dataLayer.filter((event) => event.event === 'view_item_list').length, 0);
+
+  rerender(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [property],
+    }),
+  );
+  rerender(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [{ ...property, title: 'Updated catalog title' }],
+    }),
+  );
+  rerender(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [],
+    }),
+  );
+
+  assert.equal(dataLayer.filter((event) => event.event === 'view_item_list').length, 1);
+
+  rerender(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [property],
+    }),
+  );
+
+  assert.deepEqual(
+    dataLayer.filter((event) => event.event === 'view_item_list'),
+    [
+      {
+        event: 'view_item_list',
+        items: [{ item_id: property.staysListingId || property.id }],
+      },
+      {
+        event: 'view_item_list',
+        items: [{ item_id: property.staysListingId || property.id }],
+      },
+    ],
+  );
 });
 
 test('warns when saved accommodations are stale while keeping cards available', () => {
