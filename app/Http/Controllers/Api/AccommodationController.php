@@ -95,8 +95,16 @@ class AccommodationController extends Controller
 
         $fallback = $this->catalog();
         $existing = collect($fallback)->first(fn (array $item): bool => ($item['id'] ?? null) === $id || ($item['staysListingId'] ?? null) === $id);
-        $detail = $this->stays->get('/content/listings/'.rawurlencode($id));
-        if ($detail !== null) {
+        $detailResponse = $this->stays->request('GET', '/content/listings/'.rawurlencode($id));
+        $detail = $detailResponse?->successful() ? $detailResponse->json() : null;
+        $detailId = is_array($detail) && ! array_is_list($detail)
+            ? ($detail['id'] ?? $detail['code'] ?? $detail['_id'] ?? null)
+            : null;
+        $hasValidDetail = is_string($detailId) && trim($detailId) !== '';
+        if ($detailResponse?->status() === 404 && app()->isProduction()) {
+            return response()->json(['success' => false, 'message' => 'Acomodação não encontrada na base Stays.'], 404);
+        }
+        if ($hasValidDetail) {
             $existing = $this->mapListing($detail, $fallback);
         } elseif (app()->isProduction()) {
             return response()->json(['success' => false, 'message' => 'Acomodação indisponível na Stays.'], 503);

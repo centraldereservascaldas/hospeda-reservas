@@ -44,6 +44,54 @@ class AccommodationApiTest extends TestCase
             ->assertJsonCount(0, 'data');
     }
 
+    public function test_production_detail_returns_not_found_only_for_stays_not_found_response(): void
+    {
+        app()->instance('env', 'production');
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(['*content/listings/missing-listing' => Http::response(['internal' => 'do not expose'], 404)]);
+
+        $this->getJson('/api/accommodations/missing-listing')
+            ->assertNotFound()
+            ->assertJsonPath('success', false)
+            ->assertDontSee('do not expose');
+    }
+
+    public function test_production_detail_keeps_upstream_failure_unavailable(): void
+    {
+        app()->instance('env', 'production');
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(['*content/listings/JQ08G' => Http::response(['internal' => 'do not expose'], 500)]);
+
+        $this->getJson('/api/accommodations/JQ08G')
+            ->assertServiceUnavailable()
+            ->assertJsonPath('success', false)
+            ->assertDontSee('do not expose');
+    }
+
+    public function test_production_detail_rejects_successful_but_malformed_stays_payload(): void
+    {
+        app()->instance('env', 'production');
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+
+        foreach ([[], [['id' => 'JQ08G']], ['id' => ' ']] as $payload) {
+            Http::fake(['*content/listings/JQ08G' => Http::response($payload, 200)]);
+            $this->getJson('/api/accommodations/JQ08G')
+                ->assertServiceUnavailable()
+                ->assertJsonPath('success', false);
+        }
+    }
+
+    public function test_production_detail_keeps_connection_failure_unavailable(): void
+    {
+        app()->instance('env', 'production');
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(['*content/listings/JQ08G' => Http::failedConnection()]);
+
+        $this->getJson('/api/accommodations/JQ08G')
+            ->assertServiceUnavailable()
+            ->assertJsonPath('success', false);
+    }
+
     public function test_production_undated_search_filters_live_catalog_by_city(): void
     {
         app()->instance('env', 'production');
