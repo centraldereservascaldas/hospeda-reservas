@@ -43,7 +43,10 @@ export function useAppOverlayActions({
 
   const handleStartBooking = useCallback(
     (payload: AppOverlayBookingPayload) => {
-      emitFunnelEvent({ event: 'begin_checkout', items: [{ item_id: payload.property.staysListingId || payload.property.id }] });
+      emitFunnelEvent({
+        event: 'begin_checkout',
+        items: [{ item_id: payload.property.staysListingId || payload.property.id }],
+      });
       const state: Record<string, unknown> =
         window.history.state && typeof window.history.state === 'object'
           ? { ...window.history.state }

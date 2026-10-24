@@ -317,26 +317,29 @@ test('catalog refresh preserves enriched detail without repeating view_item', as
   try {
     const StrictModeWrapper = ({ children }: { children: ReactNode }) =>
       React.createElement(React.StrictMode, null, children);
-    const { result } = renderHook(() => {
-      const [properties, setProperties] = React.useState<Property[]>([property]);
-      const [selectedProperty, setSelectedProperty] = React.useState<Property | null>(null);
-      const [, setFilters] = React.useState<SearchFilters>(createDefaultSearchFilters);
-      const restoreSearchFromUrlRef = React.useRef(() => {});
-      const routing = useAccommodationRouting({
-        properties,
-        selectedProperty,
-        setSelectedProperty,
-        setFilters,
-        restoreSearchFromUrlRef,
-      });
-      return {
-        selectedProperty,
-        setProperties,
-        propertyRouteStatus: routing.propertyRouteStatus,
-        handleClosePropertyDetail: routing.handleClosePropertyDetail,
-        handleSelectProperty: routing.handleSelectProperty,
-      };
-    }, { wrapper: StrictModeWrapper });
+    const { result } = renderHook(
+      () => {
+        const [properties, setProperties] = React.useState<Property[]>([property]);
+        const [selectedProperty, setSelectedProperty] = React.useState<Property | null>(null);
+        const [, setFilters] = React.useState<SearchFilters>(createDefaultSearchFilters);
+        const restoreSearchFromUrlRef = React.useRef(() => {});
+        const routing = useAccommodationRouting({
+          properties,
+          selectedProperty,
+          setSelectedProperty,
+          setFilters,
+          restoreSearchFromUrlRef,
+        });
+        return {
+          selectedProperty,
+          setProperties,
+          propertyRouteStatus: routing.propertyRouteStatus,
+          handleClosePropertyDetail: routing.handleClosePropertyDetail,
+          handleSelectProperty: routing.handleSelectProperty,
+        };
+      },
+      { wrapper: StrictModeWrapper },
+    );
 
     await waitFor(() =>
       assert.ok(result.current.selectedProperty?.images.includes(refreshedImage)),
@@ -346,18 +349,25 @@ test('catalog refresh preserves enriched detail without repeating view_item', as
     assert.ok(result.current.selectedProperty?.images.includes(refreshedImage));
     assert.equal(result.current.propertyRouteStatus, 'idle');
     assert.equal(detailRequests, 1);
-    assert.deepEqual(dataLayer.filter((event) => event.event === 'view_item'), [
-      { event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] },
-    ]);
+    assert.deepEqual(
+      dataLayer.filter((event) => event.event === 'view_item'),
+      [{ event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] }],
+    );
 
     act(() => result.current.handleClosePropertyDetail());
     act(() => result.current.handleSelectProperty(property));
     act(() => result.current.handleSelectProperty(anotherProperty));
-    assert.deepEqual(dataLayer.filter((event) => event.event === 'view_item'), [
-      { event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] },
-      { event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] },
-      { event: 'view_item', items: [{ item_id: anotherProperty.staysListingId || anotherProperty.id }] },
-    ]);
+    assert.deepEqual(
+      dataLayer.filter((event) => event.event === 'view_item'),
+      [
+        { event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] },
+        { event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] },
+        {
+          event: 'view_item',
+          items: [{ item_id: anotherProperty.staysListingId || anotherProperty.id }],
+        },
+      ],
+    );
   } finally {
     crcnBackendApi.getAccommodationById = originalGetAccommodationById;
     window.localStorage.removeItem('crcn.measurementConsent.v1');

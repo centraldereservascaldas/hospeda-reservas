@@ -197,7 +197,10 @@ export function useAccommodationRouting({
   ]);
 
   const handleSelectProperty = (property: Property) => {
-    emitFunnelEvent({ event: 'view_item', items: [{ item_id: property.staysListingId || property.id }] });
+    emitFunnelEvent({
+      event: 'view_item',
+      items: [{ item_id: property.staysListingId || property.id }],
+    });
     setPropertyRouteStatus('idle');
     setSelectedProperty(property);
     refreshSelectedProperty(property);
