@@ -11,13 +11,48 @@ class SpaInfrastructureTest extends TestCase
         $indexPath = public_path('index.html');
         $createdForTest = ! is_file($indexPath);
         if ($createdForTest) {
-            file_put_contents($indexPath, '<!doctype html><title>Hospeda Reservas</title>');
+            file_put_contents($indexPath, '<!doctype html><html><head><title>Hospeda Reservas</title></head><body></body></html>');
         }
 
         try {
             foreach (['/', '/checkout/example-reference', '/reservar/JQ08G'] as $path) {
                 $this->get($path)->assertOk()->assertHeader('content-type', 'text/html; charset=utf-8');
             }
+        } finally {
+            if ($createdForTest) {
+                unlink($indexPath);
+            }
+        }
+    }
+
+    public function test_unapproved_dynamic_spa_routes_are_not_indexable(): void
+    {
+        $indexPath = public_path('index.html');
+        $createdForTest = ! is_file($indexPath);
+        if ($createdForTest) {
+            file_put_contents($indexPath, '<!doctype html><html><head><title>Hospeda Reservas</title></head><body></body></html>');
+        }
+
+        try {
+            foreach ([
+                '/checkout/example-reference',
+                '/checkout/example-reference/',
+                '/reservar/JQ08G',
+                '/reservar/JQ08G/',
+                '/apartamento/JQ08G',
+                '/apartamento/JQ08G/',
+                '/en/apartment/JQ08G',
+                '/en/apartment/JQ08G/',
+            ] as $path) {
+                $this->get($path)
+                    ->assertOk()
+                    ->assertHeader('X-Robots-Tag', 'noindex, nofollow')
+                    ->assertSee('<meta name="robots" content="noindex, nofollow" />', false);
+            }
+
+            $this->get('/')->assertOk()->assertHeaderMissing('X-Robots-Tag');
+            $this->getJson('/api/health')->assertOk()->assertHeaderMissing('X-Robots-Tag');
+            $this->getJson('/external/v1/content/listings')->assertOk()->assertHeaderMissing('X-Robots-Tag');
         } finally {
             if ($createdForTest) {
                 unlink($indexPath);
