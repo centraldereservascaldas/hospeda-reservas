@@ -3,11 +3,15 @@
 namespace Tests\Feature;
 
 use App\Enums\DirectBookingOrderStatus;
+use App\Jobs\SendDirectBookingConfirmationEmail;
+use App\Models\DirectBookingEmail;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysReservationService;
+use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\Payments\MercadoPagoClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
@@ -148,6 +152,51 @@ class CheckoutPaymentEndpointTest extends TestCase
         $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->status);
         $this->assertSame(0, $order->staysActions()->where('action_type', 'confirm_reservation')->count());
         $this->assertSame('attention_required', DirectBookingPaymentAttempt::query()->sole()->status);
+    }
+
+    public function test_late_pix_approval_after_hold_expiry_requires_operational_attention_without_confirmation(): void
+    {
+        $this->enablePayments();
+        $this->freezeTime();
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)
+            ->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        $gateway = $this->mock(MercadoPagoClient::class);
+        $gateway->shouldReceive('createPayment')->once()->andReturn(['id' => '123456789']);
+        $gateway->shouldReceive('getPayment')
+            ->twice()
+            ->andReturn($this->pendingGatewayPayment($order), [
+                ...$this->pendingGatewayPayment($order),
+                'status' => 'approved',
+                'date_approved' => now()->subMinute()->toIso8601String(),
+            ]);
+
+        $response = $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            'paymentMethod' => 'pix', 'paymentMethodId' => 'pix',
+        ], ['Idempotency-Key' => 'checkout-late-pix-approval-0001', 'X-Checkout-Resume-Token' => 'resume-token'])
+            ->assertCreated()
+            ->assertJsonPath('payment.status', 'pending');
+
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        $this->assertSame('pending', $attempt->status);
+        $this->assertSame('pending', $order->refresh()->payment_status);
+
+        $this->travelTo($order->expires_at->copy()->addMinute());
+        Queue::fake([SendDirectBookingConfirmationEmail::class]);
+
+        $result = app(DirectCheckoutPaymentService::class)
+            ->reconcileGatewayPayment('123456789');
+
+        $attempt->refresh();
+        $order->refresh();
+        $this->assertSame('approved', $attempt->status);
+        $this->assertSame('approved', $order->payment_status);
+        $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->status);
+        $this->assertSame('approved', $result['attempt']?->status);
+        $this->assertTrue(collect($order->operational_events)->contains(fn (array $event): bool => ($event['code'] ?? null) === 'payment_approved_after_hold'));
+        $this->assertSame(0, $order->staysActions()->where('action_type', 'confirm_reservation')->count());
+        $this->assertSame(0, DirectBookingEmail::query()->where('direct_booking_order_id', $order->id)->where('notification_type', 'confirmation')->count());
+        Queue::assertNothingPushed();
     }
 
     #[DataProvider('gatewayIdentityMismatchCases')]
