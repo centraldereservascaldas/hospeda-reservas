@@ -17,6 +17,10 @@ class DirectBookingOperationsResource extends JsonResource
             : null;
         $manualCancellationReview = collect($events)->last(fn (mixed $event): bool => is_array($event)
             && ($event['event'] ?? null) === 'manual_cancellation_processing_started');
+        $manualGatewayRefundReview = collect($events)->last(fn (mixed $event): bool => is_array($event)
+            && ($event['code'] ?? null) === 'manual_gateway_refund_verified');
+        $resumeTokenRevocation = collect($events)->last(fn (mixed $event): bool => is_array($event)
+            && ($event['event'] ?? null) === 'visitor_resume_token_revoked');
 
         return [
             'id' => $this->id,
@@ -33,8 +37,21 @@ class DirectBookingOperationsResource extends JsonResource
             'paymentMethod' => $this->payment_method,
             'gatewayPaymentId' => $this->gateway_payment_id,
             'staysReservationId' => $this->stays_reservation_id,
+            'hasResumeToken' => is_string($this->resume_token),
+            'resumeTokenExpiresAt' => $this->resume_token_expires_at?->toISOString(),
+            'resumeTokenRevocation' => is_array($resumeTokenRevocation) ? [
+                'reviewedBy' => is_string($resumeTokenRevocation['reviewed_by'] ?? null) ? $resumeTokenRevocation['reviewed_by'] : null,
+                'at' => is_string($resumeTokenRevocation['at'] ?? null) ? $resumeTokenRevocation['at'] : null,
+            ] : null,
             'paymentApprovedWithoutConfirmedReservation' => $this->payment_status === 'approved'
-                && ! in_array($this->status->value, ['confirmado', 'concluido'], true),
+                && ! in_array($this->status->value, [
+                    'confirmado',
+                    'concluido',
+                    'cancelamento_solicitado',
+                    'reembolso_pendente',
+                    'reembolsado',
+                    'contestado',
+                ], true),
             'latePaymentAfterHold' => collect($events)->contains(fn (mixed $event): bool => is_array($event)
                 && (($event['code'] ?? null) === 'payment_approved_after_hold'
                     || ($event['source'] ?? null) === 'late_or_unreserved_payment')),
@@ -58,8 +75,16 @@ class DirectBookingOperationsResource extends JsonResource
                 'reviewedBy' => is_string($manualCancellationReview['reviewed_by'] ?? null) ? $manualCancellationReview['reviewed_by'] : null,
                 'at' => is_string($manualCancellationReview['reviewed_at'] ?? null) ? $manualCancellationReview['reviewed_at'] : null,
             ] : null,
+            'manualGatewayRefundReview' => is_array($manualGatewayRefundReview) ? [
+                'reviewedBy' => is_string($manualGatewayRefundReview['reviewed_by'] ?? null) ? $manualGatewayRefundReview['reviewed_by'] : null,
+                'at' => is_string($manualGatewayRefundReview['at'] ?? null) ? $manualGatewayRefundReview['at'] : null,
+            ] : null,
+            'createdAt' => $this->created_at?->toISOString(),
             'updatedAt' => $this->updated_at?->toISOString(),
-            'lastEvent' => is_array($lastEvent) ? array_intersect_key($lastEvent, array_flip(['event', 'status', 'source', 'code', 'at'])) : null,
+            'lastEvent' => is_array($lastEvent) ? array_intersect_key($lastEvent, array_flip([
+                'event', 'status', 'source', 'code', 'at',
+                'previous_gateway_status', 'gateway_status', 'gateway_updated_at',
+            ])) : null,
             'issue' => $this->resolveIssue($lastEvent),
         ];
     }

@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Data\VerifiedGuest;
 use App\Models\DirectBookingOrder;
 use App\Observers\DirectBookingOrderObserver;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -37,6 +38,20 @@ class AppServiceProvider extends ServiceProvider
                     ->by('checkout-resume:not-found:'.$ip.':'.$reference)
                     ->after(fn (Response $response): bool => $response->getStatusCode() === 404),
             ];
+        });
+
+        RateLimiter::for('direct-booking-orders', function (Request $request): array {
+            $guest = $request->attributes->get('verified_guest');
+
+            $limits = [
+                Limit::perMinute(120)->by('direct-booking-orders:ip:'.(string) $request->ip()),
+            ];
+
+            if ($guest instanceof VerifiedGuest) {
+                $limits[] = Limit::perMinute(30)->by('direct-booking-orders:user:'.$guest->id);
+            }
+
+            return $limits;
         });
     }
 }

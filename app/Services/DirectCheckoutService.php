@@ -35,7 +35,8 @@ class DirectCheckoutService
             ];
         }
 
-        if ($this->payments->availableMethods() === []) {
+        $resumeTokenTtlDays = DirectBookingOrder::resumeTokenTtlDays();
+        if ($resumeTokenTtlDays === null || $this->payments->availableMethods() === []) {
             return [
                 'order' => null,
                 'code' => 'payments_disabled',
@@ -57,17 +58,20 @@ class DirectCheckoutService
             if (! hash_equals($existingOrder->request_fingerprint, $fingerprint)) {
                 return ['order' => null, 'code' => 'idempotency_key_reused', 'message' => 'Esta chave de tentativa já foi usada com dados diferentes. Inicie uma nova tentativa com outra chave.', 'status' => 409, 'replayed' => false];
             }
+            if (! $existingOrder->hasValidResumeToken($existingOrder->resume_token ?? '')) {
+                return $this->resumeCredentialUnavailable();
+            }
 
             return $this->continueOrder($existingOrder, replayed: true);
         }
 
-        return $this->createOrderOnce($input, $idempotencyKey, $fingerprint);
+        return $this->createOrderOnce($input, $idempotencyKey, $fingerprint, $resumeTokenTtlDays);
     }
 
     /** @param array<string, mixed> $input
      * @return array{order: DirectBookingOrder|null, code: string|null, message: string|null, status: int, replayed: bool, success: bool, resumeReference: string|null, resumeToken: string|null}
      */
-    private function createOrderOnce(array $input, string $idempotencyKey, string $fingerprint): array
+    private function createOrderOnce(array $input, string $idempotencyKey, string $fingerprint, int $resumeTokenTtlDays): array
     {
         $property = $this->terms->findApprovedListing($input['listingId']);
         $termsSnapshot = is_array($property) ? ($property['directSaleTermsSnapshot'] ?? null) : null;
@@ -135,12 +139,13 @@ class DirectCheckoutService
         }
 
         try {
-            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $idempotencyKey, $fingerprint): DirectBookingOrder {
+            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $idempotencyKey, $fingerprint, $resumeTokenTtlDays): DirectBookingOrder {
                 $order = DirectBookingOrder::create([
                     'status' => DirectBookingOrderStatus::Cotado,
                     'idempotency_key' => $idempotencyKey,
                     'public_reference' => Str::random(40),
                     'resume_token' => Str::random(64),
+                    'resume_token_expires_at' => now()->addDays($resumeTokenTtlDays),
                     'request_fingerprint' => $fingerprint,
                     'listing_id' => (string) ($property['id'] ?? $input['listingId']),
                     'stays_listing_id' => $staysListingId,
@@ -169,6 +174,10 @@ class DirectCheckoutService
         } catch (UniqueConstraintViolationException) {
             $existingOrder = DirectBookingOrder::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existingOrder !== null && hash_equals($existingOrder->request_fingerprint, $fingerprint)) {
+                if (! $existingOrder->hasValidResumeToken($existingOrder->resume_token ?? '')) {
+                    return $this->resumeCredentialUnavailable();
+                }
+
                 return $this->continueOrder($existingOrder, replayed: true);
             }
 
@@ -200,6 +209,21 @@ class DirectCheckoutService
             'success' => $ready,
             'resumeReference' => $order->public_reference,
             'resumeToken' => $order->resume_token,
+        ];
+    }
+
+    /** @return array{order: null, code: string, message: string, status: int, replayed: true, success: false, resumeReference: null, resumeToken: null} */
+    private function resumeCredentialUnavailable(): array
+    {
+        return [
+            'order' => null,
+            'code' => 'checkout_resume_unavailable',
+            'message' => 'O link de retomada deste pedido expirou ou foi revogado. Entre na sua conta com o e-mail usado na compra para continuar.',
+            'status' => 410,
+            'replayed' => true,
+            'success' => false,
+            'resumeReference' => null,
+            'resumeToken' => null,
         ];
     }
 

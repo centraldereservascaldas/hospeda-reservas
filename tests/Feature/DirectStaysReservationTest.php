@@ -7,6 +7,7 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingStaysAction;
 use App\Services\DirectSaleTermsRegistry;
 use App\Services\DirectStaysReservationService;
+use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
@@ -16,13 +17,48 @@ class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_late_reserved_response_does_not_reopen_closed_order(): void
+    {
+        foreach ([DirectBookingOrderStatus::Expirado, DirectBookingOrderStatus::Reembolsado, DirectBookingOrderStatus::Contestado, DirectBookingOrderStatus::Concluido] as $status) {
+            $order = $this->order($status);
+            $order->reservation_status = 'canceled';
+            $order->expires_at = null;
+            $order->save();
+
+            $reservation = [
+                '_id' => 'late-reservation',
+                '_idlisting' => $order->stays_listing_id,
+                '_idclient' => $order->stays_client_id,
+                'type' => 'reserved',
+                'checkInDate' => $order->check_in->toDateString(),
+                'checkOutDate' => $order->check_out->toDateString(),
+                'internalNote' => 'CRCN_DIRECT_ORDER:'.$order->id,
+                'guests' => 2,
+                'price' => ['currency' => 'BRL', '_f_expected' => 3001],
+            ];
+
+            $result = (fn () => $this->adoptReservation($order, 'late-reservation', 60, null, $reservation))
+                ->call(app(DirectStaysReservationService::class));
+
+            $this->assertFalse($result['ready']);
+            $this->assertSame($status, $order->refresh()->status);
+            $this->assertSame('canceled', $order->reservation_status);
+            $this->assertNull($order->stays_reservation_id);
+            $this->assertNull($order->expires_at);
+            $this->assertSame('stays_reserved_after_order_closed', $order->operational_events[array_key_last($order->operational_events)]['event']);
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
         config([
             'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
             'direct-booking.enabled' => true,
-            'direct-booking.reservation_hold_minutes' => 30,
+            'direct-booking.payments_enabled' => true,
+            'direct-booking.confirmation_enabled' => true,
+            'direct-booking.resume_token_ttl_days' => 30,
+            'direct-booking.reservation_hold_minutes' => 60,
             'services.stays.client_id' => 'test-client',
             'services.stays.client_secret' => 'test-secret',
             'services.stays.base_url' => 'https://stays.test/external/v1',
@@ -31,7 +67,7 @@ class DirectStaysReservationTest extends TestCase
         Http::preventStrayRequests();
     }
 
-    public function test_checkout_creates_and_persists_reserved_and_resume_contract_without_enabling_payments(): void
+    public function test_checkout_creates_and_persists_reserved_and_resume_contract_with_payment_readiness(): void
     {
         $this->approvedTerms();
         Http::fake(function (ClientRequest $request) {
@@ -58,12 +94,12 @@ class DirectStaysReservationTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('code', 'pre_reserved')
             ->assertJsonPath('order.status', 'pre_reservado')
-            ->assertJsonPath('order.reservationStatus', 'reserved')
-            ->assertJsonPath('payment.enabled', false)
-            ->assertJsonPath('payment.methods', []);
+            ->assertJsonPath('payment.enabled', true)
+            ->assertJsonPath('payment.methods', ['pix']);
 
-        $orderId = $response->json('order.id');
-        $order = DirectBookingOrder::query()->findOrFail($orderId);
+        $publicReference = $response->json('order.publicReference');
+        $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->firstOrFail();
+        $this->assertSame('reserved', $order->reservation_status);
         $this->assertSame('reservation-1', $order->stays_reservation_id);
         $this->assertSame('client-1', $order->stays_client_id);
         $this->assertNotNull($order->expires_at);
@@ -72,7 +108,7 @@ class DirectStaysReservationTest extends TestCase
         $resume = $response->json('resume');
         $this->assertSame('/checkout/'.$order->public_reference, $resume['path']);
         $this->getJson('/api/checkout/'.$resume['reference'], ['X-Checkout-Resume-Token' => $resume['token']])
-            ->assertOk()->assertJsonPath('order.status', 'pre_reservado')->assertJsonPath('payment.enabled', false);
+            ->assertOk()->assertJsonPath('order.status', 'pre_reservado')->assertJsonPath('payment.enabled', true);
         $this->getJson('/api/checkout/'.$resume['reference'].'?quoteTotal=0&acceptedTerms=false', ['X-Checkout-Resume-Token' => 'wrong-token'])
             ->assertNotFound();
     }
@@ -146,6 +182,9 @@ class DirectStaysReservationTest extends TestCase
 
     private function approvedTerms(): void
     {
+        $this->partialMock(DirectCheckoutPaymentService::class)
+            ->shouldReceive('availableMethods')
+            ->andReturn(['pix']);
         $snapshot = ['version' => 'terms-test-1', 'cancelamento' => 'Condições específicas da acomodação.'];
         $this->mock(DirectSaleTermsRegistry::class)->shouldReceive('findApprovedListing')->once()->andReturn([
             'id' => 'JQ08G', 'staysListingId' => 'JQ08G', 'maxGuests' => 5,

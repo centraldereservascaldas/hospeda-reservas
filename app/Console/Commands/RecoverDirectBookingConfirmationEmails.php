@@ -18,8 +18,12 @@ class RecoverDirectBookingConfirmationEmails extends Command
     public function handle(DirectBookingEmailDispatcher $dispatcher): int
     {
         DirectBookingEmail::query()
-            ->where('status', '!=', 'sent')
+            ->whereNotIn('status', ['sent', 'skipped'])
             ->where('created_at', '<=', now()->subHours(DirectBookingEmail::RETRY_WINDOW_HOURS))
+            ->where(function ($query): void {
+                $query->where('status', '!=', 'failed')
+                    ->orWhereNotNull('next_attempt_at');
+            })
             ->update([
                 'status' => 'failed',
                 'queued_at' => null,

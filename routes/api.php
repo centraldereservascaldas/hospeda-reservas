@@ -24,7 +24,10 @@ Route::get('/stays/status', [BookingController::class, 'staysStatus']);
 Route::middleware('supabase.guest')->group(function (): void {
     Route::post('/auth/sync-stays', [GuestReservationController::class, 'sync']);
     Route::get('/my-reservations', [GuestReservationController::class, 'index']);
-    Route::get('/my-direct-booking-orders', [GuestReservationController::class, 'directBookingOrders']);
+    Route::get('/my-direct-booking-orders', [GuestReservationController::class, 'directBookingOrders'])
+        ->middleware('throttle:direct-booking-orders');
+    Route::get('/my-direct-booking-orders/{publicReference}/checkout', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
+    Route::post('/my-direct-booking-orders/{publicReference}/checkout/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
     Route::post('/my-direct-booking-orders/{publicReference}/cancel', [GuestReservationController::class, 'requestDirectBookingCancellation'])->middleware('throttle:5,1');
     Route::post('/my-reservations/{reservationId}/cancel', [GuestReservationController::class, 'cancel']);
     Route::get('/owner/access', [OwnerAccessController::class, 'show']);
@@ -40,6 +43,7 @@ Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->gro
     Route::post('/direct-booking-orders/{publicReference}/start-manual-cancellation', [OwnerAdminController::class, 'startManualDirectBookingCancellation'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/verify-manual-stays-cancellation', [OwnerAdminController::class, 'verifyManualDirectBookingStaysCancellation'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/verify-manual-gateway-refund', [OwnerAdminController::class, 'verifyManualDirectBookingGatewayRefund'])->middleware('throttle:10,1');
+    Route::post('/direct-booking-orders/{publicReference}/revoke-resume-token', [OwnerAdminController::class, 'revokeDirectBookingResumeToken'])->middleware('throttle:10,1');
     Route::get('/stays-owners', [OwnerAdminController::class, 'staysOwners']);
     Route::post('/approve', [OwnerAdminController::class, 'approve']);
 });

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCheckoutRequest;
 use App\Http\Resources\DirectBookingOrderResource;
@@ -10,6 +11,7 @@ use App\Services\DirectCheckoutService;
 use App\Services\DirectSaleTermsRegistry;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
+use App\Services\StaysSimulator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,7 +21,7 @@ class BookingController extends Controller
         private readonly StaysExternalApiClient $stays,
     ) {}
 
-    public function price(Request $request): JsonResponse
+    public function price(Request $request, StaysSimulator $simulator): JsonResponse
     {
         $input = $request->validate([
             'listingIds' => ['nullable', 'array'], 'listingIds.*' => ['string', 'max:100'], 'listingId' => ['nullable', 'string', 'max:100'],
@@ -29,6 +31,20 @@ class BookingController extends Controller
         $id = $input['listingIds'][0] ?? $input['listingId'] ?? null;
         if (! $id) {
             return response()->json(['success' => false, 'code' => 'invalid_quote_request', 'message' => 'Informe imóvel e datas válidas para cotar.'], 400);
+        }
+        if ($simulator->enabled()) {
+            $result = $simulator->quote($id, $input['from'], $input['to'], (int) $input['guests']);
+            if ($result === null) {
+                return response()->json(['success' => false, 'message' => 'Acomodação não encontrada na base simulada.'], 404);
+            }
+            if (($result['reason'] ?? null) === 'invalid_guest_count') {
+                return response()->json(['success' => false, 'code' => 'invalid_guest_count', 'message' => 'Quantidade de hóspedes inválida para esta acomodação.'], 400);
+            }
+            if (! ($result['available'] ?? false)) {
+                return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Este período não está disponível na simulação.'], 409);
+            }
+
+            return response()->json($result['quote']);
         }
         $catalog = json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
         $property = collect($catalog)->first(fn (array $item): bool => in_array($id, [$item['id'] ?? '', $item['staysListingId'] ?? ''], true));
@@ -211,6 +227,7 @@ class BookingController extends Controller
                 'reference' => $result['resumeReference'],
                 'token' => $result['resumeToken'],
                 'path' => '/checkout/'.$result['resumeReference'],
+                'expiresAt' => $result['order']->resume_token_expires_at?->toISOString(),
             ];
         }
         $body['idempotentReplay'] = $result['replayed'];
@@ -277,7 +294,11 @@ class BookingController extends Controller
     ): JsonResponse {
         $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
         $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
-        if ($order === null || $providedToken === '' || ! hash_equals((string) $order->resume_token, $providedToken)) {
+        $guest = $request->attributes->get('verified_guest');
+        $isAuthorizedGuest = $guest instanceof VerifiedGuest
+            && hash_equals($order?->guest_email ?? '', mb_strtolower(trim($guest->email)));
+        $isValidResumeToken = $order?->hasValidResumeToken($providedToken) ?? false;
+        if ($order === null || (! $isAuthorizedGuest && ! $isValidResumeToken)) {
             return response()->json(['success' => false, 'code' => 'checkout_not_found', 'message' => 'Pedido não encontrado.'], 404)
                 ->header('Cache-Control', 'no-store, private');
         }
@@ -290,21 +311,9 @@ class BookingController extends Controller
         $pixInstructions = $attempt?->safePixInstructions($order->status->value === 'pagamento_pendente');
         $confirmation = null;
         if ($order->status->value === 'confirmado' && $order->payment_status === 'approved') {
-            $confirmationAction = $order->staysActions()
-                ->where('action_type', 'confirm_reservation')
-                ->where('status', 'succeeded')
-                ->orderByDesc('completed_at')
-                ->first();
-            $reservationSnapshot = $confirmationAction?->response_snapshot;
-            $partnerCode = is_array($reservationSnapshot) ? ($reservationSnapshot['partnerCode'] ?? null) : null;
-            $reservationCode = is_string($partnerCode) && trim($partnerCode) !== ''
-                ? trim($partnerCode)
-                : (is_array($reservationSnapshot) && is_string($reservationSnapshot['id'] ?? null)
-                    && trim($reservationSnapshot['id']) !== ''
-                    ? trim($reservationSnapshot['id'])
-                    : $confirmationAction?->external_id);
+            $confirmationAction = $order->confirmedReservationAction();
             $confirmation = [
-                'reservationCode' => is_string($reservationCode) && trim($reservationCode) !== '' ? trim($reservationCode) : null,
+                'reservationCode' => $order->confirmedReservationCode($confirmationAction),
                 'confirmedAt' => $confirmationAction?->completed_at?->toISOString(),
             ];
         }

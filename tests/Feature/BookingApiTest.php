@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
 use App\Services\DirectSaleTermsRegistry;
+use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
@@ -119,6 +120,7 @@ class BookingApiTest extends TestCase
 
     public function test_checkout_idempotency_does_not_depend_on_cache_locks(): void
     {
+        $this->mockAvailablePaymentMethods();
         config([
             'direct-booking.enabled' => true,
             'cache.default' => 'null',
@@ -137,6 +139,7 @@ class BookingApiTest extends TestCase
 
     public function test_checkout_returns_503_for_unapproved_property_terms_without_creating_an_order(): void
     {
+        $this->mockAvailablePaymentMethods();
         config([
             'direct-booking.enabled' => true,
             'services.stays.client_id' => 'client',
@@ -213,10 +216,10 @@ class BookingApiTest extends TestCase
             ->assertJsonPath('code', 'reservation_hold_unconfigured')
             ->assertJsonPath('order.status', 'cotado')
             ->assertJsonPath('idempotentReplay', false);
-        $orderId = $first->json('order.id');
-        $this->assertIsString($orderId);
+        $publicReference = $first->json('order.publicReference');
+        $this->assertIsString($publicReference);
 
-        $order = DirectBookingOrder::query()->findOrFail($orderId);
+        $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->firstOrFail();
         $this->assertModelExists($order);
         $this->assertSame($termsSnapshot, $order->accepted_terms_snapshot);
         $this->assertSame(1, DirectBookingOrder::query()->count());
@@ -224,7 +227,7 @@ class BookingApiTest extends TestCase
         $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attempt-00003'])
             ->assertServiceUnavailable()
             ->assertJsonPath('code', 'reservation_hold_unconfigured')
-            ->assertJsonPath('order.id', $orderId)
+            ->assertJsonPath('order.publicReference', $publicReference)
             ->assertJsonPath('idempotentReplay', true);
 
         $this->postJson('/api/checkout', [...$payload, 'guest' => [...$payload['guest'], 'fullName' => 'Another Guest']], ['Idempotency-Key' => 'checkout-attempt-00003'])
@@ -251,6 +254,7 @@ class BookingApiTest extends TestCase
 
     private function configureApprovedCheckoutTerms(array $snapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.']): void
     {
+        $this->mockAvailablePaymentMethods();
         config(['direct-booking.enabled' => true, 'cache.default' => 'array']);
         app('cache')->forgetDriver('array');
         $this->mock(DirectSaleTermsRegistry::class)
@@ -264,6 +268,18 @@ class BookingApiTest extends TestCase
                 'directSaleTermsVersion' => 'terms-2026-01',
                 'directSaleTermsSnapshot' => $snapshot,
             ]);
+    }
+
+    private function mockAvailablePaymentMethods(): void
+    {
+        config([
+            'direct-booking.resume_token_ttl_days' => 30,
+            'direct-booking.payments_enabled' => true,
+            'direct-booking.confirmation_enabled' => true,
+        ]);
+        $this->partialMock(DirectCheckoutPaymentService::class)
+            ->shouldReceive('availableMethods')
+            ->andReturn(['pix']);
     }
 
     /** @param list<string> $requestOrder */

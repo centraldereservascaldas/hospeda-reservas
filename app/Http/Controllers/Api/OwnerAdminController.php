@@ -11,6 +11,7 @@ use App\Models\DirectBookingEmail;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
+use App\Models\DirectBookingStaysAction;
 use App\Models\OwnerAccess;
 use App\Services\DirectStaysReservationMatcher;
 use App\Services\MoneyAmount;
@@ -76,7 +77,14 @@ class OwnerAdminController extends Controller
                         $query->where('payment_status', 'approved')
                             ->whereNotIn('status', [DirectBookingOrderStatus::Confirmado, DirectBookingOrderStatus::Concluido]);
                     })
-                    ->orWhereIn('payment_status', ['unknown', 'refunded', 'charged_back', 'attention_required'])
+                    ->orWhereIn('payment_status', ['unknown', 'charged_back', 'attention_required'])
+                    ->orWhere(function ($query): void {
+                        $query->where('payment_status', 'refunded')
+                            ->whereNotIn('status', [
+                                DirectBookingOrderStatus::ReembolsoPendente,
+                                DirectBookingOrderStatus::Reembolsado,
+                            ]);
+                    })
                     ->orWhereHas('staysActions', fn ($query) => $query->whereIn('status', ['failed', 'attention_required']))
                     ->orWhereHas('confirmationEmails', function ($query): void {
                         $query->where(fn ($query) => $query->where('status', 'failed')
@@ -105,8 +113,34 @@ class OwnerAdminController extends Controller
                     ->select(['id', 'gateway_payment_id', 'status', 'error_code', 'updated_at'])
                     ->orderByDesc('updated_at'),
             ])
-            ->orderByDesc('updated_at')
-            ->orderByDesc('id')
+            ->orderByRaw(
+                'CASE
+                    WHEN payment_status = ? AND status NOT IN (?, ?, ?, ?, ?, ?) THEN 0
+                    WHEN status = ? THEN 1
+                    WHEN status = ? OR payment_status = ? THEN 2
+                    WHEN status = ? THEN 3
+                    WHEN status = ? THEN 4
+                    WHEN status = ? THEN 5
+                    ELSE 6
+                END',
+                [
+                    'approved',
+                    DirectBookingOrderStatus::Confirmado->value,
+                    DirectBookingOrderStatus::Concluido->value,
+                    DirectBookingOrderStatus::CancelamentoSolicitado->value,
+                    DirectBookingOrderStatus::ReembolsoPendente->value,
+                    DirectBookingOrderStatus::Reembolsado->value,
+                    DirectBookingOrderStatus::Contestado->value,
+                    DirectBookingOrderStatus::ReembolsoPendente->value,
+                    DirectBookingOrderStatus::Contestado->value,
+                    'charged_back',
+                    DirectBookingOrderStatus::LiberacaoPendente->value,
+                    DirectBookingOrderStatus::AtencaoOperacional->value,
+                    DirectBookingOrderStatus::CancelamentoSolicitado->value,
+                ],
+            )
+            ->orderBy('created_at')
+            ->orderBy('id')
             ->paginate(50, ['*'], 'page', (int) ($input['page'] ?? 1));
         $unmatchedWebhookQuery = DirectBookingPaymentWebhook::query()
             ->whereIn('status', ['received', 'retrying', 'failed', 'queued', 'processing'])
@@ -201,6 +235,45 @@ class OwnerAdminController extends Controller
         ], 202)->header('Cache-Control', 'no-store, private');
     }
 
+    public function revokeDirectBookingResumeToken(Request $request, string $publicReference): JsonResponse
+    {
+        $reviewer = $request->attributes->get('verified_guest');
+        if (! $reviewer instanceof VerifiedGuest) {
+            return response()->json(['success' => false, 'code' => 'invalid_session'], 401);
+        }
+        if (! preg_match('/^[A-Za-z0-9]{40}$/', $publicReference)) {
+            return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404);
+        }
+
+        $result = DB::transaction(function () use ($publicReference, $reviewer): string {
+            $order = DirectBookingOrder::query()
+                ->where('public_reference', $publicReference)
+                ->lockForUpdate()
+                ->first();
+            if ($order === null) {
+                return 'not_found';
+            }
+            if (! $order->revokeResumeToken($reviewer->id)) {
+                return 'already_revoked';
+            }
+
+            return 'revoked';
+        });
+
+        if ($result === 'not_found') {
+            return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        return response()->json([
+            'success' => true,
+            'status' => $result,
+            'message' => $result === 'revoked'
+                ? 'A credencial de retomada do visitante foi revogada.'
+                : 'A credencial de retomada do visitante já estava revogada.',
+        ])->header('Cache-Control', 'no-store, private');
+    }
+
     public function startManualDirectBookingCancellation(Request $request, string $publicReference): JsonResponse
     {
         $reviewer = $request->attributes->get('verified_guest');
@@ -222,6 +295,15 @@ class OwnerAdminController extends Controller
             if ($order->status === DirectBookingOrderStatus::ReembolsoPendente) {
                 return 'already_started';
             }
+            $confirmationRequiresReview = DirectBookingStaysAction::query()
+                ->where('direct_booking_order_id', $order->id)
+                ->whereIn('action_type', ['register_payment', 'confirm_reservation'])
+                ->whereIn('status', ['pending', 'processing', 'unknown', 'attention_required'])
+                ->exists();
+            if ($confirmationRequiresReview) {
+                return 'confirmation_requires_review';
+            }
+
             $latePaymentAfterHold = $order->status === DirectBookingOrderStatus::AtencaoOperacional
                 && $order->payment_status === 'approved'
                 && $order->stays_reservation_id !== null
@@ -278,6 +360,10 @@ class OwnerAdminController extends Controller
         }
         if ($result === 'payment_mismatch') {
             return response()->json(['success' => false, 'code' => 'direct_booking_approved_payment_mismatch', 'message' => 'O pedido não tem uma única tentativa aprovada que corresponda ao valor, à moeda e ao ID de pagamento registrados. Nenhuma alteração foi feita.'], 409)
+                ->header('Cache-Control', 'no-store, private');
+        }
+        if ($result === 'confirmation_requires_review') {
+            return response()->json(['success' => false, 'code' => 'direct_booking_confirmation_requires_review', 'message' => 'Há uma escrita ou confirmação da Stays em andamento ou sem resultado reconciliado. Revise a fila antes de iniciar o cancelamento manual.'], 409)
                 ->header('Cache-Control', 'no-store, private');
         }
 
@@ -401,14 +487,55 @@ class OwnerAdminController extends Controller
         }
 
         try {
-            $payments->reconcileGatewayPayment($order->gateway_payment_id);
+            $reconciliation = $payments->reconcileGatewayPayment($order->gateway_payment_id);
         } catch (\Throwable) {
             return response()->json(['success' => false, 'code' => 'gateway_refund_status_unavailable', 'message' => 'Não foi possível consultar o pagamento no Mercado Pago. Nenhuma confirmação foi registrada.'], 502)
                 ->header('Cache-Control', 'no-store, private');
         }
 
         $order->refresh();
-        $refundConfirmed = $order->payment_status === 'refunded';
+        $attempt = $reconciliation['attempt'];
+        $refundConfirmed = $reconciliation['code'] === 'attention_required'
+            && $reconciliation['gatewayStatus'] === 'refunded'
+            && $attempt !== null
+            && $attempt->direct_booking_order_id === $order->id
+            && $attempt->gateway_payment_id === $order->gateway_payment_id
+            && $attempt->gateway_status === 'refunded'
+            && $order->payment_status === 'refunded';
+        if ($refundConfirmed) {
+            $gatewayPaymentId = $attempt->gateway_payment_id;
+            $refundVerificationRecorded = DB::transaction(function () use ($order, $reviewer, $gatewayPaymentId): bool {
+                $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
+                if ($lockedOrder->payment_status !== 'refunded'
+                    || $lockedOrder->gateway_payment_id !== $gatewayPaymentId) {
+                    return false;
+                }
+
+                $events = $lockedOrder->operational_events ?? [];
+                $alreadyReviewed = collect($events)->contains(fn (mixed $event): bool => is_array($event)
+                    && ($event['code'] ?? null) === 'manual_gateway_refund_verified');
+                if ($alreadyReviewed) {
+                    return true;
+                }
+
+                $events[] = [
+                    'source' => 'owner_admin_gateway_refund_verification',
+                    'event' => 'manual_gateway_refund_verified',
+                    'code' => 'manual_gateway_refund_verified',
+                    'payment_id' => $lockedOrder->gateway_payment_id,
+                    'reviewed_by' => $reviewer->id,
+                    'at' => now()->toISOString(),
+                ];
+                $lockedOrder->operational_events = $events;
+                $lockedOrder->save();
+
+                return true;
+            });
+            $order->refresh();
+            $refundConfirmed = $refundVerificationRecorded
+                && $order->payment_status === 'refunded'
+                && $order->gateway_payment_id === $gatewayPaymentId;
+        }
 
         return response()->json([
             'success' => $refundConfirmed,
@@ -417,7 +544,7 @@ class OwnerAdminController extends Controller
             'status' => $order->status->value,
             'message' => $refundConfirmed
                 ? 'O Mercado Pago confirmou o estorno.'
-                : 'O Mercado Pago ainda não informa o pagamento como estornado. Nenhuma conclusão foi registrada.',
+                : 'A resposta atual do Mercado Pago não confirma o estorno deste pedido ou exige revisão. Nenhuma confirmação foi registrada.',
         ], $refundConfirmed ? 200 : 409)->header('Cache-Control', 'no-store, private');
     }
 

@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Mail\DirectBookingConfirmed;
 use App\Models\DirectBookingEmail;
+use App\Models\DirectBookingOrder;
 use DateTimeInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -47,8 +48,23 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
         try {
             $email = DB::transaction(function (): ?DirectBookingEmail {
                 $email = DirectBookingEmail::query()->lockForUpdate()->findOrFail($this->emailId);
-                if ($email->status !== 'sent'
-                    && $email->created_at?->lte(now()->subHours(DirectBookingEmail::RETRY_WINDOW_HOURS))) {
+                if (in_array($email->status, ['sent', 'skipped'], true)) {
+                    return null;
+                }
+
+                $email->load('order');
+                if ($email->order === null || ! $this->hasConfirmedReservation($email->order)) {
+                    $email->forceFill([
+                        'status' => 'skipped',
+                        'queued_at' => null,
+                        'next_attempt_at' => null,
+                        'error_code' => 'booking_no_longer_confirmed',
+                    ])->save();
+
+                    return null;
+                }
+
+                if ($email->created_at?->lte(now()->subHours(DirectBookingEmail::RETRY_WINDOW_HOURS))) {
                     $email->forceFill([
                         'status' => 'failed',
                         'queued_at' => null,
@@ -58,13 +74,15 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
 
                     return null;
                 }
-                if ($email->status === 'sent'
-                    || ($email->status === 'failed' && $email->next_attempt_at?->isFuture())
+
+                if (
+                    ($email->status === 'failed' && $email->next_attempt_at?->isFuture())
                     || ($email->status === 'pending' && $email->next_attempt_at?->isFuture())
                     || ($email->status === 'queued'
                         && $email->queued_at?->isAfter(now()->subMinutes(DirectBookingEmail::STALE_QUEUED_MINUTES)))
                     || ($email->status === 'processing'
-                        && $email->last_attempt_at?->isAfter(now()->subMinutes(DirectBookingEmail::STALE_PROCESSING_MINUTES)))) {
+                        && $email->last_attempt_at?->isAfter(now()->subMinutes(DirectBookingEmail::STALE_PROCESSING_MINUTES)))
+                ) {
                     return null;
                 }
 
@@ -90,14 +108,23 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
                     'error_code' => null,
                 ])->save();
 
-                return $email->load('order');
+                return $email;
             });
 
             if ($email === null) {
                 return;
             }
 
-            Mail::to($email->order->guest_email)->send(new DirectBookingConfirmed($email->order));
+            $order = DirectBookingOrder::query()->find($email->direct_booking_order_id);
+            if ($order === null || ! $this->hasConfirmedReservation($order)) {
+                $this->markSkipped($email->id);
+
+                return;
+            }
+
+            Mail::to($order->guest_email)->send(
+                new DirectBookingConfirmed($order, $order->confirmedReservationCode()),
+            );
 
             DirectBookingEmail::query()
                 ->whereKey($email->id)
@@ -150,6 +177,25 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
                 'queued_at' => null,
                 'next_attempt_at' => null,
                 'error_code' => 'mail_delivery_failed',
+                'updated_at' => now(),
+            ]);
+    }
+
+    private function hasConfirmedReservation(DirectBookingOrder $order): bool
+    {
+        return $order->payment_status === 'approved' && $order->reservation_status === 'booked';
+    }
+
+    private function markSkipped(string $emailId): void
+    {
+        DirectBookingEmail::query()
+            ->whereKey($emailId)
+            ->where('status', 'processing')
+            ->update([
+                'status' => 'skipped',
+                'queued_at' => null,
+                'next_attempt_at' => null,
+                'error_code' => 'booking_no_longer_confirmed',
                 'updated_at' => now(),
             ]);
     }

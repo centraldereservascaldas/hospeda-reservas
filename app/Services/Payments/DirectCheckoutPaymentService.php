@@ -29,6 +29,8 @@ class DirectCheckoutPaymentService
         if (! config('direct-booking.enabled', false)
             || ! config('direct-booking.payments_enabled', false)
             || ! config('direct-booking.confirmation_enabled', false)
+            || ! $this->livePaymentsAreAuthorized()
+            || DirectBookingOrder::resumeTokenTtlDays() === null
             || ! $this->hasExternalMailTransport()) {
             return [];
         }
@@ -331,7 +333,7 @@ class DirectCheckoutPaymentService
         return $this->applyGatewayPayment($order, $attempt, $gatewayPayment);
     }
 
-    /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
+    /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool, gatewayStatus: string|null} */
     public function reconcileGatewayPayment(string $gatewayPaymentId): array
     {
         $gatewayPayment = $this->mercadoPago->getPayment($gatewayPaymentId);
@@ -356,7 +358,12 @@ class DirectCheckoutPaymentService
             throw new \RuntimeException('The payment notification does not match a persisted payment attempt yet.');
         }
 
-        return $this->applyGatewayPayment($attempt->order, $attempt, $gatewayPayment);
+        $result = $this->applyGatewayPayment($attempt->order, $attempt, $gatewayPayment);
+        $result['gatewayStatus'] = is_string($gatewayPayment['status'] ?? null)
+            ? $gatewayPayment['status']
+            : null;
+
+        return $result;
     }
 
     /** @return array{processed: int, attention: int} */
@@ -370,20 +377,33 @@ class DirectCheckoutPaymentService
         }
 
         $staleBefore = now()->subSeconds(max(60, (int) config('direct-booking.payment_reconciliation_interval_seconds', 300)));
+        $settledPaymentStaleBefore = now()->subSeconds(max(
+            3600,
+            (int) config('direct-booking.settled_payment_reconciliation_interval_seconds', 86400),
+        ));
         $attempts = DirectBookingPaymentAttempt::query()
-            ->whereIn('status', ['processing', 'pending', 'in_process', 'unknown'])
-            ->where(function ($query) use ($staleBefore): void {
+            ->where(function ($query) use ($staleBefore, $settledPaymentStaleBefore): void {
                 $query->where(function ($query) use ($staleBefore): void {
-                    $query->whereNotNull('gateway_payment_id')->where('updated_at', '<=', $staleBefore);
-                })->orWhere(function ($query) use ($staleBefore): void {
-                    $query->whereNull('gateway_payment_id')
-                        ->whereNotNull('gateway_submission_started_at')
-                        ->where('gateway_submission_started_at', '<=', $staleBefore);
-                })->orWhere(function ($query) use ($staleBefore): void {
-                    $query->where('status', 'processing')
-                        ->whereNull('gateway_payment_id')
-                        ->whereNull('gateway_submission_started_at')
-                        ->where('updated_at', '<=', $staleBefore);
+                    $query->whereIn('status', ['processing', 'pending', 'in_process', 'unknown'])
+                        ->where(function ($query) use ($staleBefore): void {
+                            $query->where(function ($query) use ($staleBefore): void {
+                                $query->whereNotNull('gateway_payment_id')->where('updated_at', '<=', $staleBefore);
+                            })->orWhere(function ($query) use ($staleBefore): void {
+                                $query->whereNull('gateway_payment_id')
+                                    ->whereNotNull('gateway_submission_started_at')
+                                    ->where('gateway_submission_started_at', '<=', $staleBefore);
+                            })->orWhere(function ($query) use ($staleBefore): void {
+                                $query->where('status', 'processing')
+                                    ->whereNull('gateway_payment_id')
+                                    ->whereNull('gateway_submission_started_at')
+                                    ->where('updated_at', '<=', $staleBefore);
+                            });
+                        });
+                })->orWhere(function ($query) use ($settledPaymentStaleBefore): void {
+                    $query->whereIn('status', ['approved', 'attention_required'])
+                        ->whereIn('gateway_status', ['approved', 'refunded', 'charged_back'])
+                        ->whereNotNull('gateway_payment_id')
+                        ->where('updated_at', '<=', $settledPaymentStaleBefore);
                 });
             })
             ->orderBy('updated_at')
@@ -499,7 +519,8 @@ class DirectCheckoutPaymentService
     {
         if (! config('direct-booking.enabled', false)
             || ! config('direct-booking.payments_enabled', false)
-            || ! config('direct-booking.confirmation_enabled', false)) {
+            || ! config('direct-booking.confirmation_enabled', false)
+            || ! $this->livePaymentsAreAuthorized()) {
             return false;
         }
 
@@ -522,8 +543,12 @@ class DirectCheckoutPaymentService
     private function markUnsubmittedAttemptRetryable(DirectBookingPaymentAttempt $attempt): bool
     {
         return DB::transaction(function () use ($attempt): bool {
+            $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($attempt->direct_booking_order_id);
             $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
-            $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($lockedAttempt->direct_booking_order_id);
+            if ($lockedAttempt->direct_booking_order_id !== $lockedOrder->id) {
+                return false;
+            }
+
             if ($lockedAttempt->status !== 'processing'
                 || $lockedAttempt->gateway_payment_id !== null
                 || $lockedAttempt->gateway_submission_started_at !== null
@@ -546,8 +571,12 @@ class DirectCheckoutPaymentService
     private function claimUnknownPixGatewayRetry(DirectBookingPaymentAttempt $attempt, Carbon $staleBefore): array
     {
         return DB::transaction(function () use ($attempt, $staleBefore): array {
+            $order = DirectBookingOrder::query()->lockForUpdate()->findOrFail($attempt->direct_booking_order_id);
             $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
-            $order = DirectBookingOrder::query()->lockForUpdate()->findOrFail($lockedAttempt->direct_booking_order_id);
+            if ($lockedAttempt->direct_booking_order_id !== $order->id) {
+                return ['claimed' => false, 'order' => $order, 'payload' => null];
+            }
+
             $retryPayload = $lockedAttempt->gateway_retry_payload;
             $isStale = $lockedAttempt->gateway_submission_started_at !== null
                 && $lockedAttempt->gateway_submission_started_at->lessThanOrEqualTo($staleBefore);
@@ -576,7 +605,8 @@ class DirectCheckoutPaymentService
 
             if (! config('direct-booking.enabled', false)
                 || ! config('direct-booking.payments_enabled', false)
-                || ! config('direct-booking.confirmation_enabled', false)) {
+                || ! config('direct-booking.confirmation_enabled', false)
+                || ! $this->livePaymentsAreAuthorized()) {
                 $lockedAttempt->forceFill(['status' => 'attention_required', 'error_code' => 'gateway_retry_disabled'])->save();
 
                 return ['claimed' => false, 'order' => $order, 'payload' => null];
@@ -707,7 +737,13 @@ class DirectCheckoutPaymentService
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
             if ($lockedAttempt->gateway_payment_id !== null && $lockedAttempt->gateway_payment_id !== (string) $gatewayId) {
-                if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
+                $preserveOrderStatus = in_array($lockedOrder->status, [
+                    DirectBookingOrderStatus::ReembolsoPendente,
+                    DirectBookingOrderStatus::Reembolsado,
+                    DirectBookingOrderStatus::Contestado,
+                    DirectBookingOrderStatus::Concluido,
+                ], true);
+                if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional && ! $preserveOrderStatus) {
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, [
                         'source' => 'payment_gateway',
                         'code' => 'gateway_payment_id_conflict',
@@ -721,22 +757,32 @@ class DirectCheckoutPaymentService
                             'source' => 'payment_gateway',
                             'code' => 'gateway_payment_id_conflict',
                             'payment_id' => (string) $gatewayId,
-                            'status' => DirectBookingOrderStatus::AtencaoOperacional->value,
+                            'status' => $lockedOrder->status->value,
                             'at' => now()->toISOString(),
                         ];
                         $lockedOrder->operational_events = $events;
                     }
                 }
-                $lockedOrder->payment_status = 'unknown';
+                if (! in_array($lockedOrder->payment_status, ['approved', 'refunded', 'charged_back'], true)) {
+                    $lockedOrder->payment_status = 'unknown';
+                }
                 $lockedOrder->save();
 
                 return true;
             }
 
+            $terminalGatewayStatusAdvanced = in_array($lockedAttempt->gateway_status, ['refunded', 'charged_back'], true)
+                && in_array($status, ['refunded', 'charged_back'], true)
+                && $lockedAttempt->gateway_status !== $status
+                && $gatewayUpdatedAt !== null
+                && $lockedAttempt->gateway_updated_at !== null
+                && $gatewayUpdatedAt->greaterThan($lockedAttempt->gateway_updated_at);
             if (($gatewayUpdatedAt !== null && $lockedAttempt->gateway_updated_at !== null && $gatewayUpdatedAt->lessThan($lockedAttempt->gateway_updated_at))
-                || $this->isGatewayStatusRegression($lockedAttempt->gateway_status, $status)) {
+                || ($this->isGatewayStatusRegression($lockedAttempt->gateway_status, $status) && ! $terminalGatewayStatusAdvanced)) {
                 return false;
             }
+
+            $previousGatewayStatus = $lockedAttempt->gateway_status;
 
             $lockedAttempt->forceFill([
                 'gateway_payment_id' => (string) $gatewayId,
@@ -835,9 +881,46 @@ class DirectCheckoutPaymentService
                     'payment_id' => (string) $gatewayId,
                 ]);
             } elseif ($attemptStatus === 'unknown' || ($attemptStatus === 'attention_required' && $status !== 'charged_back')) {
-                if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
+                $preserveOrderStatus = in_array($lockedOrder->status, [
+                    DirectBookingOrderStatus::ReembolsoPendente,
+                    DirectBookingOrderStatus::Reembolsado,
+                    DirectBookingOrderStatus::Contestado,
+                    DirectBookingOrderStatus::Concluido,
+                ], true);
+                if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional && ! $preserveOrderStatus) {
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'mercadopago_authoritative_lookup', 'payment_id' => (string) $gatewayId]);
+                } elseif ($preserveOrderStatus) {
+                    $events = $lockedOrder->operational_events ?? [];
+                    $lastEvent = $events[array_key_last($events)] ?? null;
+                    if (($lastEvent['event'] ?? null) !== 'payment_gateway_attention'
+                        || ($lastEvent['payment_id'] ?? null) !== (string) $gatewayId) {
+                        $events[] = [
+                            'event' => 'payment_gateway_attention',
+                            'source' => 'mercadopago_authoritative_lookup',
+                            'code' => 'gateway_status_requires_review',
+                            'payment_id' => (string) $gatewayId,
+                            'status' => $lockedOrder->status->value,
+                            'at' => now()->toISOString(),
+                        ];
+                        $lockedOrder->operational_events = $events;
+                    }
                 }
+            }
+
+            if ($terminalGatewayStatusAdvanced) {
+                $events = $lockedOrder->operational_events ?? [];
+                $events[] = [
+                    'source' => 'mercadopago_authoritative_lookup',
+                    'event' => 'gateway_terminal_status_updated',
+                    'code' => 'gateway_terminal_status_updated',
+                    'previous_gateway_status' => $previousGatewayStatus,
+                    'gateway_status' => $status,
+                    'payment_id' => (string) $gatewayId,
+                    'gateway_updated_at' => $gatewayUpdatedAt->toISOString(),
+                    'status' => $lockedOrder->status->value,
+                    'at' => now()->toISOString(),
+                ];
+                $lockedOrder->operational_events = $events;
             }
 
             $lockedOrder->save();
@@ -928,23 +1011,39 @@ class DirectCheckoutPaymentService
         DB::transaction(function () use ($order, $code): void {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
-                if (in_array($lockedOrder->status, [DirectBookingOrderStatus::Concluido, DirectBookingOrderStatus::Reembolsado], true)) {
+                if (in_array($lockedOrder->status, [
+                    DirectBookingOrderStatus::ReembolsoPendente,
+                    DirectBookingOrderStatus::Reembolsado,
+                    DirectBookingOrderStatus::Contestado,
+                    DirectBookingOrderStatus::Concluido,
+                ], true)) {
                     $events = $lockedOrder->operational_events ?? [];
-                    $events[] = [
-                        'event' => 'payment_gateway_attention',
-                        'source' => 'payment_gateway',
-                        'code' => $code,
-                        'status' => $lockedOrder->status->value,
-                        'at' => now()->toISOString(),
-                    ];
-                    $lockedOrder->operational_events = $events;
+                    $lastEvent = $events[array_key_last($events)] ?? null;
+                    if (($lastEvent['event'] ?? null) !== 'payment_gateway_attention'
+                        || ($lastEvent['code'] ?? null) !== $code) {
+                        $events[] = [
+                            'event' => 'payment_gateway_attention',
+                            'source' => 'payment_gateway',
+                            'code' => $code,
+                            'status' => $lockedOrder->status->value,
+                            'at' => now()->toISOString(),
+                        ];
+                        $lockedOrder->operational_events = $events;
+                    }
                 } else {
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'payment_gateway', 'code' => $code]);
                 }
             }
-            $lockedOrder->payment_status = 'unknown';
+            if (! in_array($lockedOrder->payment_status, ['approved', 'refunded', 'charged_back'], true)) {
+                $lockedOrder->payment_status = 'unknown';
+            }
             $lockedOrder->save();
         });
+    }
+
+    private function livePaymentsAreAuthorized(): bool
+    {
+        return ! app()->isProduction() || (bool) config('direct-booking.live_payments_enabled', false);
     }
 
     private function parseDate(mixed $value): ?Carbon

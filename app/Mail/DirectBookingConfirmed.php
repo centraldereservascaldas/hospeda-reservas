@@ -14,7 +14,10 @@ class DirectBookingConfirmed extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public readonly DirectBookingOrder $order) {}
+    public function __construct(
+        public readonly DirectBookingOrder $order,
+        public readonly ?string $reservationCode = null,
+    ) {}
 
     /**
      * Get the message envelope.
@@ -33,7 +36,10 @@ class DirectBookingConfirmed extends Mailable
     {
         return new Content(
             markdown: 'emails.direct-booking-confirmed',
-            with: ['order' => $this->order],
+            with: [
+                'order' => $this->order,
+                'reservationCode' => $this->reservationCode,
+            ],
         );
     }
 

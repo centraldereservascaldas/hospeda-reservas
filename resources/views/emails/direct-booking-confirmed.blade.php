@@ -8,8 +8,12 @@ Sua reserva foi confirmada após a aprovação do pagamento e a confirmação da
 **Período:** {{ $order->check_in->format('d/m/Y') }} a {{ $order->check_out->format('d/m/Y') }}
 **Hóspedes:** {{ array_sum($order->guests ?? []) }}
 **Valor registrado:** {{ $order->currency }} {{ number_format((float) $order->quote_total, 2, ',', '.') }}
+**Referência do pedido:** {{ $order->public_reference }}
+@if ($reservationCode)
+**Localizador da reserva:** {{ $reservationCode }}
+@endif
 
-Nossa equipe acompanha a reserva e pode orientar você sobre os próximos passos para o check-in do condomínio.
+Nossa equipe acompanha a reserva e pode orientar você sobre os próximos passos para o check-in do condomínio. Se precisar de ajuda, escreva para [centraldereservascn@gmail.com](mailto:centraldereservascn@gmail.com) e informe a referência do pedido.
 
 Atenciosamente,
 {{ config('app.name') }}

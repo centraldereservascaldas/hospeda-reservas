@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Data\VerifiedGuest;
 use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\DirectBookingOrderResource;
+use App\Http\Resources\DirectBookingOrderListResource;
 use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
 use App\Services\GuestStaysSyncService;
@@ -45,10 +45,7 @@ class GuestReservationController extends Controller
             ->where('guest_email', mb_strtolower(trim($guest->email)))
             ->latest('created_at')
             ->get();
-        $data = $orders->map(fn (DirectBookingOrder $order): array => [
-            ...(new DirectBookingOrderResource($order))->resolve($request),
-            'resumeToken' => $order->resume_token,
-        ]);
+        $data = $orders->map(fn (DirectBookingOrder $order): array => (new DirectBookingOrderListResource($order))->resolve($request));
 
         return response()->json([
             'success' => true,

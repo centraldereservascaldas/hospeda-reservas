@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCheckoutPaymentRequest;
 use App\Models\DirectBookingOrder;
@@ -14,7 +15,11 @@ class CheckoutPaymentController extends Controller
     {
         $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
         $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
-        if ($order === null || $providedToken === '' || ! hash_equals((string) $order->resume_token, $providedToken)) {
+        $guest = $request->attributes->get('verified_guest');
+        $isAuthorizedGuest = $guest instanceof VerifiedGuest
+            && hash_equals($order?->guest_email ?? '', mb_strtolower(trim($guest->email)));
+        $isValidResumeToken = $order?->hasValidResumeToken($providedToken) ?? false;
+        if ($order === null || (! $isAuthorizedGuest && ! $isValidResumeToken)) {
             return response()->json(['success' => false, 'code' => 'checkout_not_found', 'message' => 'Pedido não encontrado.'], 404)
                 ->header('Cache-Control', 'no-store, private');
         }
