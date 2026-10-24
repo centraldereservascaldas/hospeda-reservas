@@ -4,6 +4,8 @@ import { JSDOM } from 'jsdom';
 import { crcnBackendApi } from '../src/services/crcnBackendApi.ts';
 import { isProperty, isReservation } from '../src/utils/apiValidation.ts';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
+import { saveMeasurementConsent } from '../src/utils/measurementConsent.ts';
+import { updateMeasurementAttribution } from '../src/utils/measurementAttribution.ts';
 
 const reservation = {
   id: 'reservation-1',
@@ -473,6 +475,71 @@ test('checkout validates the created order and resumes it with a protected token
     );
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test('checkout sends only consented first and last touch attribution', async () => {
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
+  const originalGlobals = {
+    window: globalThis.window,
+    document: globalThis.document,
+    fetch: globalThis.fetch,
+  };
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document });
+  const capturedRequest: { body?: Record<string, unknown> } = {};
+
+  try {
+    const consent = { analytics: true, advertising: false };
+    const capturedAt = Date.now();
+    updateMeasurementAttribution(
+      consent,
+      '?utm_source=google&utm_campaign=summer&gclid=must_not_send&email=guest%40example.test&utm_term=123456789',
+      capturedAt,
+    );
+    saveMeasurementConsent(consent);
+    globalThis.fetch = async (_input, init) => {
+      capturedRequest.body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          success: true,
+          code: 'pre_reserved',
+          order: directCheckoutOrder,
+          resume: directCheckoutResume,
+          payment: { enabled: false, methods: [], publicKey: null },
+          idempotentReplay: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+
+    assert.equal((await crcnBackendApi.createCheckout(directCheckoutRequest))?.success, true);
+    assert.deepEqual(capturedRequest.body?.marketingAttribution, {
+      firstTouch: {
+        capturedAt,
+        values: { utm_source: 'google', utm_campaign: 'summer' },
+      },
+      lastTouch: {
+        capturedAt,
+        values: { utm_source: 'google', utm_campaign: 'summer' },
+      },
+    });
+    const serializedRequest = JSON.stringify(capturedRequest.body);
+    assert.equal('version' in (capturedRequest.body?.marketingAttribution as object), false);
+    assert.equal('expiresAt' in (capturedRequest.body?.marketingAttribution as object), false);
+    assert.equal(serializedRequest.includes('must_not_send'), false);
+    assert.equal(serializedRequest.includes('123456789'), false);
+    assert.equal(serializedRequest.includes('guest@example.test'), false);
+
+    saveMeasurementConsent({ analytics: false, advertising: false });
+    await crcnBackendApi.createCheckout(directCheckoutRequest);
+    assert.equal('marketingAttribution' in (capturedRequest.body ?? {}), false);
+  } finally {
+    globalThis.fetch = originalGlobals.fetch;
+    Object.assign(globalThis, {
+      window: originalGlobals.window,
+      document: originalGlobals.document,
+    });
+    dom.window.close();
   }
 });
 

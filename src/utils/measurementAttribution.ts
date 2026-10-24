@@ -31,6 +31,7 @@ const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_SEARCH_LENGTH = 4096;
 const MAX_VALUE_LENGTH = 100;
 const SAFE_VALUE_PATTERN = /^[A-Za-z0-9._~-]+$/;
+const NUMERIC_IDENTIFIER_PATTERN = /^\d{7,}$/;
 const ANALYTICS_PARAMETERS = new Set<AttributionParameter>([
   'utm_source',
   'utm_medium',
@@ -64,7 +65,8 @@ function sanitizeValues(value: unknown): Partial<Record<AttributionParameter, st
       ALLOWED_PARAMETERS.has(key as AttributionParameter) &&
       typeof candidate === 'string' &&
       candidate.length <= MAX_VALUE_LENGTH &&
-      SAFE_VALUE_PATTERN.test(candidate)
+      SAFE_VALUE_PATTERN.test(candidate) &&
+      !NUMERIC_IDENTIFIER_PATTERN.test(candidate)
     ) {
       sanitized[key as AttributionParameter] = candidate;
     }
@@ -189,7 +191,8 @@ function collectAllowedParameters(
     if (
       candidate !== undefined &&
       candidate.length <= MAX_VALUE_LENGTH &&
-      SAFE_VALUE_PATTERN.test(candidate)
+      SAFE_VALUE_PATTERN.test(candidate) &&
+      !NUMERIC_IDENTIFIER_PATTERN.test(candidate)
     ) {
       collected[key] = candidate;
     }

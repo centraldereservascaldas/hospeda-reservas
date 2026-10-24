@@ -21,6 +21,11 @@ import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
 import { saveCheckoutResumeToken } from '../utils/checkoutResumeStorage';
 import { matchesPropertyDestination } from '../utils/propertySearchFilters';
 import { apiFetch } from './apiFetch';
+import {
+  readMeasurementAttribution,
+  type AttributionTouch,
+} from '../utils/measurementAttribution';
+import { readMeasurementConsent } from '../utils/measurementConsent';
 
 const API_REQUEST_TIMEOUT_MS = 20_000;
 const STAYS_SEARCH_PAGE_SIZE = 20;
@@ -86,6 +91,26 @@ export interface CheckoutRequestPayload {
   acceptedTermsVersion: string;
   acceptedTerms: true;
   idempotencyKey: string;
+}
+
+interface CheckoutMarketingAttribution {
+  firstTouch: AttributionTouch;
+  lastTouch: AttributionTouch;
+}
+
+function getCheckoutMarketingAttribution(): CheckoutMarketingAttribution | undefined {
+  if (typeof window === 'undefined') return undefined;
+
+  const consent = readMeasurementConsent();
+  if (!consent) return undefined;
+
+  const attribution = readMeasurementAttribution(consent);
+  if (!attribution) return undefined;
+
+  return {
+    firstTouch: attribution.firstTouch,
+    lastTouch: attribution.lastTouch,
+  };
 }
 
 export interface DirectBookingOrderSummary {
@@ -915,6 +940,7 @@ class CrcnBackendApiService {
 
   public async createCheckout(payload: CheckoutRequestPayload): Promise<CheckoutResponse | null> {
     try {
+      const marketingAttribution = getCheckoutMarketingAttribution();
       const res = await apiFetch('/api/checkout', {
         method: 'POST',
         headers: {
@@ -930,6 +956,7 @@ class CrcnBackendApiService {
           guest: payload.guest,
           acceptedTermsVersion: payload.acceptedTermsVersion,
           acceptedTerms: payload.acceptedTerms,
+          ...(marketingAttribution ? { marketingAttribution } : {}),
         }),
       });
       const json: unknown = await res.json();
