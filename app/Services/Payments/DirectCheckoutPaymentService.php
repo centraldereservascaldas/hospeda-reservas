@@ -310,7 +310,7 @@ class DirectCheckoutPaymentService
                 $additionalData,
             );
             $gatewayId = $createdPayment['id'] ?? null;
-            if (! is_string($gatewayId) && ! is_int($gatewayId)) {
+            if (! $this->isValidGatewayPaymentId($gatewayId)) {
                 throw new \RuntimeException('Mercado Pago did not return a payment identifier.');
             }
             if (! $this->persistGatewayPaymentId($attempt, (string) $gatewayId)) {
@@ -323,7 +323,7 @@ class DirectCheckoutPaymentService
             $attempt->forceFill([
                 'status' => 'unknown',
                 'error_code' => 'gateway_result_unknown',
-                'gateway_payment_id' => isset($gatewayId) && (is_string($gatewayId) || is_int($gatewayId)) ? (string) $gatewayId : null,
+                'gateway_payment_id' => isset($gatewayId) && $this->isValidGatewayPaymentId($gatewayId) ? (string) $gatewayId : null,
             ])->save();
             $this->markOrderForAttention($order, 'gateway_result_unknown');
 
@@ -668,8 +668,8 @@ class DirectCheckoutPaymentService
                 $retryPayload['additionalData'],
             );
             $gatewayId = $createdPayment['id'] ?? null;
-            if (! is_string($gatewayId) && ! is_int($gatewayId)) {
-                return ['status' => 503];
+            if (! $this->isValidGatewayPaymentId($gatewayId)) {
+                throw new \RuntimeException('Mercado Pago did not return a valid payment identifier.');
             }
 
             if (! $this->persistGatewayPaymentId($attempt, (string) $gatewayId)) {
@@ -700,7 +700,7 @@ class DirectCheckoutPaymentService
         $gatewayAmountCents = MoneyAmount::toCents($amount);
         $orderAmountCents = MoneyAmount::toCents($order->quote_total);
         $attemptAmountCents = MoneyAmount::toCents($attempt->amount);
-        if ((! is_string($gatewayId) && ! is_int($gatewayId))
+        if (! $this->isValidGatewayPaymentId($gatewayId)
             || ! is_string($status)
             || $gatewayAmountCents === null
             || $orderAmountCents === null
@@ -1044,6 +1044,12 @@ class DirectCheckoutPaymentService
     private function livePaymentsAreAuthorized(): bool
     {
         return ! app()->isProduction() || (bool) config('direct-booking.live_payments_enabled', false);
+    }
+
+    private function isValidGatewayPaymentId(mixed $gatewayId): bool
+    {
+        return (is_int($gatewayId) && $gatewayId > 0)
+            || (is_string($gatewayId) && preg_match('/^[0-9]*[1-9][0-9]*$/D', $gatewayId) === 1);
     }
 
     private function parseDate(mixed $value): ?Carbon
