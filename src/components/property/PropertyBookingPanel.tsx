@@ -1,4 +1,5 @@
 import type { RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Calendar as CalendarIcon,
   ChevronDown,
@@ -40,6 +41,7 @@ interface PropertyBookingPanelProps {
   selectedRangeAvailable: boolean;
   pricing: ReturnType<typeof calculatePropertyPricing>;
   onProceedBooking: () => void;
+  suppressMobileBookingAction: boolean;
 }
 
 function formatDateLabel(value: string): string {
@@ -79,6 +81,7 @@ export function PropertyBookingPanel({
   selectedRangeAvailable,
   pricing,
   onProceedBooking,
+  suppressMobileBookingAction,
 }: PropertyBookingPanelProps) {
   const hasConfirmedLivePrice = isConfirmedPropertyQuote(staysPrice);
   const canProceedWithBooking = Boolean(
@@ -279,11 +282,30 @@ export function PropertyBookingPanel({
       <button
         onClick={onProceedBooking}
         disabled={!canProceedWithBooking}
-        className="w-full py-4 [@media(max-height:400px)]:py-3 rounded-2xl bg-gradient-to-r from-orange-700 via-amber-700 to-orange-800 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 border border-white/30 backdrop-blur-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:from-neutral-200 disabled:via-neutral-200 disabled:to-neutral-200 disabled:text-neutral-700 disabled:shadow-none disabled:border-neutral-300 disabled:hover:scale-100 disabled:cursor-not-allowed"
+        className="hidden w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-white/30 bg-gradient-to-r from-orange-700 via-amber-700 to-orange-800 py-4 text-sm font-extrabold text-white shadow-lg shadow-orange-500/35 backdrop-blur-md transition-all hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:border-neutral-300 disabled:from-neutral-200 disabled:via-neutral-200 disabled:to-neutral-200 disabled:text-neutral-700 disabled:shadow-none disabled:hover:scale-100 sm:flex [@media(max-height:400px)]:py-3"
       >
         <span>{bookingButtonLabel}</span>
         <ChevronRight className="h-4 w-4" />
       </button>
+      {!suppressMobileBookingAction && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              id="property-detail-mobile-booking-action"
+              data-dialog-focus-portal
+              className="fixed inset-x-0 bottom-0 z-[60] border-t border-neutral-200 bg-white/95 px-3 pt-3 pb-[calc(0.75rem_+_env(safe-area-inset-bottom,0px))] shadow-[0_-8px_24px_rgba(0,0,0,0.12)] backdrop-blur-xl sm:hidden"
+            >
+              <button
+                type="button"
+                onClick={onProceedBooking}
+                disabled={!canProceedWithBooking}
+                className="mx-auto flex min-h-12 w-full max-w-5xl items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-orange-700 via-amber-700 to-orange-800 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-orange-500/35 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:from-neutral-200 disabled:via-neutral-200 disabled:to-neutral-200 disabled:text-neutral-700 disabled:shadow-none"
+              >
+                {bookingButtonLabel}
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

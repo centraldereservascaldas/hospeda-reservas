@@ -296,6 +296,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const guestLimit = Math.max(1, Number(property.maxGuests) || 1);
   const selectedRangeAvailable =
     calendarAvailable && isCalendarRangeAvailable(calendarDays, checkIn, checkOut);
+  const showMobileBookingAction = !isDatePickerOpen && !isGuestSelectorOpen && !showAllPhotos;
   const chooseDate = (date: Date) => {
     const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     if (activeDateField === 'checkIn') {
@@ -416,15 +417,20 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       role={isDialog ? 'dialog' : 'region'}
       aria-modal={isDialog ? 'true' : undefined}
       aria-labelledby="property-detail-title"
+      aria-owns={
+        isDialog && showMobileBookingAction ? 'property-detail-mobile-booking-action' : undefined
+      }
       className={
         isDialog
           ? 'fixed inset-0 z-50 overflow-y-auto bg-white/25 backdrop-blur-xl animate-in fade-in duration-200'
-          : 'mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8'
+          : `mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 ${showMobileBookingAction ? 'pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-6' : ''}`
       }
     >
       <div
         className={
-          isDialog ? 'min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start' : ''
+          isDialog
+            ? `min-h-screen py-6 sm:py-10 px-2 sm:px-6 flex justify-center items-start ${showMobileBookingAction ? 'pb-[calc(7rem_+_env(safe-area-inset-bottom,0px))] sm:pb-10' : ''}`
+            : ''
         }
       >
         <div
@@ -519,6 +525,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                     visibleFees,
                   }}
                   onProceedBooking={handleProceedBooking}
+                  suppressMobileBookingAction={!showMobileBookingAction}
                 />
               </div>
 

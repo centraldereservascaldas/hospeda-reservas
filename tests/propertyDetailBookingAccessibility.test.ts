@@ -116,7 +116,7 @@ test('detail does not imply dates are selected or request a quote before the gue
     return null;
   };
   try {
-    const { getByRole } = render(
+    const { container, getByRole } = render(
       React.createElement(PropertyDetailModal, {
         property: STAYS_NET_APARTMENTS[0]!,
         initialCheckIn: '',
@@ -131,8 +131,17 @@ test('detail does not imply dates are selected or request a quote before the gue
     );
 
     await waitFor(() => {
-      assert.ok(getByRole('button', { name: /Confirme as datas/ }));
+      const mobileBookingButton = document.querySelector<HTMLButtonElement>(
+        '#property-detail-mobile-booking-action > button',
+      );
+      assert.equal(mobileBookingButton?.textContent, 'Confirme as datas');
+      assert.equal(mobileBookingButton?.disabled, true);
     });
+    assert.equal(
+      container.querySelector<HTMLButtonElement>('.property-booking-panel > button:last-child')
+        ?.textContent,
+      'Confirme as datas',
+    );
     assert.ok(getByRole('button', { name: /Check-in\s*Selecionar/i }));
     assert.ok(getByRole('button', { name: /Check-out\s*Selecionar/i }));
     assert.equal(quoteRequests, 0);
@@ -798,10 +807,43 @@ test('retries a failed price quote when availability is confirmed', async () => 
     await waitFor(() => {
       assert.equal(quoteAttempts, 2);
       assert.equal(
-        (getByRole('button', { name: 'Continuar para reserva' }) as HTMLButtonElement).disabled,
+        document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')
+          ?.disabled,
         false,
       );
     });
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
+});
+
+test('mobile booking action stays visible and disabled while availability is loading', () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalCalculatePrice = crcnBackendApi.calculatePrice;
+  crcnBackendApi.getAccommodationCalendar = async () => await new Promise(() => {});
+  crcnBackendApi.calculatePrice = async () => null;
+
+  try {
+    render(
+      React.createElement(PropertyDetailModal, {
+        property: STAYS_NET_APARTMENTS[0]!,
+        initialCheckIn: '2026-11-11',
+        initialCheckOut: '2026-11-13',
+        initialGuests: { adults: 2, children: 0, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking: () => {},
+      }),
+    );
+
+    const mobileBookingButton = document.querySelector<HTMLButtonElement>(
+      '#property-detail-mobile-booking-action > button',
+    );
+    assert.equal(mobileBookingButton?.textContent, 'Consultando disponibilidade...');
+    assert.equal(mobileBookingButton?.disabled, true);
   } finally {
     crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
     crcnBackendApi.calculatePrice = originalCalculatePrice;
@@ -843,8 +885,8 @@ test('booking panel lets guests retry failed availability without opening the ca
     );
     assert.match(retryButton.className, /min-h-11/);
     assert.equal(
-      (getByRole('button', { name: 'Disponibilidade não confirmada' }) as HTMLButtonElement)
-        .disabled,
+      document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')
+        ?.disabled,
       true,
     );
 
@@ -874,7 +916,7 @@ test('booking callback requires live price and an available selected range', asy
   crcnBackendApi.calculatePrice = async () => liveQuote;
 
   try {
-    const { getByRole, getByText } = render(
+    const { container, getByText } = render(
       React.createElement(PropertyDetailModal, {
         property,
         initialCheckIn: '2026-11-11',
@@ -890,13 +932,25 @@ test('booking callback requires live price and an available selected range', asy
 
     await waitFor(() => {
       assert.equal(
-        (getByRole('button', { name: 'Continuar para reserva' }) as HTMLButtonElement).disabled,
-        false,
+        document.querySelector('#property-detail-mobile-booking-action > button')?.textContent,
+        'Continuar para reserva',
       );
     });
     assert.ok(getByText('Total da estadia'));
 
-    const continueButton = getByRole('button', { name: 'Continuar para reserva' });
+    const continueButton = document.querySelector<HTMLButtonElement>(
+      '#property-detail-mobile-booking-action > button',
+    );
+    const inlineContinueButton = container.querySelector<HTMLButtonElement>(
+      '.property-booking-panel > button:last-child',
+    );
+    assert.ok(continueButton);
+    assert.ok(inlineContinueButton);
+    assert.equal(continueButton.disabled, false);
+    assert.equal(inlineContinueButton.disabled, false);
+    assert.match(inlineContinueButton.className, /hidden/);
+    assert.match(inlineContinueButton.className, /sm:flex/);
+    assert.match(continueButton.parentElement?.className || '', /sm:hidden/);
     assert.ok(
       getByText('Total da estadia').compareDocumentPosition(continueButton) &
         Node.DOCUMENT_POSITION_FOLLOWING,
@@ -933,14 +987,21 @@ test('booking callback requires live price and an available selected range', asy
       }),
     );
     await waitFor(() => {
-      const button = failedQuote.getByRole('button', {
-        name: 'Cotação indisponível',
-      }) as HTMLButtonElement;
-      assert.equal(button.disabled, true);
+      const button = failedQuote.container.querySelector<HTMLButtonElement>(
+        '.property-booking-panel > button:last-child',
+      );
+      assert.equal(
+        document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')
+          ?.disabled,
+        true,
+      );
+      assert.equal(button?.disabled, true);
     });
     assert.equal(failedQuote.queryByText('Estimativa'), null);
     assert.ok(failedQuote.getByRole('button', { name: 'Tentar cotação novamente' }));
-    fireEvent.click(failedQuote.getByRole('button', { name: 'Cotação indisponível' }));
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')!,
+    );
     assert.equal(submittedBookings.length, 1);
 
     crcnBackendApi.getAccommodationCalendar = async () => [];
@@ -963,15 +1024,19 @@ test('booking callback requires live price and an available selected range', asy
     );
     await waitFor(() => {
       assert.equal(
-        (
-          unavailable.getByRole('button', {
-            name: 'Disponibilidade não confirmada',
-          }) as HTMLButtonElement
-        ).disabled,
+        document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')
+          ?.disabled,
         true,
       );
     });
-    fireEvent.click(unavailable.getByRole('button', { name: 'Disponibilidade não confirmada' }));
+    assert.equal(
+      document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')
+        ?.textContent,
+      'Disponibilidade não confirmada',
+    );
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')!,
+    );
     assert.equal(submittedBookings.length, 1);
     unavailable.unmount();
   } finally {
@@ -998,7 +1063,7 @@ test('simulated quote is visible but cannot start a reservation', async () => {
   });
 
   try {
-    const { getByRole, getByText } = render(
+    const { getByText } = render(
       React.createElement(PropertyDetailModal, {
         property,
         initialCheckIn: '2026-11-11',
@@ -1012,10 +1077,13 @@ test('simulated quote is visible but cannot start a reservation', async () => {
       }),
     );
 
-    let disabledButton: HTMLElement;
+    let disabledButton: HTMLButtonElement;
     await waitFor(() => {
-      disabledButton = getByRole('button', { name: 'Simulação: reserva desativada' });
-      assert.equal((disabledButton as HTMLButtonElement).disabled, true);
+      disabledButton = document.querySelector<HTMLButtonElement>(
+        '#property-detail-mobile-booking-action > button',
+      )!;
+      assert.equal(disabledButton.textContent, 'Simulação: reserva desativada');
+      assert.equal(disabledButton.disabled, true);
     });
     assert.ok(
       getByText(
@@ -1474,10 +1542,12 @@ test('guest selector enforces occupancy limits and returns focus to its opener',
       }),
     );
     const guestTrigger = getByRole('button', { name: /Hóspedes/ });
+    assert.ok(document.getElementById('property-detail-mobile-booking-action'));
     guestTrigger.focus();
     fireEvent.click(guestTrigger);
 
     const guestDialog = getByRole('dialog', { name: 'Hóspedes' });
+    assert.equal(document.getElementById('property-detail-mobile-booking-action'), null);
     assert.match(guestDialog.className, /flex flex-col/);
     assert.match(
       guestDialog.querySelector('.property-guest-selector-list')?.className || '',
@@ -1505,6 +1575,7 @@ test('guest selector enforces occupancy limits and returns focus to its opener',
       key: 'Escape',
     });
     assert.equal(queryByRole('dialog', { name: 'Hóspedes' }), null);
+    assert.ok(document.getElementById('property-detail-mobile-booking-action'));
     assert.equal(document.activeElement, guestTrigger);
     assert.equal(
       container.querySelector('[aria-labelledby="property-detail-title"]')?.getAttribute('role'),
