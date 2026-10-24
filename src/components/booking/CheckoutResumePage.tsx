@@ -9,6 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { emitConfirmedPurchase } from '../../utils/measurementEvents';
 import type {
   CheckoutAccessCredentials,
   CheckoutResumeResponse,
@@ -301,6 +302,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
       }
 
       setResumeState({ kind: 'ready', data: result.data, credentials: resolvedCredentials });
+      void emitConfirmedPurchase(result.data.order);
       if (
         refreshableStatuses.has(result.data.order.status) ||
         (result.data.order.status === 'expirado' &&

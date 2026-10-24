@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { afterEach } from 'node:test';
 import { JSDOM } from 'jsdom';
+import type { DirectBookingOrderSummary } from '../src/services/crcnBackendApi';
 
 const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
   url: 'http://localhost/',
@@ -19,6 +20,7 @@ const { MeasurementPreferences } = await import('../src/components/MeasurementPr
 
 const { loadGtmIfConsented, readMeasurementConsent, saveMeasurementConsent } =
   await import('../src/utils/measurementConsent.ts');
+const { emitConfirmedPurchase } = await import('../src/utils/measurementEvents.ts');
 
 afterEach(() => {
   cleanup();
@@ -67,4 +69,75 @@ test('preference UI refuses by default and can be reopened after saving', () => 
   fireEvent.click(view.getByRole('button', { name: 'Salvar escolhas' }));
   assert.deepEqual(readMeasurementConsent(), { analytics: true, advertising: true });
   assert.equal(document.activeElement, view.getByRole('button', { name: 'Preferências de medição' }));
+});
+
+test('purchase requires consent, a loaded tag, confirmed payment and a valid BRL total, and emits once', async () => {
+  const order: DirectBookingOrderSummary = {
+    status: 'confirmado',
+    publicReference: 'B'.repeat(40),
+    reservationConfirmed: true,
+    listingId: 'JQ08G',
+    guestName: 'Never sent',
+    from: '2026-11-10',
+    to: '2026-11-12',
+    quoteTotal: '850.00',
+    currency: 'BRL',
+    paymentStatus: 'approved',
+    expiresAt: null,
+    createdAt: null,
+  };
+  assert.equal(await emitConfirmedPurchase(order), false);
+  saveMeasurementConsent({ analytics: true, advertising: true });
+  assert.equal(await emitConfirmedPurchase(order), false);
+  loadGtmIfConsented({ analytics: true, advertising: true }, 'GTM-ABC123');
+  assert.equal(await emitConfirmedPurchase({ ...order, status: 'pagamento_pendente' }), false);
+  assert.equal(await emitConfirmedPurchase({ ...order, paymentStatus: 'pending' }), false);
+  assert.equal(await emitConfirmedPurchase({ ...order, quoteTotal: 'NaN' }), false);
+  assert.equal(await emitConfirmedPurchase(order), true);
+  assert.equal(await emitConfirmedPurchase(order), false);
+  const events = (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
+  const purchases = events.filter((event) => event.event === 'purchase');
+  assert.equal(purchases.length, 1);
+  assert.match(String(purchases[0]?.transaction_id), /^crcn_[a-f0-9]{64}$/);
+  assert.notEqual(purchases[0]?.transaction_id, order.publicReference);
+  assert.deepEqual({ ...purchases[0], transaction_id: undefined }, {
+    event: 'purchase',
+    transaction_id: undefined,
+    currency: 'BRL',
+    value: 850,
+    items: [{ item_id: 'JQ08G' }],
+  });
+});
+
+test('purchase fails closed when cryptographic hashing is unavailable or rejects', async () => {
+  const order: DirectBookingOrderSummary = {
+    status: 'confirmado',
+    publicReference: 'C'.repeat(40),
+    reservationConfirmed: true,
+    listingId: 'JQ08G',
+    guestName: 'Never sent',
+    from: '2026-11-10',
+    to: '2026-11-12',
+    quoteTotal: '850.00',
+    currency: 'BRL',
+    paymentStatus: 'approved',
+    expiresAt: null,
+    createdAt: null,
+  };
+  saveMeasurementConsent({ analytics: true, advertising: true });
+  loadGtmIfConsented({ analytics: true, advertising: true }, 'GTM-ABC123');
+  const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  try {
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: undefined });
+    assert.equal(await emitConfirmedPurchase(order), false);
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: { subtle: { digest: async () => { throw new Error('unavailable'); } } },
+    });
+    assert.equal(await emitConfirmedPurchase(order), false);
+    const events = (window as Window & { dataLayer?: Array<Record<string, unknown>> }).dataLayer ?? [];
+    assert.equal(events.filter((event) => event.event === 'purchase').length, 0);
+  } finally {
+    if (originalCrypto) Object.defineProperty(globalThis, 'crypto', originalCrypto);
+  }
 });
