@@ -78,8 +78,6 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
                 if (
                     ($email->status === 'failed' && $email->next_attempt_at?->isFuture())
                     || ($email->status === 'pending' && $email->next_attempt_at?->isFuture())
-                    || ($email->status === 'queued'
-                        && $email->queued_at?->isAfter(now()->subMinutes(DirectBookingEmail::STALE_QUEUED_MINUTES)))
                     || ($email->status === 'processing'
                         && $email->last_attempt_at?->isAfter(now()->subMinutes(DirectBookingEmail::STALE_PROCESSING_MINUTES)))
                 ) {
