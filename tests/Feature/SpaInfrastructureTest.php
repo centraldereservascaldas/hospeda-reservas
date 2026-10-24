@@ -30,6 +30,18 @@ class SpaInfrastructureTest extends TestCase
         $this->getJson('/api/health')->assertOk()->assertJsonPath('success', true);
     }
 
+    public function test_readiness_requires_database_while_liveness_does_not(): void
+    {
+        $this->getJson('/api/ready')->assertOk()->assertJsonPath('success', true);
+
+        config(['database.default' => 'missing-readiness-connection']);
+        $this->getJson('/api/health')->assertOk()->assertJsonPath('success', true);
+        $this->getJson('/api/ready')
+            ->assertServiceUnavailable()
+            ->assertJsonPath('success', false)
+            ->assertDontSee('missing-readiness-connection');
+    }
+
     public function test_cors_allows_configured_origin_and_rejects_unknown_origin(): void
     {
         config(['cors.allowed_origins' => ['https://reservas.example.test']]);

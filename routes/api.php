@@ -9,9 +9,19 @@ use App\Http\Controllers\Api\OwnerAccessController;
 use App\Http\Controllers\Api\OwnerAdminController;
 use App\Http\Controllers\Api\OwnerDashboardController;
 use App\Http\Controllers\Api\SofiaController;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => response()->json(['success' => true, 'service' => 'hospeda-reservas-api']));
+Route::get('/ready', function () {
+    try {
+        DB::connection()->select('SELECT 1');
+
+        return response()->json(['success' => true, 'service' => 'hospeda-reservas-api']);
+    } catch (Throwable) {
+        return response()->json(['success' => false, 'service' => 'hospeda-reservas-api'], 503);
+    }
+});
 
 Route::get('/resorts', [AccommodationController::class, 'resorts']);
 Route::get('/accommodations', [AccommodationController::class, 'index']);
