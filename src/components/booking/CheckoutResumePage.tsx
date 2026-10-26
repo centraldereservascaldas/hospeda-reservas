@@ -16,6 +16,7 @@ import type {
   DirectBookingOrderSummary,
 } from '../../services/checkoutApi';
 import { MercadoPagoCardForm } from './MercadoPagoCardForm';
+import { CieloSopCardForm } from './CieloSopCardForm';
 import {
   clearCheckoutResumeToken,
   getCheckoutResumeToken,
@@ -430,11 +431,12 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
     canRetryPixPayment;
   const paymentCapabilities = resumeState.kind === 'ready' ? resumeState.data.payment : null;
   const cardPublicKey = paymentCapabilities?.publicKey ?? null;
+  const isCieloProvider = paymentCapabilities?.provider === 'cielo_sandbox';
   const canStartCardPayment =
     order !== null &&
     paymentCapabilities?.enabled === true &&
     paymentCapabilities.methods.includes('card') &&
-    cardPublicKey !== null &&
+    (isCieloProvider || cardPublicKey !== null) &&
     reservationIsActive &&
     (order.status === 'pre_reservado' || order.status === 'pagamento_recusado') &&
     canRetryPixPayment;
@@ -813,7 +815,17 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                         </div>
                       )}
 
-                      {showCardPaymentForm && cardPublicKey && (
+                      {showCardPaymentForm && isCieloProvider && (
+                        <CieloSopCardForm
+                          reference={reference}
+                          amount={order.quoteTotal}
+                          credentials={
+                            resumeState.kind === 'ready' ? resumeState.credentials : null
+                          }
+                          onAttemptFinished={() => setRetryKey((current) => current + 1)}
+                        />
+                      )}
+                      {showCardPaymentForm && !isCieloProvider && cardPublicKey && (
                         <MercadoPagoCardForm
                           reference={reference}
                           amount={order.quoteTotal}

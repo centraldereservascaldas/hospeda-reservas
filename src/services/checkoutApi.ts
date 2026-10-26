@@ -158,6 +158,12 @@ export interface CheckoutPaymentCapabilities {
   enabled: boolean;
   methods: Array<'pix' | 'card'>;
   publicKey: string | null;
+  provider: 'mercadopago' | 'cielo_sandbox' | 'unavailable';
+}
+
+export interface CieloSopAccessToken {
+  environment: 'sandbox';
+  accessToken: string;
 }
 
 export interface CheckoutReadinessResponse {
@@ -205,6 +211,9 @@ const isCheckoutResumeCredentials = (value: unknown): value is CheckoutResumeCre
 const isCheckoutPaymentCapabilities = (value: unknown): value is CheckoutPaymentCapabilities =>
   isRecord(value) &&
   typeof value.enabled === 'boolean' &&
+  (value.provider === 'mercadopago' ||
+    value.provider === 'cielo_sandbox' ||
+    value.provider === 'unavailable') &&
   Array.isArray(value.methods) &&
   value.methods.every((method) => method === 'pix' || method === 'card') &&
   value.enabled === value.methods.length > 0 &&
@@ -212,7 +221,18 @@ const isCheckoutPaymentCapabilities = (value: unknown): value is CheckoutPayment
     (typeof value.publicKey === 'string' &&
       value.publicKey.trim() !== '' &&
       value.publicKey.length <= 255)) &&
-  value.methods.includes('card') === (typeof value.publicKey === 'string');
+  (value.provider === 'mercadopago'
+    ? value.methods.includes('card') === (typeof value.publicKey === 'string')
+    : value.publicKey === null &&
+      (!value.methods.includes('card') || value.provider === 'cielo_sandbox'));
+
+const isCieloSopAccessToken = (value: unknown): value is CieloSopAccessToken =>
+  isRecord(value) &&
+  value.success === true &&
+  value.environment === 'sandbox' &&
+  typeof value.accessToken === 'string' &&
+  value.accessToken.trim() !== '' &&
+  value.accessToken.length <= 4096;
 
 const isCheckoutReadinessResponse = (value: unknown): value is CheckoutReadinessResponse =>
   isRecord(value) &&
@@ -409,7 +429,7 @@ export const checkoutApi = {
           code: 'invalid_checkout_request',
           message: 'Confira os dados informados antes de continuar.',
           ...(fieldErrors ? { fieldErrors } : {}),
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'unavailable' },
           idempotentReplay: false,
         };
       }
@@ -537,6 +557,39 @@ export const checkoutApi = {
       };
     } catch {
       return { kind: 'unavailable' };
+    }
+  },
+
+  async getCieloSopAccessToken(
+    reference: string,
+    credentials: CheckoutAccessCredentials | null,
+  ): Promise<CieloSopAccessToken | null> {
+    if (!/^[A-Za-z0-9]{40}$/.test(reference) || credentials === null) return null;
+    if (
+      (credentials.type === 'resume-token' && !/^[A-Za-z0-9]{64}$/.test(credentials.resumeToken)) ||
+      (credentials.type === 'authenticated' && credentials.accessToken.trim() === '')
+    ) {
+      return null;
+    }
+
+    try {
+      const authenticated = credentials.type === 'authenticated';
+      const endpoint = authenticated
+        ? `/api/my-direct-booking-orders/${encodeURIComponent(reference)}/checkout/payments/cielo-sop-token`
+        : `/api/checkout/${encodeURIComponent(reference)}/payments/cielo-sop-token`;
+      const res = await apiFetch(endpoint, {
+        method: 'POST',
+        cache: 'no-store',
+        headers: authenticated
+          ? { Authorization: `Bearer ${credentials.accessToken}` }
+          : { 'X-Checkout-Resume-Token': credentials.resumeToken },
+      });
+      if (!res.ok) return null;
+      const json: unknown = await res.json();
+      return isCieloSopAccessToken(json) ? json : null;
+    } catch (err) {
+      console.warn('Error loading Cielo SOP access token:', err);
+      return null;
     }
   },
 

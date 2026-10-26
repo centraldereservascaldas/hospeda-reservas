@@ -110,7 +110,7 @@ async function submitCheckoutWithConsent(consent: {
       ready: true,
       termsAvailable: true,
       checkoutEnabled: true,
-      payment: { enabled: true, methods: ['pix'], publicKey: null },
+      payment: { enabled: true, methods: ['pix'], publicKey: null, provider: 'mercadopago' },
     },
   });
 

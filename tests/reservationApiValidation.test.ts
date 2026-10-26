@@ -347,14 +347,19 @@ test('validates the remaining backend response boundaries', async () => {
       message: 'Pré-reserva registrada.',
       order: directCheckoutOrder,
       resume: directCheckoutResume,
-      payment: { enabled: false, methods: [], publicKey: null },
+      payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
       idempotentReplay: false,
     });
     const checkout = await checkoutApi.createCheckout(directCheckoutRequest);
     assert.equal(checkout?.success, true);
     assert.deepEqual(checkout?.order, directCheckoutOrder);
     assert.deepEqual(checkout?.resume, directCheckoutResume);
-    assert.deepEqual(checkout?.payment, { enabled: false, methods: [], publicKey: null });
+    assert.deepEqual(checkout?.payment, {
+      enabled: false,
+      methods: [],
+      publicKey: null,
+      provider: 'mercadopago',
+    });
     assert.equal(checkout?.idempotentReplay, false);
 
     respond(
@@ -362,7 +367,7 @@ test('validates the remaining backend response boundaries', async () => {
         success: false,
         code: 'quote_changed',
         message: 'O preço mudou.',
-        payment: { enabled: false, methods: [], publicKey: null },
+        payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
         idempotentReplay: false,
       },
       409,
@@ -375,7 +380,7 @@ test('validates the remaining backend response boundaries', async () => {
       code: 'pre_reserved',
       order: directCheckoutOrder,
       resume: { ...directCheckoutResume, token: 'invalid' },
-      payment: { enabled: false, methods: [], publicKey: null },
+      payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
       idempotentReplay: false,
     });
     assert.equal(await checkoutApi.createCheckout(directCheckoutRequest), null);
@@ -411,7 +416,7 @@ test('checkout validates the created order and resumes it with a protected token
           success: true,
           order: { ...directCheckoutOrder, listingId: 'OTHER' },
           resume: directCheckoutResume,
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
           idempotentReplay: false,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -424,7 +429,7 @@ test('checkout validates the created order and resumes it with a protected token
           success: true,
           order: { ...directCheckoutOrder, to: '2026-10-16' },
           resume: directCheckoutResume,
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
           idempotentReplay: false,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -439,7 +444,7 @@ test('checkout validates the created order and resumes it with a protected token
           success: true,
           order: directCheckoutOrder,
           confirmation: null,
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -454,7 +459,7 @@ test('checkout validates the created order and resumes it with a protected token
         success: true,
         order: directCheckoutOrder,
         confirmation: null,
-        payment: { enabled: false, methods: [], publicKey: null },
+        payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
       },
     });
     assert.equal(resumeHeader, directCheckoutResume.token);
@@ -463,7 +468,7 @@ test('checkout validates the created order and resumes it with a protected token
       new Response(
         JSON.stringify({
           order: { ...directCheckoutOrder, quoteTotal: '851.00' },
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -503,7 +508,7 @@ test('checkout sends only consented first and last touch attribution', async () 
           code: 'pre_reserved',
           order: directCheckoutOrder,
           resume: directCheckoutResume,
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
           idempotentReplay: false,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },

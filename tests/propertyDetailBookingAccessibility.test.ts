@@ -706,7 +706,7 @@ test('checkout does not show internal approval identifiers to guests', async () 
       ready: false,
       termsAvailable: true,
       checkoutEnabled: false,
-      payment: { enabled: false, methods: [], publicKey: null },
+      payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
     },
   });
 
