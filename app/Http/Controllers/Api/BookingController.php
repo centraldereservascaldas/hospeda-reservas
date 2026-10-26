@@ -192,16 +192,16 @@ class BookingController extends Controller
 
     public function staysStatus(): JsonResponse
     {
-        $count = count(json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR));
+        $fallbackCount = count(json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR));
         if (! $this->stays->isConfigured()) {
-            return response()->json(['connected' => false, 'hasCredentials' => false, 'totalProperties' => $count, 'message' => 'Credenciais Stays não configuradas no servidor.'], 503);
+            return response()->json(['connected' => false, 'hasCredentials' => false, 'totalProperties' => $fallbackCount, 'message' => 'Credenciais Stays não configuradas no servidor.'], 503);
         }
-        $listings = $this->stays->get('/content/listings', ['limit' => 1, 'skip' => 0, 'status' => 'active']);
-        if (! is_array($listings)) {
-            return response()->json(['connected' => false, 'hasCredentials' => true, 'totalProperties' => $count, 'message' => 'Falha ao autenticar ou consultar a API Stays.'], 503);
+        $listings = $this->stays->activeListings();
+        if ($listings === null) {
+            return response()->json(['connected' => false, 'hasCredentials' => true, 'totalProperties' => $fallbackCount, 'message' => 'Falha ao autenticar ou consultar a API Stays.'], 503);
         }
 
-        return response()->json(['connected' => true, 'hasCredentials' => true, 'totalProperties' => $count, 'environment' => app()->environment()]);
+        return response()->json(['connected' => true, 'hasCredentials' => true, 'totalProperties' => count($listings), 'environment' => app()->environment()]);
     }
 
     public function createCheckoutOrder(

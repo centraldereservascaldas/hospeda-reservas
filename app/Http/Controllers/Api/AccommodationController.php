@@ -71,25 +71,9 @@ class AccommodationController extends Controller
             if (! is_array($catalog)) {
                 $catalog = Cache::lock(self::LIVE_CATALOG_CACHE_KEY.':lock', self::LIVE_CATALOG_LOCK_LEASE_SECONDS)
                     ->block(self::LIVE_CATALOG_LOCK_WAIT_SECONDS, fn (): array => Cache::remember(self::LIVE_CATALOG_CACHE_KEY, self::LIVE_CATALOG_CACHE_TTL_SECONDS, function () use ($fallback): array {
-                        $listings = [];
-                        for ($skip = 0; $skip < 5000; $skip += 50) {
-                            $page = $this->stays->get('/content/listings', ['limit' => 50, 'skip' => $skip, 'status' => 'active']);
-                            if (! is_array($page) || ! array_is_list($page)) {
-                                throw new RuntimeException('Stays returned an invalid accommodation catalog page.');
-                            }
-                            foreach ($page as $listing) {
-                                if (! is_array($listing)) {
-                                    throw new RuntimeException('Stays returned an invalid accommodation listing.');
-                                }
-                            }
-                            if ($skip === 4950 && count($page) === 50) {
-                                throw new RuntimeException('Stays accommodation catalog exceeded the pagination limit.');
-                            }
-
-                            $listings = [...$listings, ...$page];
-                            if (count($page) < 50) {
-                                break;
-                            }
+                        $listings = $this->stays->activeListings();
+                        if ($listings === null) {
+                            throw new RuntimeException('Stays returned an unavailable accommodation catalog.');
                         }
 
                         $mapped = array_map(fn (array $listing): array => $this->mapListing($listing, $fallback), $listings);
@@ -98,15 +82,13 @@ class AccommodationController extends Controller
                     }));
             }
         } catch (RuntimeException|LockTimeoutException) {
-            if (app()->isProduction()) {
-                return response()->json(['success' => false, 'source' => 'unavailable', 'count' => 0, 'data' => []], 503);
-            }
-
-            return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
-        }
-
-        if ($catalog['count'] === 0 && ! app()->isProduction()) {
-            return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
+            return response()->json([
+                'success' => false,
+                'source' => 'unavailable',
+                'message' => 'Não foi possível atualizar as acomodações na Stays agora.',
+                'count' => 0,
+                'data' => [],
+            ], 503);
         }
 
         return response()->json($catalog);

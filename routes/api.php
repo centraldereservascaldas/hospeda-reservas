@@ -53,6 +53,8 @@ Route::middleware('supabase.guest')->group(function (): void {
     Route::get('/owner/access', [OwnerAccessController::class, 'show']);
     Route::post('/owner/access/request', [OwnerAccessController::class, 'requestAccess']);
     Route::get('/owner/dashboard', [OwnerDashboardController::class, 'show']);
+    Route::get('/owner/accounting/entries/{entryId}/details', [OwnerDashboardController::class, 'accountingEntryDetails'])->middleware('throttle:30,1');
+    Route::post('/owner/calendar/blocks', [OwnerDashboardController::class, 'storeBlock'])->middleware('throttle:10,1');
 });
 Route::post('/sofia/chat', [SofiaController::class, 'chat']);
 Route::get('/owner/admin/status', [OwnerAdminController::class, 'status'])->middleware('supabase.guest');

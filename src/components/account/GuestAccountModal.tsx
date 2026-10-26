@@ -160,7 +160,7 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({
         const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
           normalizedEmail,
           {
-            redirectTo: `${window.location.origin}/`,
+            redirectTo: `${window.location.origin}/auth/confirm`,
           },
         );
         if (recoveryError) throw recoveryError;

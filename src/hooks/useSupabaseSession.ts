@@ -23,10 +23,22 @@ export function useSupabaseSession({
   const [authCallbackNotice, setAuthCallbackNotice] = useState('');
 
   useEffect(() => {
+    if (!authCallbackNotice) return;
+
+    const dismissTimer = window.setTimeout(() => setAuthCallbackNotice(''), 7000);
+    return () => window.clearTimeout(dismissTimer);
+  }, [authCallbackNotice]);
+
+  useEffect(() => {
     const authHash = new URLSearchParams(initialHash.slice(1));
     if (authHash.get('type') === 'recovery') setAccountModalMode('recovery');
     if (initialAuthCallbackError) {
-      setAuthCallbackNotice(`Não foi possível confirmar o e-mail: ${initialAuthCallbackError}`);
+      const expiredLink = /otp_expired|link is invalid|has expired/i.test(initialAuthCallbackError);
+      setAuthCallbackNotice(
+        expiredLink
+          ? 'Este link expirou ou já foi usado. Solicite um novo e-mail de recuperação e abra o link mais recente.'
+          : `Não foi possível concluir o acesso: ${initialAuthCallbackError}`,
+      );
     }
     if (!isConfigured) return;
 

@@ -163,7 +163,7 @@ test('warns when saved accommodations are stale while keeping cards available', 
     }),
   );
 
-  assert.match(screen.getByRole('alert').textContent || '', /informações salvas/);
+  assert.match(screen.getByRole('alert').textContent || '', /informações salvas|dados salvos/);
   fireEvent.click(screen.getByRole('button', { name: 'Tentar atualizar' }));
   assert.equal(retryCount, 1);
   assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' }));

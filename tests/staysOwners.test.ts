@@ -1,6 +1,28 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeStaysOwners } from '../src/utils/staysOwners.ts';
+import {
+  getStaysOwnerDateRanges,
+  normalizeStaysOwners,
+  resolveStaysFinanceOwner,
+} from '../src/utils/staysOwners.ts';
+
+test('covers the requested owner history with Stays date windows no longer than one year', () => {
+  const ranges = getStaysOwnerDateRanges(new Date('2026-10-16T23:30:00-03:00'));
+
+  assert.equal(ranges[0]?.from, '2016-01-01');
+  assert.equal(ranges[ranges.length - 1]?.to, '2026-10-17');
+  assert.equal(ranges.length, 11);
+  for (const [index, range] of ranges.entries()) {
+    const from = new Date(`${range.from}T00:00:00.000Z`);
+    const to = new Date(`${range.to}T00:00:00.000Z`);
+    assert.ok((to.getTime() - from.getTime()) / 86_400_000 <= 364);
+    if (index > 0) {
+      const previousEnd = new Date(`${ranges[index - 1]!.to}T00:00:00.000Z`);
+      previousEnd.setUTCDate(previousEnd.getUTCDate() + 1);
+      assert.equal(range.from, previousEnd.toISOString().slice(0, 10));
+    }
+  }
+});
 
 test('normalizes owner records and only returns a minimal safe summary', () => {
   const owners = normalizeStaysOwners([{
@@ -30,4 +52,26 @@ test('accepts common response wrappers, deduplicates IDs, and drops invalid reco
 
 test('returns null for an unrecognized Stays response shape instead of an empty directory', () => {
   assert.equal(normalizeStaysOwners({ message: 'unexpected response' }), null);
+});
+
+test('resolves finance data only by the exact Stays owner identifier', () => {
+  const result = resolveStaysFinanceOwner({ owners: [
+    { _id: 'owner-other', name: 'Same name' },
+    { _id: 'owner-requested', name: 'Same name', listings: [] },
+  ] }, 'owner-requested');
+
+  assert.equal(result.status, 'found');
+  if (result.status === 'found') {
+    assert.equal(result.owner._id, 'owner-requested');
+  }
+});
+
+test('distinguishes a valid finance response without the approved owner from a failed response', () => {
+  assert.deepEqual(
+    resolveStaysFinanceOwner([{ _id: 'different-owner', name: 'Proprietário' }], 'approved-owner'),
+    { status: 'not-found' },
+  );
+  assert.deepEqual(resolveStaysFinanceOwner({ message: 'unavailable' }, 'approved-owner'), {
+    status: 'invalid-response',
+  });
 });

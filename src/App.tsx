@@ -46,6 +46,12 @@ const CheckoutResumePage = lazy(() =>
   })),
 );
 
+const RecoveryLinkConfirmationPage = lazy(() =>
+  import('./components/account/RecoveryLinkConfirmationPage').then(
+    ({ RecoveryLinkConfirmationPage }) => ({ default: RecoveryLinkConfirmationPage }),
+  ),
+);
+
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
 function CheckoutResumeEntry({ reference }: { reference: string }) {
@@ -508,6 +514,19 @@ export default function App() {
 
   if (legalSlug) {
     return <LegalDocumentPage slug={legalSlug} />;
+  }
+  if (pathname === '/auth/confirm') {
+    return (
+      <Suspense
+        fallback={
+          <main className="min-h-screen bg-[#f7f4ee] px-4 py-8 text-neutral-700" role="status">
+            Confirmando seu acesso…
+          </main>
+        }
+      >
+        <RecoveryLinkConfirmationPage />
+      </Suspense>
+    );
   }
 
   if (checkoutResumeReference) {

@@ -745,7 +745,7 @@ test('checkout does not show internal approval identifiers to guests', async () 
     assert.match(priceBreakdownHeading.nextElementSibling?.className ?? '', /\btext-sm\b/);
     assert.match(propertyHeading.className, /\btext-sm\b/);
     assert.match(accompanimentHeading.parentElement?.parentElement?.className ?? '', /\btext-sm\b/);
-    assert.match(checkoutViewport?.className ?? '', /min-h-\[100dvh\]/);
+    assert.match(checkoutViewport?.className ?? '', /\bmin-h-dvh\b/);
     assert.match(checkoutViewport?.className ?? '', /safe-area-inset-left/);
     assert.match(checkoutViewport?.getAttribute('style') ?? '', /safe-area-inset-top/);
     assert.match(checkoutViewport?.getAttribute('style') ?? '', /safe-area-inset-bottom/);

@@ -76,6 +76,17 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     initialFocusRef: checkoutTitleRef,
   });
 
+  useEffect(() => {
+    if (!isOpen || !bookingData) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [bookingData, isOpen]);
+
   const currentQuote = quoteOverride ?? bookingData?.quote ?? null;
 
   useEffect(() => {
@@ -286,9 +297,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="checkout-modal-overlay fixed inset-0 z-50 overflow-y-auto no-scrollbar bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200 md:flex md:items-center md:justify-center md:overflow-hidden">
       <div
-        className="flex min-h-[100dvh] items-start justify-center py-8 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))]"
+        className="flex min-h-dvh items-start justify-center px-3 py-8 sm:px-6 md:min-h-full md:w-full md:items-center md:py-2 pl-[max(0.75rem,env(safe-area-inset-left,0px))] pr-[max(0.75rem,env(safe-area-inset-right,0px))] sm:pl-[max(1.5rem,env(safe-area-inset-left,0px))] sm:pr-[max(1.5rem,env(safe-area-inset-right,0px))]"
         style={{
           paddingTop: 'max(2rem, env(safe-area-inset-top, 0px))',
           paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))',
@@ -301,10 +312,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           aria-modal="true"
           aria-labelledby={`${fieldId}-title`}
           tabIndex={-1}
-          className="w-full max-w-4xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl border border-neutral-200/90 animate-in zoom-in-95 duration-200"
+          className="checkout-modal-dialog w-full max-w-4xl md:flex md:max-h-[calc(100dvh-2rem)] md:flex-col md:max-w-6xl bg-white/98 sm:bg-white/96 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden border border-neutral-200/90 animate-in zoom-in-95 duration-200"
         >
           {/* Header */}
-          <div className="sticky top-[env(safe-area-inset-top,0px)] z-20 flex items-center rounded-t-3xl border-b border-neutral-200 bg-white/95 px-3 py-3 backdrop-blur-md sm:px-6 sm:py-4">
+          <div className="checkout-modal-header shrink-0 sticky top-[env(safe-area-inset-top,0px)] z-20 flex items-center rounded-t-3xl border-b border-neutral-200 bg-white/95 px-3 py-3 backdrop-blur-md sm:px-6 sm:py-4">
             <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <button
                 type="button"
@@ -326,11 +337,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
           </div>
 
           {/* CHECKOUT STEP */}
-          <div className="grid grid-cols-1 gap-8 p-4 sm:gap-10 sm:p-10 lg:grid-cols-12">
+          <div className="checkout-modal-content grid grid-cols-1 gap-5 p-4 sm:p-8 md:min-h-0 md:grid-cols-12 md:gap-6 md:overflow-y-auto">
             {/* Left Column: Trip summary (7 cols) */}
-            <div className="lg:col-span-7 space-y-8">
+            <div className="checkout-modal-form-column flex flex-col gap-6 md:col-span-7">
               {/* Trip details summary */}
-              <div className="space-y-4">
+              <div className="checkout-modal-trip-summary flex flex-col gap-3">
                 <h3 className="text-base font-bold text-neutral-900">
                   Resumo da sua estadia em Caldas Novas
                 </h3>
@@ -361,11 +372,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </div>
 
               <form
-                className="space-y-5"
+                className="checkout-modal-form flex flex-col gap-4"
                 aria-busy={isSubmitting}
                 onSubmit={(event) => void handleCheckoutSubmit(event)}
               >
-                <div className="space-y-3">
+                <div className="checkout-modal-fields flex flex-col gap-2.5">
                   <div>
                     <h3 className="text-base font-bold text-neutral-900">
                       Dados do responsável pela reserva
@@ -374,7 +385,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       Informe os dados de contato para continuar com a pré-reserva e o pagamento.
                     </p>
                   </div>
-                  <fieldset disabled={!readiness?.ready || isSubmitting} className="space-y-3">
+                  <fieldset
+                    disabled={!readiness?.ready || isSubmitting}
+                    className="checkout-modal-inputs flex flex-col gap-2"
+                  >
                     <div>
                       <label
                         htmlFor={`${fieldId}-guest-name`}
@@ -470,7 +484,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   </section>
                 ) : (
                   <div
-                    className="p-4 rounded-2xl border border-amber-300 bg-amber-50 text-sm text-amber-950"
+                    className="checkout-modal-warning rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-950"
                     role="status"
                     aria-live="polite"
                   >
@@ -511,7 +525,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     type="submit"
                     disabled={!canSubmit}
                     aria-describedby={`${fieldId}-checkout-status`}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-700 via-amber-700 to-orange-800 text-white font-extrabold text-sm shadow-lg shadow-orange-500/35 flex items-center justify-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="checkout-modal-submit flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-orange-700 via-amber-700 to-orange-800 py-4 text-sm font-extrabold text-white shadow-lg shadow-orange-500/35 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <ShieldCheck className="w-4 h-4" aria-hidden="true" />
                     <span>
@@ -554,8 +568,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             </div>
 
             {/* Right Column: Reservation Preview */}
-            <div className="min-w-0 lg:col-span-5">
-              <div className="min-w-0 space-y-4 rounded-3xl border border-neutral-200/90 bg-white/70 p-4 shadow-sm backdrop-blur-xl sm:p-6">
+            <div className="min-w-0 md:col-span-5">
+              <div className="checkout-modal-property-card flex flex-col gap-4 rounded-3xl border border-neutral-200/90 bg-white/70 p-5 shadow-sm backdrop-blur-xl">
                 {/* Property Card Mini */}
                 <div className="flex min-w-0 gap-4">
                   <img

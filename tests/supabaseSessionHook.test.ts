@@ -122,7 +122,7 @@ test('reports session restore failures and skips auth loading when unconfigured'
   await waitFor(() => assert.equal(unconfigured.result.current.accountModalMode, 'recovery'));
   assert.equal(
     unconfigured.result.current.authCallbackNotice,
-    'Não foi possível confirmar o e-mail: link inválido',
+    'Não foi possível concluir o acesso: link inválido',
   );
   assert.equal(loadCount, 0);
   unconfigured.unmount();

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -52,15 +53,16 @@ class AccommodationApiTest extends TestCase
             ->assertJsonCount(0, 'data');
     }
 
-    public function test_development_catalog_uses_local_fallback_for_a_valid_empty_stays_result(): void
+    public function test_development_catalog_preserves_a_valid_empty_stays_result(): void
     {
         config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
         Http::fake(['*content/listings*' => Http::response([], 200)]);
 
         $this->getJson('/api/accommodations')
             ->assertOk()
-            ->assertJsonPath('source', 'local-catalog')
-            ->assertJsonPath('count', 19);
+            ->assertJsonPath('source', 'stays-live')
+            ->assertJsonPath('count', 0)
+            ->assertJsonPath('data', []);
     }
 
     public function test_live_catalog_is_shared_across_requests_until_cache_expiration(): void
@@ -343,6 +345,49 @@ class AccommodationApiTest extends TestCase
             ->assertJsonPath('data.1.propertyAmenities.0', 'Estacionamento');
 
         Http::assertSentCount(4);
+    }
+
+    public function test_empty_live_catalog_does_not_fall_back_to_inactive_local_listings(): void
+    {
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->getJson('/api/accommodations')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('source', 'stays-live')
+            ->assertJsonPath('count', 0)
+            ->assertExactJson(['success' => true, 'source' => 'stays-live', 'count' => 0, 'data' => []]);
+    }
+
+    public function test_failed_live_catalog_does_not_return_stale_local_listings(): void
+    {
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(['*' => Http::response(['error' => 'unavailable'], 503)]);
+
+        $this->getJson('/api/accommodations')
+            ->assertStatus(503)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('source', 'unavailable')
+            ->assertJsonPath('data', []);
+    }
+
+    public function test_failed_later_live_catalog_page_does_not_return_a_partial_catalog(): void
+    {
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(function (ClientRequest $request): mixed {
+            if (str_contains($request->url(), 'skip=50')) {
+                return Http::response(['error' => 'unavailable'], 503);
+            }
+
+            return Http::response(array_fill(0, 50, ['id' => 'live-listing']), 200);
+        });
+
+        $this->getJson('/api/accommodations')
+            ->assertStatus(503)
+            ->assertJsonPath('source', 'unavailable');
+
+        Http::assertSent(fn (ClientRequest $request): bool => str_contains($request->url(), 'skip=50'));
     }
 
     public function test_dated_live_search_maps_stays_result_and_quote(): void
