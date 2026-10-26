@@ -8,8 +8,16 @@ import {
 
 export const OPEN_MEASUREMENT_PREFERENCES = 'crcn:open-measurement-preferences';
 
-export function MeasurementPreferences({ showReopenButton = false }: { showReopenButton?: boolean }) {
-  const [savedConsent, setSavedConsent] = useState<MeasurementConsent | null>(readMeasurementConsent);
+export function MeasurementPreferences({
+  showReopenButton = false,
+  placement = 'fixed',
+}: {
+  showReopenButton?: boolean;
+  placement?: 'fixed' | 'inline';
+}) {
+  const [savedConsent, setSavedConsent] = useState<MeasurementConsent | null>(
+    readMeasurementConsent,
+  );
   const [accepted, setAccepted] = useState(
     Boolean(savedConsent?.analytics && savedConsent.advertising),
   );
@@ -18,10 +26,19 @@ export function MeasurementPreferences({ showReopenButton = false }: { showReope
   const reopenButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const restoreFocusAfterCloseRef = useRef(false);
+  const reopenButtonClassName =
+    placement === 'inline'
+      ? 'inline-flex min-h-11 w-fit items-center rounded-xl border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-900 shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700'
+      : 'fixed bottom-4 right-4 z-[1100] min-h-11 rounded-xl border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-900 shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700';
+  const panelClassName =
+    placement === 'inline'
+      ? 'w-full rounded-2xl border border-neutral-300 bg-white p-4 text-neutral-900 shadow-sm'
+      : 'fixed inset-x-3 bottom-[calc(5rem_+_env(safe-area-inset-bottom,0px))] z-[1100] mx-auto max-w-lg rounded-2xl border border-neutral-300 bg-white p-4 text-neutral-900 shadow-xl sm:bottom-4';
 
   useEffect(() => {
     const open = () => {
-      returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      returnFocusRef.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setIsOpen(true);
     };
     window.addEventListener(OPEN_MEASUREMENT_PREFERENCES, open);
@@ -37,7 +54,10 @@ export function MeasurementPreferences({ showReopenButton = false }: { showReope
       if (previous?.isConnected) {
         previous.focus();
       } else {
-        (reopenButtonRef.current ?? document.querySelector<HTMLButtonElement>('[data-measurement-preferences-trigger]'))?.focus();
+        (
+          reopenButtonRef.current ??
+          document.querySelector<HTMLButtonElement>('[data-measurement-preferences-trigger]')
+        )?.focus();
       }
     }
   }, [isOpen]);
@@ -62,36 +82,59 @@ export function MeasurementPreferences({ showReopenButton = false }: { showReope
 
   if (!isOpen) {
     return showReopenButton ? (
-      <button ref={reopenButtonRef} type="button" onClick={(event) => { returnFocusRef.current = event.currentTarget; setIsOpen(true); }} className="fixed bottom-4 right-4 z-[1100] min-h-11 rounded-xl border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-900 shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700">
+      <button
+        ref={reopenButtonRef}
+        type="button"
+        onClick={(event) => {
+          returnFocusRef.current = event.currentTarget;
+          setIsOpen(true);
+        }}
+        className={reopenButtonClassName}
+      >
         Preferências de medição
       </button>
     ) : null;
   }
 
   return (
-    <section
-      aria-labelledby="measurement-preferences-title"
-      className="fixed inset-x-3 bottom-[calc(5rem_+_env(safe-area-inset-bottom,0px))] z-[1100] mx-auto max-w-lg rounded-2xl border border-neutral-300 bg-white p-4 text-neutral-900 shadow-xl sm:bottom-4"
-    >
-      <h2 ref={titleRef} tabIndex={-1} id="measurement-preferences-title" className="text-base font-bold focus:outline-none">
+    <section aria-labelledby="measurement-preferences-title" className={panelClassName}>
+      <h2
+        ref={titleRef}
+        tabIndex={-1}
+        id="measurement-preferences-title"
+        className="text-base font-bold focus:outline-none"
+      >
         Preferências de medição
       </h2>
       <p className="mt-2 text-sm leading-5">
         Escolha se podemos carregar ferramentas de medição e publicidade. Você pode mudar sua
-        escolha pelo controle “Preferências de medição”. Ao revogar, a página recarrega para interromper as tags; a remoção de
-        cookies existentes depende da configuração dessas ferramentas.
+        escolha pelo controle “Preferências de medição”. Ao revogar, a página recarrega para
+        interromper as tags; a remoção de cookies existentes depende da configuração dessas
+        ferramentas.
       </p>
       <div className="mt-3 flex flex-col gap-2 text-sm">
         <label className="flex min-h-11 items-center gap-3">
-          <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={accepted}
+            onChange={(event) => setAccepted(event.target.checked)}
+          />
           Permitir medição e publicidade
         </label>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" onClick={() => save({ analytics: false, advertising: false })} className="min-h-11 rounded-xl border border-neutral-400 px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700">
+        <button
+          type="button"
+          onClick={() => save({ analytics: false, advertising: false })}
+          className="min-h-11 rounded-xl border border-neutral-400 px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+        >
           Recusar
         </button>
-        <button type="button" onClick={() => save({ analytics: accepted, advertising: accepted })} className="min-h-11 rounded-xl bg-orange-700 px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700">
+        <button
+          type="button"
+          onClick={() => save({ analytics: accepted, advertising: accepted })}
+          className="min-h-11 rounded-xl bg-orange-700 px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+        >
           Salvar escolhas
         </button>
       </div>

@@ -132,6 +132,15 @@ export function usePageMetadata(initialPathname: string): void {
   }, []);
 
   useEffect(() => {
+    const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
+    if (
+      normalizedPathname === '/privacidade' ||
+      normalizedPathname === '/termos' ||
+      normalizedPathname === '/cancelamento'
+    ) {
+      return;
+    }
+
     const propertyId = getAccommodationIdFromPath(pathname);
     const preserveInitialMetadata =
       propertyId !== null &&

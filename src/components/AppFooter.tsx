@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Globe, ShieldCheck } from 'lucide-react';
 import type { Currency } from '../types';
+import { readLegalPageSummaries, type LegalPageSummary } from '../utils/legalPages';
 import { LogoCRCN } from './LogoCRCN';
 import { OPEN_MEASUREMENT_PREFERENCES } from './MeasurementPreferences';
 
@@ -9,6 +11,23 @@ interface AppFooterProps {
 }
 
 export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
+  const [legalPages, setLegalPages] = useState<LegalPageSummary[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/api/public/legal-pages', {
+      headers: { Accept: 'application/json' },
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: unknown) => setLegalPages(readLegalPageSummaries(payload)))
+      .catch(() => {
+        if (!controller.signal.aborted) setLegalPages([]);
+      });
+
+    return () => controller.abort();
+  }, []);
+
   return (
     <footer className="border-t border-white/60 bg-white/40 backdrop-blur-2xl text-xs text-neutral-600">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-10">
@@ -85,10 +104,17 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
               © {new Date().getFullYear()} Central de Reservas Caldas Novas. Todos os direitos
               reservados.
             </span>
-            <span>•</span>
-            <span>Privacidade</span>
-            <span>•</span>
-            <span>Termos</span>
+            {legalPages.map((page) => (
+              <span key={page.slug} className="contents">
+                <span aria-hidden="true">•</span>
+                <a
+                  href={page.path}
+                  className="min-h-11 inline-flex items-center underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                >
+                  {page.title}
+                </a>
+              </span>
+            ))}
             <span>•</span>
             <button
               type="button"

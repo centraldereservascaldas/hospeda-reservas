@@ -38,6 +38,7 @@ import { CHECKOUT_MODAL_HISTORY_ENTRY, useAppOverlayActions } from './hooks/useA
 import { focusWithoutScrolling } from './utils/focus';
 import { countOccupancyGuests } from './utils/guestCounts';
 import { usePageMetadata } from './hooks/usePageMetadata';
+import { LegalDocumentPage } from './components/LegalDocumentPage';
 
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
@@ -495,6 +496,19 @@ export default function App() {
   }, []);
 
   const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})$/.exec(pathname)?.[1];
+  const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
+  const legalSlug =
+    normalizedPathname === '/privacidade'
+      ? 'privacidade'
+      : normalizedPathname === '/termos'
+        ? 'termos'
+        : normalizedPathname === '/cancelamento'
+          ? 'cancelamento'
+          : null;
+
+  if (legalSlug) {
+    return <LegalDocumentPage slug={legalSlug} />;
+  }
 
   if (checkoutResumeReference) {
     return (
