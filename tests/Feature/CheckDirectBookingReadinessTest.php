@@ -106,9 +106,52 @@ class CheckDirectBookingReadinessTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_cielo_requires_its_credentials_instead_of_mercado_pago_credentials(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        config([
+            'direct-booking.payment_provider' => 'cielo_sandbox',
+            'services.mercadopago.access_token' => null,
+            'services.cielo.merchant_id' => 'sentinel-merchant',
+            'services.cielo.merchant_key' => 'sentinel-key',
+            'services.cielo.sop_client_id' => 'sentinel-client',
+            'services.cielo.sop_client_secret' => 'sentinel-secret',
+            'services.cielo.webhook_queue_connection' => 'database',
+        ]);
+        $this->app->instance(DirectSaleTermsRegistry::class, $this->registry(['pilot-one', 'pilot-two']));
+
+        $this->assertSame(0, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $output = Artisan::output();
+        $result = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
+        $this->assertArrayNotHasKey('MERCADO_PAGO_ACCESS_TOKEN', $result['checks']);
+        $this->assertStringNotContainsString('sentinel-', $output);
+
+        config(['services.cielo.sop_client_secret' => null]);
+        $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertFalse($result['checks']['CIELO_SANDBOX_SOP_CLIENT_SECRET']['configured']);
+        Http::assertNothingSent();
+    }
+
+    public function test_unknown_provider_fails_without_falling_back_to_mercado_pago(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        config(['direct-booking.payment_provider' => 'unsupported']);
+        $this->app->instance(DirectSaleTermsRegistry::class, $this->registry(['pilot-one', 'pilot-two']));
+
+        $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertFalse($result['checks']['DIRECT_BOOKING_PAYMENT_PROVIDER']['configured']);
+        $this->assertArrayNotHasKey('MERCADO_PAGO_ACCESS_TOKEN', $result['checks']);
+        Http::assertNothingSent();
+    }
+
     private function configureCompleteReadiness(): void
     {
         config([
+            'direct-booking.payment_provider' => 'mercadopago',
             'services.mercadopago.access_token' => 'sentinel-access-token',
             'services.mercadopago.webhook_secret' => 'sentinel-webhook-secret',
             'services.mercadopago.public_key' => 'sentinel-public-key',

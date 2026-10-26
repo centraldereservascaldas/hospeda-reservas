@@ -29,9 +29,7 @@ class CheckDirectBookingReadiness extends Command
         $minimumPixMinutes = filter_var(config('direct-booking.pix_minimum_remaining_minutes', 30), FILTER_VALIDATE_INT);
         $safetyMarginMinutes = filter_var(config('direct-booking.payment_safety_margin_minutes', 5), FILTER_VALIDATE_INT);
         $checks = [
-            'MERCADO_PAGO_ACCESS_TOKEN' => $this->isConfiguredString(config('services.mercadopago.access_token')),
-            'MERCADO_PAGO_WEBHOOK_SECRET' => $this->isConfiguredString(config('services.mercadopago.webhook_secret')),
-            'MERCADO_PAGO_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady(config('services.mercadopago.webhook_queue_connection')),
+            ...$this->paymentProviderChecks(),
             'DIRECT_BOOKING_NOTIFICATION_QUEUE_CONNECTION' => $this->isQueueReady(config('direct-booking.notification_queue_connection')),
             'QUEUE_CONNECTION' => $this->isQueueReady(config('queue.default')),
             'DIRECT_BOOKING_PILOT_LISTING_IDS' => $pilotTermsAreConfigured,
@@ -51,14 +49,16 @@ class CheckDirectBookingReadiness extends Command
             'DIRECT_BOOKING_RESUME_TOKEN_TTL_DAYS' => DirectBookingOrder::resumeTokenTtlDays() !== null,
             'MAIL_MAILER' => $this->hasExternalMailTransport(),
         ];
-        $optionalChecks = [
-            'VITE_MERCADO_PAGO_PUBLIC_KEY' => $this->isConfiguredString(config('services.mercadopago.public_key')),
-        ];
+        $optionalChecks = config('direct-booking.payment_provider', 'mercadopago') === 'mercadopago'
+            ? ['VITE_MERCADO_PAGO_PUBLIC_KEY' => $this->isConfiguredString(config('services.mercadopago.public_key'))]
+            : [];
         $flags = [
             'DIRECT_BOOKING_ENABLED' => (bool) config('direct-booking.enabled', false),
             'DIRECT_BOOKING_PAYMENTS_ENABLED' => (bool) config('direct-booking.payments_enabled', false),
             'DIRECT_BOOKING_CONFIRMATION_ENABLED' => (bool) config('direct-booking.confirmation_enabled', false),
             'DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED' => (bool) config('direct-booking.live_payments_enabled', false),
+            'CIELO_SANDBOX_ENABLED' => (bool) config('services.cielo.enabled', false),
+            'CIELO_SANDBOX_SOP_ENABLED' => (bool) config('services.cielo.sop_enabled', false),
         ];
         $complete = ! in_array(false, $checks, true);
 
@@ -88,6 +88,33 @@ class CheckDirectBookingReadiness extends Command
         }
 
         return $complete ? self::SUCCESS : self::FAILURE;
+    }
+
+    /** @return array<string, bool> */
+    private function paymentProviderChecks(): array
+    {
+        $provider = config('direct-booking.payment_provider', 'mercadopago');
+        $checks = ['DIRECT_BOOKING_PAYMENT_PROVIDER' => in_array($provider, ['mercadopago', 'cielo_sandbox'], true)];
+
+        if ($provider === 'mercadopago') {
+            return $checks + [
+                'MERCADO_PAGO_ACCESS_TOKEN' => $this->isConfiguredString(config('services.mercadopago.access_token')),
+                'MERCADO_PAGO_WEBHOOK_SECRET' => $this->isConfiguredString(config('services.mercadopago.webhook_secret')),
+                'MERCADO_PAGO_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady(config('services.mercadopago.webhook_queue_connection')),
+            ];
+        }
+
+        if ($provider === 'cielo_sandbox') {
+            return $checks + [
+                'CIELO_SANDBOX_MERCHANT_ID' => $this->isConfiguredString(config('services.cielo.merchant_id')),
+                'CIELO_SANDBOX_MERCHANT_KEY' => $this->isConfiguredString(config('services.cielo.merchant_key')),
+                'CIELO_SANDBOX_SOP_CLIENT_ID' => $this->isConfiguredString(config('services.cielo.sop_client_id')),
+                'CIELO_SANDBOX_SOP_CLIENT_SECRET' => $this->isConfiguredString(config('services.cielo.sop_client_secret')),
+                'CIELO_SANDBOX_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady(config('services.cielo.webhook_queue_connection')),
+            ];
+        }
+
+        return $checks;
     }
 
     private function isConfiguredString(mixed $value): bool
