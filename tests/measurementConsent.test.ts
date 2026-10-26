@@ -57,7 +57,7 @@ test('revocation persists and prevents loading on the next page', () => {
   assert.equal(loadGtmIfConsented(readMeasurementConsent()!, 'GTM-ABC123'), false);
 });
 
-test('preference UI refuses by default and can be reopened after saving', () => {
+test('preference UI saves independent choices and restores them when reopened', () => {
   const view = render(React.createElement(MeasurementPreferences, { showReopenButton: true }));
   assert.equal(
     document.activeElement,
@@ -72,13 +72,39 @@ test('preference UI refuses by default and can be reopened after saving', () => 
     document.activeElement,
     view.getByRole('heading', { name: 'Preferências de medição' }),
   );
-  fireEvent.click(view.getByRole('checkbox', { name: 'Permitir medição e publicidade' }));
+  const getAnalytics = () =>
+    view.getByRole('checkbox', { name: 'Permitir analytics (medição de uso)' }) as HTMLInputElement;
+  const getAdvertising = () =>
+    view.getByRole('checkbox', { name: 'Permitir publicidade' }) as HTMLInputElement;
+  assert.equal(getAnalytics().checked, false);
+  assert.equal(getAdvertising().checked, false);
+  fireEvent.click(getAnalytics());
   fireEvent.click(view.getByRole('button', { name: 'Salvar escolhas' }));
-  assert.deepEqual(readMeasurementConsent(), { analytics: true, advertising: true });
+  assert.deepEqual(readMeasurementConsent(), { analytics: true, advertising: false });
   assert.equal(
     document.activeElement,
     view.getByRole('button', { name: 'Preferências de medição' }),
   );
+
+  fireEvent.click(view.getByRole('button', { name: 'Preferências de medição' }));
+  assert.equal(getAnalytics().checked, true);
+  assert.equal(getAdvertising().checked, false);
+  fireEvent.click(getAnalytics());
+  fireEvent.click(getAdvertising());
+  fireEvent.click(view.getByRole('button', { name: 'Salvar escolhas' }));
+  assert.deepEqual(readMeasurementConsent(), { analytics: false, advertising: true });
+
+  fireEvent.click(view.getByRole('button', { name: 'Preferências de medição' }));
+  assert.equal(getAnalytics().checked, false);
+  assert.equal(getAdvertising().checked, true);
+  fireEvent.click(view.getByRole('button', { name: 'Recusar' }));
+  assert.deepEqual(readMeasurementConsent(), { analytics: false, advertising: false });
+});
+
+test('single-category consent does not load GTM', () => {
+  assert.equal(loadGtmIfConsented({ analytics: true, advertising: false }, 'GTM-ABC123'), false);
+  assert.equal(loadGtmIfConsented({ analytics: false, advertising: true }, 'GTM-ABC123'), false);
+  assert.equal(document.querySelector('#crcn-gtm-script'), null);
 });
 
 test('purchase requires consent, a loaded tag, confirmed payment and a valid BRL total, and emits once', async () => {

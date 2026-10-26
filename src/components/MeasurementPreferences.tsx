@@ -18,8 +18,9 @@ export function MeasurementPreferences({
   const [savedConsent, setSavedConsent] = useState<MeasurementConsent | null>(
     readMeasurementConsent,
   );
-  const [accepted, setAccepted] = useState(
-    Boolean(savedConsent?.analytics && savedConsent.advertising),
+  const [analyticsAccepted, setAnalyticsAccepted] = useState(savedConsent?.analytics ?? false);
+  const [advertisingAccepted, setAdvertisingAccepted] = useState(
+    savedConsent?.advertising ?? false,
   );
   const [isOpen, setIsOpen] = useState(savedConsent === null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -72,7 +73,8 @@ export function MeasurementPreferences({
     const hadLoadedGtm = Boolean(document.getElementById('crcn-gtm-script'));
     saveMeasurementConsent(choice);
     setSavedConsent(choice);
-    setAccepted(choice.analytics && choice.advertising);
+    setAnalyticsAccepted(choice.analytics);
+    setAdvertisingAccepted(choice.advertising);
     restoreFocusAfterCloseRef.current = true;
     setIsOpen(false);
     if (hadLoadedGtm && (!choice.analytics || !choice.advertising)) {
@@ -107,19 +109,27 @@ export function MeasurementPreferences({
         Preferências de medição
       </h2>
       <p className="mt-2 text-sm leading-5">
-        Escolha se podemos carregar ferramentas de medição e publicidade. Você pode mudar sua
-        escolha pelo controle “Preferências de medição”. Ao revogar, a página recarrega para
-        interromper as tags; a remoção de cookies existentes depende da configuração dessas
-        ferramentas.
+        Escolha separadamente se permite analytics e publicidade. Algumas ferramentas podem depender
+        da combinação das duas escolhas. Você pode mudar suas escolhas pelo controle “Preferências
+        de medição”. Ao revogar, a página recarrega para interromper as tags; a remoção de cookies
+        existentes depende da configuração dessas ferramentas.
       </p>
       <div className="mt-3 flex flex-col gap-2 text-sm">
         <label className="flex min-h-11 items-center gap-3">
           <input
             type="checkbox"
-            checked={accepted}
-            onChange={(event) => setAccepted(event.target.checked)}
+            checked={analyticsAccepted}
+            onChange={(event) => setAnalyticsAccepted(event.target.checked)}
           />
-          Permitir medição e publicidade
+          Permitir analytics (medição de uso)
+        </label>
+        <label className="flex min-h-11 items-center gap-3">
+          <input
+            type="checkbox"
+            checked={advertisingAccepted}
+            onChange={(event) => setAdvertisingAccepted(event.target.checked)}
+          />
+          Permitir publicidade
         </label>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -132,7 +142,7 @@ export function MeasurementPreferences({
         </button>
         <button
           type="button"
-          onClick={() => save({ analytics: accepted, advertising: accepted })}
+          onClick={() => save({ analytics: analyticsAccepted, advertising: advertisingAccepted })}
           className="min-h-11 rounded-xl bg-orange-700 px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
         >
           Salvar escolhas

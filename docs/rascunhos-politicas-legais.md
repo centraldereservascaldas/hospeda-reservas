@@ -62,9 +62,9 @@ A lista de fornecedores, os dados que cada um recebe, seus papéis, países de p
 
 ### 5. Preferências de medição
 
-O site oferece o controle **“Preferências de medição”**. Na interface atual, existe uma única opção conjunta, **“Permitir medição e publicidade”**: você pode permitir as duas categorias juntas ou recusá-las juntas, mas não escolher analytics e publicidade separadamente. O carregamento do Google Tag Manager e o envio dos eventos analíticos do funil dependem de ambas estarem habilitadas. A escolha é guardada no navegador. Ao revogar uma escolha depois do carregamento das tags, o site recarrega a página; a remoção de cookies já criados depende da configuração das ferramentas.
+O site oferece o controle **“Preferências de medição”**, com escolhas separadas para analytics (medição de uso) e publicidade. As escolhas ficam guardadas no navegador, podem ser alteradas depois e podem ser recusadas em conjunto. Algumas ferramentas podem depender da combinação das duas escolhas: no comportamento atual, o Google Tag Manager e os eventos analíticos do funil só são carregados ou enviados quando ambas estão habilitadas. Isso não significa que as tags estejam configuradas para operar de forma independente por categoria. Ao revogar uma escolha depois do carregamento das tags, o site recarrega a página; a remoção de cookies já criados depende da configuração das ferramentas.
 
-Você pode alterar sua escolha pelo controle de preferências disponível no site. A recusa dessas categorias não deve impedir as funções necessárias para navegar ou solicitar uma reserva. [Confirmar quais tags estão configuradas no GTM e se a configuração publicada de cada tag respeita a escolha registrada. Avaliar se serão oferecidas escolhas separadas antes de descrevê-las como independentes.]
+Você pode alterar suas escolhas pelo controle de preferências disponível no site. A recusa dessas categorias não deve impedir as funções necessárias para navegar ou solicitar uma reserva. [Confirmar quais tags estão configuradas no GTM e se a configuração publicada de cada tag respeita a escolha registrada antes da publicação.]
 
 ### 6. Armazenamento e retenção
 
@@ -123,7 +123,7 @@ Estes fatos justificam o conteúdo do rascunho, mas não substituem um inventár
 - Stays é consultada para catálogo, cotação, disponibilidade e, conforme o caminho usado, cadastros ou reservas.
 - O Mercado Pago está integrado no código para iniciar e conciliar pagamentos, mas o estado documentado do produto indica que o fluxo não foi validado ponta a ponta nem habilitado para compra real.
 - A Sofia pode enviar a mensagem e o histórico recente à API OpenAI. O endpoint observado usa `store: false`; isso não basta para afirmar políticas de retenção ou processamento do fornecedor.
-- Preferências e atribuição de campanha ficam no armazenamento local do navegador. A interface oferece uma única escolha conjunta para analytics e publicidade, sem toggles independentes; os eventos de funil só são enviados quando ambas estão autorizadas e o GTM está carregado.
+- Preferências e atribuição de campanha ficam no armazenamento local do navegador. Analytics e publicidade têm escolhas independentes; os eventos de funil e o carregamento do GTM ainda exigem ambas autorizadas, e essa combinação não comprova que as tags estejam configuradas para operar separadamente por categoria.
 - No pedido de reserva direta, a interface e a API registram pedido de cancelamento para análise; o retorno informa que a reserva continua ativa até confirmação. O reembolso não é iniciado por essa solicitação. O fluxo administrativo possui passos para verificar cancelamento na Stays e reembolso no gateway.
 - Para reservas sincronizadas na Stays, o sistema envia uma alteração de cancelamento ao serviço e retorna sucesso apenas se a Stays confirmar; em caso de falha, informa que a reserva continua ativa.
 - As páginas legais permanecem marcadas como não aprovadas e sem conteúdo publicável na configuração do servidor.
