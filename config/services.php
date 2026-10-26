@@ -53,6 +53,18 @@ return [
         'webhook_queue_connection' => env('MERCADO_PAGO_WEBHOOK_QUEUE_CONNECTION', 'database'),
     ],
 
+    'cielo' => [
+        'enabled' => (bool) env('CIELO_SANDBOX_ENABLED', false),
+        'sop_enabled' => (bool) env('CIELO_SANDBOX_SOP_ENABLED', false),
+        'merchant_id' => env('CIELO_SANDBOX_MERCHANT_ID'),
+        'merchant_key' => env('CIELO_SANDBOX_MERCHANT_KEY'),
+        'sop_client_id' => env('CIELO_SANDBOX_SOP_CLIENT_ID'),
+        'sop_client_secret' => env('CIELO_SANDBOX_SOP_CLIENT_SECRET'),
+        'webhook_header_name' => env('CIELO_SANDBOX_WEBHOOK_HEADER_NAME'),
+        'webhook_header_value' => env('CIELO_SANDBOX_WEBHOOK_HEADER_VALUE'),
+        'webhook_queue_connection' => env('CIELO_SANDBOX_WEBHOOK_QUEUE_CONNECTION', 'database'),
+    ],
+
     'supabase' => [
         'url' => env('SUPABASE_URL', env('VITE_SUPABASE_URL')),
         'anon_key' => env('SUPABASE_ANON_KEY', env('VITE_SUPABASE_ANON_KEY')),

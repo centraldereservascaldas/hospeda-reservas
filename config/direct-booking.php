@@ -4,6 +4,7 @@ return [
     'enabled' => (bool) env('DIRECT_BOOKING_ENABLED', false),
     'payments_enabled' => (bool) env('DIRECT_BOOKING_PAYMENTS_ENABLED', false),
     'confirmation_enabled' => (bool) env('DIRECT_BOOKING_CONFIRMATION_ENABLED', false),
+    'payment_provider' => env('DIRECT_BOOKING_PAYMENT_PROVIDER', 'mercadopago'),
     'live_payments_enabled' => (bool) env('DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED', false),
     'pilot_listing_ids' => array_values(array_unique(array_filter(
         array_map('trim', explode(',', (string) env('DIRECT_BOOKING_PILOT_LISTING_IDS', ''))),

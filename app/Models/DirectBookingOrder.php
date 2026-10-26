@@ -39,6 +39,8 @@ class DirectBookingOrder extends Model
         'expires_at',
         'stays_reservation_id',
         'gateway_payment_id',
+        'gateway_provider',
+        'gateway_merchant_id',
         'payment_status',
         'payment_amount',
         'payment_currency',
