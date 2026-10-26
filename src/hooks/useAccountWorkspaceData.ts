@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Reservation } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
-import type { DirectBookingOrderListItem } from '../services/crcnBackendApi';
+import type { DirectBookingOrderListItem } from '../services/checkoutApi';
 import type { MainView } from '../components/MobileBottomNavigation';
 
 export type OwnerAccessStatus =

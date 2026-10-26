@@ -15,7 +15,7 @@ import type {
 import type { PropertyRouteStatus } from '../hooks/useAccommodationRouting';
 import type { CondominiumSummary } from '../utils/condominiumCatalog';
 import type { MainView } from './MobileBottomNavigation';
-import type { DirectBookingOrderListItem } from '../services/crcnBackendApi';
+import type { DirectBookingOrderListItem } from '../services/checkoutApi';
 import type { OwnerAccessStatus } from '../hooks/useAccountWorkspaceData';
 import type { AppOverlayBookingPayload } from '../types/booking';
 import { countOccupancyGuests } from '../utils/guestCounts';

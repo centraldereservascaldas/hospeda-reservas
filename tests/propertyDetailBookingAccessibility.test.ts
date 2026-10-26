@@ -27,6 +27,7 @@ const { PropertyDatePickerDialog } =
 const { formatPropertyDescription, PropertyOverviewSection } =
   await import('../src/components/property/PropertyOverviewSection.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
+const { checkoutApi } = await import('../src/services/checkoutApi.ts');
 const { CheckoutModal } = await import('../src/components/booking/CheckoutModal.tsx');
 const { CheckoutResumePage } = await import('../src/components/booking/CheckoutResumePage.tsx');
 const { PropertyHostSection } = await import('../src/components/property/PropertyHostSection.tsx');
@@ -639,12 +640,12 @@ const liveQuote = {
 };
 
 test('shows checkout retry when terms or readiness requests reject unexpectedly', async () => {
-  const originalGetCheckoutTerms = crcnBackendApi.getCheckoutTerms;
-  const originalGetCheckoutReadiness = crcnBackendApi.getCheckoutReadiness;
-  crcnBackendApi.getCheckoutTerms = async () => {
+  const originalGetCheckoutTerms = checkoutApi.getCheckoutTerms;
+  const originalGetCheckoutReadiness = checkoutApi.getCheckoutReadiness;
+  checkoutApi.getCheckoutTerms = async () => {
     throw new Error('terms request rejected');
   };
-  crcnBackendApi.getCheckoutReadiness = async () => {
+  checkoutApi.getCheckoutReadiness = async () => {
     throw new Error('readiness request rejected');
   };
 
@@ -677,15 +678,15 @@ test('shows checkout retry when terms or readiness requests reject unexpectedly'
       getByText('Não foi possível carregar as condições desta estadia. Tente consultar novamente.'),
     );
   } finally {
-    crcnBackendApi.getCheckoutTerms = originalGetCheckoutTerms;
-    crcnBackendApi.getCheckoutReadiness = originalGetCheckoutReadiness;
+    checkoutApi.getCheckoutTerms = originalGetCheckoutTerms;
+    checkoutApi.getCheckoutReadiness = originalGetCheckoutReadiness;
   }
 });
 
 test('checkout does not show internal approval identifiers to guests', async () => {
-  const originalGetCheckoutTerms = crcnBackendApi.getCheckoutTerms;
-  const originalGetCheckoutReadiness = crcnBackendApi.getCheckoutReadiness;
-  crcnBackendApi.getCheckoutTerms = async () => ({
+  const originalGetCheckoutTerms = checkoutApi.getCheckoutTerms;
+  const originalGetCheckoutReadiness = checkoutApi.getCheckoutReadiness;
+  checkoutApi.getCheckoutTerms = async () => ({
     kind: 'ready',
     data: {
       success: true,
@@ -698,7 +699,7 @@ test('checkout does not show internal approval identifiers to guests', async () 
       },
     },
   });
-  crcnBackendApi.getCheckoutReadiness = async () => ({
+  checkoutApi.getCheckoutReadiness = async () => ({
     kind: 'ready',
     data: {
       success: true,
@@ -755,8 +756,8 @@ test('checkout does not show internal approval identifiers to guests', async () 
     assert.match(termsAcceptance.parentElement?.className ?? '', /min-h-11/);
     assert.equal((checkoutSubmit as HTMLButtonElement).disabled, true);
   } finally {
-    crcnBackendApi.getCheckoutTerms = originalGetCheckoutTerms;
-    crcnBackendApi.getCheckoutReadiness = originalGetCheckoutReadiness;
+    checkoutApi.getCheckoutTerms = originalGetCheckoutTerms;
+    checkoutApi.getCheckoutReadiness = originalGetCheckoutReadiness;
   }
 });
 
@@ -1654,9 +1655,9 @@ test('guest selector uses a wider compact layout in landscape viewports', () => 
 
 test('checkout resume not-found state keeps its return link touch-sized', async () => {
   const reference = 'R'.repeat(40);
-  const originalResumeCheckout = crcnBackendApi.resumeCheckout;
+  const originalResumeCheckout = checkoutApi.resumeCheckout;
   saveCheckoutResumeToken(reference, 'T'.repeat(64), new Date(Date.now() + 60_000).toISOString());
-  crcnBackendApi.resumeCheckout = async () => ({ kind: 'not-found' });
+  checkoutApi.resumeCheckout = async () => ({ kind: 'not-found' });
 
   try {
     const { getByRole } = render(React.createElement(CheckoutResumePage, { reference }));
@@ -1680,17 +1681,17 @@ test('checkout resume not-found state keeps its return link touch-sized', async 
     );
     assert.match(returnLink.className, /min-h-11/);
   } finally {
-    crcnBackendApi.resumeCheckout = originalResumeCheckout;
+    checkoutApi.resumeCheckout = originalResumeCheckout;
     clearCheckoutResumeToken(reference);
   }
 });
 
 test('checkout resume retry remains touch-sized when the order service is unavailable', async () => {
   const reference = 'U'.repeat(40);
-  const originalResumeCheckout = crcnBackendApi.resumeCheckout;
+  const originalResumeCheckout = checkoutApi.resumeCheckout;
   let checks = 0;
   saveCheckoutResumeToken(reference, 'V'.repeat(64), new Date(Date.now() + 60_000).toISOString());
-  crcnBackendApi.resumeCheckout = async () => {
+  checkoutApi.resumeCheckout = async () => {
     checks += 1;
     return { kind: 'unavailable' };
   };
@@ -1707,7 +1708,7 @@ test('checkout resume retry remains touch-sized when the order service is unavai
     await waitFor(() => assert.equal(checks, 2));
     assert.ok(getByRole('heading', { name: 'Não foi possível consultar agora' }));
   } finally {
-    crcnBackendApi.resumeCheckout = originalResumeCheckout;
+    checkoutApi.resumeCheckout = originalResumeCheckout;
     clearCheckoutResumeToken(reference);
   }
 });

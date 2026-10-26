@@ -22,7 +22,7 @@ Object.assign(globalThis, {
 const React = (await import('react')).default;
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react');
 const { CheckoutModal } = await import('../src/components/booking/CheckoutModal.tsx');
-const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
+const { checkoutApi } = await import('../src/services/checkoutApi.ts');
 const { STAYS_NET_APARTMENTS } = await import('../src/data/staysApartments.ts');
 const { saveMeasurementConsent } = await import('../src/utils/measurementConsent.ts');
 const { updateMeasurementAttribution } = await import('../src/utils/measurementAttribution.ts');
@@ -69,15 +69,15 @@ const bookingData = {
 };
 
 const originalFetch = globalThis.fetch;
-const originalGetCheckoutTerms = crcnBackendApi.getCheckoutTerms;
-const originalGetCheckoutReadiness = crcnBackendApi.getCheckoutReadiness;
+const originalGetCheckoutTerms = checkoutApi.getCheckoutTerms;
+const originalGetCheckoutReadiness = checkoutApi.getCheckoutReadiness;
 
 afterEach(() => {
   cleanup();
   document.body.innerHTML = '';
   window.localStorage.clear();
-  crcnBackendApi.getCheckoutTerms = originalGetCheckoutTerms;
-  crcnBackendApi.getCheckoutReadiness = originalGetCheckoutReadiness;
+  checkoutApi.getCheckoutTerms = originalGetCheckoutTerms;
+  checkoutApi.getCheckoutReadiness = originalGetCheckoutReadiness;
   globalThis.fetch = originalFetch;
 });
 
@@ -93,7 +93,7 @@ async function submitCheckoutWithConsent(consent: {
   );
   saveMeasurementConsent(consent);
 
-  crcnBackendApi.getCheckoutTerms = async () => ({
+  checkoutApi.getCheckoutTerms = async () => ({
     kind: 'ready',
     data: {
       success: true,
@@ -103,7 +103,7 @@ async function submitCheckoutWithConsent(consent: {
       },
     },
   });
-  crcnBackendApi.getCheckoutReadiness = async () => ({
+  checkoutApi.getCheckoutReadiness = async () => ({
     kind: 'ready',
     data: {
       success: true,

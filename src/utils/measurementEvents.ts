@@ -1,4 +1,4 @@
-import type { DirectBookingOrderSummary } from '../services/crcnBackendApi';
+import type { DirectBookingOrderSummary } from '../services/checkoutApi';
 import { readMeasurementConsent } from './measurementConsent';
 
 type FunnelEvent =

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { crcnBackendApi } from '../src/services/crcnBackendApi.ts';
+import { checkoutApi } from '../src/services/checkoutApi.ts';
 import { isProperty, isReservation } from '../src/utils/apiValidation.ts';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
 import { saveMeasurementConsent } from '../src/utils/measurementConsent.ts';
@@ -349,7 +350,7 @@ test('validates the remaining backend response boundaries', async () => {
       payment: { enabled: false, methods: [], publicKey: null },
       idempotentReplay: false,
     });
-    const checkout = await crcnBackendApi.createCheckout(directCheckoutRequest);
+    const checkout = await checkoutApi.createCheckout(directCheckoutRequest);
     assert.equal(checkout?.success, true);
     assert.deepEqual(checkout?.order, directCheckoutOrder);
     assert.deepEqual(checkout?.resume, directCheckoutResume);
@@ -366,7 +367,7 @@ test('validates the remaining backend response boundaries', async () => {
       },
       409,
     );
-    const changedQuote = await crcnBackendApi.createCheckout(directCheckoutRequest);
+    const changedQuote = await checkoutApi.createCheckout(directCheckoutRequest);
     assert.equal(changedQuote?.success, false);
 
     respond({
@@ -377,7 +378,7 @@ test('validates the remaining backend response boundaries', async () => {
       payment: { enabled: false, methods: [], publicKey: null },
       idempotentReplay: false,
     });
-    assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
+    assert.equal(await checkoutApi.createCheckout(directCheckoutRequest), null);
 
     respond({ success: true, reservationId: 'different-reservation' });
     await assert.rejects(crcnBackendApi.cancelMyReservation('reservation-1', 'test-token'));
@@ -415,7 +416,7 @@ test('checkout validates the created order and resumes it with a protected token
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
-    assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
+    assert.equal(await checkoutApi.createCheckout(directCheckoutRequest), null);
 
     globalThis.fetch = async () =>
       new Response(
@@ -428,7 +429,7 @@ test('checkout validates the created order and resumes it with a protected token
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
-    assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
+    assert.equal(await checkoutApi.createCheckout(directCheckoutRequest), null);
 
     let resumeHeader = '';
     globalThis.fetch = async (_input, init) => {
@@ -443,7 +444,7 @@ test('checkout validates the created order and resumes it with a protected token
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
     };
-    const resumed = await crcnBackendApi.resumeCheckout(
+    const resumed = await checkoutApi.resumeCheckout(
       directCheckoutResume.reference,
       directCheckoutResume.token,
     );
@@ -467,10 +468,7 @@ test('checkout validates the created order and resumes it with a protected token
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
     assert.deepEqual(
-      await crcnBackendApi.resumeCheckout(
-        directCheckoutResume.reference,
-        directCheckoutResume.token,
-      ),
+      await checkoutApi.resumeCheckout(directCheckoutResume.reference, directCheckoutResume.token),
       { kind: 'unavailable' },
     );
   } finally {
@@ -512,7 +510,7 @@ test('checkout sends only consented first and last touch attribution', async () 
       );
     };
 
-    assert.equal((await crcnBackendApi.createCheckout(directCheckoutRequest))?.success, true);
+    assert.equal((await checkoutApi.createCheckout(directCheckoutRequest))?.success, true);
     assert.deepEqual(capturedRequest.body?.marketingAttribution, {
       firstTouch: {
         capturedAt,
@@ -531,7 +529,7 @@ test('checkout sends only consented first and last touch attribution', async () 
     assert.equal(serializedRequest.includes('guest@example.test'), false);
 
     saveMeasurementConsent({ analytics: false, advertising: false });
-    await crcnBackendApi.createCheckout(directCheckoutRequest);
+    await checkoutApi.createCheckout(directCheckoutRequest);
     assert.equal('marketingAttribution' in (capturedRequest.body ?? {}), false);
   } finally {
     globalThis.fetch = originalGlobals.fetch;

@@ -8,11 +8,9 @@ import {
   getPropertyFeeLabel,
   getVisiblePropertyFees,
 } from '../../utils/propertyPricing';
-import {
-  crcnBackendApi,
-  type CalculatedPriceResponse,
-  type CheckoutReadinessResponse,
-} from '../../services/crcnBackendApi';
+import { crcnBackendApi } from '../../services/crcnBackendApi';
+import type { CalculatedPriceResponse } from '../../services/crcnBackendApi';
+import { checkoutApi, type CheckoutReadinessResponse } from '../../services/checkoutApi';
 import { useDialogFocus } from '../useDialogFocus';
 import { countOccupancyGuests } from '../../utils/guestCounts';
 import {
@@ -106,8 +104,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     }
 
     void Promise.all([
-      crcnBackendApi.getCheckoutTerms(listingId),
-      crcnBackendApi.getCheckoutReadiness(bookingData?.property.id || listingId),
+      checkoutApi.getCheckoutTerms(listingId),
+      checkoutApi.getCheckoutReadiness(bookingData?.property.id || listingId),
     ])
       .then(([termsResult, readinessResult]) => {
         if (!isCurrent) return;
@@ -238,7 +236,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setIsSubmitting(true);
     try {
       const idempotencyKey = await getOrCreateCheckoutSubmissionKey(checkoutSubmission);
-      const result = await crcnBackendApi.createCheckout({
+      const result = await checkoutApi.createCheckout({
         ...checkoutSubmission,
         idempotencyKey,
       });

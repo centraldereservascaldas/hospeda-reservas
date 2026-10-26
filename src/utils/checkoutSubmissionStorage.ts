@@ -1,4 +1,4 @@
-import type { CheckoutRequestPayload } from '../services/crcnBackendApi';
+import type { CheckoutRequestPayload } from '../services/checkoutApi';
 
 const storagePrefix = 'crcn.checkout.submission.';
 const inMemoryKeys = new Map<string, string>();

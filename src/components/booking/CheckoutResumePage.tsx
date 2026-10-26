@@ -8,13 +8,13 @@ import {
   Printer,
   ShieldCheck,
 } from 'lucide-react';
-import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { checkoutApi } from '../../services/checkoutApi';
 import { emitConfirmedPurchase, emitFunnelEvent } from '../../utils/measurementEvents';
 import type {
   CheckoutAccessCredentials,
   CheckoutResumeResponse,
   DirectBookingOrderSummary,
-} from '../../services/crcnBackendApi';
+} from '../../services/checkoutApi';
 import { MercadoPagoCardForm } from './MercadoPagoCardForm';
 import {
   clearCheckoutResumeToken,
@@ -286,10 +286,10 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
     const refresh = async (showLoading: boolean): Promise<void> => {
       if (showLoading) setResumeState({ kind: 'loading' });
       let resolvedCredentials = credentials;
-      let result = await crcnBackendApi.resumeCheckout(reference, resolvedCredentials);
+      let result = await checkoutApi.resumeCheckout(reference, resolvedCredentials);
       if (result.kind === 'not-found' && accessToken && resumeToken) {
         resolvedCredentials = { type: 'resume-token', resumeToken };
-        result = await crcnBackendApi.resumeCheckout(reference, resolvedCredentials);
+        result = await checkoutApi.resumeCheckout(reference, resolvedCredentials);
       }
       if (!isCurrent) return;
 
@@ -344,7 +344,10 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
 
     pixPaymentSubmissionInFlightRef.current = true;
     if (!pixPaymentInfoEmittedRef.current) {
-      pixPaymentInfoEmittedRef.current = emitFunnelEvent({ event: 'add_payment_info', payment_type: 'pix' });
+      pixPaymentInfoEmittedRef.current = emitFunnelEvent({
+        event: 'add_payment_info',
+        payment_type: 'pix',
+      });
     }
     setIsStartingPixPayment(true);
     setPaymentStartError(null);
@@ -352,7 +355,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
       if (!isValidPixPaymentIdempotencyKey(pixPaymentIdempotencyKeyRef.current)) {
         pixPaymentIdempotencyKeyRef.current = getPixPaymentIdempotencyKey(reference);
       }
-      const result = await crcnBackendApi.createCheckoutPayment(
+      const result = await checkoutApi.createCheckoutPayment(
         reference,
         credentials,
         order.quoteTotal,

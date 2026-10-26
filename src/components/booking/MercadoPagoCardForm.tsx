@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { crcnBackendApi } from '../../services/crcnBackendApi';
-import type { CheckoutAccessCredentials } from '../../services/crcnBackendApi';
+import { checkoutApi } from '../../services/checkoutApi';
+import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
 import {
   loadMercadoPagoSdk,
   type MercadoPagoCardFormInstance,
@@ -91,12 +91,15 @@ export function MercadoPagoCardForm({
 
     isSubmittingRef.current = true;
     if (!paymentInfoEmittedRef.current) {
-      paymentInfoEmittedRef.current = emitFunnelEvent({ event: 'add_payment_info', payment_type: 'card' });
+      paymentInfoEmittedRef.current = emitFunnelEvent({
+        event: 'add_payment_info',
+        payment_type: 'card',
+      });
     }
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const result = await crcnBackendApi.createCheckoutPayment(reference, credentials, amount, {
+      const result = await checkoutApi.createCheckoutPayment(reference, credentials, amount, {
         paymentMethod: 'card',
         paymentMethodId: cardData.paymentMethodId,
         token: cardData.token,

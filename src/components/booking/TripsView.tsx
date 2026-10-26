@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import type { Reservation, Currency, ReservationCancellationResult } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
-import type { DirectBookingOrderListItem } from '../../services/crcnBackendApi';
+import type { DirectBookingOrderListItem } from '../../services/checkoutApi';
 import { formatCurrency } from '../../utils/formatters';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { useDialogFocus } from '../useDialogFocus';

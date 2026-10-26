@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { afterEach } from 'node:test';
 import { JSDOM } from 'jsdom';
-import type { DirectBookingOrderSummary } from '../src/services/crcnBackendApi';
+import type { DirectBookingOrderSummary } from '../src/services/checkoutApi';
 
 const dom = new JSDOM('<!doctype html><html><head></head><body></body></html>', {
   url: 'http://localhost/',

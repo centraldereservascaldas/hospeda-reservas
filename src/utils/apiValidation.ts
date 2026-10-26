@@ -1,7 +1,7 @@
 import type { Property, Reservation } from '../types';
+import type { DirectBookingOrderListItem } from '../services/checkoutApi';
 import type {
   CalculatedPriceResponse,
-  DirectBookingOrderListItem,
   DirectBookingOperationsOrder,
   DirectBookingOperationsWebhook,
 } from '../services/crcnBackendApi';
