@@ -64,6 +64,7 @@ declare global {
 }
 
 let mercadoPagoSdkPromise: Promise<MercadoPagoConstructor> | null = null;
+const sdkLoadTimeoutMs = 15_000;
 
 export function loadMercadoPagoSdk(): Promise<MercadoPagoConstructor> {
   if (window.MercadoPago) return Promise.resolve(window.MercadoPago);
@@ -74,8 +75,16 @@ export function loadMercadoPagoSdk(): Promise<MercadoPagoConstructor> {
       'script[data-mercadopago-sdk="true"]',
     );
     const script = existingScript ?? document.createElement('script');
+    let timeoutId = 0;
+
+    const cleanup = (): void => {
+      window.clearTimeout(timeoutId);
+      script.removeEventListener('load', handleLoad);
+      script.removeEventListener('error', handleError);
+    };
 
     const handleLoad = (): void => {
+      cleanup();
       if (window.MercadoPago) {
         resolve(window.MercadoPago);
       } else {
@@ -85,6 +94,7 @@ export function loadMercadoPagoSdk(): Promise<MercadoPagoConstructor> {
       }
     };
     const handleError = (): void => {
+      cleanup();
       mercadoPagoSdkPromise = null;
       script.remove();
       reject(new Error('Falha ao carregar MercadoPago.js.'));
@@ -92,6 +102,12 @@ export function loadMercadoPagoSdk(): Promise<MercadoPagoConstructor> {
 
     script.addEventListener('load', handleLoad, { once: true });
     script.addEventListener('error', handleError, { once: true });
+    timeoutId = window.setTimeout(() => {
+      cleanup();
+      mercadoPagoSdkPromise = null;
+      script.remove();
+      reject(new Error('Tempo limite ao carregar MercadoPago.js.'));
+    }, sdkLoadTimeoutMs);
 
     if (!existingScript) {
       script.src = 'https://sdk.mercadopago.com/js/v2';
