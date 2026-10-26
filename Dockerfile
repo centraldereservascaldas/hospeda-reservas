@@ -29,7 +29,7 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/html/public \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl libpq-dev libpq5 unzip \
-    && docker-php-ext-install opcache pdo_pgsql pdo_sqlite \
+    && docker-php-ext-install pdo_pgsql pdo_sqlite \
     && apt-get purge -y --auto-remove libpq-dev \
     && rm -rf /var/lib/apt/lists/* \
     && a2enmod headers rewrite \
