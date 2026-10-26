@@ -5,6 +5,7 @@ import type {
   DirectBookingOperationsOrder,
   DirectBookingOperationsWebhook,
 } from '../services/crcnBackendApi';
+import type { DirectBookingCancellationReceipt } from '../services/checkoutApi';
 import type { StaysCalendarDay } from './staysAvailability';
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -114,7 +115,18 @@ export const isDirectBookingOrderListItem = (value: unknown): value is DirectBoo
   value.currency === 'BRL' &&
   (value.paymentStatus === null || typeof value.paymentStatus === 'string') &&
   (value.expiresAt === null || isIsoDateTime(value.expiresAt)) &&
-  (value.createdAt === null || isIsoDateTime(value.createdAt));
+  (value.createdAt === null || isIsoDateTime(value.createdAt)) &&
+  (value.cancellationReceipt === undefined ||
+    value.cancellationReceipt === null ||
+    isDirectBookingCancellationReceipt(value.cancellationReceipt));
+
+export const isDirectBookingCancellationReceipt = (
+  value: unknown,
+): value is DirectBookingCancellationReceipt =>
+  isRecord(value) &&
+  typeof value.protocol === 'string' &&
+  /^CANCEL-[A-Za-z0-9]{40}$/.test(value.protocol) &&
+  isIsoDateTime(value.requestedAt);
 
 export const isDirectBookingOperationsOrder = (
   value: unknown,

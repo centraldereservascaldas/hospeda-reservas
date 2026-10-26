@@ -63,20 +63,20 @@ class GuestReservationController extends Controller
             return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404);
         }
 
-        $result = DB::transaction(function () use ($guest, $publicReference): string {
+        $result = DB::transaction(function () use ($guest, $publicReference): array {
             $order = DirectBookingOrder::query()
                 ->where('public_reference', $publicReference)
                 ->where('guest_email', mb_strtolower(trim($guest->email)))
                 ->lockForUpdate()
                 ->first();
             if ($order === null) {
-                return 'not_found';
+                return ['status' => 'not_found', 'receipt' => null];
             }
             if ($order->status === DirectBookingOrderStatus::CancelamentoSolicitado) {
-                return 'already_requested';
+                return ['status' => 'already_requested', 'receipt' => $order->cancellationReceipt()];
             }
             if ($order->status !== DirectBookingOrderStatus::Confirmado || $order->payment_status !== 'approved') {
-                return 'not_cancellable';
+                return ['status' => 'not_cancellable', 'receipt' => null];
             }
 
             $order->transitionTo(DirectBookingOrderStatus::CancelamentoSolicitado, [
@@ -86,14 +86,14 @@ class GuestReservationController extends Controller
             ]);
             $order->save();
 
-            return 'requested';
+            return ['status' => 'requested', 'receipt' => $order->cancellationReceipt()];
         });
 
-        if ($result === 'not_found') {
+        if ($result['status'] === 'not_found') {
             return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404)
                 ->header('Cache-Control', 'no-store, private');
         }
-        if ($result === 'not_cancellable') {
+        if ($result['status'] === 'not_cancellable') {
             return response()->json(['success' => false, 'code' => 'direct_booking_not_cancellable', 'message' => 'Este pedido não está em um estado que permita solicitar cancelamento. Nenhuma alteração foi feita.'], 409)
                 ->header('Cache-Control', 'no-store, private');
         }
@@ -101,8 +101,9 @@ class GuestReservationController extends Controller
         return response()->json([
             'success' => true,
             'cancellationStatus' => 'requested',
-            'alreadyRequested' => $result === 'already_requested',
-            'message' => 'A solicitação foi registrada para análise da Central. A reserva continua ativa até a confirmação do cancelamento.',
+            'alreadyRequested' => $result['status'] === 'already_requested',
+            'cancellationReceipt' => $result['receipt'],
+            'message' => 'A solicitação de cancelamento foi recebida para análise da Central; o cancelamento ainda não foi concluído.',
         ])->header('Cache-Control', 'no-store, private');
     }
 

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import type { Reservation, Currency, ReservationCancellationResult } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import type { DirectBookingOrderListItem } from '../../services/checkoutApi';
+import type { DirectBookingCancellationReceipt } from '../../services/checkoutApi';
 import { formatCurrency } from '../../utils/formatters';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { useDialogFocus } from '../useDialogFocus';
@@ -62,6 +63,11 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const [isSubmittingCancellation, setIsSubmittingCancellation] = useState(false);
   const [cancellationError, setCancellationError] = useState('');
   const [cancellationNotice, setCancellationNotice] = useState('');
+  const [cancellationNoticeReceipt, setCancellationNoticeReceipt] =
+    useState<DirectBookingCancellationReceipt | null>(null);
+  const [localCancellationReceipts, setLocalCancellationReceipts] = useState<
+    Record<string, DirectBookingCancellationReceipt>
+  >({});
   const [cancellationConfirmationOrderId, setCancellationConfirmationOrderId] = useState<
     string | null
   >(null);
@@ -130,12 +136,18 @@ export const TripsView: React.FC<TripsViewProps> = ({
     setCancellationRequestSubmittingId(order.publicReference);
     setCancellationRequestErrors((errors) => ({ ...errors, [order.publicReference]: '' }));
     try {
-      await crcnBackendApi.requestDirectBookingCancellation(accessToken, order.publicReference);
-      setLocallyRequestedCancellationIds((ids) => [...new Set([...ids, order.publicReference])]);
-      setCancellationConfirmationOrderId(null);
-      setCancellationNotice(
-        'A solicitação foi enviada para análise da Central. A reserva continua ativa até a confirmação do cancelamento; nenhum reembolso foi processado.',
+      const result = await crcnBackendApi.requestDirectBookingCancellation(
+        accessToken,
+        order.publicReference,
       );
+      setLocallyRequestedCancellationIds((ids) => [...new Set([...ids, order.publicReference])]);
+      setLocalCancellationReceipts((receipts) => ({
+        ...receipts,
+        [order.publicReference]: result.cancellationReceipt,
+      }));
+      setCancellationNoticeReceipt(result.cancellationReceipt);
+      setCancellationConfirmationOrderId(null);
+      setCancellationNotice(result.message);
     } catch (error) {
       console.warn('Unable to request cancellation:', error);
       setCancellationRequestErrors((errors) => ({
@@ -175,6 +187,14 @@ export const TripsView: React.FC<TripsViewProps> = ({
           className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950"
         >
           {cancellationNotice}
+          {cancellationNoticeReceipt && (
+            <span className="mt-1 block font-mono text-xs font-bold">
+              Protocolo {cancellationNoticeReceipt.protocol} · recebido em{' '}
+              {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(
+                new Date(cancellationNoticeReceipt.requestedAt),
+              )}
+            </span>
+          )}
         </p>
       )}
 
@@ -281,8 +301,8 @@ export const TripsView: React.FC<TripsViewProps> = ({
                           aria-label="Confirmar solicitação de cancelamento"
                         >
                           <p className="text-xs leading-5 text-neutral-700">
-                            A Central analisará o pedido. A reserva continuará ativa até a
-                            confirmação; esta solicitação não processa reembolso.
+                            A Central analisará o pedido. Enviar esta solicitação não confirma o
+                            cancelamento nem processa reembolso.
                           </p>
                           {cancellationRequestErrors[order.publicReference] && (
                             <p className="text-xs font-semibold text-rose-800" role="alert">
@@ -325,6 +345,32 @@ export const TripsView: React.FC<TripsViewProps> = ({
                       )}
                     </div>
                   )}
+                {(localCancellationReceipts[order.publicReference] ??
+                  order.cancellationReceipt) && (
+                  <p
+                    className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950"
+                    role="status"
+                  >
+                    Solicitação recebida; o cancelamento ainda não foi concluído.
+                    <span className="mt-1 block font-mono font-bold">
+                      Protocolo{' '}
+                      {
+                        (localCancellationReceipts[order.publicReference] ??
+                          order.cancellationReceipt)?.protocol
+                      }{' '}
+                      · recebido em{' '}
+                      {new Intl.DateTimeFormat('pt-BR', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      }).format(
+                        new Date(
+                          (localCancellationReceipts[order.publicReference] ??
+                            order.cancellationReceipt)!.requestedAt,
+                        ),
+                      )}
+                    </span>
+                  </p>
+                )}
               </article>
             ))}
           </div>

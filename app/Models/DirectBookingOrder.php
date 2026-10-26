@@ -94,6 +94,25 @@ class DirectBookingOrder extends Model
             && hash_equals($this->resume_token, $providedToken);
     }
 
+    /**
+     * @return array{protocol: string, requestedAt: string}|null
+     */
+    public function cancellationReceipt(): ?array
+    {
+        foreach (array_reverse($this->operational_events ?? []) as $event) {
+            if (($event['code'] ?? null) !== 'guest_cancellation_requested' || ! is_string($event['at'] ?? null)) {
+                continue;
+            }
+
+            return [
+                'protocol' => 'CANCEL-'.$this->public_reference,
+                'requestedAt' => $event['at'],
+            ];
+        }
+
+        return null;
+    }
+
     public function confirmedReservationAction(): ?DirectBookingStaysAction
     {
         return $this->staysActions()

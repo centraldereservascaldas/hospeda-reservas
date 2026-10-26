@@ -21,6 +21,7 @@ class DirectBookingOrderListResource extends JsonResource
             'paymentStatus' => $this->payment_status,
             'expiresAt' => $this->expires_at?->toISOString(),
             'createdAt' => $this->created_at?->toISOString(),
+            'cancellationReceipt' => $this->cancellationReceipt(),
         ];
     }
 }

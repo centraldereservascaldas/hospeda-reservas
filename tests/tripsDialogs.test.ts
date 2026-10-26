@@ -13,8 +13,9 @@ Object.assign(globalThis, {
 });
 
 const React = (await import('react')).default;
-const { render, fireEvent, cleanup } = await import('@testing-library/react');
+const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 const { TripsView } = await import('../src/components/booking/TripsView.tsx');
+const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
 afterEach(() => {
   cleanup();
@@ -44,6 +45,24 @@ const reservation = {
   guestName: 'Pessoa Hóspede',
   guestEmail: 'guest@example.test',
   guestPhone: '000000000',
+};
+
+const cancellationOrder = {
+  status: 'cancelamento_solicitado' as const,
+  publicReference: '0123456789abcdef0123456789abcdef01234567',
+  reservationConfirmed: true,
+  listingId: 'JQ08G',
+  from: '2026-11-10',
+  to: '2026-11-13',
+  quoteTotal: '3001.00',
+  currency: 'BRL' as const,
+  paymentStatus: 'approved',
+  expiresAt: null,
+  createdAt: '2026-10-26T14:00:00.000Z',
+  cancellationReceipt: {
+    protocol: 'CANCEL-0123456789abcdef0123456789abcdef01234567',
+    requestedAt: '2026-10-26T15:30:00.000Z',
+  },
 };
 
 test('voucher and cancellation dialogs have names, initial focus, Escape and focus return', () => {
@@ -92,4 +111,62 @@ test('voucher and cancellation dialogs have names, initial focus, Escape and foc
   fireEvent.keyDown(document, { key: 'Escape' });
   assert.equal(queryByRole('dialog'), null);
   assert.equal(document.activeElement, cancelTrigger);
+});
+
+test('retrieved cancellation receipt is labeled received and not completed', () => {
+  const { getByText } = render(
+    React.createElement(TripsView, {
+      reservations: [],
+      directBookingOrders: [cancellationOrder],
+      accessToken: 'access-token',
+      currency: 'BRL',
+      onCancelReservation: async () => {},
+      onExploreMore: () => {},
+    }),
+  );
+
+  assert.ok(getByText('Solicitação recebida; o cancelamento ainda não foi concluído.'));
+  assert.ok(getByText(/Protocolo CANCEL-0123456789abcdef0123456789abcdef01234567/));
+  assert.ok(getByText(/recebido em 26\/10\/2026, 12:30/));
+});
+
+test('new cancellation request displays the returned receipt and received status', async () => {
+  const originalRequest = crcnBackendApi.requestDirectBookingCancellation;
+  crcnBackendApi.requestDirectBookingCancellation = async () => ({
+    cancellationReceipt: cancellationOrder.cancellationReceipt,
+    alreadyRequested: false,
+    message: 'A solicitação de cancelamento foi recebida para análise da Central; o cancelamento ainda não foi concluído.',
+  });
+
+  try {
+    const { getByRole, getByText } = render(
+      React.createElement(TripsView, {
+        reservations: [],
+        directBookingOrders: [{ ...cancellationOrder, status: 'confirmado', cancellationReceipt: null }],
+        accessToken: 'access-token',
+        currency: 'BRL',
+        onCancelReservation: async () => {},
+        onExploreMore: () => {},
+      }),
+    );
+
+    fireEvent.click(getByRole('button', { name: 'Pedir análise de cancelamento' }));
+    fireEvent.click(getByRole('button', { name: 'Enviar solicitação' }));
+
+    await waitFor(() => {
+      assert.ok(
+        getByText(
+          'A solicitação de cancelamento foi recebida para análise da Central; o cancelamento ainda não foi concluído.',
+        ),
+      );
+      assert.equal(
+        document.body.textContent?.match(/Protocolo CANCEL-0123456789abcdef0123456789abcdef01234567/g)
+          ?.length,
+        2,
+      );
+    });
+    assert.equal(document.body.textContent?.includes('A reserva continua ativa'), false);
+  } finally {
+    crcnBackendApi.requestDirectBookingCancellation = originalRequest;
+  }
 });

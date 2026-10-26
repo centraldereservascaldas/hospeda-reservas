@@ -12,11 +12,16 @@ import {
   isStaysOwnerSummary,
   isStaysCalendarDay,
   isDirectBookingOrderListItem,
+  isDirectBookingCancellationReceipt,
   isDirectBookingOperationsOrder,
   isDirectBookingOperationsWebhook,
 } from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
-import type { DirectBookingOrderListItem, DirectBookingOrderSummary } from './checkoutApi';
+import type {
+  DirectBookingCancellationReceipt,
+  DirectBookingOrderListItem,
+  DirectBookingOrderSummary,
+} from './checkoutApi';
 import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
 import { matchesPropertyDestination } from '../utils/propertySearchFilters';
 import { apiFetch } from './apiFetch';
@@ -618,7 +623,11 @@ class CrcnBackendApiService {
   public async requestDirectBookingCancellation(
     accessToken: string,
     publicReference: string,
-  ): Promise<void> {
+  ): Promise<{
+    cancellationReceipt: DirectBookingCancellationReceipt;
+    alreadyRequested: boolean;
+    message: string;
+  }> {
     if (!/^[A-Za-z0-9]{40}$/.test(publicReference)) {
       throw new Error('Referência do pedido inválida.');
     }
@@ -637,7 +646,10 @@ class CrcnBackendApiService {
       !isRecord(json) ||
       json.success !== true ||
       json.cancellationStatus !== 'requested' ||
-      typeof json.message !== 'string'
+      typeof json.message !== 'string' ||
+      typeof json.alreadyRequested !== 'boolean' ||
+      !isDirectBookingCancellationReceipt(json.cancellationReceipt) ||
+      json.cancellationReceipt.protocol !== `CANCEL-${publicReference}`
     ) {
       throw new Error(
         isRecord(json) && typeof json.message === 'string'
@@ -645,6 +657,12 @@ class CrcnBackendApiService {
           : 'Não foi possível registrar a solicitação de cancelamento.',
       );
     }
+
+    return {
+      cancellationReceipt: json.cancellationReceipt,
+      alreadyRequested: json.alreadyRequested,
+      message: json.message,
+    };
   }
 
   public async cancelMyReservation(

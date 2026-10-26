@@ -64,9 +64,15 @@ export interface DirectBookingOrderSummary {
   paymentStatus: string | null;
   expiresAt: string | null;
   createdAt: string | null;
+  cancellationReceipt?: DirectBookingCancellationReceipt | null;
 }
 
 export type DirectBookingOrderListItem = Omit<DirectBookingOrderSummary, 'guestName'>;
+
+export interface DirectBookingCancellationReceipt {
+  protocol: string;
+  requestedAt: string;
+}
 
 export interface CheckoutResumeCredentials {
   reference: string;
