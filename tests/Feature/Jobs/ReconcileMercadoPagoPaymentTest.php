@@ -8,7 +8,10 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
 use App\Services\Payments\DirectCheckoutPaymentService;
+use GuzzleHttp\Psr7\Response as PsrResponse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response as ClientResponse;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
@@ -53,7 +56,7 @@ class ReconcileMercadoPagoPaymentTest extends TestCase
             (new ReconcileMercadoPagoPayment($webhook->id))->handle($payments);
             $this->fail('The reconciliation exception should be rethrown for queue retry.');
         } catch (RuntimeException $exception) {
-            $this->assertSame('Gateway temporarily unavailable.', $exception->getMessage());
+            $this->assertSame('payment_reconciliation_failed', $exception->getMessage());
         }
 
         $webhook->refresh();
@@ -125,7 +128,7 @@ class ReconcileMercadoPagoPaymentTest extends TestCase
             (new ReconcileMercadoPagoPayment($webhook->id))->handle($payments);
             $this->fail('A service-unavailable result should be rethrown for queue retry.');
         } catch (RuntimeException $exception) {
-            $this->assertSame('The gateway payment could not be reconciled safely.', $exception->getMessage());
+            $this->assertSame('payment_reconciliation_failed', $exception->getMessage());
         }
 
         $webhook->refresh();
@@ -151,6 +154,33 @@ class ReconcileMercadoPagoPaymentTest extends TestCase
         $this->assertSame(3, $webhook->reconciliation_attempts);
         $this->assertSame('payment_reconciliation_failed', $webhook->error_code);
         $this->assertNull($webhook->processed_at);
+    }
+
+    public function test_gateway_http_failure_rethrows_status_without_response_body(): void
+    {
+        $webhook = $this->createWebhook();
+        $payments = $this->mock(DirectCheckoutPaymentService::class);
+        $payments->shouldReceive('reconcileGatewayPayment')
+            ->once()
+            ->with('987654321')
+            ->andThrow(new RequestException(new ClientResponse(new PsrResponse(
+                422,
+                ['Content-Type' => 'application/json'],
+                '{"message":"synthetic@example.invalid 11999990000"}',
+            ))));
+
+        try {
+            (new ReconcileMercadoPagoPayment($webhook->id))->handle($payments);
+            $this->fail('The HTTP failure should be rethrown for queue retry.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('payment_reconciliation_failed; gateway_http_status=422', $exception->getMessage());
+            $this->assertStringNotContainsString('synthetic@example.invalid', $exception->getMessage());
+            $this->assertStringNotContainsString('11999990000', $exception->getMessage());
+        }
+
+        $webhook->refresh();
+        $this->assertSame('retrying', $webhook->status);
+        $this->assertSame('payment_reconciliation_failed', $webhook->error_code);
     }
 
     public function test_terminal_queue_failure_at_attempt_limit_uses_limit_error_code(): void
