@@ -42,6 +42,85 @@
   will-change: transform;
 }
 
+@media (min-width: 768px) and (max-height: 800px) {
+  .checkout-modal-dialog {
+    max-height: calc(100dvh - 1rem);
+  }
+
+  .checkout-modal-header {
+    padding-block: 0.5rem;
+  }
+
+  .checkout-modal-content {
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .checkout-modal-form-column,
+  .checkout-modal-form,
+  .checkout-modal-property-card {
+    gap: 0.75rem;
+  }
+
+  .checkout-modal-trip-summary {
+    gap: 0.375rem;
+  }
+
+  .checkout-modal-trip-summary h3,
+  .checkout-modal-fields h3 {
+    font-size: 0.9375rem;
+  }
+
+  .checkout-modal-trip-summary > div:not(:first-child) {
+    padding-block: 0.375rem;
+    font-size: 0.8125rem;
+  }
+
+  .checkout-modal-fields {
+    gap: 0.375rem;
+  }
+
+  .checkout-modal-inputs {
+    gap: 0.375rem;
+  }
+
+  .checkout-modal-inputs label {
+    font-size: 0.75rem;
+  }
+
+  .checkout-modal-inputs input {
+    margin-top: 0.25rem;
+    padding-block: 0.375rem;
+    font-size: 0.875rem;
+  }
+
+  .checkout-modal-warning {
+    padding: 0.625rem;
+    font-size: 0.6875rem;
+    line-height: 1.25;
+  }
+
+  .checkout-modal-submit {
+    padding-block: 0.75rem;
+  }
+
+  .checkout-modal-form > div:last-child > p {
+    margin-top: 0.375rem;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .checkout-modal-property-card {
+    padding: 1rem;
+  }
+}
+
+@media (min-width: 768px) and (max-height: 560px) {
+  .checkout-modal-dialog {
+    max-height: calc(100dvh - 0.5rem);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
