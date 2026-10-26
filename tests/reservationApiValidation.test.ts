@@ -56,6 +56,7 @@ const directCheckoutOrder = {
   status: 'pre_reservado',
   publicReference: '1234567890123456789012345678901234567890',
   reservationConfirmed: false,
+  reservationStatus: 'reserved',
   listingId: 'JQ08G',
   guestName: 'Checkout Guest',
   from: '2026-10-13',

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
 use App\Services\DirectSaleTermsRegistry;
+use App\Services\DirectStaysReservationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
@@ -87,7 +88,7 @@ class BookingApiTest extends TestCase
         $this->postJson('/api/owner/access/request', [])->assertUnauthorized();
     }
 
-    public function test_reserved_stays_record_is_pending_and_has_no_assumed_payment_method(): void
+    public function test_reservations_use_verified_guest_details_and_are_not_cached(): void
     {
         config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key']);
         Http::fake([
@@ -98,6 +99,7 @@ class BookingApiTest extends TestCase
                 'checkInDate' => '2026-11-10',
                 'checkOutDate' => '2026-11-13',
                 'type' => 'reserved',
+                'bookerDetails' => ['name' => 'Unverified Name', 'email' => 'unverified@example.test'],
                 'price' => ['_f_total' => 3001],
             ]]]], 200),
         ]);
@@ -110,7 +112,10 @@ class BookingApiTest extends TestCase
         $this->withToken('valid-access-token')->getJson('/api/my-reservations')
             ->assertOk()
             ->assertJsonPath('data.0.status', 'pending')
-            ->assertJsonPath('data.0.paymentMethod', '');
+            ->assertJsonPath('data.0.paymentMethod', '')
+            ->assertJsonPath('data.0.guestName', 'Guest Example')
+            ->assertJsonPath('data.0.guestEmail', 'guest@example.test')
+            ->assertHeader('Cache-Control', 'no-store, private');
     }
 
     public function test_valid_supabase_session_can_request_owner_access_in_local_database(): void
@@ -161,11 +166,9 @@ class BookingApiTest extends TestCase
 
     public function test_checkout_idempotency_does_not_depend_on_cache_locks(): void
     {
+        $this->configureCheckoutPaymentReadiness();
         config([
-            'direct-booking.enabled' => true,
             'cache.default' => 'null',
-            'services.stays.client_id' => 'client',
-            'services.stays.client_secret' => 'secret',
         ]);
         $this->mock(DirectSaleTermsRegistry::class)->shouldReceive('findApprovedListing')->once()->andReturn(null);
         Http::preventStrayRequests();
@@ -179,11 +182,7 @@ class BookingApiTest extends TestCase
 
     public function test_checkout_returns_503_for_unapproved_property_terms_without_creating_an_order(): void
     {
-        config([
-            'direct-booking.enabled' => true,
-            'services.stays.client_id' => 'client',
-            'services.stays.client_secret' => 'secret',
-        ]);
+        $this->configureCheckoutPaymentReadiness();
         $this->mock(DirectSaleTermsRegistry::class)
             ->shouldReceive('findApprovedListing')
             ->once()
@@ -248,6 +247,14 @@ class BookingApiTest extends TestCase
         $this->configureApprovedCheckoutTerms($termsSnapshot);
         $requestOrder = [];
         $this->fakeDirectCheckoutRequests(3001, $requestOrder);
+        $this->mock(DirectStaysReservationService::class)
+            ->shouldReceive('reserve')
+            ->twice()
+            ->andReturn([
+                'ready' => false,
+                'code' => 'reservation_hold_unconfigured',
+                'message' => 'A pré-reserva não está configurada.',
+            ]);
         $payload = $this->checkoutPayload(3001);
 
         $first = $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attempt-00003'])
@@ -255,10 +262,10 @@ class BookingApiTest extends TestCase
             ->assertJsonPath('code', 'reservation_hold_unconfigured')
             ->assertJsonPath('order.status', 'cotado')
             ->assertJsonPath('idempotentReplay', false);
-        $orderId = $first->json('order.id');
-        $this->assertIsString($orderId);
+        $orderReference = $first->json('order.publicReference');
+        $this->assertIsString($orderReference);
 
-        $order = DirectBookingOrder::query()->findOrFail($orderId);
+        $order = DirectBookingOrder::query()->where('public_reference', $orderReference)->firstOrFail();
         $this->assertModelExists($order);
         $this->assertSame($termsSnapshot, $order->accepted_terms_snapshot);
         $this->assertSame(1, DirectBookingOrder::query()->count());
@@ -266,7 +273,7 @@ class BookingApiTest extends TestCase
         $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attempt-00003'])
             ->assertServiceUnavailable()
             ->assertJsonPath('code', 'reservation_hold_unconfigured')
-            ->assertJsonPath('order.id', $orderId)
+            ->assertJsonPath('order.publicReference', $orderReference)
             ->assertJsonPath('idempotentReplay', true);
 
         $this->postJson('/api/checkout', [...$payload, 'guest' => [...$payload['guest'], 'fullName' => 'Another Guest']], ['Idempotency-Key' => 'checkout-attempt-00003'])
@@ -293,7 +300,8 @@ class BookingApiTest extends TestCase
 
     private function configureApprovedCheckoutTerms(array $snapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.']): void
     {
-        config(['direct-booking.enabled' => true, 'cache.default' => 'array']);
+        $this->configureCheckoutPaymentReadiness();
+        config(['cache.default' => 'array']);
         app('cache')->forgetDriver('array');
         $this->mock(DirectSaleTermsRegistry::class)
             ->shouldReceive('findApprovedListing')
@@ -329,6 +337,25 @@ class BookingApiTest extends TestCase
                 default => Http::response([], 404),
             };
         });
+    }
 
+    private function configureCheckoutPaymentReadiness(): void
+    {
+        config([
+            'direct-booking.enabled' => true,
+            'direct-booking.payments_enabled' => true,
+            'direct-booking.confirmation_enabled' => true,
+            'direct-booking.stays_payment_type' => 'credit',
+            'direct-booking.stays_payment_provider_id' => 'test-provider',
+            'direct-booking.reservation_hold_minutes' => 60,
+            'direct-booking.notification_queue_connection' => 'database',
+            'services.stays.client_id' => 'client',
+            'services.stays.client_secret' => 'secret',
+            'services.mercadopago.access_token' => 'test-access-token',
+            'services.mercadopago.webhook_secret' => 'test-webhook-secret',
+            'services.mercadopago.webhook_queue_connection' => 'database',
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.transport' => 'smtp',
+        ]);
     }
 }

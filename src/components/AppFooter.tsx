@@ -15,7 +15,8 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
           <div className="space-y-3">
             <LogoCRCN size="md" variant="glass" />
             <p className="text-[11px] text-neutral-500 leading-relaxed">
-              Encontre hospedagens em Caldas Novas e região, com opções próximas a parques e atrações.
+              Encontre hospedagens em Caldas Novas e região, com opções próximas a parques e
+              atrações.
             </p>
             <div className="pt-1 text-[11px] text-neutral-700 font-semibold space-y-1">
               <p>📍 Caldas Novas - Goiás, Brasil</p>
