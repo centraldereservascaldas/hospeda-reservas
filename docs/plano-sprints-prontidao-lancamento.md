@@ -167,41 +167,26 @@ Em cada sprint, manter lista de itens com responsável, estado, evidência do ac
 
 **Estado vigente em 26/10/2026:** Sprint 0 segue aberta para destinação da mudança preexistente de `composer.lock` e execução do smoke de imagem em ambiente com runtime. Os gates das Sprints 1–6 não estão aceitos. Aprovação comercial dos imóveis piloto, termos e identificação/validação de credenciais de sandbox seguem pendentes. Nenhuma cobrança real, publicação ou campanha foi ativada. A causa da intermitência Stays observada no smoke ainda não foi atribuída. Compra não deve ser considerada validada em GA4, Google Ads ou Meta até importar/revisar o container, checar consentimento das tags e testar deduplicação em navegador com compra sandbox.
 
-### Checklist de entradas locais verificadas em 26/10/2026
+### Diagnóstico de pré-requisitos em 26/10/2026
 
-Arquivos `.env` lidos apenas com `vlucas/phpdotenv` para classificar variáveis não vazias; os valores não foram exibidos nem registrados. `configured` indica somente que há conteúdo local para a chave, sem validar formato, titularidade, ambiente ou funcionamento. Em particular, a presença de `MERCADO_PAGO_ACCESS_TOKEN` não permite inferir sandbox.
+Executado `php artisan direct-booking:check-readiness --json`. O comando retorna somente presença/formato e estados booleanos; nenhum arquivo `.env` foi lido diretamente nem qualquer valor foi registrado. Resultado: `prerequisites_configured=false`.
 
-Comparação de nomes: o código lê `MERCADO_PAGO_ACCESS_TOKEN` em `config/services.php`, igual ao nome do `.env.example`. O nome `MERCADOPAGO_ACCESS_TOKEN` (sem os separadores) é diferente e não consta nessa configuração; se esse for o nome exigido pelo ambiente de integração, há incompatibilidade a resolver antes da validação. Nenhum arquivo `.env` foi alterado.
-
-Os imóveis do catálogo não têm versão nem snapshot de termos de venda; os IDs de piloto também estão ausentes nos dois `.env`. `config/legal_pages.php` mantém as três páginas com aprovação falsa e `config/property_metadata.php` não tem registros editoriais aprovados. Isso confirma que as páginas e mecanismos estão implementados no código, enquanto os textos ainda não foram aprovados para publicação.
-
-| Variável | `.env` do repositório | `/Users/murilloalves/Projects/CRCN/.env` |
+| Verificação | Resultado | Ação pendente |
 | --- | --- | --- |
-| `MERCADO_PAGO_ACCESS_TOKEN` | configured | absent |
-| `MERCADO_PAGO_WEBHOOK_SECRET` | absent | absent |
-| `VITE_MERCADO_PAGO_PUBLIC_KEY` | absent | absent |
-| `VITE_GTM_ID` | absent | absent |
-| `DIRECT_BOOKING_PILOT_LISTING_IDS` | absent | absent |
-| `DIRECT_BOOKING_STAYS_PAYMENT_TYPE` | absent | absent |
-| `DIRECT_BOOKING_STAYS_PAYMENT_PROVIDER_ID` | absent | absent |
-| `DIRECT_BOOKING_RESERVATION_HOLD_MINUTES` | absent | absent |
-| `DIRECT_BOOKING_ENABLED` | absent | absent |
-| `DIRECT_BOOKING_PAYMENTS_ENABLED` | absent | absent |
-| `DIRECT_BOOKING_CONFIRMATION_ENABLED` | absent | absent |
-| `DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED` | absent | absent |
-| `MAIL_MAILER` | absent | absent |
-| `MAIL_URL` | absent | absent |
-| `MAIL_SCHEME` | absent | absent |
-| `MAIL_HOST` | absent | absent |
-| `MAIL_PORT` | absent | absent |
-| `MAIL_USERNAME` | absent | absent |
-| `MAIL_PASSWORD` | absent | absent |
-| `POSTMARK_API_KEY` | absent | absent |
-| `RESEND_API_KEY` | absent | absent |
-| `AWS_ACCESS_KEY_ID` | absent | absent |
-| `AWS_SECRET_ACCESS_KEY` | absent | absent |
-| `AWS_DEFAULT_REGION` | absent | absent |
-| `MAIL_FROM_ADDRESS` | absent | absent |
-| `MAIL_FROM_NAME` | absent | absent |
+| `MERCADO_PAGO_ACCESS_TOKEN` | configurado | Identificar e validar explicitamente a credencial de sandbox antes de qualquer teste integrado; presença não comprova sandbox, validade, titularidade nem rotação recente do token. |
+| `MERCADO_PAGO_WEBHOOK_SECRET` | pendente | Obter o segredo de webhook do ambiente de teste e configurá-lo no ambiente isolado; validar assinatura no roteiro de sandbox. |
+| `MERCADO_PAGO_WEBHOOK_QUEUE_CONNECTION` | configurado | — |
+| `DIRECT_BOOKING_NOTIFICATION_QUEUE_CONNECTION` | configurado | — |
+| `QUEUE_CONNECTION` | pendente | Selecionar uma conexão de fila assíncrona suportada e configurá-la como fila padrão; depois confirmar a execução do worker no ambiente de QA. |
+| `DIRECT_BOOKING_PILOT_LISTING_IDS` | pendente | Selecionar de 2 a 5 imóveis existentes e aprovados; cadastrar IDs e snapshots/versionamento dos termos exigidos para cada piloto. |
+| `STAYS_CLIENT_ID`, `STAYS_CLIENT_SECRET`, `STAYS_BASE_URL` | configurados | Confirmar que apontam para a conta/ambiente de teste autorizado e validar acesso no roteiro de sandbox; presença não prova conectividade nem credenciais válidas. |
+| `DIRECT_BOOKING_STAYS_PAYMENT_TYPE` | pendente | Confirmar com a Stays o tipo de pagamento permitido para a conta de teste e configurar o valor correspondente (`credit` ou `debit`). |
+| `DIRECT_BOOKING_STAYS_PAYMENT_PROVIDER_ID` | pendente | Obter da Stays o identificador autorizado do provedor de pagamento na conta de teste e configurá-lo; não presumir o ID. |
+| `DIRECT_BOOKING_RESERVATION_HOLD_MINUTES` | pendente | Aprovar com responsáveis comerciais/operacionais e configurar retenção válida maior que 35 minutos, respeitando a margem de Pix atual. |
+| `DIRECT_BOOKING_RESUME_TOKEN_TTL_DAYS` | configurado | — |
+| `MAIL_MAILER` | pendente | Configurar um transporte externo de e-mail aprovado e testar entrega no ambiente isolado, incluindo recuperação de falha. |
+| `VITE_MERCADO_PAGO_PUBLIC_KEY` (opcional no comando) | pendente | Obter e configurar a chave pública correspondente ao ambiente de teste para exercitar o formulário de pagamento no navegador. |
 
-**Entradas ainda necessárias:** selecionar/aprovar imóveis piloto e preencher seus termos e janela de pré-reserva; configurar IDs/provider de pagamento Stays; confirmar origem e ambiente das credenciais Mercado Pago, obter segredo do webhook/chave pública adequados ao ambiente e validar Pix/cartão no sandbox; configurar ID e container GTM/GA4/Ads/Meta e verificar consentimento/deduplicação; configurar e-mail transacional aprovado; definir flags apenas conforme os respectivos gates e aprovações. Nenhuma flag foi ativada, nenhuma chamada externa foi feita e nenhum arquivo `.env` foi alterado.
+O código em `config/services.php` lê `MERCADO_PAGO_ACCESS_TOKEN`. Correção do registro anterior: a sugestão de que `MERCADOPAGO_ACCESS_TOKEN` (sem separadores) pudesse ser o nome exigido pelo código estava incorreta; não há incompatibilidade a investigar com base nesse nome alternativo.
+
+Os quatro flags (`DIRECT_BOOKING_ENABLED`, `DIRECT_BOOKING_PAYMENTS_ENABLED`, `DIRECT_BOOKING_CONFIRMATION_ENABLED` e `DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED`) retornaram `false`. O comando os apresenta somente como informação; este diagnóstico não recomenda nem autoriza ativá-los. A validação de sandbox e as aprovações dos gates continuam pendentes. Nenhum gate de lançamento foi aceito.
