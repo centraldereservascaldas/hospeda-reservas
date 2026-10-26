@@ -37,6 +37,7 @@ import { useSavedPropertyIds } from './hooks/useSavedPropertyIds';
 import { CHECKOUT_MODAL_HISTORY_ENTRY, useAppOverlayActions } from './hooks/useAppOverlayActions';
 import { focusWithoutScrolling } from './utils/focus';
 import { countOccupancyGuests } from './utils/guestCounts';
+import { usePageMetadata } from './hooks/usePageMetadata';
 
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
@@ -485,6 +486,7 @@ function MarketplaceApp() {
 
 export default function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
+  usePageMetadata(pathname);
 
   useEffect(() => {
     const handlePopState = () => setPathname(window.location.pathname);

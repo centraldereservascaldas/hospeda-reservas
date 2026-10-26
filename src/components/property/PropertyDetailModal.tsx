@@ -25,12 +25,12 @@ import { PropertyDetailActions } from './PropertyDetailActions';
 import { useDialogFocus } from '../useDialogFocus';
 import { usePropertyAvailability } from './usePropertyAvailability';
 import { selectAvailabilityDay, selectAvailabilityRange } from '../../utils/propertyDateSelection';
+import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import {
   getAccommodationIdFromPath,
   mergeSearchFiltersIntoUrl,
   parseSearchFilters,
 } from '../../utils/searchUrlState';
-import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { countOccupancyGuests } from '../../utils/guestCounts';
 
 interface PropertyDetailModalProps {
@@ -81,7 +81,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const propertyId = property?.id;
-  const pageTitle = property ? `${getPublicPropertyTitle(property.title)} | Hospeda Reservas` : '';
   const defaultCheckIn = initialCheckIn;
   const defaultCheckOut = initialCheckOut;
   // Booking state
@@ -108,14 +107,6 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const hasExplicitDateSelectionRef = useRef(Boolean(initialCheckIn && initialCheckOut));
   const latestBookingContextRef = useRef({ checkIn, checkOut, adults, children, infants, pets });
   latestBookingContextRef.current = { checkIn, checkOut, adults, children, infants, pets };
-  useEffect(() => {
-    if (isDialog || !pageTitle) return;
-    const previousTitle = document.title;
-    document.title = pageTitle;
-    return () => {
-      document.title = previousTitle;
-    };
-  }, [isDialog, pageTitle, propertyId]);
   useEffect(() => {
     if (!isDialog && propertyId) detailTitleRef.current?.focus();
   }, [isDialog, propertyId]);

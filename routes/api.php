@@ -8,11 +8,14 @@ use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OwnerAccessController;
 use App\Http\Controllers\Api\OwnerAdminController;
 use App\Http\Controllers\Api\OwnerDashboardController;
+use App\Http\Controllers\Api\PropertyMetadataController;
 use App\Http\Controllers\Api\SofiaController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => response()->json(['success' => true, 'service' => 'hospeda-reservas-api']));
+Route::get('/public/property-metadata/{id}', [PropertyMetadataController::class, 'show'])
+    ->where('id', '[A-Za-z0-9_-]+');
 Route::get('/ready', function () {
     try {
         DB::connection()->select('SELECT 1');

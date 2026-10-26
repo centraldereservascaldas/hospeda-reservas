@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\PropertyMetadataResolver;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -10,6 +11,8 @@ class SpaController extends Controller
     private const PROPERTY_PATH_PATTERN = '~^(?:(?:[a-z]{2}/)?(?:apartamento|apartment))/[a-zA-Z0-9_-]+(?:/.*)?$~i';
 
     private const NON_INDEXABLE_PATH_PATTERN = '~^(?:(?:checkout|reservar)/[a-zA-Z0-9_-]+(?:/.*)?|(?:[a-z]{2}/)?(?:apartamento|apartment)/[a-zA-Z0-9_-]+(?:/.*)?)$~i';
+
+    public function __construct(private PropertyMetadataResolver $metadataResolver) {}
 
     public function __invoke(?string $path = null): Response
     {
@@ -37,28 +40,15 @@ class SpaController extends Controller
 
     private function propertyResponse(string $propertyId, string $html): Response
     {
-        $listing = config("property_metadata.listings.{$propertyId}");
-        $isApprovedForIndexing = is_array($listing)
-            && ($listing['approved'] ?? false) === true
-            && ($listing['indexable'] ?? false) === true
-            && is_string($listing['title'] ?? null)
-            && trim($listing['title']) !== ''
-            && is_string($listing['description'] ?? null)
-            && trim($listing['description']) !== '';
-
-        if (! $isApprovedForIndexing) {
+        $metadata = $this->metadataResolver->resolve($propertyId);
+        if ($metadata === null) {
             return $this->noindexResponse($html);
         }
 
-        $canonicalUrl = $this->canonicalUrl($propertyId);
-        if ($canonicalUrl === null) {
-            return $this->noindexResponse($html);
-        }
-
-        $title = e(trim($listing['title']));
-        $description = e(trim($listing['description']));
-        $canonical = e($canonicalUrl);
-        $imageUrl = $this->validatedImageUrl($listing['imageUrl'] ?? null);
+        $title = e($metadata['title']);
+        $description = e($metadata['description']);
+        $canonical = e($metadata['canonicalUrl']);
+        $imageUrl = $metadata['imageUrl'];
         $twitterCard = $imageUrl === null ? 'summary' : 'summary_large_image';
         $imageMetadata = $imageUrl === null
             ? ''
@@ -135,49 +125,5 @@ HTML;
     private function isNonIndexablePath(?string $path): bool
     {
         return is_string($path) && preg_match(self::NON_INDEXABLE_PATH_PATTERN, $path) === 1;
-    }
-
-    private function validatedImageUrl(mixed $imageUrl): ?string
-    {
-        if (! is_string($imageUrl) || filter_var($imageUrl, FILTER_VALIDATE_URL) === false) {
-            return null;
-        }
-
-        $parts = parse_url($imageUrl);
-        if (! is_array($parts)
-            || mb_strtolower($parts['scheme'] ?? '') !== 'https'
-            || ! is_string($parts['host'] ?? null)
-            || isset($parts['user'])
-            || isset($parts['pass'])
-        ) {
-            return null;
-        }
-
-        return $imageUrl;
-    }
-
-    private function canonicalUrl(string $propertyId): ?string
-    {
-        $configuredUrl = config('app.url');
-        if (! is_string($configuredUrl)) {
-            return null;
-        }
-
-        $parts = parse_url($configuredUrl);
-        if (! is_array($parts)
-            || ! in_array(mb_strtolower($parts['scheme'] ?? ''), ['http', 'https'], true)
-            || ! is_string($parts['host'] ?? null)
-            || isset($parts['user'])
-            || isset($parts['pass'])
-        ) {
-            return null;
-        }
-
-        $origin = $parts['scheme'].'://'.$parts['host'];
-        if (isset($parts['port'])) {
-            $origin .= ':'.$parts['port'];
-        }
-
-        return $origin.'/apartamento/'.$propertyId;
     }
 }

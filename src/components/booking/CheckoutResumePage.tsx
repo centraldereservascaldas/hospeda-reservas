@@ -245,29 +245,6 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
   const pixPaymentIdempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const previousTitle = document.title;
-    const existingRobots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
-    const previousRobotsContent = existingRobots?.content;
-    const robotsMeta = existingRobots ?? document.createElement('meta');
-    if (!existingRobots) {
-      robotsMeta.name = 'robots';
-      document.head.append(robotsMeta);
-    }
-
-    document.title = 'Acompanhe seu pedido | CRCN';
-    robotsMeta.content = 'noindex, nofollow';
-
-    return () => {
-      document.title = previousTitle;
-      if (existingRobots && previousRobotsContent !== undefined) {
-        existingRobots.content = previousRobotsContent;
-      } else {
-        robotsMeta.remove();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     setPixCopyResult(null);
     const resumeToken = getCheckoutResumeToken(reference);
     const credentials: CheckoutAccessCredentials | null = accessToken

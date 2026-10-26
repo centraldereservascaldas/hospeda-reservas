@@ -6,6 +6,45 @@ use Tests\TestCase;
 
 class SpaInfrastructureTest extends TestCase
 {
+    public function test_public_property_metadata_endpoint_returns_only_fully_approved_entries(): void
+    {
+        config([
+            'app.url' => 'https://reservas.example.test',
+            'property_metadata.listings.JQ08G' => [
+                'approved' => true,
+                'indexable' => true,
+                'title' => 'Título editorial aprovado',
+                'description' => 'Descrição editorial aprovada.',
+                'imageUrl' => 'https://cdn.example.test/property.jpg',
+            ],
+            'property_metadata.listings.LG03J' => [
+                'approved' => true,
+                'indexable' => false,
+                'title' => 'Título ainda não indexável',
+                'description' => 'Descrição ainda não indexável.',
+            ],
+        ]);
+
+        $this->getJson('/api/public/property-metadata/JQ08G')
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJson([
+                'approved' => true,
+                'title' => 'Título editorial aprovado',
+                'description' => 'Descrição editorial aprovada.',
+                'canonicalUrl' => 'https://reservas.example.test/apartamento/JQ08G',
+                'imageUrl' => 'https://cdn.example.test/property.jpg',
+            ]);
+
+        $this->getJson('/api/public/property-metadata/LG03J')
+            ->assertOk()
+            ->assertExactJson(['approved' => false]);
+
+        $this->getJson('/api/public/property-metadata/NOT-APPROVED')
+            ->assertOk()
+            ->assertExactJson(['approved' => false]);
+    }
+
     public function test_spa_deep_links_render_the_application(): void
     {
         $indexPath = public_path('index.html');

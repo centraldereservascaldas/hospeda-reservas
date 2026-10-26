@@ -4,6 +4,7 @@ import type { Property, SearchFilters } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
 import { getAccommodationIdFromPath, parseSearchFilters } from '../utils/searchUrlState';
 import { emitFunnelEvent } from '../utils/measurementEvents';
+import { PAGE_METADATA_NAVIGATION_EVENT } from './usePageMetadata';
 
 interface UseAccommodationRoutingOptions {
   properties: Property[];
@@ -210,6 +211,7 @@ export function useAccommodationRouting({
     if (getAccommodationIdFromPath(window.location.pathname)) {
       if (window.location.pathname !== detailPath) {
         window.history.replaceState(historyStateRecord(), '', nextPath);
+        window.dispatchEvent(new window.Event(PAGE_METADATA_NAVIGATION_EVENT));
       }
       window.scrollTo(0, 0);
       return;
@@ -231,6 +233,7 @@ export function useAccommodationRouting({
         '',
       );
       window.history.pushState({ [PROPERTY_DETAIL_ENTRY]: true }, '', nextPath);
+      window.dispatchEvent(new window.Event(PAGE_METADATA_NAVIGATION_EVENT));
       window.scrollTo(0, 0);
     }
   };
@@ -251,6 +254,7 @@ export function useAccommodationRouting({
         '',
         `${getCatalogPath(window.location.pathname)}${window.location.search}${window.location.hash}`,
       );
+      window.dispatchEvent(new window.Event(PAGE_METADATA_NAVIGATION_EVENT));
       const restoredFilters = parseSearchFilters(window.location.search);
       if (restoredFilters.checkIn && restoredFilters.checkOut) {
         restoreSearchFromUrlRef.current(restoredFilters);
