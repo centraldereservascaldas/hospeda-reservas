@@ -70,6 +70,16 @@ Registro histórico verificado em 20/10/2026. O estado remoto precisa ser confer
 | Worker de filas | Não necessário enquanto ações em fila estiverem desabilitadas | Necessário para jobs e e-mails do checkout |
 | Scheduler Laravel | Não necessário para navegação do catálogo | Necessário para reconciliações e tarefas periódicas |
 
+Quando o checkout for habilitado, crie serviços Coolify separados para worker e scheduler usando a mesma imagem e as mesmas variáveis da aplicação web. O `Dockerfile` inicia Apache por padrão; configure o comando de inicialização de cada serviço explicitamente:
+
+- Worker: `php artisan queue:work database --tries=5 --timeout=60 --sleep=3 --max-time=3600`.
+- Scheduler: `php artisan schedule:work`.
+- Aplicação web: mantenha o comando padrão do `Dockerfile`.
+
+Desabilite ou substitua o health check HTTP herdado do `Dockerfile` nos serviços de worker e scheduler, pois eles não iniciam Apache. Configure um health check de processo que confirme o comando principal do container, por exemplo `CMD-SHELL tr '\000' ' ' </proc/1/cmdline | grep -F 'artisan queue:work' >/dev/null` para o worker e `CMD-SHELL tr '\000' ' ' </proc/1/cmdline | grep -F 'artisan schedule:work' >/dev/null` para o scheduler. Mantenha a verificação HTTP `/api/ready` na aplicação web.
+
+Configure reinício automático para worker e scheduler após qualquer saída, incluindo saída normal. O worker encerra intencionalmente depois de uma hora por causa de `--max-time=3600` e precisa ser iniciado de novo pelo Coolify; o scheduler também deve voltar após falha ou reinício do host. Mantenha `QUEUE_CONNECTION=database` e `DB_QUEUE_RETRY_AFTER=90` nos três serviços. O timeout do worker fica em 60 segundos, abaixo do `retry_after` de 90 segundos; preserve essa margem ao mudar qualquer um dos valores. O `composer queue:work` local usa as mesmas tentativas e timeout. Confirme nos logs do Coolify que os processos do worker e scheduler permanecem ativos após reinícios e que as tabelas `jobs` e `failed_jobs` existem no banco dedicado.
+
 ## Publicação e recuperação
 
 - [ ] Antes de push/deploy, apresentar branch, commit, arquivos incluídos, variáveis necessárias, health checks e plano de rollback para aprovação.
