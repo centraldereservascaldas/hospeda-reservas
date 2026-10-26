@@ -177,6 +177,19 @@ test('preference UI saves independent choices and restores them when reopened', 
   assert.deepEqual(readMeasurementConsent(), { analytics: false, advertising: false });
 });
 
+test('fixed preference panel can scroll within short viewports while inline legal copy stays in flow', () => {
+  const fixedView = render(React.createElement(MeasurementPreferences));
+  const fixedPanel = fixedView.getByRole('region', { name: 'Preferências de medição' });
+  assert.match(fixedPanel.className, /max-h-\[calc\(100dvh/);
+  assert.match(fixedPanel.className, /overflow-y-auto/);
+  assert.match(fixedPanel.className, /overscroll-contain/);
+
+  fixedView.unmount();
+  const inlineView = render(React.createElement(MeasurementPreferences, { placement: 'inline' }));
+  const inlinePanel = inlineView.getByRole('region', { name: 'Preferências de medição' });
+  assert.doesNotMatch(inlinePanel.className, /max-h-|overflow-y-auto|overscroll-contain/);
+});
+
 test('single-category consent does not load GTM', () => {
   assert.equal(loadGtmIfConsented({ analytics: true, advertising: false }, 'GTM-ABC123'), false);
   assert.equal(loadGtmIfConsented({ analytics: false, advertising: true }, 'GTM-ABC123'), false);

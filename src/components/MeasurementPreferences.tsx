@@ -34,7 +34,7 @@ export function MeasurementPreferences({
   const panelClassName =
     placement === 'inline'
       ? 'w-full rounded-2xl border border-neutral-300 bg-white p-4 text-neutral-900 shadow-sm'
-      : 'fixed inset-x-3 bottom-[calc(5rem_+_env(safe-area-inset-bottom,0px))] z-[1100] mx-auto max-w-lg rounded-2xl border border-neutral-300 bg-white p-4 text-neutral-900 shadow-xl sm:bottom-4';
+      : 'fixed inset-x-3 bottom-[calc(5rem_+_env(safe-area-inset-bottom,0px))] z-[1100] mx-auto max-h-[calc(100dvh_-_6rem_-_env(safe-area-inset-top,0px)_-_env(safe-area-inset-bottom,0px))] max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-neutral-300 bg-white p-4 text-neutral-900 shadow-xl sm:bottom-4 sm:max-h-[calc(100dvh_-_2rem)]';
 
   useEffect(() => {
     const open = () => {
