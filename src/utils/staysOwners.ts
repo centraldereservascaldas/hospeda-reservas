@@ -9,6 +9,11 @@ export interface StaysOwnerDateRange {
   to: string;
 }
 
+export type StaysFinanceOwnerResolution =
+  | { status: 'found'; owner: Record<string, unknown> }
+  | { status: 'not-found' }
+  | { status: 'invalid-response' };
+
 export function getStaysOwnerDateRanges(today = new Date()): StaysOwnerDateRange[] {
   const lastDate = new Date(
     Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
@@ -49,6 +54,22 @@ function extractOwnerArray(payload: unknown): unknown[] | null {
     }
   }
   return null;
+}
+
+export function resolveStaysFinanceOwner(
+  payload: unknown,
+  ownerId: string,
+): StaysFinanceOwnerResolution {
+  const owners = extractOwnerArray(payload);
+  if (!owners) return { status: 'invalid-response' };
+
+  const owner = owners.find((candidate): candidate is Record<string, unknown> => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+    const record = candidate as Record<string, unknown>;
+    return String(record._id || record.id || record.ownerId || record.owner_id || '').trim() === ownerId;
+  });
+
+  return owner ? { status: 'found', owner } : { status: 'not-found' };
 }
 
 export function normalizeStaysOwners(payload: unknown): StaysOwnerSummary[] | null {

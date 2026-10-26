@@ -530,6 +530,30 @@ export interface OwnerDashboardData {
     currency: string;
     nights: number;
   }>;
+  entries: Array<{
+    id: string;
+    date: string;
+    listingId: string;
+    propertyTitle: string;
+    reservationId: string | null;
+    reservationCode: string | null;
+    description: string;
+    publicNote: string | null;
+    type: 'debit' | 'credit';
+    status: string;
+    amount: number;
+  }>;
+}
+
+export interface OwnerAccountingDetails {
+  reservationCode: string;
+  guestName: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  fees: Array<{ label: string; amount: number }>;
+  payout: number;
+  ledgerEntry: { date: string; type: 'debit' | 'credit'; status: string; description: string; amount: number };
 }
 
 class CrcnBackendApiService {
@@ -1160,6 +1184,37 @@ class CrcnBackendApiService {
         propertyImage: isSafeMediaUrl(reservation.propertyImage) ? reservation.propertyImage : '',
       })),
     };
+  }
+
+  public async getOwnerAccountingDetails(
+    accessToken: string,
+    entryId: string,
+    listingId: string,
+    from: string,
+    to: string,
+  ): Promise<OwnerAccountingDetails> {
+    const query = new URLSearchParams({ listingId, from, to });
+    const res = await fetch(`/api/owner/accounting/entries/${encodeURIComponent(entryId)}/details?${query}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const json: unknown = await res.json();
+    if (!res.ok || !isRecord(json) || json.success !== true || !isRecord(json.details)) {
+      throw new Error(isRecord(json) && typeof json.message === 'string' ? json.message : 'Não foi possível carregar os detalhes do lançamento.');
+    }
+    const detail = json.details;
+    const isFee = (value: unknown): value is OwnerAccountingDetails['fees'][number] =>
+      isRecord(value) && typeof value.label === 'string' && isFiniteNumber(value.amount);
+    const isLedgerEntry = (value: unknown): value is OwnerAccountingDetails['ledgerEntry'] =>
+      isRecord(value) && typeof value.date === 'string' && (value.type === 'debit' || value.type === 'credit') &&
+      typeof value.status === 'string' && typeof value.description === 'string' && isFiniteNumber(value.amount);
+    if (
+      typeof detail.reservationCode !== 'string' || typeof detail.guestName !== 'string' || typeof detail.checkIn !== 'string' || typeof detail.checkOut !== 'string' ||
+      !isFiniteNumber(detail.nights) || !Array.isArray(detail.fees) || !detail.fees.every(isFee) ||
+      !isFiniteNumber(detail.payout) || !isLedgerEntry(detail.ledgerEntry)
+    ) {
+      throw new Error('A API retornou detalhes financeiros inválidos.');
+    }
+    return detail as unknown as OwnerAccountingDetails;
   }
 
   public async createOwnerCalendarBlock(

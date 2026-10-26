@@ -53,15 +53,16 @@ const directCheckoutRequest = {
 };
 
 const directCheckoutOrder = {
-  id: '90c0a1c0-27aa-4a23-8a63-d750de9f183e',
   status: 'pre_reservado',
   publicReference: '1234567890123456789012345678901234567890',
-  reservationStatus: 'reserved',
+  reservationConfirmed: false,
   listingId: 'JQ08G',
+  guestName: 'Checkout Guest',
   from: '2026-10-13',
   to: '2026-10-15',
   quoteTotal: '850.00',
   currency: 'BRL',
+  paymentStatus: null,
   expiresAt: '2026-10-13T12:30:00.000000Z',
   createdAt: '2026-10-13T12:00:00.000000Z',
 };
@@ -340,14 +341,14 @@ test('validates the remaining backend response boundaries', async () => {
       message: 'Pré-reserva registrada.',
       order: directCheckoutOrder,
       resume: directCheckoutResume,
-      payment: { enabled: false, methods: [] },
+      payment: { enabled: false, methods: [], publicKey: null },
       idempotentReplay: false,
     });
     const checkout = await crcnBackendApi.createCheckout(directCheckoutRequest);
     assert.equal(checkout?.success, true);
     assert.deepEqual(checkout?.order, directCheckoutOrder);
     assert.deepEqual(checkout?.resume, directCheckoutResume);
-    assert.deepEqual(checkout?.payment, { enabled: false, methods: [] });
+    assert.deepEqual(checkout?.payment, { enabled: false, methods: [], publicKey: null });
     assert.equal(checkout?.idempotentReplay, false);
 
     respond(
@@ -355,7 +356,7 @@ test('validates the remaining backend response boundaries', async () => {
         success: false,
         code: 'quote_changed',
         message: 'O preço mudou.',
-        payment: { enabled: false, methods: [] },
+        payment: { enabled: false, methods: [], publicKey: null },
         idempotentReplay: false,
       },
       409,
@@ -368,7 +369,7 @@ test('validates the remaining backend response boundaries', async () => {
       code: 'pre_reserved',
       order: directCheckoutOrder,
       resume: { ...directCheckoutResume, token: 'invalid' },
-      payment: { enabled: false, methods: [] },
+      payment: { enabled: false, methods: [], publicKey: null },
       idempotentReplay: false,
     });
     assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
@@ -404,7 +405,7 @@ test('checkout validates the created order and resumes it with a protected token
           success: true,
           order: { ...directCheckoutOrder, listingId: 'OTHER' },
           resume: directCheckoutResume,
-          payment: { enabled: false, methods: [] },
+          payment: { enabled: false, methods: [], publicKey: null },
           idempotentReplay: false,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -417,7 +418,7 @@ test('checkout validates the created order and resumes it with a protected token
           success: true,
           order: { ...directCheckoutOrder, to: '2026-10-16' },
           resume: directCheckoutResume,
-          payment: { enabled: false, methods: [] },
+          payment: { enabled: false, methods: [], publicKey: null },
           idempotentReplay: false,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -431,7 +432,8 @@ test('checkout validates the created order and resumes it with a protected token
         JSON.stringify({
           success: true,
           order: directCheckoutOrder,
-          payment: { enabled: false, methods: [] },
+          confirmation: null,
+          payment: { enabled: false, methods: [], publicKey: null },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -442,7 +444,12 @@ test('checkout validates the created order and resumes it with a protected token
     );
     assert.deepEqual(resumed, {
       kind: 'ready',
-      data: { success: true, order: directCheckoutOrder, payment: { enabled: false, methods: [] } },
+      data: {
+        success: true,
+        order: directCheckoutOrder,
+        confirmation: null,
+        payment: { enabled: false, methods: [], publicKey: null },
+      },
     });
     assert.equal(resumeHeader, directCheckoutResume.token);
 
@@ -450,7 +457,7 @@ test('checkout validates the created order and resumes it with a protected token
       new Response(
         JSON.stringify({
           order: { ...directCheckoutOrder, quoteTotal: '851.00' },
-          payment: { enabled: false, methods: [] },
+          payment: { enabled: false, methods: [], publicKey: null },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );

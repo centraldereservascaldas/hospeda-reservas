@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getStaysOwnerDateRanges, normalizeStaysOwners } from '../src/utils/staysOwners.ts';
+import {
+  getStaysOwnerDateRanges,
+  normalizeStaysOwners,
+  resolveStaysFinanceOwner,
+} from '../src/utils/staysOwners.ts';
 
 test('covers the requested owner history with Stays date windows no longer than one year', () => {
   const ranges = getStaysOwnerDateRanges(new Date('2026-10-16T23:30:00-03:00'));
@@ -48,4 +52,26 @@ test('accepts common response wrappers, deduplicates IDs, and drops invalid reco
 
 test('returns null for an unrecognized Stays response shape instead of an empty directory', () => {
   assert.equal(normalizeStaysOwners({ message: 'unexpected response' }), null);
+});
+
+test('resolves finance data only by the exact Stays owner identifier', () => {
+  const result = resolveStaysFinanceOwner({ owners: [
+    { _id: 'owner-other', name: 'Same name' },
+    { _id: 'owner-requested', name: 'Same name', listings: [] },
+  ] }, 'owner-requested');
+
+  assert.equal(result.status, 'found');
+  if (result.status === 'found') {
+    assert.equal(result.owner._id, 'owner-requested');
+  }
+});
+
+test('distinguishes a valid finance response without the approved owner from a failed response', () => {
+  assert.deepEqual(
+    resolveStaysFinanceOwner([{ _id: 'different-owner', name: 'Proprietário' }], 'approved-owner'),
+    { status: 'not-found' },
+  );
+  assert.deepEqual(resolveStaysFinanceOwner({ message: 'unavailable' }, 'approved-owner'), {
+    status: 'invalid-response',
+  });
 });

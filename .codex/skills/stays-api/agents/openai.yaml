@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stays Anúncios e API"
+  short_description: "Operar anúncios, calendário e API Stays"
+  default_prompt: "Use $stays-api para revisar ou atualizar este anúncio na Stays, conferindo conteúdo, fotos, status, calendário e impacto antes de salvar."

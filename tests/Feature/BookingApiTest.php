@@ -39,6 +39,48 @@ class BookingApiTest extends TestCase
         $this->getJson('/api/stays/status')->assertStatus(503)->assertJsonPath('hasCredentials', false)->assertJsonMissingPath('clientSecret');
     }
 
+    public function test_stays_status_reports_the_live_listing_count(): void
+    {
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(function (ClientRequest $request): mixed {
+            return Http::response(
+                str_contains($request->url(), 'skip=50')
+                    ? [['id' => 'listing-51']]
+                    : array_fill(0, 50, ['id' => 'live-listing']),
+                200,
+            );
+        });
+
+        $this->getJson('/api/stays/status')
+            ->assertOk()
+            ->assertJsonPath('connected', true)
+            ->assertJsonPath('totalProperties', 51);
+
+        Http::assertSent(fn (ClientRequest $request): bool => str_contains($request->url(), 'skip=50'));
+    }
+
+    public function test_stays_status_reports_zero_when_the_live_catalog_is_empty(): void
+    {
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->getJson('/api/stays/status')
+            ->assertOk()
+            ->assertJsonPath('connected', true)
+            ->assertJsonPath('totalProperties', 0);
+    }
+
+    public function test_stays_status_fails_when_a_live_listing_page_is_unavailable(): void
+    {
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
+        Http::fake(['*' => Http::response(['error' => 'unavailable'], 503)]);
+
+        $this->getJson('/api/stays/status')
+            ->assertStatus(503)
+            ->assertJsonPath('connected', false)
+            ->assertJsonPath('hasCredentials', true);
+    }
+
     public function test_guest_routes_require_authentication(): void
     {
         $this->getJson('/api/my-reservations')->assertUnauthorized()->assertJsonPath('code', 'authentication_required');

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, CircleDollarSign, ClipboardList, Home, LoaderCircle, LockKeyhole, RefreshCw } from 'lucide-react';
 import { OwnerDashboardData } from '../../services/crcnBackendApi';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { getOwnerCalendarDaySegment } from '../../utils/ownerCalendar';
+import { OwnerAccountingTransactions } from './OwnerAccountingTransactions';
 
 type DashboardSection = 'overview' | 'properties' | 'reservations' | 'calendar' | 'accounting';
 
@@ -167,6 +169,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             <div className="overflow-x-auto rounded-2xl border border-neutral-200/80">
               <table className="w-full min-w-[520px] text-left text-sm"><thead className="bg-neutral-50 text-xs uppercase text-neutral-500"><tr><th className="px-4 py-3">Propriedade</th><th className="px-4 py-3 text-right">Créditos</th><th className="px-4 py-3 text-right">Débitos</th></tr></thead><tbody className="divide-y divide-neutral-100 bg-white/80">{dashboard.properties.map((property) => <tr key={property.staysListingId}><td className="px-4 py-3 font-semibold text-neutral-800">{property.title}</td><td className="px-4 py-3 text-right font-bold text-emerald-700">{currencyText(property.credit, 'BRL')}</td><td className="px-4 py-3 text-right font-bold text-orange-700">{currencyText(property.debit, 'BRL')}</td></tr>)}</tbody></table>
             </div>
+            <OwnerAccountingTransactions accessToken={accessToken} entries={dashboard.entries} properties={dashboard.properties} period={dashboard.period} />
           </SectionCard>}
 
           {section === 'calendar' && <SectionCard title="Calendário de reservas" detail="Consulte reservas e bloqueios sincronizados com a Stays e bloqueie períodos dos seus imóveis.">
@@ -242,10 +245,15 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
               {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => <div key={day} className="pb-2 text-center text-xs font-bold text-neutral-500">{day}</div>)}
               {calendarDays.map((day) => {
-                const stays = reservations.filter((reservation) => reservation.checkIn <= day.iso && reservation.checkOut > day.iso);
+                const stays = reservations
+                  .map((reservation) => ({
+                    reservation,
+                    segment: getOwnerCalendarDaySegment(reservation.checkIn, reservation.checkOut, day.iso),
+                  }))
+                  .filter(({ segment }) => segment !== 'none');
                 return <div key={day.iso} className={`min-h-20 rounded-xl border p-1.5 sm:min-h-24 sm:p-2 ${day.inMonth ? 'border-white/90 bg-white/75' : 'border-transparent bg-white/30 text-neutral-400'}`}>
                   <span className="text-xs font-bold">{day.number}</span>
-                  <div className="mt-1 space-y-1">{stays.slice(0, 2).map((stay) => <div key={`${day.iso}-${stay.id}`} title={`${stay.propertyTitle} · ${statusLabel[stay.status]} · ${paymentStatusLabel[stay.paymentStatus]}`} className={`truncate rounded-md px-1 py-0.5 text-[9px] font-bold sm:text-[10px] ${calendarEntryClass(stay)}`}>{stay.propertyTitle}</div>)}{stays.length > 2 && <div className="text-[9px] font-semibold text-neutral-500">+{stays.length - 2}</div>}</div>
+                  <div className="mt-1 flex flex-wrap items-start gap-1">{stays.slice(0, 2).map(({ reservation, segment }) => <div key={`${day.iso}-${reservation.id}`} title={`${reservation.propertyTitle} · ${statusLabel[reservation.status]} · ${paymentStatusLabel[reservation.paymentStatus]}${segment === 'checkout' ? ' · liberação ao meio-dia' : ''}`} aria-label={`${reservation.propertyTitle} · ${statusLabel[reservation.status]}${segment === 'checkout' ? ' · ocupa até meio-dia' : ''}`} className={`truncate rounded-md px-1 py-0.5 text-[9px] font-bold sm:text-[10px] ${segment === 'checkout' ? 'w-fit shrink-0' : stays.length > 1 ? 'min-w-0 flex-1 basis-[calc(50%-0.125rem)]' : 'w-full'} ${calendarEntryClass(reservation)}`}>{segment === 'checkout' ? 'Até 12h' : reservation.status === 'blocked' ? 'Bloqueio' : reservation.propertyTitle}</div>)}{stays.length > 2 && <div className="basis-full text-[9px] font-semibold text-neutral-500">+{stays.length - 2}</div>}</div>
                 </div>;
               })}
             </div>

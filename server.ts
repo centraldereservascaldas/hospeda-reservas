@@ -11,6 +11,7 @@ import { isMissingOwnerReviewMetadataError } from './src/utils/ownerApproval';
 import {
   getStaysOwnerDateRanges,
   normalizeStaysOwners,
+  resolveStaysFinanceOwner,
   StaysOwnerSummary,
 } from './src/utils/staysOwners';
 import { buildSofiaFallback } from './src/utils/sofiaConcierge';
@@ -45,6 +46,10 @@ const supabaseAdmin = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
 
 app.use(cors());
 app.use(express.json());
+
+app.get('/api/health', (_req: Request, res: Response) => {
+  return res.json({ success: true, service: 'hospeda-reservas-api' });
+});
 
 // In-memory cache for live Stays PMS synchronized properties
 let cachedProperties: Property[] = [...STAYS_NET_APARTMENTS];
@@ -297,6 +302,75 @@ async function callStaysExternalApi<T>(endpoint: string, options: RequestInit = 
     console.error(`Error calling Stays API [${endpoint}]:`, err);
     return null;
   }
+}
+
+type StaysOwnerFinanceLookup =
+  | { success: true; owner: Record<string, any> }
+  | { success: false; reason: 'owner-not-found' }
+  | { success: false; reason: 'unavailable' };
+
+async function fetchStaysOwnerFinance(
+  ownerId: string,
+  from: string,
+  to: string,
+): Promise<StaysOwnerFinanceLookup> {
+  const query = new URLSearchParams({ from, to });
+  const payload = await callStaysExternalApi<any>(`/finance/owners?${query}`);
+  if (!payload) return { success: false, reason: 'unavailable' };
+
+  const ownerResolution = resolveStaysFinanceOwner(payload, ownerId);
+  if (ownerResolution.status === 'invalid-response') return { success: false, reason: 'unavailable' };
+  if (ownerResolution.status === 'not-found') return { success: false, reason: 'owner-not-found' };
+
+  const owner = ownerResolution.owner;
+  if (!Array.isArray(owner.listings) || owner.listings.length > 200) {
+    return { success: false, reason: 'unavailable' };
+  }
+
+  const listings: any[] = [];
+  for (let offset = 0; offset < owner.listings.length; offset += 8) {
+    const summaries = owner.listings.slice(offset, offset + 8);
+    const details = await Promise.all(summaries.map(async (summary: any) => {
+      const listingIds = [...new Set([summary?._id, summary?.id, summary?.code]
+        .filter((value) => typeof value === 'string' || typeof value === 'number')
+        .map((value) => String(value).trim())
+        .filter(Boolean))];
+      if (listingIds.length === 0) return null;
+      let detailPayload: any = null;
+      for (const listingId of listingIds) {
+        detailPayload = await callStaysExternalApi<any>(
+          `/finance/owners/${encodeURIComponent(ownerId)}/${encodeURIComponent(listingId)}?${query}`,
+        );
+        if (detailPayload) break;
+      }
+      if (!detailPayload) return null;
+      let detail = detailPayload.listing || detailPayload.data || detailPayload;
+      if (Array.isArray(detail?.listings)) detail = detail.listings[0];
+      if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null;
+      return { ...summary, ...detail };
+    }));
+    if (details.some((detail) => detail === null)) return { success: false, reason: 'unavailable' };
+    listings.push(...details);
+  }
+
+  return { success: true, owner: { ...owner, listings } };
+}
+
+function sendOwnerFinanceError(
+  res: Response,
+  reason: Exclude<StaysOwnerFinanceLookup, { success: true }>['reason'],
+  fallbackCode: string,
+  fallbackMessage: string,
+): Response {
+  if (reason === 'owner-not-found') {
+    return res.status(409).json({
+      success: false,
+      code: 'stays_owner_link_not_found',
+      message: 'O vínculo deste proprietário não foi localizado na Stays. A Central precisa revisar o cadastro antes de exibir os dados.',
+    });
+  }
+
+  return res.status(502).json({ success: false, code: fallbackCode, message: fallbackMessage });
 }
 
 type VerifiedGuest = { id: string; email: string; fullName: string; user: User };
@@ -586,11 +660,23 @@ async function fetchStaysProperties(): Promise<any[] | null> {
   const properties: any[] = [];
   for (let skip = 0; skip < 5000; skip += 20) {
     const page = await callStaysExternalApi<any[]>(`/content/properties?status=active&limit=20&skip=${skip}`);
-    if (!Array.isArray(page)) return properties.length ? properties : null;
+    if (!Array.isArray(page) || !page.every((property) => property && typeof property === 'object' && !Array.isArray(property))) return null;
     properties.push(...page);
     if (page.length < 20) break;
   }
   return properties;
+}
+
+async function fetchActiveStaysListings(): Promise<any[] | null> {
+  if (!STAYS_CLIENT_ID || !STAYS_CLIENT_SECRET) return null;
+  const listings: any[] = [];
+  for (let skip = 0; skip < 5000; skip += 50) {
+    const page = await callStaysExternalApi<any[]>(`/content/listings?limit=50&skip=${skip}&status=active`);
+    if (!Array.isArray(page) || !page.every((listing) => listing && typeof listing === 'object' && !Array.isArray(listing))) return null;
+    listings.push(...page);
+    if (page.length < 50) return listings;
+  }
+  return null;
 }
 
 function indexStaysPropertyDetails(properties: any[]): Map<string, { name: string; description: string; images: string[] }> {
@@ -657,17 +743,21 @@ app.get('/api/accommodations', async (_req: Request, res: Response) => {
   try {
     const staysProperties = await fetchStaysProperties();
     if (staysProperties) cachedStaysPropertyDetails = indexStaysPropertyDetails(staysProperties);
-    // Fetch only active listings and paginate: Stays caps each response page.
-    const liveListings: any[] = [];
     if (STAYS_CLIENT_ID && STAYS_CLIENT_SECRET) {
-      for (let skip = 0; skip < 5000; skip += 50) {
-        const page = await callStaysExternalApi<any[]>(`/content/listings?limit=50&skip=${skip}&status=active`);
-        if (!Array.isArray(page)) break;
-        liveListings.push(...page);
-        if (page.length < 50) break;
+      const liveListings = await fetchActiveStaysListings();
+      if (!liveListings) {
+        return res.status(503).json({
+          success: false,
+          source: 'unavailable',
+          message: 'Não foi possível atualizar as acomodações na Stays agora.',
+          data: [],
+        });
       }
-    }
-    if (liveListings && Array.isArray(liveListings) && liveListings.length > 0) {
+      if (liveListings.length === 0) {
+        cachedProperties = [];
+        return res.json({ success: true, source: 'stays-live', count: 0, data: [] });
+      }
+
       // The property collection omits its gallery. Fetch each distinct property
       // detail so condominium cards use the property's own Stays images, never
       // the separate apartment/listing gallery.
@@ -1340,11 +1430,11 @@ app.get('/api/owner/dashboard', async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, code: 'invalid_date_range', message: 'Selecione um período válido de até 12 meses.' });
   }
 
-  const ownerResponse = await callStaysExternalApi<any>(
-    `/finance/owners/${encodeURIComponent(access.staysOwnerId)}?${new URLSearchParams({ from, to })}`,
-  );
-  if (!ownerResponse) return res.status(502).json({ success: false, code: 'owner_finance_unavailable', message: 'Não foi possível carregar os dados financeiros agora.' });
-  const owner = ownerResponse.owner || ownerResponse.data || ownerResponse;
+  const ownerLookup = await fetchStaysOwnerFinance(access.staysOwnerId, from, to);
+  if (ownerLookup.success === false) {
+    return sendOwnerFinanceError(res, ownerLookup.reason, 'owner_finance_unavailable', 'Não foi possível carregar os dados financeiros agora.');
+  }
+  const owner = ownerLookup.owner;
   const ownerListings = Array.isArray(owner?.listings) ? owner.listings : [];
   if (ownerListings.length > 200) return res.status(502).json({ success: false, code: 'owner_listing_limit', message: 'A lista de propriedades ultrapassa o limite de consulta. Fale com a Central.' });
 
@@ -1387,7 +1477,7 @@ app.get('/api/owner/dashboard', async (req: Request, res: Response) => {
         const guestName = String(record?.client?.name || [record?.client?.fName, record?.client?.lName].filter(Boolean).join(' ') || record?.guestName || 'Hóspede');
         reservations.push({
           id,
-          code: String(record?.partnerCode || record?.code || id),
+          code: String(record?.id || record?.partnerCode || record?.code || id),
           listingId: listing.staysListingId,
           propertyTitle: listing.title,
           propertyImage: listing.image,
@@ -1407,6 +1497,37 @@ app.get('/api/owner/dashboard', async (req: Request, res: Response) => {
     }
   }
 
+  const entries: Array<Record<string, unknown>> = [];
+  for (const listing of ownerListings) {
+    const listingId = String(listing?.id || listing?.code || listing?._id || '').trim();
+    const property = listings.find((item: any) => item.staysListingId === listingId);
+    const listingReservations = reservations.filter((item) => item.listingId === listingId);
+    for (const [index, account] of (Array.isArray(listing?.accounts) ? listing.accounts : []).entries()) {
+      const date = String(account?.date || '');
+      const type = String(account?.type || '').toLowerCase();
+      const amount = Number(account?._mcval?.BRL);
+      if (!isIsoDate(date) || !['debit', 'credit'].includes(type) || !Number.isFinite(amount)) continue;
+      const reservationId = account?.reserveId ? String(account.reserveId) : null;
+      const reservation = listingReservations.find((item) => item.id === reservationId || item.code === reservationId);
+      const reservationCheckIn = typeof reservation?.checkIn === 'string' ? reservation.checkIn : '';
+      const reservationCheckOut = typeof reservation?.checkOut === 'string' ? reservation.checkOut : '';
+      const rangeDescription = reservationCheckIn && reservationCheckOut ? `${reservationCheckIn.split('-').reverse().join('/')} - ${reservationCheckOut.split('-').reverse().join('/')}` : '';
+      entries.push({
+        id: String(account?._id || `${listingId}-${date}-${type}-${index}`),
+        date,
+        listingId,
+        propertyTitle: property?.title || String(listing?.internalName || 'Acomodação'),
+        reservationId,
+        reservationCode: reservation?.code || null,
+        description: String(account?.transactionName || rangeDescription || account?.publicNote || 'Lançamento financeiro'),
+        publicNote: account?.publicNote ? String(account.publicNote) : null,
+        type,
+        status: String(account?.status || ''),
+        amount,
+      });
+    }
+  }
+
   return res.json({
     success: true,
     period: { from, to },
@@ -1417,7 +1538,102 @@ app.get('/api/owner/dashboard', async (req: Request, res: Response) => {
     },
     properties: listings,
     reservations: reservations.sort((a: any, b: any) => String(a.checkIn).localeCompare(String(b.checkIn))),
+    entries: entries.sort((a, b) => String(b.date).localeCompare(String(a.date))),
   });
+});
+
+app.get('/api/owner/accounting/entries/:entryId/details', async (req: Request, res: Response) => {
+  const authentication = await authenticateVerifiedGuest(req);
+  if (!authentication.guest) return res.status(authentication.status || 401).json({ success: false, code: authentication.code, message: authentication.message });
+  const access = await getOwnerAccess(authentication.guest.id);
+  if (!access) return res.status(503).json({ success: false, code: 'owner_access_unavailable', message: 'Não foi possível verificar o acesso de proprietário agora.' });
+  if (access.status !== 'approved' || !access.staysOwnerId) return res.status(403).json({ success: false, code: 'owner_access_not_approved', message: 'O acesso ao painel de proprietário ainda não foi aprovado.' });
+  const listingId = String(req.query.listingId || '').trim();
+  const from = String(req.query.from || '');
+  const to = String(req.query.to || '');
+  if (!listingId || listingId.length > 160 || !isIsoDate(from) || !isIsoDate(to) || stayNights(from, to) < 0 || stayNights(from, to) > 366) {
+    return res.status(400).json({ success: false, code: 'invalid_accounting_query', message: 'O período ou a propriedade do lançamento é inválido.' });
+  }
+  const ownerLookup = await fetchStaysOwnerFinance(access.staysOwnerId, from, to);
+  if (ownerLookup.success === false) {
+    return sendOwnerFinanceError(res, ownerLookup.reason, 'owner_finance_unavailable', 'Não foi possível validar o lançamento na Stays.');
+  }
+  const owner = ownerLookup.owner;
+  const listing = (Array.isArray(owner?.listings) ? owner.listings : []).find((item: any) => [item?.id, item?._id, item?.code].some((id) => String(id || '') === listingId));
+  if (!listing) return res.status(403).json({ success: false, code: 'owner_listing_forbidden', message: 'Essa propriedade não está vinculada ao seu acesso de proprietário.' });
+  const account = (Array.isArray(listing?.accounts) ? listing.accounts : []).find((item: any, index: number) => {
+    const date = String(item?.date || '');
+    const type = String(item?.type || '').toLowerCase();
+    return String(item?._id || `${listingId}-${date}-${type}-${index}`) === req.params.entryId && isIsoDate(date) && date >= from && date <= to && ['debit', 'credit'].includes(type);
+  });
+  if (!account) return res.status(404).json({ success: false, code: 'accounting_entry_not_found', message: 'O lançamento não está disponível neste período.' });
+  const reservationId = String(account?.reserveId || '');
+  const reservation = reservationId ? await callStaysExternalApi<any>(`/booking/reservations/${encodeURIComponent(reservationId)}`) : null;
+  const reservationListingIds = [reservation?.listingId, reservation?._idlisting, reservation?.apartment?._id].filter((value) => typeof value === 'string');
+  const ownerListingIds = [listing?.id, listing?._id, listing?.code, listingId].filter((value) => typeof value === 'string').map(String);
+  if (reservationId && (!reservation || !reservationListingIds.some((id) => ownerListingIds.includes(id)))) {
+    return res.status(502).json({ success: false, code: 'reservation_details_unavailable', message: 'Os detalhes da reserva não estão disponíveis na Stays.' });
+  }
+  const amountOf = (value: any): number => Number(value?._mcval?.BRL ?? value?._f_val ?? value?.amount ?? value ?? 0) || 0;
+  const fees: Array<{ label: string; amount: number }> = [];
+  const accountAmount = amountOf(account?._mcval?.BRL ?? 0);
+  const checkIn = String(reservation?.checkInDate || '');
+  const checkOut = String(reservation?.checkOutDate || '');
+  if (String(account?.type || '').toLowerCase() === 'credit' && isIsoDate(checkIn) && isIsoDate(checkOut)) {
+    const exportReservations = await callStaysExternalApi<any[]>('/booking/reservations-export', {
+      method: 'POST',
+      body: JSON.stringify({
+        from: checkIn,
+        to: checkOut,
+        dateType: 'included',
+        listingId: [String(listing?.id || listing?.code || listingId)],
+      }),
+    });
+    const reservationReferences = [reservationId, reservation?.id, reservation?.partnerCode, reservation?.code]
+      .filter((value) => typeof value === 'string' && value !== '');
+    const ownerListingIds = [listing?.id, listing?._id, listing?.code, listingId]
+      .filter((value) => typeof value === 'string' || typeof value === 'number')
+      .map(String);
+    const exportReservation = Array.isArray(exportReservations)
+      ? exportReservations.find((item: any) => {
+        const exportReferences = [item?._id, item?.id, item?.partnerCode]
+          .filter((value) => typeof value === 'string' && value !== '');
+        const exportListingIds = [item?.listing?.id, item?._idlisting]
+          .filter((value) => typeof value === 'string' || typeof value === 'number')
+          .map(String);
+        return reservationReferences.some((reference) => exportReferences.includes(reference))
+          && ownerListingIds.some((ownerListingId) => exportListingIds.includes(ownerListingId));
+      })
+      : null;
+
+    if (exportReservation) {
+      for (const ownerFee of Array.isArray(exportReservation.ownerFee) ? exportReservation.ownerFee : []) {
+        const label = String(ownerFee?.desc || '').trim();
+        const feeAmount = Number(ownerFee?.val);
+        if (label && Number.isFinite(feeAmount) && feeAmount > 0) fees.push({ label, amount: feeAmount });
+      }
+      const companyCommission = Number(exportReservation.companyCommision);
+      if (Number.isFinite(companyCommission) && companyCommission > 0) {
+        fees.push({ label: 'Comissão do administrador', amount: companyCommission });
+      }
+    }
+  }
+  return res.json({ success: true, details: {
+    reservationCode: String(reservation?.id || reservation?.partnerCode || reservation?.code || reservationId || ''),
+    guestName: String(reservation?.client?.name || [reservation?.client?.fName, reservation?.client?.lName].filter(Boolean).join(' ') || 'Hóspede'),
+    checkIn,
+    checkOut,
+    nights: isIsoDate(checkIn) && isIsoDate(checkOut) ? Math.max(0, stayNights(checkIn, checkOut)) : 0,
+    fees,
+    payout: amountOf(account),
+    ledgerEntry: {
+      date: String(account?.date || ''),
+      type: String(account?.type || 'credit').toLowerCase(),
+      status: String(account?.status || ''),
+      description: String(account?.transactionName || account?.publicNote || account?.internalName || 'Lançamento financeiro'),
+      amount: accountAmount,
+    },
+  } });
 });
 
 app.post('/api/owner/calendar/blocks', async (req: Request, res: Response) => {
@@ -1438,9 +1654,11 @@ app.post('/api/owner/calendar/blocks', async (req: Request, res: Response) => {
   }
   if (!STAYS_CLIENT_ID || !STAYS_CLIENT_SECRET) return res.status(503).json({ success: false, code: 'stays_not_configured', message: 'O calendário da Stays está indisponível no momento.' });
 
-  const ownerResponse = await callStaysExternalApi<any>(`/finance/owners/${encodeURIComponent(access.staysOwnerId)}?${new URLSearchParams({ from, to })}`);
-  if (!ownerResponse) return res.status(502).json({ success: false, code: 'owner_properties_unavailable', message: 'Não foi possível confirmar a propriedade na Stays. Tente novamente.' });
-  const owner = ownerResponse.owner || ownerResponse.data || ownerResponse;
+  const ownerLookup = await fetchStaysOwnerFinance(access.staysOwnerId, from, to);
+  if (ownerLookup.success === false) {
+    return sendOwnerFinanceError(res, ownerLookup.reason, 'owner_properties_unavailable', 'Não foi possível confirmar a propriedade na Stays. Tente novamente.');
+  }
+  const owner = ownerLookup.owner;
   const listing = (Array.isArray(owner?.listings) ? owner.listings : []).find((item: any) => [item?.id, item?._id, item?.code].some((id) => String(id || '') === listingId));
   if (!listing) return res.status(403).json({ success: false, code: 'owner_listing_forbidden', message: 'Essa propriedade não está vinculada ao seu acesso de proprietário.' });
 
@@ -1794,8 +2012,8 @@ app.get('/api/stays/status', async (_req: Request, res: Response) => {
       message: 'Credenciais Stays não configuradas no servidor.',
     });
   }
-  const listings = await callStaysExternalApi<any[]>('/content/listings?limit=1&skip=0&status=active');
-  if (!Array.isArray(listings)) {
+  const listings = await fetchActiveStaysListings();
+  if (!listings) {
     return res.status(503).json({
       connected: false,
       hasCredentials: true,
@@ -1806,7 +2024,7 @@ app.get('/api/stays/status', async (_req: Request, res: Response) => {
   return res.json({
     connected: true,
     hasCredentials: true,
-    totalProperties: cachedProperties.length,
+    totalProperties: listings.length,
     environment: process.env.NODE_ENV || 'development',
   });
 });

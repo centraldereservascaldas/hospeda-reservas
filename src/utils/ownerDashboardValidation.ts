@@ -38,6 +38,20 @@ const isOwnerReservation = (value: unknown): boolean =>
   Number.isInteger(value.nights) &&
   value.nights >= 1;
 
+const isOwnerAccountingEntry = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value.id === 'string' &&
+  isIsoDate(value.date) &&
+  typeof value.listingId === 'string' &&
+  typeof value.propertyTitle === 'string' &&
+  (value.reservationId === null || typeof value.reservationId === 'string') &&
+  (value.reservationCode === null || typeof value.reservationCode === 'string') &&
+  typeof value.description === 'string' &&
+  (value.publicNote === null || typeof value.publicNote === 'string') &&
+  (value.type === 'debit' || value.type === 'credit') &&
+  typeof value.status === 'string' &&
+  isFiniteNumber(value.amount);
+
 export function isOwnerDashboardData(value: unknown): value is OwnerDashboardData {
   return (
     isRecord(value) &&
@@ -52,6 +66,8 @@ export function isOwnerDashboardData(value: unknown): value is OwnerDashboardDat
     Array.isArray(value.properties) &&
     value.properties.every(isOwnerProperty) &&
     Array.isArray(value.reservations) &&
-    value.reservations.every(isOwnerReservation)
+    value.reservations.every(isOwnerReservation) &&
+    Array.isArray(value.entries) &&
+    value.entries.every(isOwnerAccountingEntry)
   );
 }

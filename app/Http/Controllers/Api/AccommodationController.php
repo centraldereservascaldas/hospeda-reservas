@@ -34,19 +34,14 @@ class AccommodationController extends Controller
             return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
         }
 
-        $listings = [];
-        for ($skip = 0; $skip < 5000; $skip += 50) {
-            $page = $this->stays->get('/content/listings', ['limit' => 50, 'skip' => $skip, 'status' => 'active']);
-            if (! is_array($page)) {
-                break;
-            }
-            $listings = [...$listings, ...$page];
-            if (count($page) < 50) {
-                break;
-            }
-        }
-        if ($listings === []) {
-            return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
+        $listings = $this->stays->activeListings();
+        if ($listings === null) {
+            return response()->json([
+                'success' => false,
+                'source' => 'unavailable',
+                'message' => 'Não foi possível atualizar as acomodações na Stays agora.',
+                'data' => [],
+            ], 503);
         }
 
         $mapped = array_map(fn (array $listing): array => $this->mapListing($listing, $fallback), $listings);

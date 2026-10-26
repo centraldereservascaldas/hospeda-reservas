@@ -34,6 +34,21 @@ const dashboard = {
       nights: 2,
     },
   ],
+  entries: [
+    {
+      id: 'account-1',
+      date: '2026-10-27',
+      listingId: 'JQ08G',
+      propertyTitle: 'Apartamento Caldas',
+      reservationId: 'reservation-1',
+      reservationCode: 'ABC123',
+      description: '27/10/2026 - 29/10/2026',
+      publicNote: null,
+      type: 'credit',
+      status: 'received',
+      amount: 120,
+    },
+  ],
 };
 
 test('accepts the Laravel owner dashboard response shape', () => {
@@ -64,6 +79,7 @@ test('clears unsafe property and reservation images from the owner dashboard res
 
 test('rejects incomplete, invalid-date, and non-finite owner dashboard data', () => {
   assert.equal(isOwnerDashboardData({ ...dashboard, totals: { debit: 0 } }), false);
+  assert.equal(isOwnerDashboardData({ ...dashboard, entries: [{ ...dashboard.entries[0], type: 'unknown' }] }), false);
   assert.equal(
     isOwnerDashboardData({ ...dashboard, period: { from: '2026-02-30', to: '2026-03-01' } }),
     false,
@@ -107,4 +123,34 @@ test('rejects incomplete, invalid-date, and non-finite owner dashboard data', ()
     }),
     false,
   );
+});
+
+test('loads validated Stays accounting reservation details', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    assert.match(String(input), /owner\/accounting\/entries\/account-1\/details/);
+    return new Response(JSON.stringify({
+      success: true,
+      details: {
+        reservationCode: 'QI03J',
+        guestName: 'Hóspede',
+        checkIn: '2026-10-27',
+        checkOut: '2026-10-29',
+        nights: 2,
+        fees: [{ label: 'Taxa de limpeza', amount: 80 }],
+        payout: 120,
+        ledgerEntry: { date: '2026-10-27', type: 'credit', status: 'paid', description: 'Repasse da reserva', amount: 120 },
+      },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+
+  try {
+    const result = await crcnBackendApi.getOwnerAccountingDetails('test-token', 'account-1', 'JQ08G', '2026-10-01', '2026-10-31');
+    assert.equal(result.guestName, 'Hóspede');
+    assert.equal(result.reservationCode, 'QI03J');
+    assert.equal(result.fees[0]?.amount, 80);
+    assert.equal(result.ledgerEntry.amount, 120);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
