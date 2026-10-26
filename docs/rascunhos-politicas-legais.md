@@ -2,14 +2,14 @@
 
 > **Rascunho interno para revisão. Não publicado e ainda não aprovado.** Os trechos entre colchetes são pendências que precisam ser preenchidas com informações verificadas. Este documento não afirma que a operação esteja em conformidade integral com a LGPD ou com o CDC.
 
-Este material foi preparado a partir do código existente em 26/10/2026 e de fontes oficiais indicadas ao final. A publicação depende de confirmar a identidade da empresa responsável, os canais de atendimento, os papéis dos anfitriões e fornecedores, os prazos de retenção, as regras de cada oferta e a revisão jurídica.
+Este material foi preparado a partir do código existente em 26/10/2026 e das fontes indicadas ao final. Fontes empresariais públicas secundárias atribuem à operação a razão social CRCN LTDA e o nome fantasia Central de Reservas Caldas Novas. Elas não são comprovante cadastral emitido pela Receita Federal. A publicação depende de confirmar a identidade e o vínculo da empresa responsável, designar canais operacionais, definir os papéis dos anfitriões e fornecedores, os prazos de retenção, as regras de cada oferta e obter revisão jurídica.
 
 ## Política de privacidade — rascunho para hóspedes
 
 **Última atualização:** [preencher após aprovação]  
-**Responsável pelo tratamento:** [razão social e nome fantasia]  
-**CNPJ informado pelo responsável:** 67.314.679/0001-64 *(informado pelo responsável; não verificado em cadastro público)*  
-**Canal de privacidade e atendimento:** [e-mail, formulário ou endereço confirmado]
+**Entidade empresarial identificada para esta minuta:** CRCN LTDA, nome fantasia Central de Reservas Caldas Novas; CNPJ 67.314.679/0001-64 *(razão social atribuída às fontes cadastrais secundárias; o site oficial confirma o CNPJ. O papel da empresa no tratamento deve ser confirmado conforme o fluxo efetivo da operação)*.
+**Contato comercial publicado no site oficial:** centraldereservascn@gmail.com · Avenida Vera Cruz, quadra 34, lote 1, nº 98, São José, Caldas Novas/GO, CEP 75680-057 *(confirmar antes da publicação como canal/endereço operacional)*. O telefone (64) 99213-3042 e o endereço Rua 11, s/n, quadra 07, lote 13, Estância Itaguaí, Caldas Novas/GO, CEP 75682-014 constam no diretório Solutudo, mas divergem do endereço publicado no site oficial; validar essa referência separadamente.
+**Canal de privacidade e atendimento operacional:** [designar e confirmar; o contato comercial publicado acima ainda não foi confirmado para solicitações de titulares]
 
 ### 1. Sobre esta política
 
@@ -76,7 +76,7 @@ Mantemos os dados pelo tempo necessário para as finalidades descritas e conform
 
 Você pode solicitar, conforme as condições previstas na LGPD, confirmação do tratamento, acesso, correção, informação sobre compartilhamentos, portabilidade quando aplicável, anonimização, bloqueio ou eliminação de dados desnecessários ou tratados em desconformidade, eliminação de dados tratados com consentimento quando cabível, informação sobre a possibilidade e as consequências de não consentir e revogação do consentimento. Também pode apresentar oposição nas hipóteses legais.
 
-Envie sua solicitação para **[canal de privacidade confirmado]**, informando como podemos localizar os dados e qual direito deseja exercer. Poderemos pedir informações razoáveis para confirmar sua identidade e proteger sua conta. Alguns dados podem precisar ser mantidos quando houver obrigação legal ou outra hipótese legal aplicável; explicaremos a razão quando isso ocorrer. Se não formos responsáveis por determinado tratamento, indicaremos, quando possível, o agente apropriado.
+Envie sua solicitação para **[canal de privacidade operacional a designar e confirmar]**, informando como podemos localizar os dados e qual direito deseja exercer. O e-mail comercial centraldereservascn@gmail.com, publicado no site oficial e em diretório comercial, ainda não foi confirmado como canal de privacidade, e o atendimento de solicitações de titulares não foi testado. Poderemos pedir informações razoáveis para confirmar sua identidade e proteger sua conta. Alguns dados podem precisar ser mantidos quando houver obrigação legal ou outra hipótese legal aplicável; explicaremos a razão quando isso ocorrer. Se não formos responsáveis por determinado tratamento, indicaremos, quando possível, o agente apropriado.
 
 ### 8. Segurança e atualizações
 
@@ -85,7 +85,8 @@ Adotamos medidas técnicas e organizacionais compatíveis com a operação para 
 ## Cancelamento e reembolso — rascunho para hóspedes
 
 **Última atualização:** [preencher após aprovação]  
-**Central responsável:** [razão social e canal confirmado]; CNPJ informado pelo responsável: **67.314.679/0001-64** *(não verificado em cadastro público)*.  
+**Central responsável indicada:** CRCN LTDA, nome fantasia Central de Reservas Caldas Novas; CNPJ **67.314.679/0001-64** *(confirmar vínculo com a operação e cadastro oficial)*.
+**Contato comercial publicado no site oficial:** centraldereservascn@gmail.com *(confirmar como canal operacional para cancelamentos; ainda não há confirmação)*.
 **Aplicação:** pedidos feitos no site e reservas administradas pela Central, respeitadas as condições específicas exibidas para cada acomodação e os direitos previstos em lei.
 
 ### 1. Confira as condições da sua reserva
@@ -132,7 +133,7 @@ Estes fatos justificam o conteúdo do rascunho, mas não substituem um inventár
 
 ## Pendências obrigatórias antes da publicação
 
-1. Confirmar razão social, nome fantasia e vínculo com o CNPJ informado (67.314.679/0001-64), validar os dados cadastrais, confirmar endereço e canais de atendimento e privacidade; definir quem responde às solicitações de titulares e eventual encarregado.
+1. Confirmar em documento cadastral oficial a razão social, nome fantasia e vínculo da CRCN LTDA (CNPJ 67.314.679/0001-64) com a operação; validar os contatos do site oficial e resolver separadamente a divergência do endereço publicado no diretório Solutudo; designar e testar canal operacional de atendimento e privacidade; definir quem responde às solicitações de titulares e avaliar eventual encarregado. As fontes consultadas não comprovam designação de encarregado.
 2. Validar os papéis de controlador e operador da Central, anfitriões, Stays, Mercado Pago, Supabase, OpenAI, Google/GTM e provedores de e-mail; confirmar compartilhamentos, subprocessadores e transferências internacionais.
 3. Completar o inventário de dados (incluindo logs, hospedagem, suporte, antifraude, pagamento e dados de hóspedes acompanhantes), bases legais por finalidade e controles implementados; aprovar retenção, descarte, backups e resposta a incidentes.
 4. Conferir tags ativas do GTM, cookies e armazenamento local, comportamento de revogação, dados enviados por cada tag e se todas as tags respeitam a preferência antes de ativar medição ou publicidade.
@@ -141,6 +142,14 @@ Estes fatos justificam o conteúdo do rascunho, mas não substituem um inventár
 7. **Bloqueio de publicação — arrependimento em contratação eletrônica:** antes de publicar, disponibilizar a ferramenta de arrependimento pela mesma ferramenta usada para contratar, sem exigir canal externo; confirmar imediatamente o recebimento pelo mesmo meio e integrar o fluxo operacional para comunicar imediatamente a instituição financeira, administradora do cartão ou gateway e impedir o lançamento ou efetivar o estorno, conforme o estado da transação. O código examinado não comprova que esse fluxo esteja implementado de ponta a ponta; não descrevê-lo como já disponível até validar a operação.
 8. Definir o fluxo operacional dos demais pedidos de cancelamento e reembolso, responsáveis, evidência de confirmação de cancelamento, meio de pagamento de retorno, prazos comunicados ao consumidor, tratamento de chargeback e canal de acompanhamento. A confirmação imediata de recebimento das demandas eletrônicas e a resposta em até cinco dias também devem ser incorporadas e verificadas conforme o Decreto nº 7.962/2013.
 9. Revisar os dois textos com responsável jurídico e publicar somente após aprovação formal, preenchimento das lacunas, implementação e verificação dos requisitos operacionais acima e registro de versão e data.
+
+## Fontes públicas empresariais consultadas em 26/10/2026
+
+- [Central de Reservas Caldas Novas — site oficial](https://www.centraldereservascaldas.com/) — o rodapé publica o CNPJ 67.314.679/0001-64, o e-mail centraldereservascn@gmail.com e o endereço Avenida Vera Cruz, quadra 34, lote 1, nº 98, São José, Caldas Novas/GO, CEP 75680-057. A consulta às páginas do domínio não localizou uma política geral verificável de cancelamento e reembolso; isso não permite afirmar que tal política inexista fora do conteúdo consultado. As regras encontradas para condomínio, multa de limpeza ou checkout não foram tratadas como política geral de cancelamento.
+- [CRCN LTDA — Serasa Experian](https://empresas.serasaexperian.com.br/consulta-gratis/CRCN-LTDA-ME-67314679000164) e [consulta CNPJ — CNPJGO](https://cnpjgo.com.br/cnpj/67314679000164) — espelhos públicos que atribuem a razão social CRCN LTDA, nome fantasia Central de Reservas Caldas Novas e CNPJ 67.314.679/0001-64. Não são comprovante emitido pela Receita Federal; confirmar os dados em fonte cadastral oficial antes de publicar.
+- [Central de Reservas Caldas Novas — Solutudo](https://www.solutudo.com.br/empresas/go/caldas-novas/administradoras-de-condominios/central-de-reservas-caldas-novas-30739625) — diretório comercial que publica o telefone (64) 99213-3042 e o endereço Rua 11, s/n, quadra 07, lote 13, Estância Itaguaí, Caldas Novas/GO, CEP 75682-014. O endereço diverge daquele publicado no site oficial e precisa ser validado; o diretório não confirma designação para atendimento LGPD nem teste do canal.
+
+Os dados empresariais foram consultados em 26/10/2026. A fonte oficial citada confirma publicamente CNPJ, e-mail e endereço comercial; Serasa Experian e CNPJGO são espelhos públicos secundários para a razão social, e não comprovantes da Receita Federal. O contato comercial não deve ser apresentado como canal de privacidade até a confirmação operacional. A consulta ao site não localizou política geral de cancelamento verificável; multas, percentuais, prazos e janelas específicos permanecem pendentes de aprovação para cada oferta.
 
 ## Fontes oficiais consultadas
 
