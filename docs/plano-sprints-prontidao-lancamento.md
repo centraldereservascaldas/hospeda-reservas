@@ -125,6 +125,7 @@ Em cada sprint, manter lista de itens com responsável, estado, evidência do ac
 
 ### Progresso em 26/10/2026
 
+- `4db7337`: timeout do worker explicitado em 60 s, abaixo de retry_after 90 s; checklist Coolify descreve serviços separados, healthchecks de processo para worker/scheduler e reinício após qualquer saída. Revisão independente Luna; sintaxe das flags, entrada da imagem, composer validate e diff-check conferidos. Configuração real no Coolify e ensaio de reinício continuam pendentes.
 - `1559f4b`: recuperação de pagamento pendente sem webhook validada com serviço real e HTTP fake; comando recoloca webhook estagnado na fila e ignora recentes, processados e no limite de tentativas. Implementação e revisão independente Luna; 5 testes/22 asserções, Pint e diff-check passaram. Execução real do scheduler/worker e gateway sandbox continuam pendentes.
 - `7e5abec`: cliente de checkout/pagamentos extraído para `checkoutApi.ts`, carregado com as telas de reserva. Index passou de 435,42/126,87 kB gzip para 426,62/124,60 kB gzip; chunk dedicado 8,90/2,92 kB gzip. Implementação e revisão independente Luna; lint, build, 61 testes focados e diff-check passaram. Não houve medição de Web Vitals ou smoke autenticado.
 - Auditoria de privacidade confirmou que a sintaxe dos UTMs não impede dados pessoais em slugs. Taxonomia aprovada permanece pendente; nenhum filtro novo foi aplicado. O evento purchase não inclui esses valores, mas o checkout os persiste.
