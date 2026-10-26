@@ -50,6 +50,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [section, setSection] = useState<DashboardSection>('overview');
   const [dashboard, setDashboard] = useState<OwnerDashboardData | null>(null);
+  const [selectedListingId, setSelectedListingId] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [blockListingId, setBlockListingId] = useState('');
@@ -77,9 +78,17 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
 
   useEffect(() => { void loadDashboard(); }, [loadDashboard]);
 
-  const confirmed = dashboard?.reservations.filter((reservation) => reservation.status === 'confirmed') || [];
+  const activeListingId = dashboard?.properties.some((property) => property.staysListingId === selectedListingId) ? selectedListingId : 'all';
+  const showPropertyFilter = section === 'reservations' || section === 'accounting';
+  const selectedProperty = dashboard?.properties.find((property) => property.staysListingId === activeListingId);
+  const allProperties = dashboard?.properties || [];
+  const filteredProperties = allProperties.filter((property) => activeListingId === 'all' || property.staysListingId === activeListingId);
+  const allReservations = dashboard?.reservations || [];
+  const reservations = allReservations.filter((reservation) => activeListingId === 'all' || reservation.listingId === activeListingId);
+  const entries = dashboard?.entries.filter((entry) => activeListingId === 'all' || entry.listingId === activeListingId) || [];
+  const accountingTotals = selectedProperty ?? dashboard?.totals;
+  const confirmed = allReservations.filter((reservation) => reservation.status === 'confirmed');
   const upcoming = confirmed.filter((reservation) => reservation.checkOut >= new Date().toISOString().slice(0, 10));
-  const reservations = dashboard?.reservations || [];
   const monthTitle = useMemo(() => {
     const [year, monthNumber] = month.split('-').map(Number);
     return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(year, monthNumber - 1, 1)));
@@ -93,7 +102,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
   const tabs: Array<{ id: DashboardSection; label: string; icon: React.ReactNode }> = [
     { id: 'overview', label: 'Visão geral', icon: <Home className="h-4 w-4" /> },
     { id: 'properties', label: 'Minhas propriedades', icon: <Home className="h-4 w-4" /> },
-    { id: 'reservations', label: 'Minhas reservas', icon: <ClipboardList className="h-4 w-4" /> },
+    { id: 'reservations', label: 'Reservas feitas', icon: <ClipboardList className="h-4 w-4" /> },
     { id: 'calendar', label: 'Calendário', icon: <CalendarDays className="h-4 w-4" /> },
     { id: 'accounting', label: 'Contabilidade', icon: <CircleDollarSign className="h-4 w-4" /> },
   ];
@@ -110,6 +119,8 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
       return { iso, number: day.getUTCDate(), inMonth: iso.slice(0, 7) === from.slice(0, 7) };
     });
   }, [month]);
+  const calendarListingId = blockListingId || dashboard?.properties[0]?.staysListingId || '';
+  const calendarReservations = dashboard?.reservations.filter((reservation) => reservation.listingId === calendarListingId) || [];
 
   return (
     <div className="mx-auto min-h-[75vh] max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
@@ -118,10 +129,19 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
           <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">Painel do proprietário</h1>
           <p className="mt-1 text-sm text-neutral-600">{dashboard?.ownerName ? `Olá, ${dashboard.ownerName}. ` : ''}Consulte propriedades, reservas e valores do período.</p>
         </div>
-        <div className="flex items-center gap-2 self-start rounded-2xl border border-white/80 bg-white/75 p-1.5 shadow-sm backdrop-blur-xl sm:self-auto">
-          <button type="button" onClick={() => changeMonth(-1)} aria-label="Mês anterior" className="rounded-xl p-2 hover:bg-white"><ChevronLeft className="h-4 w-4" /></button>
-          <span className="min-w-36 text-center text-sm font-bold capitalize text-neutral-800">{monthTitle}</span>
-          <button type="button" onClick={() => changeMonth(1)} aria-label="Próximo mês" className="rounded-xl p-2 hover:bg-white"><ChevronRight className="h-4 w-4" /></button>
+        <div className="flex flex-col gap-2 self-start sm:flex-row sm:items-center sm:self-auto">
+          {dashboard && dashboard.properties.length > 1 && showPropertyFilter && <label className="flex items-center gap-2 rounded-2xl border border-white/80 bg-white/75 px-3 py-1.5 text-xs font-bold text-neutral-700 shadow-sm backdrop-blur-xl">
+            <span>Propriedade</span>
+            <select aria-label="Filtrar propriedades" value={activeListingId} onChange={(event) => setSelectedListingId(event.target.value)} className="min-h-9 min-w-36 rounded-xl border border-white/80 bg-white/80 px-2 text-sm font-semibold text-neutral-800 outline-none focus-visible:ring-4 focus-visible:ring-orange-200">
+              <option value="all">Todas</option>
+              {dashboard.properties.map((property) => <option key={property.staysListingId} value={property.staysListingId}>{property.title}</option>)}
+            </select>
+          </label>}
+          <div className="flex items-center gap-2 rounded-2xl border border-white/80 bg-white/75 p-1.5 shadow-sm backdrop-blur-xl">
+            <button type="button" onClick={() => changeMonth(-1)} aria-label="Mês anterior" className="rounded-xl p-2 hover:bg-white"><ChevronLeft className="h-4 w-4" /></button>
+            <span className="min-w-36 text-center text-sm font-bold capitalize text-neutral-800">{monthTitle}</span>
+            <button type="button" onClick={() => changeMonth(1)} aria-label="Próximo mês" className="rounded-xl p-2 hover:bg-white"><ChevronRight className="h-4 w-4" /></button>
+          </div>
         </div>
       </header>
 
@@ -141,7 +161,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
         <>
           {section === 'overview' && <>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Metric label="Propriedades vinculadas" value={String(dashboard.properties.length)} icon={<Home className="h-5 w-5" />} />
+              <Metric label="Propriedades vinculadas" value={String(allProperties.length)} icon={<Home className="h-5 w-5" />} />
               <Metric label="Reservas confirmadas no período" value={String(confirmed.length)} icon={<CalendarDays className="h-5 w-5" />} />
               <Metric label="Créditos no período" value={currencyText(dashboard.totals.credit, 'BRL')} icon={<CircleDollarSign className="h-5 w-5" />} />
               <Metric label="Débitos no período" value={currencyText(dashboard.totals.debit, 'BRL')} icon={<CircleDollarSign className="h-5 w-5" />} />
@@ -150,26 +170,26 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
               <SectionCard title="Próximas estadias" detail={`${upcoming.length} reserva(s) confirmada(s) com checkout a partir de hoje`}>
                 <ReservationList rows={upcoming.slice(0, 5)} />
               </SectionCard>
-              <SectionCard title="Suas propriedades" detail={`${dashboard.properties.length} propriedade(s) associada(s) ao seu acesso`}>
-                <PropertyList rows={dashboard.properties.slice(0, 5)} />
+              <SectionCard title="Suas propriedades" detail={`${allProperties.length} propriedade(s) associada(s) ao seu acesso`}>
+                <PropertyList rows={allProperties.slice(0, 5)} />
               </SectionCard>
             </div>
           </>}
 
-          {section === 'properties' && <SectionCard title="Minhas propriedades" detail="Imóveis vinculados ao seu perfil de proprietário na Stays."><PropertyList rows={dashboard.properties} /></SectionCard>}
+          {section === 'properties' && <SectionCard title="Minhas propriedades" detail="Imóveis vinculados ao seu perfil de proprietário na Stays."><PropertyList rows={allProperties} /></SectionCard>}
 
-          {section === 'reservations' && <SectionCard title="Minhas reservas" detail="Reservas, cancelamentos e bloqueios incluídos no período selecionado."><ReservationList rows={reservations} /></SectionCard>}
+          {section === 'reservations' && <SectionCard title="Reservas feitas" detail="Reservas e bloqueios registrados nos apartamentos vinculados, no período selecionado."><ReservationList rows={reservations} /></SectionCard>}
 
           {section === 'accounting' && <SectionCard title="Minha contabilidade" detail={`Totais informados pela Stays para ${monthTitle}. Os valores não são estimativas.`}>
             <div className="mb-4 grid gap-3 sm:grid-cols-3">
-              <AmountCard label="Créditos" value={currencyText(dashboard.totals.credit, 'BRL')} tone="emerald" />
-              <AmountCard label="Débitos" value={currencyText(dashboard.totals.debit, 'BRL')} tone="orange" />
-              <AmountCard label="Saldo (créditos − débitos)" value={currencyText(dashboard.totals.credit - dashboard.totals.debit, 'BRL')} tone="neutral" />
+              <AmountCard label="Créditos" value={currencyText(accountingTotals?.credit ?? 0, 'BRL')} tone="emerald" />
+              <AmountCard label="Débitos" value={currencyText(accountingTotals?.debit ?? 0, 'BRL')} tone="orange" />
+              <AmountCard label="Saldo (créditos − débitos)" value={currencyText((accountingTotals?.credit ?? 0) - (accountingTotals?.debit ?? 0), 'BRL')} tone="neutral" />
             </div>
             <div className="overflow-x-auto rounded-2xl border border-neutral-200/80">
-              <table className="w-full min-w-[520px] text-left text-sm"><thead className="bg-neutral-50 text-xs uppercase text-neutral-500"><tr><th className="px-4 py-3">Propriedade</th><th className="px-4 py-3 text-right">Créditos</th><th className="px-4 py-3 text-right">Débitos</th></tr></thead><tbody className="divide-y divide-neutral-100 bg-white/80">{dashboard.properties.map((property) => <tr key={property.staysListingId}><td className="px-4 py-3 font-semibold text-neutral-800">{property.title}</td><td className="px-4 py-3 text-right font-bold text-emerald-700">{currencyText(property.credit, 'BRL')}</td><td className="px-4 py-3 text-right font-bold text-orange-700">{currencyText(property.debit, 'BRL')}</td></tr>)}</tbody></table>
+              <table className="w-full min-w-[520px] border-separate border-spacing-0 text-left text-sm"><thead className="bg-neutral-50 text-xs uppercase text-neutral-500"><tr><th scope="col" className="border-b border-r border-neutral-200 px-4 py-3">Propriedade</th><th scope="col" className="border-b border-r border-neutral-200 px-4 py-3 text-right">Créditos</th><th scope="col" className="border-b border-neutral-200 px-4 py-3 text-right">Débitos</th></tr></thead><tbody className="bg-white/80">{filteredProperties.map((property) => <tr key={property.staysListingId}><th scope="row" className="border-b border-r border-neutral-100 px-4 py-3 text-left font-semibold text-neutral-800">{property.title}</th><td className="border-b border-r border-neutral-100 px-4 py-3 text-right font-bold text-emerald-700">{currencyText(property.credit, 'BRL')}</td><td className="border-b border-neutral-100 px-4 py-3 text-right font-bold text-orange-700">{currencyText(property.debit, 'BRL')}</td></tr>)}</tbody></table>
             </div>
-            <OwnerAccountingTransactions accessToken={accessToken} entries={dashboard.entries} properties={dashboard.properties} period={dashboard.period} />
+            <OwnerAccountingTransactions accessToken={accessToken} entries={entries} properties={filteredProperties} period={dashboard.period} />
           </SectionCard>}
 
           {section === 'calendar' && <SectionCard title="Calendário de reservas" detail="Consulte reservas e bloqueios sincronizados com a Stays e bloqueie períodos dos seus imóveis.">
@@ -205,7 +225,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
               <label className="grid gap-1 text-xs font-bold text-neutral-700 sm:col-span-2 lg:col-span-1">
                 Propriedade
                 <select
-                  value={blockListingId || dashboard.properties[0]?.staysListingId || ''}
+                  value={calendarListingId}
                   onChange={(event) => setBlockListingId(event.target.value)}
                   required
                   disabled={dashboard.properties.length === 0 || blockSaving}
@@ -232,7 +252,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                   {blockSaving ? 'Bloqueando…' : 'Bloquear datas'}
                 </button>
               </div>
-              <p className="text-[11px] text-neutral-600 sm:col-span-2 lg:col-span-5">A data de liberação funciona como checkout: ela não fica bloqueada. O bloqueio será aplicado à disponibilidade real na Stays.</p>
+              <p className="text-[11px] text-neutral-600 sm:col-span-2 lg:col-span-5">O imóvel selecionado define este calendário e onde o bloqueio será aplicado. A data de liberação funciona como checkout: ela não fica bloqueada.</p>
               {blockError && <p role="alert" className="text-xs font-semibold text-rose-700 sm:col-span-2 lg:col-span-5">{blockError}</p>}
               {blockSuccess && <p role="status" className="text-xs font-semibold text-emerald-700 sm:col-span-2 lg:col-span-5">{blockSuccess}</p>}
             </form>
@@ -245,7 +265,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
               {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => <div key={day} className="pb-2 text-center text-xs font-bold text-neutral-500">{day}</div>)}
               {calendarDays.map((day) => {
-                const stays = reservations
+                const stays = calendarReservations
                   .map((reservation) => ({
                     reservation,
                     segment: getOwnerCalendarDaySegment(reservation.checkIn, reservation.checkOut, day.iso),
