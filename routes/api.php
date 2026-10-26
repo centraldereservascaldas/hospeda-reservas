@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\CheckoutCancellationController;
 use App\Http\Controllers\Api\CheckoutPaymentController;
 use App\Http\Controllers\Api\GuestReservationController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
@@ -69,6 +70,7 @@ Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTe
 Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
 Route::post('/checkout/{publicReference}/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
+Route::post('/checkout/{publicReference}/cancel', [CheckoutCancellationController::class, 'store'])->middleware('throttle:5,1');
 Route::post('/webhooks/mercadopago', MercadoPagoWebhookController::class)->middleware('throttle:120,1');
 
 Route::get('/external/v1/content/listings', [AccommodationController::class, 'staysListings']);

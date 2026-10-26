@@ -62,6 +62,91 @@ class DirectBookingCancellationRequestTest extends TestCase
         $this->assertSame([], $order->operational_events);
     }
 
+    public function test_resume_token_can_request_cancellation_and_replay_keeps_the_receipt(): void
+    {
+        $this->freezeTime();
+        $resumeToken = str_repeat('a', 64);
+        $order = $this->confirmedOrder('guest@example.test');
+        $order->forceFill([
+            'resume_token' => $resumeToken,
+            'resume_token_expires_at' => now()->addDay(),
+        ])->save();
+        $headers = ['X-Checkout-Resume-Token' => $resumeToken];
+
+        $firstResponse = $this->postJson('/api/checkout/'.$order->public_reference.'/cancel', [], $headers)
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('alreadyRequested', false)
+            ->assertJsonPath('cancellationReceipt.protocol', 'CANCEL-'.$order->public_reference);
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/cancel', [], $headers)
+            ->assertOk()
+            ->assertJsonPath('alreadyRequested', true)
+            ->assertJsonPath('cancellationReceipt', $firstResponse->json('cancellationReceipt'));
+
+        $this->getJson('/api/checkout/'.$order->public_reference, $headers)
+            ->assertOk()
+            ->assertJsonPath('order.cancellationReceipt', $firstResponse->json('cancellationReceipt'));
+
+        $events = $order->refresh()->operational_events;
+        $this->assertSame(1, collect($events)->where('code', 'guest_cancellation_requested')->count());
+        $this->assertSame('approved', $order->payment_status);
+    }
+
+    public function test_resume_token_cancellation_hides_wrong_expired_and_revoked_tokens(): void
+    {
+        $wrongTokenOrder = $this->confirmedOrder('wrong-token@example.test');
+        $wrongTokenOrder->forceFill([
+            'resume_token' => str_repeat('b', 64),
+            'resume_token_expires_at' => now()->addDay(),
+        ])->save();
+
+        $expiredTokenOrder = $this->confirmedOrder('expired-token@example.test');
+        $expiredTokenOrder->forceFill([
+            'resume_token' => str_repeat('c', 64),
+            'resume_token_expires_at' => now()->subSecond(),
+        ])->save();
+
+        $revokedResumeToken = str_repeat('e', 64);
+        $revokedTokenOrder = $this->confirmedOrder('revoked-token@example.test');
+        $revokedTokenOrder->forceFill([
+            'resume_token' => $revokedResumeToken,
+            'resume_token_expires_at' => now()->addDay(),
+        ])->save();
+
+        $revokedHeaders = ['X-Checkout-Resume-Token' => $revokedResumeToken];
+        $this->getJson('/api/checkout/'.$revokedTokenOrder->public_reference, $revokedHeaders)
+            ->assertOk()
+            ->assertJsonPath('order.publicReference', $revokedTokenOrder->public_reference);
+
+        config(['services.hospeda.owner_admin_emails' => ['admin@example.test']]);
+        $this->authenticateAs('admin-1', 'admin@example.test');
+        $this->postJson('/api/owner/admin/direct-booking-orders/'.$revokedTokenOrder->public_reference.'/revoke-resume-token', [], [
+            'Authorization' => 'Bearer guest-token',
+        ])->assertOk()
+            ->assertJsonPath('status', 'revoked');
+
+        foreach ([
+            [$wrongTokenOrder, str_repeat('d', 64)],
+            [$expiredTokenOrder, str_repeat('c', 64)],
+        ] as [$order, $token]) {
+            $this->postJson('/api/checkout/'.$order->public_reference.'/cancel', [], [
+                'X-Checkout-Resume-Token' => $token,
+            ])->assertNotFound()
+                ->assertHeader('Cache-Control', 'no-store, private');
+            $this->assertSame(DirectBookingOrderStatus::Confirmado, $order->refresh()->status);
+            $this->assertSame([], $order->operational_events);
+        }
+
+        $this->postJson('/api/checkout/'.$revokedTokenOrder->public_reference.'/cancel', [], $revokedHeaders)
+            ->assertNotFound()
+            ->assertHeader('Cache-Control', 'no-store, private');
+        $this->assertSame(DirectBookingOrderStatus::Confirmado, $revokedTokenOrder->refresh()->status);
+        $this->assertSame(1, collect($revokedTokenOrder->operational_events)->where('event', 'visitor_resume_token_revoked')->count());
+        $this->assertSame(0, collect($revokedTokenOrder->operational_events)->where('code', 'guest_cancellation_requested')->count());
+    }
+
     private function authenticateAs(string $id, string $email): void
     {
         config([

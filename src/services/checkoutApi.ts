@@ -1,4 +1,8 @@
-import { isDirectBookingOrder, isRecord } from '../utils/apiValidation';
+import {
+  isDirectBookingCancellationReceipt,
+  isDirectBookingOrder,
+  isRecord,
+} from '../utils/apiValidation';
 import { saveCheckoutResumeToken } from '../utils/checkoutResumeStorage';
 import { apiFetch } from './apiFetch';
 import { readMeasurementAttribution, type AttributionTouch } from '../utils/measurementAttribution';
@@ -132,6 +136,12 @@ export type CheckoutPaymentResult =
   | { kind: 'invalid'; fieldErrors?: Record<string, string[]> }
   | { kind: 'not-found' }
   | { kind: 'unavailable' };
+
+export interface CheckoutCancellationResult {
+  cancellationReceipt: DirectBookingCancellationReceipt;
+  alreadyRequested: boolean;
+  message: string;
+}
 
 export interface CheckoutResponse {
   success: boolean;
@@ -608,5 +618,50 @@ export const checkoutApi = {
       console.warn('Error resuming direct checkout:', err);
       return { kind: 'unavailable' };
     }
+  },
+
+  async requestCheckoutCancellation(
+    reference: string,
+    credentials: CheckoutAccessCredentials,
+  ): Promise<CheckoutCancellationResult> {
+    if (!/^[A-Za-z0-9]{40}$/.test(reference)) {
+      throw new Error('Referência do pedido inválida.');
+    }
+
+    const authenticated = credentials.type === 'authenticated';
+    const endpoint = authenticated
+      ? `/api/my-direct-booking-orders/${encodeURIComponent(reference)}/cancel`
+      : `/api/checkout/${encodeURIComponent(reference)}/cancel`;
+    const headers: Record<string, string> = authenticated
+      ? { Authorization: `Bearer ${credentials.accessToken}` }
+      : { 'X-Checkout-Resume-Token': credentials.resumeToken };
+    const res = await apiFetch(endpoint, {
+      method: 'POST',
+      cache: 'no-store',
+      headers,
+    });
+    const json: unknown = await res.json();
+    if (
+      !res.ok ||
+      !isRecord(json) ||
+      json.success !== true ||
+      json.cancellationStatus !== 'requested' ||
+      typeof json.alreadyRequested !== 'boolean' ||
+      typeof json.message !== 'string' ||
+      !isDirectBookingCancellationReceipt(json.cancellationReceipt) ||
+      json.cancellationReceipt.protocol !== `CANCEL-${reference}`
+    ) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível registrar a solicitação de cancelamento.',
+      );
+    }
+
+    return {
+      cancellationReceipt: json.cancellationReceipt,
+      alreadyRequested: json.alreadyRequested,
+      message: json.message,
+    };
   },
 };

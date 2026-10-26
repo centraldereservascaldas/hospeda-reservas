@@ -238,6 +238,8 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
   } | null>(null);
   const [isStartingPixPayment, setIsStartingPixPayment] = useState(false);
   const [paymentStartError, setPaymentStartError] = useState<string | null>(null);
+  const [cancellationRequestError, setCancellationRequestError] = useState<string | null>(null);
+  const [isRequestingCancellation, setIsRequestingCancellation] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const pixPaymentSubmissionInFlightRef = useRef(false);
@@ -370,6 +372,29 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
     } finally {
       pixPaymentSubmissionInFlightRef.current = false;
       setIsStartingPixPayment(false);
+    }
+  };
+
+  const requestCancellation = async (): Promise<void> => {
+    if (resumeState.kind !== 'ready' || isRequestingCancellation) return;
+    const confirmed = window.confirm(
+      'Deseja registrar uma solicitação de cancelamento? A Central analisará o pedido. Esta solicitação não cancela a reserva nem realiza estorno do pagamento.',
+    );
+    if (!confirmed) return;
+
+    setIsRequestingCancellation(true);
+    setCancellationRequestError(null);
+    try {
+      await checkoutApi.requestCheckoutCancellation(reference, resumeState.credentials);
+      setRetryKey((current) => current + 1);
+    } catch (error) {
+      setCancellationRequestError(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível registrar a solicitação. Tente novamente.',
+      );
+    } finally {
+      setIsRequestingCancellation(false);
     }
   };
 
@@ -671,6 +696,63 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                           Imprimir comprovante
                         </button>
                       </div>
+                    </section>
+                  )}
+
+                  {order.status === 'confirmado' && order.paymentStatus === 'approved' && (
+                    <section className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4">
+                      <h2 className="font-extrabold text-neutral-950">Solicitar cancelamento</h2>
+                      <p className="text-sm leading-6 text-neutral-700">
+                        A Central analisará sua solicitação. O pedido não cancela a reserva nem
+                        realiza o estorno do pagamento.
+                      </p>
+                      {cancellationRequestError && (
+                        <p className="text-sm text-red-800" role="alert">
+                          {cancellationRequestError}
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => void requestCancellation()}
+                        disabled={isRequestingCancellation}
+                        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-bold text-neutral-900 transition hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-800 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isRequestingCancellation && (
+                          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        )}
+                        {isRequestingCancellation
+                          ? 'Enviando solicitação…'
+                          : 'Solicitar cancelamento'}
+                      </button>
+                    </section>
+                  )}
+
+                  {order.status === 'cancelamento_solicitado' && order.cancellationReceipt && (
+                    <section
+                      aria-labelledby="checkout-cancellation-receipt-title"
+                      className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4"
+                      role="status"
+                    >
+                      <h2
+                        id="checkout-cancellation-receipt-title"
+                        className="font-extrabold text-amber-950"
+                      >
+                        Solicitação de cancelamento registrada
+                      </h2>
+                      <p className="text-sm leading-6 text-amber-950">
+                        A Central analisará o pedido. A reserva continua ativa até a confirmação do
+                        cancelamento, e o estorno ainda não foi realizado.
+                      </p>
+                      <p className="text-sm text-amber-950">
+                        Protocolo:{' '}
+                        <span className="font-mono font-bold">
+                          {order.cancellationReceipt.protocol}
+                        </span>
+                      </p>
+                      <p className="text-sm text-amber-950">
+                        Registrada em{' '}
+                        {dateTimeFormatter.format(new Date(order.cancellationReceipt.requestedAt))}
+                      </p>
                     </section>
                   )}
 

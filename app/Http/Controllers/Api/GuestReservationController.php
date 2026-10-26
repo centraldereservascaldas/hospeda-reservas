@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Data\VerifiedGuest;
-use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DirectBookingOrderListResource;
 use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
+use App\Services\DirectBookingCancellationRequestService;
 use App\Services\GuestStaysSyncService;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
@@ -53,8 +53,11 @@ class GuestReservationController extends Controller
         ])->header('Cache-Control', 'no-store, private');
     }
 
-    public function requestDirectBookingCancellation(Request $request, string $publicReference): JsonResponse
-    {
+    public function requestDirectBookingCancellation(
+        Request $request,
+        string $publicReference,
+        DirectBookingCancellationRequestService $cancellations,
+    ): JsonResponse {
         $guest = $request->attributes->get('verified_guest');
         if (! $guest instanceof VerifiedGuest) {
             return response()->json(['success' => false, 'code' => 'invalid_session'], 401);
@@ -63,31 +66,7 @@ class GuestReservationController extends Controller
             return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404);
         }
 
-        $result = DB::transaction(function () use ($guest, $publicReference): array {
-            $order = DirectBookingOrder::query()
-                ->where('public_reference', $publicReference)
-                ->where('guest_email', mb_strtolower(trim($guest->email)))
-                ->lockForUpdate()
-                ->first();
-            if ($order === null) {
-                return ['status' => 'not_found', 'receipt' => null];
-            }
-            if ($order->status === DirectBookingOrderStatus::CancelamentoSolicitado) {
-                return ['status' => 'already_requested', 'receipt' => $order->cancellationReceipt()];
-            }
-            if ($order->status !== DirectBookingOrderStatus::Confirmado || $order->payment_status !== 'approved') {
-                return ['status' => 'not_cancellable', 'receipt' => null];
-            }
-
-            $order->transitionTo(DirectBookingOrderStatus::CancelamentoSolicitado, [
-                'source' => 'guest_cancellation_request',
-                'code' => 'guest_cancellation_requested',
-                'requested_by' => $guest->id,
-            ]);
-            $order->save();
-
-            return ['status' => 'requested', 'receipt' => $order->cancellationReceipt()];
-        });
+        $result = $cancellations->request($publicReference, $guest, '');
 
         if ($result['status'] === 'not_found') {
             return response()->json(['success' => false, 'code' => 'direct_booking_not_found', 'message' => 'Pedido não encontrado.'], 404)
