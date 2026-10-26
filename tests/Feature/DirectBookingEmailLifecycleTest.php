@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\DirectBookingOrderStatus;
+use App\Exceptions\DirectBookingEmailDeliveryException;
 use App\Jobs\SendDirectBookingConfirmationEmail;
 use App\Mail\DirectBookingConfirmed;
 use App\Models\DirectBookingEmail;
@@ -84,13 +85,21 @@ class DirectBookingEmailLifecycleTest extends TestCase
             'queued_at' => now(),
         ]);
 
-        Mail::shouldReceive('to')->once()->andThrow(new RuntimeException('transport unavailable'));
+        $guestEmailSentinel = 'guest-sensitive@example.test';
+        $credentialSentinel = 'provider-secret-sentinel';
+        $responseSentinel = 'provider-response-sentinel';
+        Mail::shouldReceive('to')->once()->andThrow(new RuntimeException(
+            "transport failed for {$guestEmailSentinel}; credential={$credentialSentinel}; response={$responseSentinel}",
+        ));
 
         try {
             (new SendDirectBookingConfirmationEmail($email->id))->handle();
-            $this->fail('The transport exception should be rethrown for the queue worker.');
-        } catch (RuntimeException $exception) {
-            $this->assertSame('transport unavailable', $exception->getMessage());
+            $this->fail('The sanitized delivery exception should reach the queue worker.');
+        } catch (DirectBookingEmailDeliveryException $exception) {
+            $this->assertNull($exception->getPrevious());
+            $this->assertStringNotContainsString($guestEmailSentinel, $exception->getMessage());
+            $this->assertStringNotContainsString($credentialSentinel, $exception->getMessage());
+            $this->assertStringNotContainsString($responseSentinel, $exception->getMessage());
         } finally {
             Mail::swap($mailFake);
         }

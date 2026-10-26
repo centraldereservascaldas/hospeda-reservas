@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\DirectBookingEmailDeliveryException;
 use App\Mail\DirectBookingConfirmed;
 use App\Models\DirectBookingEmail;
 use App\Models\DirectBookingOrder;
@@ -44,120 +45,101 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
      */
     public function handle(): void
     {
-        $email = null;
-        try {
-            $email = DB::transaction(function (): ?DirectBookingEmail {
-                $email = DirectBookingEmail::query()->lockForUpdate()->findOrFail($this->emailId);
-                if (in_array($email->status, ['sent', 'skipped'], true)) {
-                    return null;
-                }
+        $email = DB::transaction(function (): ?DirectBookingEmail {
+            $email = DirectBookingEmail::query()->lockForUpdate()->findOrFail($this->emailId);
+            if (in_array($email->status, ['sent', 'skipped'], true)) {
+                return null;
+            }
 
-                $email->load('order');
-                if ($email->order === null || ! $this->hasConfirmedReservation($email->order)) {
-                    $email->forceFill([
-                        'status' => 'skipped',
-                        'queued_at' => null,
-                        'next_attempt_at' => null,
-                        'error_code' => 'booking_no_longer_confirmed',
-                    ])->save();
-
-                    return null;
-                }
-
-                if ($email->created_at?->lte(now()->subHours(DirectBookingEmail::RETRY_WINDOW_HOURS))) {
-                    $email->forceFill([
-                        'status' => 'failed',
-                        'queued_at' => null,
-                        'next_attempt_at' => null,
-                        'error_code' => 'mail_retry_window_expired',
-                    ])->save();
-
-                    return null;
-                }
-
-                if (
-                    ($email->status === 'failed' && $email->next_attempt_at?->isFuture())
-                    || ($email->status === 'pending' && $email->next_attempt_at?->isFuture())
-                    || ($email->status === 'processing'
-                        && $email->last_attempt_at?->isAfter(now()->subMinutes(DirectBookingEmail::STALE_PROCESSING_MINUTES)))
-                ) {
-                    return null;
-                }
-
-                $nextAttemptNumber = $email->attempts + 1;
-                if ($email->created_at?->copy()->addSeconds(min(3600, 30 * (2 ** min(max($nextAttemptNumber - 1, 0), 7))))
-                    ->greaterThanOrEqualTo($email->created_at->copy()->addHours(DirectBookingEmail::RETRY_WINDOW_HOURS))) {
-                    $email->forceFill([
-                        'status' => 'failed',
-                        'queued_at' => null,
-                        'next_attempt_at' => null,
-                        'error_code' => 'mail_retry_window_expired',
-                    ])->save();
-
-                    return null;
-                }
-
+            $email->load('order');
+            if ($email->order === null || ! $this->hasConfirmedReservation($email->order)) {
                 $email->forceFill([
-                    'status' => 'processing',
+                    'status' => 'skipped',
                     'queued_at' => null,
-                    'attempts' => $nextAttemptNumber,
-                    'last_attempt_at' => now(),
                     'next_attempt_at' => null,
-                    'error_code' => null,
+                    'error_code' => 'booking_no_longer_confirmed',
                 ])->save();
 
-                return $email;
-            });
-
-            if ($email === null) {
-                return;
+                return null;
             }
 
-            $order = DirectBookingOrder::query()->find($email->direct_booking_order_id);
-            if ($order === null || ! $this->hasConfirmedReservation($order)) {
-                $this->markSkipped($email->id);
+            if ($email->created_at?->lte(now()->subHours(DirectBookingEmail::RETRY_WINDOW_HOURS))) {
+                $email->forceFill([
+                    'status' => 'failed',
+                    'queued_at' => null,
+                    'next_attempt_at' => null,
+                    'error_code' => 'mail_retry_window_expired',
+                ])->save();
 
-                return;
+                return null;
             }
 
+            if (
+                ($email->status === 'failed' && $email->next_attempt_at?->isFuture())
+                || ($email->status === 'pending' && $email->next_attempt_at?->isFuture())
+                || ($email->status === 'processing'
+                    && $email->last_attempt_at?->isAfter(now()->subMinutes(DirectBookingEmail::STALE_PROCESSING_MINUTES)))
+            ) {
+                return null;
+            }
+
+            $nextAttemptNumber = $email->attempts + 1;
+            if ($email->created_at?->copy()->addSeconds(min(3600, 30 * (2 ** min(max($nextAttemptNumber - 1, 0), 7))))
+                ->greaterThanOrEqualTo($email->created_at->copy()->addHours(DirectBookingEmail::RETRY_WINDOW_HOURS))) {
+                $email->forceFill([
+                    'status' => 'failed',
+                    'queued_at' => null,
+                    'next_attempt_at' => null,
+                    'error_code' => 'mail_retry_window_expired',
+                ])->save();
+
+                return null;
+            }
+
+            $email->forceFill([
+                'status' => 'processing',
+                'queued_at' => null,
+                'attempts' => $nextAttemptNumber,
+                'last_attempt_at' => now(),
+                'next_attempt_at' => null,
+                'error_code' => null,
+            ])->save();
+
+            return $email;
+        });
+
+        if ($email === null) {
+            return;
+        }
+
+        $order = DirectBookingOrder::query()->find($email->direct_booking_order_id);
+        if ($order === null || ! $this->hasConfirmedReservation($order)) {
+            $this->markSkipped($email->id);
+
+            return;
+        }
+
+        try {
             Mail::to($order->guest_email)->send(
                 new DirectBookingConfirmed($order, $order->confirmedReservationCode()),
             );
+        } catch (Throwable) {
+            $this->markDeliveryFailed($email);
 
-            DirectBookingEmail::query()
-                ->whereKey($email->id)
-                ->where('status', 'processing')
-                ->update([
-                    'status' => 'sent',
-                    'queued_at' => null,
-                    'sent_at' => now(),
-                    'next_attempt_at' => null,
-                    'error_code' => null,
-                    'updated_at' => now(),
-                ]);
-        } catch (Throwable $exception) {
-            if ($email instanceof DirectBookingEmail) {
-                $retrySeconds = min(3600, 30 * (2 ** min(max($email->attempts - 1, 0), 7)));
-                $nextAttemptAt = now()->addSeconds($retrySeconds);
-                if ($nextAttemptAt->greaterThanOrEqualTo($email->created_at->copy()->addHours(DirectBookingEmail::RETRY_WINDOW_HOURS))) {
-                    $email->forceFill([
-                        'status' => 'failed',
-                        'queued_at' => null,
-                        'next_attempt_at' => null,
-                        'error_code' => 'mail_retry_window_expired',
-                    ])->save();
-                } else {
-                    $email->forceFill([
-                        'status' => 'failed',
-                        'queued_at' => null,
-                        'next_attempt_at' => $nextAttemptAt,
-                        'error_code' => 'mail_delivery_failed',
-                    ])->save();
-                }
-            }
-
-            throw $exception;
+            throw new DirectBookingEmailDeliveryException;
         }
+
+        DirectBookingEmail::query()
+            ->whereKey($email->id)
+            ->where('status', 'processing')
+            ->update([
+                'status' => 'sent',
+                'queued_at' => null,
+                'sent_at' => now(),
+                'next_attempt_at' => null,
+                'error_code' => null,
+                'updated_at' => now(),
+            ]);
     }
 
     public function failed(?Throwable $exception): void
@@ -196,5 +178,28 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
                 'error_code' => 'booking_no_longer_confirmed',
                 'updated_at' => now(),
             ]);
+    }
+
+    private function markDeliveryFailed(DirectBookingEmail $email): void
+    {
+        $retrySeconds = min(3600, 30 * (2 ** min(max($email->attempts - 1, 0), 7)));
+        $nextAttemptAt = now()->addSeconds($retrySeconds);
+        if ($nextAttemptAt->greaterThanOrEqualTo($email->created_at->copy()->addHours(DirectBookingEmail::RETRY_WINDOW_HOURS))) {
+            $email->forceFill([
+                'status' => 'failed',
+                'queued_at' => null,
+                'next_attempt_at' => null,
+                'error_code' => 'mail_retry_window_expired',
+            ])->save();
+
+            return;
+        }
+
+        $email->forceFill([
+            'status' => 'failed',
+            'queued_at' => null,
+            'next_attempt_at' => $nextAttemptAt,
+            'error_code' => 'mail_delivery_failed',
+        ])->save();
     }
 }
