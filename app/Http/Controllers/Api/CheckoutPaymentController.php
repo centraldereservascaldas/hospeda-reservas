@@ -8,6 +8,8 @@ use App\Http\Requests\StoreCheckoutPaymentRequest;
 use App\Models\DirectBookingOrder;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Throwable;
 
 class CheckoutPaymentController extends Controller
 {
@@ -48,5 +50,32 @@ class CheckoutPaymentController extends Controller
                 ] : null,
             ],
         ], $result['status'])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function cieloSopToken(Request $request, string $publicReference, DirectCheckoutPaymentService $payments): JsonResponse
+    {
+        $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
+        $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
+        $guest = $request->attributes->get('verified_guest');
+        $isAuthorizedGuest = $guest instanceof VerifiedGuest
+            && hash_equals($order?->guest_email ?? '', mb_strtolower(trim($guest->email)));
+        $isValidResumeToken = $order?->hasValidResumeToken($providedToken) ?? false;
+        if ($order === null || (! $isAuthorizedGuest && ! $isValidResumeToken)) {
+            return response()->json(['success' => false, 'code' => 'checkout_not_found'], 404)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        try {
+            $accessToken = $payments->cieloSopAccessToken($order);
+        } catch (Throwable) {
+            return response()->json(['success' => false, 'code' => 'cielo_sop_unavailable'], 503)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        return response()->json([
+            'success' => true,
+            'environment' => 'sandbox',
+            'accessToken' => $accessToken,
+        ])->header('Cache-Control', 'no-store, private');
     }
 }

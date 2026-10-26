@@ -210,7 +210,8 @@ class BookingController extends Controller
         DirectCheckoutPaymentService $payments,
     ): JsonResponse {
         $result = $checkout->createOrder($request);
-        $paymentMethods = $payments->availableMethods();
+        $order = $result['order'];
+        $paymentMethods = $payments->availableMethods($order);
         $body = [
             'success' => $result['success'] ?? false,
             'code' => $result['code'],
@@ -218,7 +219,8 @@ class BookingController extends Controller
             'payment' => [
                 'enabled' => $paymentMethods !== [],
                 'methods' => $paymentMethods,
-                'publicKey' => $payments->publicKey(),
+                'publicKey' => $payments->publicKey($order),
+                'provider' => $payments->provider($order),
             ],
         ];
         if ($result['order'] !== null) {
@@ -283,6 +285,7 @@ class BookingController extends Controller
                 'enabled' => $paymentMethods !== [],
                 'methods' => $paymentMethods,
                 'publicKey' => $payments->publicKey(),
+                'provider' => $payments->provider(),
             ],
         ])->header('Cache-Control', 'no-store');
     }
@@ -307,7 +310,7 @@ class BookingController extends Controller
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->first();
-        $paymentMethods = $payments->availableMethods();
+        $paymentMethods = $payments->availableMethods($order);
         $pixInstructions = $attempt?->safePixInstructions($order->status->value === 'pagamento_pendente');
         $confirmation = null;
         if ($order->status->value === 'confirmado' && $order->payment_status === 'approved') {
@@ -325,7 +328,8 @@ class BookingController extends Controller
             'payment' => [
                 'enabled' => $paymentMethods !== [],
                 'methods' => $paymentMethods,
-                'publicKey' => $payments->publicKey(),
+                'publicKey' => $payments->publicKey($order),
+                'provider' => $payments->provider($order),
                 'attempt' => $attempt === null ? null : [
                     'status' => $attempt->status,
                     'method' => $attempt->payment_method,

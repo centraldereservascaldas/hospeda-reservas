@@ -6,6 +6,7 @@ use App\Data\VerifiedGuest;
 use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DirectBookingOperationsResource;
+use App\Jobs\ReconcileCieloPaymentWebhook;
 use App\Jobs\ReconcileMercadoPagoPayment;
 use App\Models\DirectBookingEmail;
 use App\Models\DirectBookingOrder;
@@ -146,6 +147,7 @@ class OwnerAdminController extends Controller
             ->whereIn('status', ['received', 'retrying', 'failed', 'queued', 'processing'])
             ->whereNotIn('gateway_payment_id', DirectBookingPaymentAttempt::query()
                 ->select('gateway_payment_id')
+                ->whereColumn('direct_booking_payment_attempts.gateway_provider', 'direct_booking_payment_webhooks.gateway_provider')
                 ->whereNotNull('gateway_payment_id'));
         $unmatchedWebhooks = (clone $unmatchedWebhookQuery)
             ->orderByDesc('updated_at')
@@ -180,7 +182,20 @@ class OwnerAdminController extends Controller
 
     public function retryDirectBookingWebhook(string $webhookId): JsonResponse
     {
-        $queueConnection = (string) config('services.mercadopago.webhook_queue_connection', 'database');
+        $webhook = DirectBookingPaymentWebhook::query()->findOrFail($webhookId);
+        if (! in_array($webhook->gateway_provider, ['mercadopago', 'cielo_sandbox'], true)) {
+            return response()->json([
+                'success' => false,
+                'code' => 'unknown_gateway_provider',
+                'message' => 'O provedor desta notificação não é reconhecido e precisa de conferência manual.',
+            ], 409);
+        }
+        $queueConnection = (string) config(
+            $webhook->gateway_provider === 'cielo_sandbox'
+                ? 'services.cielo.webhook_queue_connection'
+                : 'services.mercadopago.webhook_queue_connection',
+            'database',
+        );
         if ($queueConnection === 'sync' || ! config("queue.connections.{$queueConnection}")) {
             return response()->json([
                 'success' => false,
@@ -194,6 +209,7 @@ class OwnerAdminController extends Controller
                 $webhook = DirectBookingPaymentWebhook::query()->lockForUpdate()->findOrFail($webhookId);
                 $alreadyLinked = DirectBookingPaymentAttempt::query()
                     ->where('gateway_payment_id', $webhook->gateway_payment_id)
+                    ->where('gateway_provider', $webhook->gateway_provider)
                     ->exists();
 
                 if ($alreadyLinked || $webhook->status !== 'failed') {
@@ -208,9 +224,11 @@ class OwnerAdminController extends Controller
                     'error_code' => null,
                 ])->save();
 
-                ReconcileMercadoPagoPayment::dispatch($webhook->id)
-                    ->onConnection($queueConnection)
-                    ->afterCommit();
+                if ($webhook->gateway_provider === 'cielo_sandbox') {
+                    ReconcileCieloPaymentWebhook::dispatch($webhook->id)->onConnection($queueConnection)->afterCommit();
+                } else {
+                    ReconcileMercadoPagoPayment::dispatch($webhook->id)->onConnection($queueConnection)->afterCommit();
+                }
 
                 return $webhook;
             });

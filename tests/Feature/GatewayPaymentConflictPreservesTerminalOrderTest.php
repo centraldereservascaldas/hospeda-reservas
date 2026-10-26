@@ -6,6 +6,8 @@ use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysReservationService;
+use App\Services\Payments\CieloCheckoutPaymentService;
+use App\Services\Payments\CieloSilentOrderPostClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\Payments\MercadoPagoClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -53,7 +55,12 @@ class GatewayPaymentConflictPreservesTerminalOrderTest extends TestCase
         $gateway = $this->mock(MercadoPagoClient::class);
         $gateway->shouldReceive('createPayment')->twice()->andReturn(['id' => ''], ['id' => 0]);
         $gateway->shouldNotReceive('getPayment');
-        $payments = Mockery::mock(DirectCheckoutPaymentService::class, [$gateway, $reservations])->makePartial();
+        $payments = Mockery::mock(DirectCheckoutPaymentService::class, [
+            $gateway,
+            $reservations,
+            $this->mock(CieloCheckoutPaymentService::class),
+            $this->mock(CieloSilentOrderPostClient::class),
+        ])->makePartial();
         $payments->shouldReceive('availableMethods')->andReturn(['pix']);
         app()->instance(DirectCheckoutPaymentService::class, $payments);
 

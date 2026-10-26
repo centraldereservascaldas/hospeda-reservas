@@ -21,10 +21,12 @@ class DirectCheckoutPaymentService
     public function __construct(
         private readonly MercadoPagoClient $mercadoPago,
         private readonly DirectStaysReservationService $reservations,
+        private readonly CieloCheckoutPaymentService $cieloPayments,
+        private readonly CieloSilentOrderPostClient $cieloSop,
     ) {}
 
     /** @return list<string> */
-    public function availableMethods(): array
+    public function availableMethods(?DirectBookingOrder $order = null): array
     {
         if (! config('direct-booking.enabled', false)
             || ! config('direct-booking.payments_enabled', false)
@@ -32,6 +34,23 @@ class DirectCheckoutPaymentService
             || ! $this->livePaymentsAreAuthorized()
             || DirectBookingOrder::resumeTokenTtlDays() === null
             || ! $this->hasExternalMailTransport()) {
+            return [];
+        }
+
+        $paymentProvider = $order?->gateway_provider ?? (string) config('direct-booking.payment_provider', 'mercadopago');
+        if (! in_array($paymentProvider, ['mercadopago', 'cielo_sandbox'], true)) {
+            return [];
+        }
+        if ($paymentProvider === 'cielo_sandbox') {
+            if (! $this->cieloPayments->isAvailable()
+                || ($order !== null && (! is_string($order->gateway_merchant_id)
+                    || ! hash_equals($order->gateway_merchant_id, (string) config('services.cielo.merchant_id'))))) {
+                return [];
+            }
+
+            return ['card'];
+        }
+        if ($paymentProvider !== 'mercadopago') {
             return [];
         }
 
@@ -118,10 +137,11 @@ class DirectCheckoutPaymentService
         return in_array($transport, ['smtp', 'sendmail', 'mailgun', 'ses', 'ses-v2', 'postmark', 'resend'], true);
     }
 
-    public function publicKey(): ?string
+    public function publicKey(?DirectBookingOrder $order = null): ?string
     {
         $publicKey = config('services.mercadopago.public_key');
-        if (! in_array('card', $this->availableMethods(), true)
+        if (! in_array('card', $this->availableMethods($order), true)
+            || ($order?->gateway_provider ?? config('direct-booking.payment_provider', 'mercadopago')) !== 'mercadopago'
             || ! is_string($publicKey)
             || trim($publicKey) === '') {
             return null;
@@ -130,11 +150,32 @@ class DirectCheckoutPaymentService
         return trim($publicKey);
     }
 
+    public function provider(?DirectBookingOrder $order = null): string
+    {
+        $provider = $order?->gateway_provider ?? (string) config('direct-booking.payment_provider', 'mercadopago');
+
+        return in_array($provider, ['mercadopago', 'cielo_sandbox'], true) ? $provider : 'unavailable';
+    }
+
+    public function cieloSopAccessToken(DirectBookingOrder $order): string
+    {
+        if ($order->gateway_provider !== 'cielo_sandbox'
+            || ! in_array('card', $this->availableMethods($order), true)) {
+            throw new \RuntimeException('Cielo Silent Order Post is not available for this order.');
+        }
+
+        return $this->cieloSop->createBrowserAccessToken();
+    }
+
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
     public function createAttempt(DirectBookingOrder $order, StoreCheckoutPaymentRequest $request): array
     {
-        if ($this->availableMethods() === []) {
+        if ($this->availableMethods($order) === []) {
             return $this->result(null, 'payments_disabled', 'O pagamento no site ainda não está habilitado.', 503);
+        }
+
+        if ($order->gateway_provider === 'cielo_sandbox') {
+            return $this->cieloPayments->createAttempt($order, $request);
         }
 
         $staysPaymentType = config('direct-booking.stays_payment_type');
@@ -336,14 +377,32 @@ class DirectCheckoutPaymentService
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool, gatewayStatus: string|null} */
     public function reconcileGatewayPayment(string $gatewayPaymentId): array
     {
+        $persistedAttempt = DirectBookingPaymentAttempt::query()
+            ->where('gateway_payment_id', $gatewayPaymentId)
+            ->first();
+        if ($persistedAttempt?->gateway_provider === 'cielo_sandbox') {
+            return $this->cieloPayments->reconcilePaymentId($gatewayPaymentId);
+        }
+        if ($persistedAttempt !== null && $persistedAttempt->gateway_provider !== 'mercadopago') {
+            $persistedAttempt->forceFill([
+                'status' => 'attention_required',
+                'error_code' => 'unknown_gateway_provider',
+            ])->save();
+            $this->markOrderForAttention($persistedAttempt->order, 'unknown_gateway_provider');
+
+            return $this->result($persistedAttempt->refresh(), 'unknown_gateway_provider', 'O provedor desta tentativa não é reconhecido e precisa de conferência manual.', 503);
+        }
+
         $gatewayPayment = $this->mercadoPago->getPayment($gatewayPaymentId);
         $attempt = DirectBookingPaymentAttempt::query()
             ->where('gateway_payment_id', $gatewayPaymentId)
+            ->where('gateway_provider', 'mercadopago')
             ->first();
 
         if ($attempt === null && is_string($gatewayPayment['external_reference'] ?? null)) {
             $unlinkedAttempts = DirectBookingPaymentAttempt::query()
                 ->where('direct_booking_order_id', $gatewayPayment['external_reference'])
+                ->where('gateway_provider', 'mercadopago')
                 ->whereNull('gateway_payment_id')
                 ->whereIn('status', ['processing', 'pending', 'in_process', 'unknown'])
                 ->limit(2)
@@ -366,15 +425,41 @@ class DirectCheckoutPaymentService
         return $result;
     }
 
+    public function reconcileCieloPaymentId(string $gatewayPaymentId): array
+    {
+        return $this->cieloPayments->reconcilePaymentId($gatewayPaymentId);
+    }
+
+    public function reconcileAttempt(DirectBookingPaymentAttempt $attempt): array
+    {
+        if ($attempt->gateway_provider === 'cielo_sandbox') {
+            return $this->cieloPayments->reconcileAttempt($attempt);
+        }
+
+        if ($attempt->gateway_provider !== 'mercadopago') {
+            $attempt->forceFill([
+                'status' => 'attention_required',
+                'error_code' => 'unknown_gateway_provider',
+            ])->save();
+            $this->markOrderForAttention($attempt->order, 'unknown_gateway_provider');
+
+            return ['status' => 503];
+        }
+
+        if ($attempt->gateway_payment_id !== null) {
+            return $this->reconcileGatewayPayment((string) $attempt->gateway_payment_id);
+        }
+
+        return ['status' => $this->markUnsubmittedAttemptRetryable($attempt) ? 200 : 503];
+    }
+
     /** @return array{processed: int, attention: int} */
     public function recoverPendingPayments(): array
     {
         $this->purgeExpiredPixInstructions();
 
-        $accessToken = config('services.mercadopago.access_token');
-        if (! is_string($accessToken) || trim($accessToken) === '') {
-            return ['processed' => 0, 'attention' => 0];
-        }
+        $hasMercadoPagoCredentials = is_string(config('services.mercadopago.access_token'))
+            && trim((string) config('services.mercadopago.access_token')) !== '';
 
         $staleBefore = now()->subSeconds(max(60, (int) config('direct-booking.payment_reconciliation_interval_seconds', 300)));
         $settledPaymentStaleBefore = now()->subSeconds(max(
@@ -401,7 +486,7 @@ class DirectCheckoutPaymentService
                         });
                 })->orWhere(function ($query) use ($settledPaymentStaleBefore): void {
                     $query->whereIn('status', ['approved', 'attention_required'])
-                        ->whereIn('gateway_status', ['approved', 'refunded', 'charged_back'])
+                        ->whereIn('gateway_status', ['approved', 'refunded', 'charged_back', 'captured', 'authorized'])
                         ->whereNotNull('gateway_payment_id')
                         ->where('updated_at', '<=', $settledPaymentStaleBefore);
                 });
@@ -415,7 +500,18 @@ class DirectCheckoutPaymentService
         $attention = 0;
         foreach ($attempts as $attempt) {
             try {
-                if ($attempt->gateway_payment_id !== null) {
+                if ($attempt->gateway_provider === 'cielo_sandbox') {
+                    $result = $this->cieloPayments->reconcileAttempt($attempt);
+                } elseif ($attempt->gateway_provider !== 'mercadopago') {
+                    $attempt->forceFill([
+                        'status' => 'attention_required',
+                        'error_code' => 'unknown_gateway_provider',
+                    ])->save();
+                    $this->markOrderForAttention($attempt->order, 'unknown_gateway_provider');
+                    $result = ['status' => 503];
+                } elseif (! $hasMercadoPagoCredentials) {
+                    continue;
+                } elseif ($attempt->gateway_payment_id !== null) {
                     $result = $this->reconcileGatewayPayment((string) $attempt->gateway_payment_id);
                 } elseif ($attempt->gateway_submission_started_at === null) {
                     $result = ['status' => $this->markUnsubmittedAttemptRetryable($attempt) ? 200 : 503];
@@ -436,8 +532,18 @@ class DirectCheckoutPaymentService
             }
         }
 
-        $queueConnection = (string) config('services.mercadopago.webhook_queue_connection', 'database');
-        if ($queueConnection !== 'sync' && config("queue.connections.{$queueConnection}")) {
+        $recoverableWebhookProviders = [];
+        foreach (['mercadopago', 'cielo_sandbox'] as $provider) {
+            $queueConfig = $provider === 'cielo_sandbox'
+                ? 'services.cielo.webhook_queue_connection'
+                : 'services.mercadopago.webhook_queue_connection';
+            $connection = (string) config($queueConfig, 'database');
+            if ($connection !== 'sync' && config("queue.connections.{$connection}")) {
+                $recoverableWebhookProviders[$provider] = $connection;
+            }
+        }
+
+        if ($recoverableWebhookProviders !== []) {
             $staleWebhookBefore = now()->subSeconds(max(
                 600,
                 (int) config('direct-booking.payment_reconciliation_interval_seconds', 300) * 2,
@@ -445,6 +551,7 @@ class DirectCheckoutPaymentService
             $recoverableWebhookStatuses = ['received', 'retrying', 'failed', 'queued', 'processing'];
             $staleWebhooks = DirectBookingPaymentWebhook::query()
                 ->whereIn('status', $recoverableWebhookStatuses)
+                ->whereIn('gateway_provider', array_keys($recoverableWebhookProviders))
                 ->where('reconciliation_attempts', '<', ReconcileMercadoPagoPayment::MAX_RECONCILIATION_ATTEMPTS)
                 ->where('updated_at', '<=', $staleWebhookBefore)
                 ->orderBy('updated_at')
@@ -454,6 +561,11 @@ class DirectCheckoutPaymentService
 
             foreach ($staleWebhooks as $webhook) {
                 try {
+                    $connection = $recoverableWebhookProviders[$webhook->gateway_provider] ?? null;
+                    if ($connection === null) {
+                        continue;
+                    }
+
                     $claim = DB::transaction(function () use ($webhook, $recoverableWebhookStatuses, $staleWebhookBefore): ?string {
                         $lockedWebhook = DirectBookingPaymentWebhook::query()->lockForUpdate()->findOrFail($webhook->id);
                         $updatedAt = $lockedWebhook->updated_at;
@@ -476,7 +588,11 @@ class DirectCheckoutPaymentService
                         continue;
                     }
 
-                    ReconcileMercadoPagoPayment::dispatch($webhook->id)->onConnection($queueConnection);
+                    if ($webhook->gateway_provider === 'cielo_sandbox') {
+                        ReconcileCieloPaymentWebhook::dispatch($webhook->id)->onConnection($connection);
+                    } else {
+                        ReconcileMercadoPagoPayment::dispatch($webhook->id)->onConnection($connection);
+                    }
                     $processed++;
                 } catch (Throwable) {
                     $attention++;

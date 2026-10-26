@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CheckoutCancellationController;
 use App\Http\Controllers\Api\CheckoutPaymentController;
+use App\Http\Controllers\Api\CieloWebhookController;
 use App\Http\Controllers\Api\GuestReservationController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OwnerAccessController;
@@ -46,6 +47,7 @@ Route::middleware('supabase.guest')->group(function (): void {
         ->middleware('throttle:direct-booking-orders');
     Route::get('/my-direct-booking-orders/{publicReference}/checkout', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
     Route::post('/my-direct-booking-orders/{publicReference}/checkout/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
+    Route::post('/my-direct-booking-orders/{publicReference}/checkout/payments/cielo-sop-token', [CheckoutPaymentController::class, 'cieloSopToken'])->middleware('throttle:10,1');
     Route::post('/my-direct-booking-orders/{publicReference}/cancel', [GuestReservationController::class, 'requestDirectBookingCancellation'])->middleware('throttle:5,1');
     Route::post('/my-reservations/{reservationId}/cancel', [GuestReservationController::class, 'cancel']);
     Route::get('/owner/access', [OwnerAccessController::class, 'show']);
@@ -70,8 +72,10 @@ Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTe
 Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
 Route::post('/checkout/{publicReference}/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
+Route::post('/checkout/{publicReference}/payments/cielo-sop-token', [CheckoutPaymentController::class, 'cieloSopToken'])->middleware('throttle:10,1');
 Route::post('/checkout/{publicReference}/cancel', [CheckoutCancellationController::class, 'store'])->middleware('throttle:5,1');
 Route::post('/webhooks/mercadopago', MercadoPagoWebhookController::class)->middleware('throttle:120,1');
+Route::post('/webhooks/cielo', CieloWebhookController::class)->middleware('throttle:30,1');
 
 Route::get('/external/v1/content/listings', [AccommodationController::class, 'staysListings']);
 Route::get('/external/v1/content/listings/{id}', [AccommodationController::class, 'staysListing']);

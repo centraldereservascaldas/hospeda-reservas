@@ -33,6 +33,9 @@ class ReconcileMercadoPagoPayment implements ShouldQueue
     {
         $shouldProcess = DB::transaction(function (): bool {
             $webhook = DirectBookingPaymentWebhook::query()->lockForUpdate()->findOrFail($this->webhookId);
+            if ($webhook->gateway_provider !== 'mercadopago') {
+                return false;
+            }
             if (in_array($webhook->status, ['processed', 'processing'], true)) {
                 return false;
             }
