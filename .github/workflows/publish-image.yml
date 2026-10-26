@@ -193,12 +193,16 @@ jobs:
               --header "Authorization: Bearer $COOLIFY_TOKEN" \
               "$api_base/deployments/$deployment_uuid")
             status=$(jq --raw-output '.status // empty' <<< "$deployment")
-            deployed_tag=$(jq --raw-output '.docker_registry_image_tag // empty' <<< "$deployment")
 
             case "$status" in
               finished)
-                if [ "$deployed_tag" != "$IMAGE_TAG" ]; then
-                  echo 'Coolify reported success for a different image tag.' >&2
+                application=$(curl --fail-with-body --silent --show-error \
+                  --header "Authorization: Bearer $COOLIFY_TOKEN" \
+                  "$application_url")
+                deployed_tag=$(jq --raw-output '.docker_registry_image_tag // empty' <<< "$application")
+                application_status=$(jq --raw-output '.status // empty' <<< "$application")
+                if [ "$deployed_tag" != "$IMAGE_TAG" ] || [ "$application_status" != 'running:healthy' ]; then
+                  echo 'Coolify finished the deployment, but the application is not healthy on the expected image tag.' >&2
                   exit 1
                 fi
 
