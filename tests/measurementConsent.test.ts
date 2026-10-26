@@ -34,6 +34,7 @@ test('defaults to no consent and persists refusal', () => {
   assert.equal(readMeasurementConsent(), null);
   saveMeasurementConsent({ analytics: false, advertising: false });
   assert.deepEqual(readMeasurementConsent(), { analytics: false, advertising: false });
+  assert.equal((window as Window & { dataLayer?: unknown[] }).dataLayer, undefined);
   assert.equal(loadGtmIfConsented(readMeasurementConsent()!, 'GTM-ABC123'), false);
   assert.equal(document.querySelector('script'), null);
 });
@@ -52,9 +53,28 @@ test('requires both choices and valid GTM ID, then inserts a single script', () 
 
 test('revocation persists and prevents loading on the next page', () => {
   saveMeasurementConsent({ analytics: true, advertising: true });
+  assert.equal(loadGtmIfConsented(readMeasurementConsent()!, 'GTM-ABC123'), true);
+  const existingDataLayer = (window as Window & { dataLayer?: Array<Record<string, unknown>> })
+    .dataLayer!;
+  const existingStartupEvents = existingDataLayer.filter(
+    (event) => event.event === 'gtm.js',
+  ).length;
+
   saveMeasurementConsent({ analytics: false, advertising: false });
   assert.deepEqual(readMeasurementConsent(), { analytics: false, advertising: false });
+  assert.deepEqual(existingDataLayer[existingDataLayer.length - 1], {
+    event: 'crcn_consent_preferences',
+    analytics_storage: 'denied',
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+  });
   assert.equal(loadGtmIfConsented(readMeasurementConsent()!, 'GTM-ABC123'), false);
+  assert.equal(document.querySelectorAll('#crcn-gtm-script').length, 1);
+  assert.equal(
+    existingDataLayer.filter((event) => event.event === 'gtm.js').length,
+    existingStartupEvents,
+  );
 });
 
 test('preference UI saves independent choices and restores them when reopened', () => {

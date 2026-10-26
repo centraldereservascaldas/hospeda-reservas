@@ -9,6 +9,29 @@ const STORAGE_KEY = 'crcn.measurementConsent.v1';
 const GTM_SCRIPT_ID = 'crcn-gtm-script';
 const GTM_ID_PATTERN = /^GTM-[A-Z0-9]+$/;
 
+function pushConsentPreferences(
+  consent: MeasurementConsent,
+  createDataLayer = false,
+): unknown[] | null {
+  const measurementWindow = window as Window & { dataLayer?: unknown[] };
+  let dataLayer = measurementWindow.dataLayer;
+  if (!Array.isArray(dataLayer)) {
+    if (!createDataLayer) return null;
+    dataLayer = [];
+    measurementWindow.dataLayer = dataLayer;
+  }
+
+  dataLayer.push({
+    event: 'crcn_consent_preferences',
+    analytics_storage: consent.analytics ? 'granted' : 'denied',
+    ad_storage: consent.advertising ? 'granted' : 'denied',
+    ad_user_data: consent.advertising ? 'granted' : 'denied',
+    ad_personalization: consent.advertising ? 'granted' : 'denied',
+  });
+
+  return dataLayer;
+}
+
 export function readMeasurementConsent(): MeasurementConsent | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -36,6 +59,8 @@ export function saveMeasurementConsent(consent: MeasurementConsent): void {
   } catch {
     // The choice still applies to the current page.
   }
+  // Update an already-created data layer without loading GTM for a denied choice.
+  pushConsentPreferences(consent);
   updateMeasurementAttribution(consent);
 }
 
@@ -44,15 +69,8 @@ export function loadGtmIfConsented(consent: MeasurementConsent, configuredId: st
   if (!consent.analytics || !consent.advertising || !GTM_ID_PATTERN.test(id)) return false;
   if (document.getElementById(GTM_SCRIPT_ID)) return true;
 
-  const dataLayer = ((window as Window & { dataLayer?: unknown[] }).dataLayer ??= []);
-  // GTM must also be configured to require the corresponding consent for each tag.
-  dataLayer.push({
-    event: 'crcn_consent_preferences',
-    analytics_storage: consent.analytics ? 'granted' : 'denied',
-    ad_storage: consent.advertising ? 'granted' : 'denied',
-    ad_user_data: consent.advertising ? 'granted' : 'denied',
-    ad_personalization: consent.advertising ? 'granted' : 'denied',
-  });
+  const dataLayer = pushConsentPreferences(consent, true);
+  if (!dataLayer) return false;
   dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' });
   const script = document.createElement('script');
   script.id = GTM_SCRIPT_ID;
