@@ -24,6 +24,10 @@ const isOwnerReservation = (value: unknown): boolean =>
   isIsoDate(value.checkOut) &&
   value.checkOut > value.checkIn &&
   value.nights === getNightsBetween(value.checkIn, value.checkOut) &&
+  (value.paymentStatus === 'paid' ||
+    value.paymentStatus === 'partial' ||
+    value.paymentStatus === 'unpaid' ||
+    value.paymentStatus === 'unknown') &&
   (value.status === 'confirmed' ||
     value.status === 'cancelled' ||
     value.status === 'blocked' ||

@@ -84,6 +84,7 @@ test('calendar reduces mobile cell height and exposes reservation status to assi
         checkIn: '2026-10-20',
         checkOut: '2026-10-23',
         status: 'confirmed',
+        paymentStatus: 'paid',
         total: 1200,
         currency: 'BRL',
         nights: 3,

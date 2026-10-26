@@ -28,6 +28,7 @@ const dashboard = {
       checkIn: '2026-10-10',
       checkOut: '2026-10-12',
       status: 'confirmed',
+      paymentStatus: 'paid',
       total: 800,
       currency: 'BRL',
       nights: 2,
@@ -75,6 +76,13 @@ test('rejects incomplete, invalid-date, and non-finite owner dashboard data', ()
     isOwnerDashboardData({
       ...dashboard,
       reservations: [{ ...dashboard.reservations[0], status: 'pending' }],
+    }),
+    false,
+  );
+  assert.equal(
+    isOwnerDashboardData({
+      ...dashboard,
+      reservations: [{ ...dashboard.reservations[0], paymentStatus: 'in_progress' }],
     }),
     false,
   );

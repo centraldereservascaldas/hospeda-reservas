@@ -7,6 +7,7 @@ import { lazy, Suspense, useEffect, useState, useRef } from 'react';
 import { Property, SearchFilters, Currency } from './types';
 import { Header } from './components/Header';
 import { AuthCallbackNotice } from './components/account/AuthCallbackNotice';
+import { RecoveryLinkConfirmationPage } from './components/account/RecoveryLinkConfirmationPage';
 import { CategoryBar } from './components/search/CategoryBar';
 import {
   MobileBottomNavigation,
@@ -494,6 +495,10 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  if (pathname === '/auth/confirm') {
+    return <RecoveryLinkConfirmationPage />;
+  }
 
   const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})$/.exec(pathname)?.[1];
   const normalizedPathname = pathname.replace(/\/+$/, '') || '/';

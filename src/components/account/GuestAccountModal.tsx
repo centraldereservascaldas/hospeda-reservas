@@ -160,7 +160,7 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({
         const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
           normalizedEmail,
           {
-            redirectTo: `${window.location.origin}/`,
+            redirectTo: `${window.location.origin}/auth/confirm`,
           },
         );
         if (recoveryError) throw recoveryError;
@@ -209,7 +209,13 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({
       setPassword('');
     } catch (submitError) {
       if (mode === 'signup') localStorage.removeItem('hospeda_pending_email_confirmation');
-      setError(getAccountErrorMessage(submitError));
+      const errorMessage = submitError instanceof Error ? submitError.message : '';
+      const isNetworkFailure = /failed to fetch|network request failed/i.test(errorMessage);
+      setError(
+        isNetworkFailure
+          ? 'Não foi possível enviar o link agora. Confira sua conexão e tente novamente.'
+          : getAccountErrorMessage(submitError),
+      );
     } finally {
       setBusy(false);
     }

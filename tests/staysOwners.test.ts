@@ -1,6 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeStaysOwners } from '../src/utils/staysOwners.ts';
+import { getStaysOwnerDateRanges, normalizeStaysOwners } from '../src/utils/staysOwners.ts';
+
+test('covers the requested owner history with Stays date windows no longer than one year', () => {
+  const ranges = getStaysOwnerDateRanges(new Date('2026-10-16T23:30:00-03:00'));
+
+  assert.equal(ranges[0]?.from, '2016-01-01');
+  assert.equal(ranges[ranges.length - 1]?.to, '2026-10-17');
+  assert.equal(ranges.length, 11);
+  for (const [index, range] of ranges.entries()) {
+    const from = new Date(`${range.from}T00:00:00.000Z`);
+    const to = new Date(`${range.to}T00:00:00.000Z`);
+    assert.ok((to.getTime() - from.getTime()) / 86_400_000 <= 364);
+    if (index > 0) {
+      const previousEnd = new Date(`${ranges[index - 1]!.to}T00:00:00.000Z`);
+      previousEnd.setUTCDate(previousEnd.getUTCDate() + 1);
+      assert.equal(range.from, previousEnd.toISOString().slice(0, 10));
+    }
+  }
+});
 
 test('normalizes owner records and only returns a minimal safe summary', () => {
   const owners = normalizeStaysOwners([{

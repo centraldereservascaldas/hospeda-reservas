@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Home,
   LoaderCircle,
+  LockKeyhole,
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react';
@@ -47,12 +48,37 @@ const statusLabel: Record<string, string> = {
   other: 'Outra',
 };
 
+const paymentStatusLabel: Record<string, string> = {
+  paid: 'Pagamento confirmado',
+  partial: 'Pagamento parcial',
+  unpaid: 'Sem pagamento',
+  unknown: 'Pagamento não informado',
+};
+
+const calendarEntryClass = (reservation: OwnerDashboardData['reservations'][number]): string => {
+  if (reservation.status === 'blocked') return 'bg-red-100 text-red-800';
+  if (reservation.status === 'cancelled') return 'bg-neutral-100 text-neutral-500 line-through';
+  if (reservation.paymentStatus === 'paid' || reservation.paymentStatus === 'partial')
+    return 'bg-blue-100 text-blue-800';
+  if (reservation.status === 'confirmed') return 'bg-amber-100 text-amber-900';
+  return 'bg-neutral-100 text-neutral-700';
+};
+
 export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToken }) => {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [section, setSection] = useState<DashboardSection>('overview');
   const [dashboard, setDashboard] = useState<OwnerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [blockListingId, setBlockListingId] = useState('');
+  const [blockFrom, setBlockFrom] = useState(() => new Date().toISOString().slice(0, 10));
+  const [blockTo, setBlockTo] = useState(() =>
+    new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+  );
+  const [blockReason, setBlockReason] = useState('');
+  const [blockSaving, setBlockSaving] = useState(false);
+  const [blockError, setBlockError] = useState('');
+  const [blockSuccess, setBlockSuccess] = useState('');
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -123,7 +149,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
       <header className="flex flex-col justify-between gap-4 border-b border-white/70 pb-5 sm:flex-row sm:items-end">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1 text-xs font-bold text-emerald-800">
-            <ShieldCheck className="h-4 w-4" /> Acesso de proprietário aprovado
+            <ShieldCheck className="h-4 w-4" aria-hidden="true" /> Acesso de proprietário aprovado
           </div>
           <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">
             Painel do proprietário
@@ -138,7 +164,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             type="button"
             onClick={() => changeMonth(-1)}
             aria-label="Mês anterior"
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-xl hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+            className="rounded-xl p-2 hover:bg-white"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
@@ -149,7 +175,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             type="button"
             onClick={() => changeMonth(1)}
             aria-label="Próximo mês"
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-xl hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+            className="rounded-xl p-2 hover:bg-white"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -166,7 +192,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             type="button"
             aria-current={section === tab.id ? 'page' : undefined}
             onClick={() => setSection(tab.id)}
-            className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center text-xs font-bold leading-tight transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 sm:min-h-11 sm:shrink-0 sm:flex-row sm:gap-2 sm:whitespace-nowrap sm:px-3 sm:py-2.5 sm:text-sm ${section === tab.id ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20' : 'text-neutral-700 hover:bg-white/90'}`}
+            className={`flex min-h-14 min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-xs font-bold transition sm:min-h-11 sm:shrink-0 sm:px-3 sm:text-sm ${section === tab.id ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20' : 'text-neutral-700 hover:bg-white/90'}`}
           >
             {tab.icon}
             {tab.label}
@@ -285,26 +311,11 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                 </div>
                 <div className="space-y-3 sm:hidden">
                   {dashboard.properties.map((property) => (
-                    <article
-                      key={property.staysListingId}
-                      className="rounded-2xl border border-neutral-200/80 bg-white/80 p-4"
-                    >
-                      <h3 className="break-words text-sm font-bold text-neutral-900">
-                        {property.title}
-                      </h3>
-                      <dl className="mt-3 grid grid-cols-2 gap-3">
-                        <div>
-                          <dt className="text-xs font-semibold text-neutral-600">Créditos</dt>
-                          <dd className="mt-1 break-words text-sm font-bold text-emerald-700">
-                            {currencyText(property.credit, 'BRL')}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="text-xs font-semibold text-neutral-600">Débitos</dt>
-                          <dd className="mt-1 break-words text-sm font-bold text-orange-700">
-                            {currencyText(property.debit, 'BRL')}
-                          </dd>
-                        </div>
+                    <article key={property.staysListingId} className="rounded-2xl border border-neutral-200/80 bg-white/80 p-4">
+                      <h3 className="text-sm font-bold text-neutral-900">{property.title}</h3>
+                      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                        <div><dt className="text-xs text-neutral-500">Créditos</dt><dd className="mt-1 font-bold text-emerald-700">{currencyText(property.credit, 'BRL')}</dd></div>
+                        <div><dt className="text-xs text-neutral-500">Débitos</dt><dd className="mt-1 font-bold text-orange-700">{currencyText(property.debit, 'BRL')}</dd></div>
                       </dl>
                     </article>
                   ))}
@@ -341,8 +352,153 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             {section === 'calendar' && (
               <SectionCard
                 title="Calendário de reservas"
-                detail="O calendário é montado com as reservas e bloqueios que a Stays retorna para o período. Esta visualização não altera disponibilidade."
+                detail="Consulte reservas e bloqueios sincronizados com a Stays e bloqueie períodos dos seus imóveis."
               >
+                <form
+                  className="mb-5 grid gap-3 rounded-2xl border border-orange-100 bg-orange-50/55 p-4 sm:grid-cols-2 lg:grid-cols-5"
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    if (!dashboard?.properties.length) return;
+                    setBlockSaving(true);
+                    setBlockError('');
+                    setBlockSuccess('');
+                    try {
+                      await crcnBackendApi.createOwnerCalendarBlock(accessToken, {
+                        listingId: blockListingId || dashboard.properties[0]!.staysListingId,
+                        from: blockFrom,
+                        to: blockTo,
+                        ...(blockReason.trim() ? { reason: blockReason.trim() } : {}),
+                      });
+                      setBlockSuccess('As datas foram bloqueadas na Stays.');
+                      setBlockReason('');
+                      if (month === blockFrom.slice(0, 7)) {
+                        await loadDashboard();
+                      } else {
+                        setMonth(blockFrom.slice(0, 7));
+                      }
+                    } catch (blockRequestError) {
+                      setBlockError(
+                        blockRequestError instanceof Error
+                          ? blockRequestError.message
+                          : 'Não foi possível bloquear essas datas.',
+                      );
+                    } finally {
+                      setBlockSaving(false);
+                    }
+                  }}
+                >
+                  <label className="grid gap-1 text-xs font-bold text-neutral-700 sm:col-span-2 lg:col-span-1">
+                    Propriedade
+                    <select
+                      value={blockListingId || dashboard.properties[0]?.staysListingId || ''}
+                      onChange={(event) => setBlockListingId(event.target.value)}
+                      required
+                      disabled={dashboard.properties.length === 0 || blockSaving}
+                      className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    >
+                      {dashboard.properties.map((property) => (
+                        <option key={property.staysListingId} value={property.staysListingId}>
+                          {property.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-xs font-bold text-neutral-700">
+                    Primeira data bloqueada
+                    <input
+                      type="date"
+                      value={blockFrom}
+                      min={new Date().toISOString().slice(0, 10)}
+                      onChange={(event) => setBlockFrom(event.target.value)}
+                      required
+                      disabled={blockSaving}
+                      className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-bold text-neutral-700">
+                    Data de liberação
+                    <input
+                      type="date"
+                      value={blockTo}
+                      min={blockFrom}
+                      onChange={(event) => setBlockTo(event.target.value)}
+                      required
+                      disabled={blockSaving}
+                      className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-xs font-bold text-neutral-700 sm:col-span-2 lg:col-span-1">
+                    Motivo (opcional)
+                    <input
+                      type="text"
+                      value={blockReason}
+                      maxLength={140}
+                      onChange={(event) => setBlockReason(event.target.value)}
+                      placeholder="Ex.: uso pessoal ou manutenção"
+                      disabled={blockSaving}
+                      className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none placeholder:font-normal focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                    />
+                  </label>
+                  <div className="flex items-end sm:col-span-2 lg:col-span-1">
+                    <button
+                      type="submit"
+                      disabled={blockSaving || dashboard.properties.length === 0}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 text-sm font-extrabold text-white shadow-md shadow-orange-500/20 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {blockSaving ? (
+                        <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                      ) : (
+                        <LockKeyhole className="h-4 w-4" aria-hidden="true" />
+                      )}
+                      {blockSaving ? 'Bloqueando…' : 'Bloquear datas'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-neutral-600 sm:col-span-2 lg:col-span-5">
+                    A data de liberação funciona como checkout: ela não fica bloqueada. O bloqueio
+                    será aplicado à disponibilidade real na Stays.
+                  </p>
+                  {blockError && (
+                    <p
+                      role="alert"
+                      className="text-xs font-semibold text-rose-700 sm:col-span-2 lg:col-span-5"
+                    >
+                      {blockError}
+                    </p>
+                  )}
+                  {blockSuccess && (
+                    <p
+                      role="status"
+                      className="text-xs font-semibold text-emerald-700 sm:col-span-2 lg:col-span-5"
+                    >
+                      {blockSuccess}
+                    </p>
+                  )}
+                </form>
+                {dashboard.properties.length === 0 && (
+                  <EmptyState message="Não há imóveis vinculados para bloquear datas." />
+                )}
+                <ul aria-label="Legenda do calendário de reservas" className="sr-only">
+                  <li>Confirmada</li>
+                  <li>Cancelada</li>
+                  <li>Bloqueio ou outro estado</li>
+                </ul>
+                <div
+                  className="mb-3 flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold text-neutral-700"
+                  aria-label="Legenda do calendário"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                    Bloqueio
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500" aria-hidden="true" />
+                    Reserva com pagamento
+                  </span>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500" aria-hidden="true" />
+                    Reserva sem pagamento confirmado
+                  </span>
+                </div>
                 <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
                   {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => (
                     <div key={day} className="pb-2 text-center text-xs font-bold text-neutral-500">
@@ -363,21 +519,17 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                         <div className="mt-1 space-y-1">
                           {stays.slice(0, 2).map((stay) => (
                             <React.Fragment key={`${day.iso}-${stay.id}`}>
-                              <span
-                                role="img"
-                                aria-label={`${statusLabel[stay.status]} · ${stay.propertyTitle}`}
-                                className={`mx-auto block h-2.5 w-2.5 rounded-full sm:hidden ${stay.status === 'confirmed' ? 'bg-orange-600' : stay.status === 'cancelled' ? 'bg-neutral-500' : 'bg-sky-600'}`}
-                              />
+                              <span role="img" aria-label={`${statusLabel[stay.status]} · ${stay.propertyTitle}`} className={`mx-auto block h-2.5 w-2.5 rounded-full sm:hidden ${calendarEntryClass(stay).split(' ')[0]}`} />
                               <div
-                                title={`${stay.propertyTitle} · ${statusLabel[stay.status]}`}
-                                className={`hidden truncate rounded-md px-1 py-0.5 text-xs font-bold sm:block ${stay.status === 'confirmed' ? 'bg-orange-100 text-orange-800' : stay.status === 'cancelled' ? 'bg-neutral-100 text-neutral-600 line-through' : 'bg-sky-100 text-sky-800'}`}
-                              >
-                                {stay.propertyTitle}
+                              title={`${stay.propertyTitle} · ${statusLabel[stay.status]} · ${paymentStatusLabel[stay.paymentStatus]}`}
+                              className={`hidden truncate rounded-md px-1 py-0.5 text-xs font-bold sm:block ${calendarEntryClass(stay)}`}
+                            >
+                              {stay.propertyTitle}
                               </div>
                             </React.Fragment>
                           ))}
                           {stays.length > 2 && (
-                            <div className="text-xs font-semibold text-neutral-600">
+                            <div className="text-[9px] font-semibold text-neutral-500">
                               +{stays.length - 2}
                             </div>
                           )}
@@ -386,25 +538,9 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                     );
                   })}
                 </div>
-                <ul
-                  aria-label="Legenda do calendário de reservas"
-                  className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold text-neutral-700"
-                >
-                  <li className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-orange-600" aria-hidden="true" />
-                    Confirmada
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-neutral-500" aria-hidden="true" />
-                    Cancelada
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full bg-sky-600" aria-hidden="true" />
-                    Bloqueio ou outro estado
-                  </li>
-                </ul>
                 <p className="mt-3 text-xs text-neutral-500">
-                  Para editar datas ou tarifas, use os canais oficiais de gestão.
+                  As reservas e bloqueios exibidos vêm da Stays. Bloqueios criados aqui afetam a
+                  disponibilidade do imóvel nos canais integrados.
                 </p>
               </SectionCard>
             )}
@@ -475,31 +611,39 @@ const PropertyList: React.FC<{ rows: OwnerDashboardData['properties'] }> = ({ ro
 const ReservationList: React.FC<{ rows: OwnerDashboardData['reservations'] }> = ({ rows }) =>
   rows.length ? (
     <div className="divide-y divide-neutral-100">
-      {rows.map((reservation) => (
-        <div
-          key={reservation.id}
-          className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-bold text-neutral-900">{reservation.guestName}</p>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${reservation.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800' : reservation.status === 'cancelled' ? 'bg-neutral-100 text-neutral-600' : 'bg-sky-100 text-sky-800'}`}
-              >
-                {statusLabel[reservation.status]}
-              </span>
+      {rows.map((reservation) => {
+        const isPreReservation =
+          reservation.status === 'confirmed' &&
+          reservation.paymentStatus !== 'paid' &&
+          reservation.paymentStatus !== 'partial';
+        const badgeLabel = isPreReservation ? 'Pré-reserva' : statusLabel[reservation.status];
+
+        return (
+          <div
+            key={reservation.id}
+            className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-bold text-neutral-900">{reservation.guestName}</p>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${calendarEntryClass(reservation)}`}
+                >
+                  {badgeLabel}
+                </span>
+              </div>
+              <p className="mt-1 truncate text-xs text-neutral-600">
+                {reservation.propertyTitle} · {dateText(reservation.checkIn)} a{' '}
+                {dateText(reservation.checkOut)} · {reservation.nights} noite(s)
+              </p>
+              <p className="text-[11px] text-neutral-400">Reserva {reservation.code}</p>
             </div>
-            <p className="mt-1 truncate text-xs text-neutral-600">
-              {reservation.propertyTitle} · {dateText(reservation.checkIn)} a{' '}
-              {dateText(reservation.checkOut)} · {reservation.nights} noite(s)
+            <p className="shrink-0 text-sm font-extrabold text-neutral-900">
+              {currencyText(reservation.total, reservation.currency)}
             </p>
-            <p className="text-[11px] text-neutral-400">Reserva {reservation.code}</p>
           </div>
-          <p className="shrink-0 text-sm font-extrabold text-neutral-900">
-            {currencyText(reservation.total, reservation.currency)}
-          </p>
-        </div>
-      ))}
+        );
+      })}
     </div>
   ) : (
     <EmptyState message="Nenhuma reserva foi retornada para este período." />

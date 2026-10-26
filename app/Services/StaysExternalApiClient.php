@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 class StaysExternalApiClient
@@ -71,16 +72,50 @@ class StaysExternalApiClient
             return $this->cachedOwnerDirectory;
         }
 
-        $payload = $this->get('/finance/owners', ['from' => now()->subYears(10)->startOfYear()->toDateString(), 'to' => now()->toDateString()]);
-        $owners = $payload['owners'] ?? $payload['data'] ?? $payload;
-        if (! is_array($owners)) {
-            return null;
-        }
+        $this->cachedOwnerDirectory = Cache::remember('stays.owner_directory.v1', 300, function (): ?array {
+            $ownersById = [];
+            $today = now()->startOfDay();
+            $from = now()->subYears(10)->startOfYear();
 
-        $this->cachedOwnerDirectory = collect($owners)->map(fn (array $owner): array => [
-            'id' => (string) ($owner['_id'] ?? $owner['id'] ?? ''),
-            'name' => (string) ($owner['name'] ?? trim(($owner['fName'] ?? '').' '.($owner['lName'] ?? ''))),
-        ])->filter(fn (array $owner): bool => $owner['id'] !== '')->values()->all();
+            while ($from->lte($today)) {
+                // Stays rejects finance queries spanning more than one year.
+                $to = $from->copy()->addDays(364);
+                if ($to->gt($today)) {
+                    $to = $today->copy();
+                }
+
+                $payload = $this->get('/finance/owners', [
+                    'from' => $from->toDateString(),
+                    'to' => $to->toDateString(),
+                ]);
+                if (! is_array($payload)) {
+                    return null;
+                }
+
+                $owners = $payload['owners'] ?? $payload['data'] ?? $payload;
+                if (! is_array($owners) || ! array_is_list($owners)) {
+                    return null;
+                }
+
+                foreach ($owners as $owner) {
+                    if (! is_array($owner)) {
+                        continue;
+                    }
+
+                    $id = (string) ($owner['_id'] ?? $owner['id'] ?? '');
+                    if ($id === '') {
+                        continue;
+                    }
+
+                    $name = (string) ($owner['name'] ?? trim(($owner['fName'] ?? '').' '.($owner['lName'] ?? '')));
+                    $ownersById[$id] = ['id' => $id, 'name' => $name];
+                }
+
+                $from = $to->copy()->addDay();
+            }
+
+            return array_values($ownersById);
+        });
         $this->ownerDirectoryCacheUntil = time() + 300;
 
         return $this->cachedOwnerDirectory;

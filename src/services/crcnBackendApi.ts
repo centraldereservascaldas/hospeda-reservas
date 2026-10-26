@@ -225,6 +225,7 @@ export interface OwnerDashboardData {
     checkIn: string;
     checkOut: string;
     status: 'confirmed' | 'cancelled' | 'blocked' | 'other';
+    paymentStatus: 'paid' | 'partial' | 'unpaid' | 'unknown';
     total: number;
     currency: string;
     nights: number;
@@ -741,6 +742,25 @@ class CrcnBackendApiService {
         propertyImage: isSafeMediaUrl(reservation.propertyImage) ? reservation.propertyImage : '',
       })),
     };
+  }
+
+  public async createOwnerCalendarBlock(
+    accessToken: string,
+    input: { listingId: string; from: string; to: string; reason?: string },
+  ): Promise<void> {
+    const res = await fetch('/api/owner/calendar/blocks', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const json: unknown = await res.json();
+    if (!res.ok || !isRecord(json) || json.success !== true || json.status !== 'blocked') {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível bloquear essas datas.',
+      );
+    }
   }
 
   public async getOwnerAdminStatus(accessToken: string): Promise<boolean> {

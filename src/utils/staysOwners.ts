@@ -4,6 +4,35 @@ export interface StaysOwnerSummary {
   propertyCount: number;
 }
 
+export interface StaysOwnerDateRange {
+  from: string;
+  to: string;
+}
+
+export function getStaysOwnerDateRanges(today = new Date()): StaysOwnerDateRange[] {
+  const lastDate = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+  );
+  const firstDate = new Date(Date.UTC(lastDate.getUTCFullYear() - 10, 0, 1));
+  const ranges: StaysOwnerDateRange[] = [];
+
+  while (firstDate <= lastDate) {
+    const rangeEnd = new Date(firstDate);
+    rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 364);
+    if (rangeEnd > lastDate) rangeEnd.setTime(lastDate.getTime());
+
+    ranges.push({
+      from: firstDate.toISOString().slice(0, 10),
+      to: rangeEnd.toISOString().slice(0, 10),
+    });
+
+    firstDate.setTime(rangeEnd.getTime());
+    firstDate.setUTCDate(firstDate.getUTCDate() + 1);
+  }
+
+  return ranges;
+}
+
 function extractOwnerArray(payload: unknown): unknown[] | null {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== 'object') return null;
