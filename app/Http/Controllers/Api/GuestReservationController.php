@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Data\VerifiedGuest;
+use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\DirectBookingOrderListResource;
 use App\Models\DirectBookingOrder;
