@@ -28,6 +28,7 @@ afterEach(() => {
   window.localStorage.clear();
   document.head.innerHTML = '';
   delete (window as Window & { dataLayer?: unknown[] }).dataLayer;
+  delete (window as Window & { __crcnConsentModeDefaultSet?: boolean }).__crcnConsentModeDefaultSet;
 });
 
 test('defaults to no consent and persists refusal', () => {
@@ -49,6 +50,41 @@ test('requires both choices and valid GTM ID, then inserts a single script', () 
     document.querySelector<HTMLScriptElement>('#crcn-gtm-script')?.src,
     'https://www.googletagmanager.com/gtm.js?id=GTM-ABC123',
   );
+
+  const dataLayer = (window as Window & { dataLayer?: unknown[] }).dataLayer!;
+  const gtagCommands = dataLayer.filter(
+    (entry): entry is ArrayLike<unknown> =>
+      typeof entry === 'object' && entry !== null && 'length' in entry,
+  );
+  assert.deepEqual(
+    gtagCommands.map((entry) => [entry[0], entry[1], entry[2]]),
+    [
+      [
+        'consent',
+        'default',
+        {
+          analytics_storage: 'denied',
+          ad_storage: 'denied',
+          ad_user_data: 'denied',
+          ad_personalization: 'denied',
+        },
+      ],
+      [
+        'consent',
+        'update',
+        {
+          analytics_storage: 'granted',
+          ad_storage: 'granted',
+          ad_user_data: 'granted',
+          ad_personalization: 'granted',
+        },
+      ],
+    ],
+  );
+  assert.equal(dataLayer[0], gtagCommands[0]);
+  assert.equal(dataLayer.indexOf(gtagCommands[1] as unknown), 1);
+  const lastDataLayerEntry = dataLayer[dataLayer.length - 1] as { event?: string };
+  assert.equal(lastDataLayerEntry.event, 'gtm.js');
 });
 
 test('revocation persists and prevents loading on the next page', () => {
@@ -69,6 +105,26 @@ test('revocation persists and prevents loading on the next page', () => {
     ad_user_data: 'denied',
     ad_personalization: 'denied',
   });
+  const gtagUpdates = existingDataLayer.filter((entry) => 'length' in entry) as unknown as Array<
+    ArrayLike<unknown>
+  >;
+  assert.deepEqual(
+    [
+      gtagUpdates[gtagUpdates.length - 1]?.[0],
+      gtagUpdates[gtagUpdates.length - 1]?.[1],
+      gtagUpdates[gtagUpdates.length - 1]?.[2],
+    ],
+    [
+      'consent',
+      'update',
+      {
+        analytics_storage: 'denied',
+        ad_storage: 'denied',
+        ad_user_data: 'denied',
+        ad_personalization: 'denied',
+      },
+    ],
+  );
   assert.equal(loadGtmIfConsented(readMeasurementConsent()!, 'GTM-ABC123'), false);
   assert.equal(document.querySelectorAll('#crcn-gtm-script').length, 1);
   assert.equal(
@@ -125,6 +181,14 @@ test('single-category consent does not load GTM', () => {
   assert.equal(loadGtmIfConsented({ analytics: true, advertising: false }, 'GTM-ABC123'), false);
   assert.equal(loadGtmIfConsented({ analytics: false, advertising: true }, 'GTM-ABC123'), false);
   assert.equal(document.querySelector('#crcn-gtm-script'), null);
+  assert.equal((window as Window & { dataLayer?: unknown[] }).dataLayer, undefined);
+});
+
+test('invalid GTM IDs do not initialize consent commands or load a network script', () => {
+  assert.equal(loadGtmIfConsented({ analytics: true, advertising: true }, 'G-ABC123'), false);
+  assert.equal(loadGtmIfConsented({ analytics: true, advertising: true }, ''), false);
+  assert.equal((window as Window & { dataLayer?: unknown[] }).dataLayer, undefined);
+  assert.equal(document.querySelector('script[src]'), null);
 });
 
 test('purchase requires consent, a loaded tag, confirmed payment and a valid BRL total, and emits once', async () => {

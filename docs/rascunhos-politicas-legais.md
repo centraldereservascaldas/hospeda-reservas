@@ -64,6 +64,8 @@ A lista de fornecedores, os dados que cada um recebe, seus papéis, países de p
 
 O site oferece o controle **“Preferências de medição”**, com escolhas separadas para analytics (medição de uso) e publicidade. As escolhas ficam guardadas no navegador, podem ser alteradas depois e podem ser recusadas em conjunto. Algumas ferramentas podem depender da combinação das duas escolhas: no comportamento atual, o Google Tag Manager e os eventos analíticos do funil só são carregados ou enviados quando ambas estão habilitadas. Isso não significa que as tags estejam configuradas para operar de forma independente por categoria. Ao revogar uma escolha depois do carregamento das tags, o site recarrega a página; a remoção de cookies já criados depende da configuração das ferramentas.
 
+No código local, quando ambas as categorias foram autorizadas e o ID do GTM é válido, o site enfileira os comandos Google Consent Mode `consent/default` (categorias negadas) e `consent/update` (escolhas autorizadas) antes de iniciar o GTM. Na recusa inicial ou com configuração inválida, o código não cria essa fila nem carrega o script. Essa implementação local não confirma o comportamento das tags no container publicado, o uso de cookies nem as requisições efetivamente enviadas; isso ainda precisa ser conferido no GTM/Tag Assistant e nas ferramentas configuradas antes de aprovar os textos ou publicar.
+
 Você pode alterar suas escolhas pelo controle de preferências disponível no site. A recusa dessas categorias não deve impedir as funções necessárias para navegar ou solicitar uma reserva. [Confirmar quais tags estão configuradas no GTM e se a configuração publicada de cada tag respeita a escolha registrada antes da publicação.]
 
 ### 6. Armazenamento e retenção
