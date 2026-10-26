@@ -29,71 +29,8 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->bindSyntheticApprovedCatalog();
         Http::preventStrayRequests();
 
-        $reservation = null;
-        $staysPayments = [];
         $gatewayStatus = 'pending';
-        Http::fake(function (ClientRequest $request) use (&$reservation, &$staysPayments, &$gatewayStatus) {
-            $path = parse_url($request->url(), PHP_URL_PATH);
-            $method = $request->method();
-
-            if ($path === '/external/v1/booking/search-listings' && $method === 'POST') {
-                return Http::response([['id' => 'JQ08G']], 200);
-            }
-            if ($path === '/external/v1/booking/calculate-price' && $method === 'POST') {
-                return Http::response([[
-                    '_idlisting' => 'JQ08G',
-                    'bookingPrice' => ['mainCurrency' => 'BRL', '_mctotal' => ['BRL' => 3001], 'feesIncluded' => true, 'fees' => []],
-                ]], 200);
-            }
-            if ($path === '/external/v1/booking/clients' && $method === 'GET') {
-                return Http::response([], 200);
-            }
-            if ($path === '/external/v1/booking/clients' && $method === 'POST') {
-                return Http::response(['_id' => 'client-journey-1'], 201);
-            }
-            if ($path === '/external/v1/booking/reservations' && $method === 'POST') {
-                $payload = $request->data();
-                $reservation = [
-                    '_id' => 'reservation-journey-1',
-                    '_idlisting' => $payload['listingId'],
-                    '_idclient' => $payload['_idclient'],
-                    'type' => 'reserved',
-                    'checkInDate' => $payload['checkInDate'],
-                    'checkOutDate' => $payload['checkOutDate'],
-                    'guests' => $payload['guests'],
-                    'guestsDetails' => $payload['guestsDetails'],
-                    'price' => $payload['price'],
-                    'internalNote' => $payload['internalNote'],
-                ];
-
-                return Http::response($reservation, 201);
-            }
-            if ($path === '/external/v1/booking/reservations/reservation-journey-1' && $method === 'GET') {
-                return Http::response($reservation, 200);
-            }
-            if ($path === '/external/v1/booking/reservations/reservation-journey-1/payments' && $method === 'GET') {
-                return Http::response($staysPayments, 200);
-            }
-            if ($path === '/external/v1/booking/reservations/reservation-journey-1/payments' && $method === 'POST') {
-                $payment = [...$request->data(), '_id' => 'stays-payment-journey-1'];
-                $staysPayments[] = $payment;
-
-                return Http::response($payment, 201);
-            }
-            if ($path === '/external/v1/booking/reservations/reservation-journey-1' && $method === 'PATCH') {
-                $reservation['type'] = $request->data()['type'];
-
-                return Http::response($reservation, 200);
-            }
-            if ($path === '/v1/payments' && $method === 'POST') {
-                return Http::response(['id' => '987654321'], 201);
-            }
-            if ($path === '/v1/payments/987654321' && $method === 'GET') {
-                return Http::response($this->gatewayPayment($reservation, $gatewayStatus), 200);
-            }
-
-            throw new RuntimeException('Unexpected HTTP fake request: '.$method.' '.$request->url());
-        });
+        $this->fakeJourneyHttp($gatewayStatus);
 
         $checkout = $this->postJson('/api/checkout', $this->checkoutPayload(), [
             'Idempotency-Key' => 'integrated-checkout-journey-001',
@@ -156,9 +93,10 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->assertSame('booked', $order->reservation_status);
         $this->assertSame('succeeded', $order->staysActions()->where('action_type', 'register_payment')->sole()->status);
         $this->assertSame('succeeded', $order->staysActions()->where('action_type', 'confirm_reservation')->sole()->status);
-        $this->assertCount(1, $staysPayments);
-        $this->assertSame(3001.0, $staysPayments[0]['_f_val']);
-        $this->assertSame('completed', $staysPayments[0]['status']);
+        $staysPayment = Http::recorded(fn (ClientRequest $request): bool => parse_url($request->url(), PHP_URL_PATH) === '/external/v1/booking/reservations/reservation-journey-1/payments'
+            && $request->method() === 'POST')->sole()[0];
+        $this->assertSame(3001.0, $staysPayment->data()['_f_val']);
+        $this->assertSame('completed', $staysPayment->data()['status']);
 
         $email = DirectBookingEmail::query()->where('direct_booking_order_id', $order->id)->sole();
         $this->assertSame(DirectBookingEmail::TYPE_BOOKING_CONFIRMED, $email->notification_type);
@@ -204,6 +142,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             'services.stays.client_secret' => 'test-secret',
             'services.stays.base_url' => 'https://stays.test/external/v1',
             'services.mercadopago.access_token' => 'test-access-token',
+            'services.mercadopago.public_key' => 'test-public-key',
             'services.mercadopago.webhook_secret' => 'test-webhook-secret',
             'mail.default' => 'smtp',
             'mail.mailers.smtp.transport' => 'smtp',
@@ -228,6 +167,230 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
                 return $this->catalog;
             }
         });
+    }
+
+    public function test_approved_card_checkout_confirms_once_sends_email_and_can_be_resumed(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        Http::preventStrayRequests();
+        Mail::fake();
+        $gatewayStatus = 'approved';
+        $this->fakeJourneyHttp($gatewayStatus, 'visa');
+
+        $checkout = $this->postJson('/api/checkout', $this->checkoutPayload(), [
+            'Idempotency-Key' => 'integrated-card-approved-checkout-001',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('code', 'pre_reserved');
+
+        $reference = $checkout->json('resume.reference');
+        $resumeToken = $checkout->json('resume.token');
+        $order = DirectBookingOrder::query()->where('public_reference', $reference)->sole();
+        $this->assertSame(DirectBookingOrderStatus::PreReservado, $order->status);
+
+        $this->postJson('/api/checkout/'.$reference.'/payments', $this->cardPayload(), [
+            'Idempotency-Key' => 'integrated-card-approved-payment-001',
+            'X-Checkout-Resume-Token' => $resumeToken,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('payment.status', 'approved');
+
+        $attempt = DirectBookingPaymentAttempt::query()->where('direct_booking_order_id', $order->id)->sole();
+        $this->assertSame('approved', $attempt->status);
+        $this->assertSame('987654321', $attempt->gateway_payment_id);
+        $this->assertSame(DirectBookingOrderStatus::PagoEmConfirmacao, $order->refresh()->status);
+
+        $this->submitPaymentWebhook('987654321', 'integrated-card-approved-webhook-001');
+        $webhook = DirectBookingPaymentWebhook::query()->where('gateway_payment_id', '987654321')->sole();
+        (new ReconcileMercadoPagoPayment($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
+
+        $this->artisan('direct-booking:recover-reservations')->assertSuccessful();
+
+        $order->refresh();
+        $this->assertSame(DirectBookingOrderStatus::Confirmado, $order->status);
+        $this->assertSame('approved', $order->payment_status);
+        $this->assertSame('booked', $order->reservation_status);
+        $this->assertSame(1, $order->staysActions()->where('action_type', 'register_payment')->where('status', 'succeeded')->count());
+        $this->assertSame(1, $order->staysActions()->where('action_type', 'confirm_reservation')->where('status', 'succeeded')->count());
+        $this->assertSame(1, DirectBookingEmail::query()->where('direct_booking_order_id', $order->id)->count());
+
+        $this->artisan('direct-booking:recover-reservations')->assertSuccessful();
+        $email = DirectBookingEmail::query()->where('direct_booking_order_id', $order->id)->sole();
+        (new SendDirectBookingConfirmationEmail($email->id))->handle();
+        (new SendDirectBookingConfirmationEmail($email->id))->handle();
+        Mail::assertSent(DirectBookingConfirmed::class, 1);
+        $this->assertSame('sent', $email->refresh()->status);
+
+        $this->getJson('/api/checkout/'.$reference, ['X-Checkout-Resume-Token' => $resumeToken])
+            ->assertOk()
+            ->assertJsonPath('order.status', 'confirmado')
+            ->assertJsonPath('order.reservationConfirmed', true)
+            ->assertJsonPath('confirmation.reservationCode', 'reservation-journey-1')
+            ->assertJsonPath('payment.attempt.status', 'approved');
+
+        $this->assertSame(1, DirectBookingOrder::query()->count());
+        $this->assertSame(1, DirectBookingPaymentAttempt::query()->count());
+        $this->assertSame(1, DirectBookingPaymentWebhook::query()->count());
+        $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1/payments', 'POST'));
+        $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1', 'PATCH'));
+        $this->assertSame(1, $this->recordedRequests('/v1/payments', 'POST'));
+        $gatewayRequest = Http::recorded(fn (ClientRequest $request): bool => parse_url($request->url(), PHP_URL_PATH) === '/v1/payments'
+            && $request->method() === 'POST')->sole()[0];
+        $this->assertSame('visa', $gatewayRequest->data()['payment_method_id']);
+        $this->assertSame('tokenized-card-credential', $gatewayRequest->data()['token']);
+        $this->assertSame(1, $gatewayRequest->data()['installments']);
+        $this->assertArrayNotHasKey('card_number', $gatewayRequest->data());
+        $this->assertArrayNotHasKey('security_code', $gatewayRequest->data());
+    }
+
+    public function test_rejected_card_checkout_persists_decline_without_confirmation_or_financial_registration(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        Http::preventStrayRequests();
+        Mail::fake();
+        $gatewayStatus = 'rejected';
+        $this->fakeJourneyHttp($gatewayStatus, 'visa');
+
+        $checkout = $this->postJson('/api/checkout', $this->checkoutPayload(), [
+            'Idempotency-Key' => 'integrated-card-rejected-checkout-001',
+        ])->assertCreated();
+        $reference = $checkout->json('resume.reference');
+        $resumeToken = $checkout->json('resume.token');
+        $order = DirectBookingOrder::query()->where('public_reference', $reference)->sole();
+
+        $this->postJson('/api/checkout/'.$reference.'/payments', $this->cardPayload(), [
+            'Idempotency-Key' => 'integrated-card-rejected-payment-001',
+            'X-Checkout-Resume-Token' => $resumeToken,
+        ])->assertCreated()->assertJsonPath('payment.status', 'rejected');
+
+        $attempt = DirectBookingPaymentAttempt::query()->where('direct_booking_order_id', $order->id)->sole();
+        $this->submitPaymentWebhook('987654321', 'integrated-card-rejected-webhook-001');
+        $webhook = DirectBookingPaymentWebhook::query()->where('gateway_payment_id', '987654321')->sole();
+        (new ReconcileMercadoPagoPayment($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
+
+        $order->refresh();
+        $attempt->refresh();
+        $this->assertSame(DirectBookingOrderStatus::PagamentoRecusado, $order->status);
+        $this->assertSame('rejected', $order->payment_status);
+        $this->assertSame('reserved', $order->reservation_status);
+        $this->assertSame('rejected', $attempt->status);
+        $this->assertSame('processed', $webhook->refresh()->status);
+        $this->assertSame(0, $order->staysActions()->where('action_type', 'register_payment')->count());
+        $this->assertSame(0, $order->staysActions()->where('action_type', 'confirm_reservation')->count());
+        $this->assertSame(0, DirectBookingEmail::query()->where('direct_booking_order_id', $order->id)->count());
+        Mail::assertNothingOutgoing();
+
+        $this->getJson('/api/checkout/'.$reference, ['X-Checkout-Resume-Token' => $resumeToken])
+            ->assertOk()
+            ->assertJsonPath('order.status', 'pagamento_recusado')
+            ->assertJsonPath('order.reservationConfirmed', false)
+            ->assertJsonPath('payment.attempt.status', 'rejected');
+
+        $this->assertSame(1, DirectBookingOrder::query()->count());
+        $this->assertSame(1, DirectBookingPaymentAttempt::query()->count());
+        $this->assertSame(1, DirectBookingPaymentWebhook::query()->count());
+        $this->assertSame(0, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1/payments', 'POST'));
+        $this->assertSame(0, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1', 'PATCH'));
+    }
+
+    /** @return array<string, mixed> */
+    private function cardPayload(): array
+    {
+        return [
+            'paymentMethod' => 'card',
+            'paymentMethodId' => 'visa',
+            'token' => 'tokenized-card-credential',
+            'installments' => 1,
+            'cardholderName' => 'Checkout Guest',
+            'cardholderEmail' => 'checkout@example.test',
+            'payerIdentification' => ['type' => 'CPF', 'number' => '12345678909'],
+        ];
+    }
+
+    private function submitPaymentWebhook(string $paymentId, string $requestId): void
+    {
+        $timestamp = '1704908010';
+        $signature = hash_hmac('sha256', 'id:'.$paymentId.';request-id:'.$requestId.';ts:'.$timestamp.';', 'test-webhook-secret');
+
+        $this->postJson('/api/webhooks/mercadopago?type=payment&data.id='.$paymentId, [
+            'action' => 'payment.updated',
+            'type' => 'payment',
+        ], [
+            'x-request-id' => $requestId,
+            'x-signature' => 'ts='.$timestamp.',v1='.$signature,
+        ])->assertAccepted()->assertJsonPath('received', true);
+    }
+
+    private function fakeJourneyHttp(string &$gatewayStatus, string $paymentMethodId = 'pix'): void
+    {
+        $reservation = null;
+        $staysPayments = [];
+        Http::fake(function (ClientRequest $request) use (&$reservation, &$staysPayments, &$gatewayStatus, $paymentMethodId) {
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            $method = $request->method();
+
+            if ($path === '/external/v1/booking/search-listings' && $method === 'POST') {
+                return Http::response([['id' => 'JQ08G']], 200);
+            }
+            if ($path === '/external/v1/booking/calculate-price' && $method === 'POST') {
+                return Http::response([[
+                    '_idlisting' => 'JQ08G',
+                    'bookingPrice' => ['mainCurrency' => 'BRL', '_mctotal' => ['BRL' => 3001], 'feesIncluded' => true, 'fees' => []],
+                ]], 200);
+            }
+            if ($path === '/external/v1/booking/clients' && $method === 'GET') {
+                return Http::response([], 200);
+            }
+            if ($path === '/external/v1/booking/clients' && $method === 'POST') {
+                return Http::response(['_id' => 'client-journey-1'], 201);
+            }
+            if ($path === '/external/v1/booking/reservations' && $method === 'POST') {
+                $payload = $request->data();
+                $reservation = [
+                    '_id' => 'reservation-journey-1', '_idlisting' => $payload['listingId'],
+                    '_idclient' => $payload['_idclient'], 'type' => 'reserved',
+                    'checkInDate' => $payload['checkInDate'], 'checkOutDate' => $payload['checkOutDate'],
+                    'guests' => $payload['guests'], 'guestsDetails' => $payload['guestsDetails'],
+                    'price' => $payload['price'], 'internalNote' => $payload['internalNote'],
+                ];
+
+                return Http::response($reservation, 201);
+            }
+            if ($path === '/external/v1/booking/reservations/reservation-journey-1' && $method === 'GET') {
+                return Http::response($reservation, 200);
+            }
+            if ($path === '/external/v1/booking/reservations/reservation-journey-1/payments' && $method === 'GET') {
+                return Http::response($staysPayments, 200);
+            }
+            if ($path === '/external/v1/booking/reservations/reservation-journey-1/payments' && $method === 'POST') {
+                $payment = [...$request->data(), '_id' => 'stays-payment-journey-1'];
+                $staysPayments[] = $payment;
+
+                return Http::response($payment, 201);
+            }
+            if ($path === '/external/v1/booking/reservations/reservation-journey-1' && $method === 'PATCH') {
+                $reservation['type'] = $request->data()['type'];
+
+                return Http::response($reservation, 200);
+            }
+            if ($path === '/v1/payments' && $method === 'POST') {
+                return Http::response(['id' => '987654321', 'status' => 'pending'], 201);
+            }
+            if ($path === '/v1/payments/987654321' && $method === 'GET') {
+                return Http::response($this->gatewayPayment($reservation, $gatewayStatus, $paymentMethodId), 200);
+            }
+
+            throw new RuntimeException('Unexpected HTTP fake request: '.$method.' '.$request->url());
+        });
+    }
+
+    private function recordedRequests(string $path, string $method): int
+    {
+        return Http::recorded(fn (ClientRequest $request): bool => parse_url($request->url(), PHP_URL_PATH) === $path
+            && $request->method() === $method)->count();
     }
 
     /** @return array<string, mixed> */
@@ -267,7 +430,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
     /** @param array<string, mixed>|null $reservation
      * @return array<string, mixed>
      */
-    private function gatewayPayment(?array $reservation, string $status): array
+    private function gatewayPayment(?array $reservation, string $status, string $paymentMethod = 'pix'): array
     {
         $order = DirectBookingOrder::query()->where('stays_reservation_id', $reservation['_id'] ?? null)->firstOrFail();
 
@@ -277,7 +440,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             'transaction_amount' => 3001,
             'currency_id' => 'BRL',
             'external_reference' => $order->id,
-            'payment_method_id' => 'pix',
+            'payment_method_id' => $paymentMethod,
             'date_of_expiration' => now()->addMinutes(45)->toIso8601String(),
             'date_approved' => $status === 'approved' ? now()->toIso8601String() : null,
             'point_of_interaction' => ['transaction_data' => ['qr_code' => 'pix-copy-paste', 'qr_code_base64' => 'cXItY29kZQ==']],
