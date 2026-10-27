@@ -15,7 +15,8 @@ class DirectBookingOrderObserver
      */
     public function updated(DirectBookingOrder $directBookingOrder): void
     {
-        if (! $directBookingOrder->wasChanged('status')
+        if (! config('direct-booking.send_confirmation_email', false)
+            || ! $directBookingOrder->wasChanged('status')
             || $directBookingOrder->status !== DirectBookingOrderStatus::Confirmado
             || $directBookingOrder->payment_status !== 'approved'
             || $directBookingOrder->reservation_status !== 'booked'

@@ -270,6 +270,18 @@ class DirectStaysReservationTest extends TestCase
         return null;
     }
 
+    public function test_confirmed_stays_reservation_does_not_queue_a_duplicate_guest_email_by_default(): void
+    {
+        config(['direct-booking.send_confirmation_email' => false]);
+        $order = $this->order(DirectBookingOrderStatus::PagoEmConfirmacao, 'reservation-email-managed-by-stays');
+        $order->forceFill(['payment_status' => 'approved', 'reservation_status' => 'booked'])->save();
+
+        $order->transitionTo(DirectBookingOrderStatus::Confirmado, ['source' => 'stays_booked_verified']);
+        $order->save();
+
+        $this->assertDatabaseCount('direct_booking_emails', 0);
+    }
+
     private function checkoutPayload(): array
     {
         return [

@@ -44,6 +44,7 @@ export interface AppOverlayLayerProps {
   setFilters: Dispatch<SetStateAction<SearchFilters>>;
   selectedCondominium: CondominiumSummary | null;
   bookingPayload: AppOverlayBookingPayload | null;
+  checkoutGuestPrefill: { fullName: string; email: string; phone: string };
   accountModalMode: AccountModalMode;
   accountReturnFocusRef?: RefObject<HTMLButtonElement | null>;
   properties: Property[];
@@ -71,6 +72,7 @@ export function AppOverlayLayer({
   setFilters,
   selectedCondominium,
   bookingPayload,
+  checkoutGuestPrefill,
   accountModalMode,
   accountReturnFocusRef,
   properties,
@@ -111,6 +113,7 @@ export function AppOverlayLayer({
           isOpen={bookingPayload !== null}
           onClose={onCloseCheckout}
           bookingData={bookingPayload}
+          guestPrefill={checkoutGuestPrefill}
           currency={currency}
         />
       </DeferredModal>

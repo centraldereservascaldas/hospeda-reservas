@@ -141,7 +141,7 @@ async function submitCheckoutWithConsent(consent: {
   fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'pessoa@example.test' } });
   fireEvent.change(screen.getByLabelText('Telefone'), { target: { value: '+5511999999999' } });
   fireEvent.click(screen.getByRole('checkbox', { name: /Li e aceito as condições/ }));
-  fireEvent.click(screen.getByRole('button', { name: 'Continuar para pagamento' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Continuar para pagamento Pix' }));
 
   await waitFor(() => assert.ok(requestBody));
   return { ...requestBody, _capturedAt: capturedAt };

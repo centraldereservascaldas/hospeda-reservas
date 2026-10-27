@@ -168,9 +168,11 @@ class DirectCheckoutService
                     'terms_accepted_at' => now(),
                     'origin' => 'website',
                     'gateway_provider' => $this->configuredPaymentProvider(),
-                    'gateway_merchant_id' => config('direct-booking.payment_provider') === 'cielo_sandbox'
-                        ? config('services.cielo.merchant_id')
-                        : null,
+                    'gateway_merchant_id' => match ($this->configuredPaymentProvider()) {
+                        'cielo_sandbox' => config('services.cielo.merchant_id'),
+                        'cielo_checkout' => config('services.cielo.checkout_merchant_id'),
+                        default => null,
+                    },
                     'operational_events' => [[
                         'status' => DirectBookingOrderStatus::Cotado->value,
                         'at' => now()->toISOString(),
@@ -199,7 +201,7 @@ class DirectCheckoutService
     private function configuredPaymentProvider(): string
     {
         $provider = config('direct-booking.payment_provider', 'mercadopago');
-        if (! in_array($provider, ['mercadopago', 'cielo_sandbox'], true)) {
+        if (! in_array($provider, ['mercadopago', 'cielo_sandbox', 'cielo_checkout'], true)) {
             throw new \RuntimeException('The configured direct booking payment provider is invalid.');
         }
 

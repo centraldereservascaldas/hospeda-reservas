@@ -545,6 +545,102 @@ test('checkout sends only consented first and last touch attribution', async () 
   }
 });
 
+test('creates a hosted Cielo checkout with the resume token and no card data', async () => {
+  const originalFetch = globalThis.fetch;
+  let requestUrl = '';
+  let requestInit: Parameters<typeof fetch>[1];
+  globalThis.fetch = async (input, init) => {
+    requestUrl = String(input);
+    requestInit = init;
+    return new Response(
+      JSON.stringify({
+        success: true,
+        code: 'pending',
+        message: 'Checkout Cielo criado.',
+        replayed: false,
+        payment: {
+          id: 'attempt-1',
+          status: 'pending',
+          method: 'card',
+          amount: '125.00',
+          currency: 'BRL',
+          expiresAt: '2026-10-28T12:00:00Z',
+          paidAt: null,
+          checkoutUrl: 'https://cieloecommerce.cielo.com.br/checkout/example',
+          pix: null,
+        },
+      }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+
+  try {
+    const result = await checkoutApi.createCieloCheckout(
+      'A'.repeat(40),
+      'B'.repeat(64),
+      '125.00',
+      'checkout-attempt-00001',
+    );
+
+    assert.equal(result.kind, 'response');
+    if (result.kind === 'response') {
+      assert.equal(result.success, true);
+      assert.equal(
+        result.payment?.checkoutUrl,
+        'https://cieloecommerce.cielo.com.br/checkout/example',
+      );
+    }
+    assert.equal(requestUrl, `/api/checkout/${'A'.repeat(40)}/cielo-checkout`);
+    assert.equal(requestInit?.method, 'POST');
+    const headers = new Headers(requestInit?.headers);
+    assert.equal(headers.get('X-Checkout-Resume-Token'), 'B'.repeat(64));
+    assert.equal(headers.get('Idempotency-Key'), 'checkout-attempt-00001');
+    assert.deepEqual(JSON.parse(String(requestInit?.body)), {
+      idempotencyKey: 'checkout-attempt-00001',
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('rejects a hosted Cielo checkout URL from an untrusted host', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        success: true,
+        code: 'pending',
+        message: 'Checkout Cielo criado.',
+        replayed: false,
+        payment: {
+          id: 'attempt-1',
+          status: 'pending',
+          method: 'card',
+          amount: '125.00',
+          currency: 'BRL',
+          expiresAt: null,
+          paidAt: null,
+          checkoutUrl: 'https://attacker.example/checkout',
+          pix: null,
+        },
+      }),
+      { status: 201, headers: { 'Content-Type': 'application/json' } },
+    );
+
+  try {
+    const result = await checkoutApi.createCieloCheckout(
+      'A'.repeat(40),
+      'B'.repeat(64),
+      '125.00',
+      'checkout-attempt-00001',
+    );
+
+    assert.deepEqual(result, { kind: 'unavailable' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('rejects invalid numeric and calendar values at API boundaries', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {

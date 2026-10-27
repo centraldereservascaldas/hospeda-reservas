@@ -46,6 +46,7 @@ function createOverlayProps(): AppOverlayLayerProps {
     setFilters,
     selectedCondominium: null,
     bookingPayload: null,
+    checkoutGuestPrefill: { fullName: '', email: '', phone: '' },
     accountModalMode: null,
     properties: [],
     isSofiaOpen: false,

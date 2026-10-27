@@ -63,6 +63,17 @@ return [
         'webhook_header_name' => env('CIELO_SANDBOX_WEBHOOK_HEADER_NAME'),
         'webhook_header_value' => env('CIELO_SANDBOX_WEBHOOK_HEADER_VALUE'),
         'webhook_queue_connection' => env('CIELO_SANDBOX_WEBHOOK_QUEUE_CONNECTION', 'database'),
+        'checkout_environment' => env('CIELO_ENVIRONMENT', 'sandbox'),
+        'checkout_merchant_id' => env('CIELO_MERCHANT_ID'),
+        'checkout_merchant_key' => env('CIELO_MERCHANT_KEY'),
+        'checkout_sop_client_id' => env('CIELO_SOP_CLIENT_ID'),
+        'checkout_sop_client_secret' => env('CIELO_SOP_CLIENT_SECRET'),
+        'checkout_transaction_base_url' => env('CIELO_ENVIRONMENT', 'sandbox') === 'production'
+            ? 'https://api.cieloecommerce.cielo.com.br'
+            : 'https://apisandbox.cieloecommerce.cielo.com.br',
+        'checkout_query_base_url' => env('CIELO_ENVIRONMENT', 'sandbox') === 'production'
+            ? 'https://apiquery.cieloecommerce.cielo.com.br'
+            : 'https://apiquerysandbox.cieloecommerce.cielo.com.br',
     ],
 
     'supabase' => [

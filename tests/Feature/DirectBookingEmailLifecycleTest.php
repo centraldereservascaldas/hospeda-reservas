@@ -19,6 +19,13 @@ class DirectBookingEmailLifecycleTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['direct-booking.send_confirmation_email' => true]);
+    }
+
     public function test_freshly_queued_confirmation_is_sent_once_even_if_job_runs_twice(): void
     {
         Queue::fake();

@@ -17,6 +17,12 @@ class RecoverDirectBookingConfirmationEmails extends Command
      */
     public function handle(DirectBookingEmailDispatcher $dispatcher): int
     {
+        if (! config('direct-booking.send_confirmation_email', false)) {
+            $this->info('O e-mail próprio de confirmação está desativado; a Stays notificará o hóspede.');
+
+            return self::SUCCESS;
+        }
+
         DirectBookingEmail::query()
             ->whereNotIn('status', ['sent', 'skipped'])
             ->where('created_at', '<=', now()->subHours(DirectBookingEmail::RETRY_WINDOW_HOURS))

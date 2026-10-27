@@ -45,6 +45,10 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
      */
     public function handle(): void
     {
+        if (! config('direct-booking.send_confirmation_email', false)) {
+            return;
+        }
+
         $email = DB::transaction(function (): ?DirectBookingEmail {
             $email = DirectBookingEmail::query()->lockForUpdate()->findOrFail($this->emailId);
             if (in_array($email->status, ['sent', 'skipped'], true)) {
@@ -112,7 +116,7 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
             return;
         }
 
-        $order = DirectBookingOrder::query()->find($email->direct_booking_order_id);
+        $order = $email->order;
         if ($order === null || ! $this->hasConfirmedReservation($order)) {
             $this->markSkipped($email->id);
 

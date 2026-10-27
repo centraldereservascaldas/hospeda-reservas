@@ -94,7 +94,7 @@ class CheckDirectBookingReadiness extends Command
     private function paymentProviderChecks(): array
     {
         $provider = config('direct-booking.payment_provider', 'mercadopago');
-        $checks = ['DIRECT_BOOKING_PAYMENT_PROVIDER' => in_array($provider, ['mercadopago', 'cielo_sandbox'], true)];
+        $checks = ['DIRECT_BOOKING_PAYMENT_PROVIDER' => in_array($provider, ['mercadopago', 'cielo_sandbox', 'cielo_checkout'], true)];
 
         if ($provider === 'mercadopago') {
             return $checks + [
@@ -111,6 +111,15 @@ class CheckDirectBookingReadiness extends Command
                 'CIELO_SANDBOX_SOP_CLIENT_ID' => $this->isConfiguredString(config('services.cielo.sop_client_id')),
                 'CIELO_SANDBOX_SOP_CLIENT_SECRET' => $this->isConfiguredString(config('services.cielo.sop_client_secret')),
                 'CIELO_SANDBOX_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady(config('services.cielo.webhook_queue_connection')),
+            ];
+        }
+
+        if ($provider === 'cielo_checkout') {
+            return $checks + [
+                'CIELO_MERCHANT_ID' => $this->isConfiguredString(config('services.cielo.checkout_merchant_id')),
+                'CIELO_SOP_CLIENT_ID' => $this->isConfiguredString(config('services.cielo.checkout_sop_client_id')),
+                'CIELO_SOP_CLIENT_SECRET' => $this->isConfiguredString(config('services.cielo.checkout_sop_client_secret')),
+                'CIELO_ENVIRONMENT' => in_array(config('services.cielo.checkout_environment'), ['sandbox', 'production'], true),
             ];
         }
 

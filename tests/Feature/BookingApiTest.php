@@ -211,6 +211,19 @@ class BookingApiTest extends TestCase
         $this->assertDatabaseCount('direct_booking_orders', 0);
     }
 
+    public function test_checkout_requires_an_external_mailer_only_when_its_own_confirmation_email_is_enabled(): void
+    {
+        $this->configureCheckoutPaymentReadiness();
+        config(['direct-booking.send_confirmation_email' => true]);
+        Http::preventStrayRequests();
+
+        $this->postJson('/api/checkout', $this->checkoutPayload(3001), ['Idempotency-Key' => 'checkout-email-opt-in-001'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'payments_disabled');
+
+        $this->assertDatabaseCount('direct_booking_orders', 0);
+    }
+
     public function test_checkout_returns_503_when_accepted_terms_version_does_not_match_the_server_version(): void
     {
         $this->configureApprovedCheckoutTerms();
@@ -492,6 +505,7 @@ class BookingApiTest extends TestCase
             'direct-booking.enabled' => true,
             'direct-booking.payments_enabled' => true,
             'direct-booking.confirmation_enabled' => true,
+            'direct-booking.send_confirmation_email' => false,
             'direct-booking.stays_payment_type' => 'credit',
             'direct-booking.stays_payment_provider_id' => 'test-provider',
             'direct-booking.reservation_hold_minutes' => 60,
@@ -501,8 +515,7 @@ class BookingApiTest extends TestCase
             'services.mercadopago.access_token' => 'test-access-token',
             'services.mercadopago.webhook_secret' => 'test-webhook-secret',
             'services.mercadopago.webhook_queue_connection' => 'database',
-            'mail.default' => 'smtp',
-            'mail.mailers.smtp.transport' => 'smtp',
+            'mail.default' => 'log',
         ]);
     }
 }

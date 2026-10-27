@@ -7,6 +7,7 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysReservationService;
 use App\Services\Payments\CieloCheckoutPaymentService;
+use App\Services\Payments\CieloClient;
 use App\Services\Payments\CieloSilentOrderPostClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\Payments\MercadoPagoClient;
@@ -57,6 +58,7 @@ class GatewayUnknownProviderTest extends TestCase
         $mercadoPago->shouldNotReceive('getPayment');
         $payments = new DirectCheckoutPaymentService(
             $mercadoPago,
+            $this->mock(CieloClient::class),
             $this->mock(DirectStaysReservationService::class),
             $this->mock(CieloCheckoutPaymentService::class),
             $this->mock(CieloSilentOrderPostClient::class),

@@ -130,6 +130,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             'direct-booking.enabled' => true,
             'direct-booking.payments_enabled' => true,
             'direct-booking.confirmation_enabled' => true,
+            'direct-booking.send_confirmation_email' => true,
             'direct-booking.live_payments_enabled' => false,
             'direct-booking.pilot_listing_ids' => ['JQ08G', 'synthetic-pilot-2'],
             'direct-booking.stays_payment_type' => 'credit',

@@ -52,6 +52,12 @@ const RecoveryLinkConfirmationPage = lazy(() =>
   ),
 );
 
+const CieloCheckoutPreviewPage = lazy(() =>
+  import('./components/booking/CieloCheckoutPreviewPage').then(({ CieloCheckoutPreviewPage }) => ({
+    default: CieloCheckoutPreviewPage,
+  })),
+);
+
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
 function CheckoutResumeEntry({ reference }: { reference: string }) {
@@ -468,6 +474,17 @@ function MarketplaceApp() {
         setFilters={setFilters}
         selectedCondominium={selectedCondominium}
         bookingPayload={bookingPayload}
+        checkoutGuestPrefill={{
+          fullName: String(
+            accountSession?.user.user_metadata?.full_name ||
+              accountSession?.user.user_metadata?.name ||
+              '',
+          ),
+          email: accountSession?.user.email || '',
+          phone: String(
+            accountSession?.user.phone || accountSession?.user.user_metadata?.phone || '',
+          ),
+        }}
         accountModalMode={accountModalMode}
         accountReturnFocusRef={accountButtonRef}
         properties={properties}
@@ -511,6 +528,20 @@ export default function App() {
         : normalizedPathname === '/cancelamento'
           ? 'cancelamento'
           : null;
+
+  if (import.meta.env.DEV && pathname === '/checkout-preview/cielo') {
+    return (
+      <Suspense
+        fallback={
+          <main className="min-h-screen bg-[#f7f4ee] p-8" role="status">
+            Carregando prévia…
+          </main>
+        }
+      >
+        <CieloCheckoutPreviewPage />
+      </Suspense>
+    );
+  }
 
   if (legalSlug) {
     return <LegalDocumentPage slug={legalSlug} />;

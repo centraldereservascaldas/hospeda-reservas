@@ -10,6 +10,7 @@ interface CieloSopCardFormProps {
   amount: string;
   credentials: CheckoutAccessCredentials | null;
   onAttemptFinished: () => void;
+  previewOnly?: boolean;
 }
 
 type FormState = 'loading' | 'ready' | 'error';
@@ -22,17 +23,23 @@ export function CieloSopCardForm({
   amount,
   credentials,
   onAttemptFinished,
+  previewOnly = false,
 }: CieloSopCardFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const accessTokenRef = useRef<string | null>(null);
   const submittingRef = useRef(false);
   const mountedRef = useRef(false);
   const sopTimeoutRef = useRef<number | null>(null);
-  const [formState, setFormState] = useState<FormState>('loading');
+  const [formState, setFormState] = useState<FormState>(previewOnly ? 'ready' : 'loading');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (previewOnly) {
+      setFormState('ready');
+      return undefined;
+    }
+
     let isCurrent = true;
     mountedRef.current = true;
     setFormState('loading');
@@ -68,7 +75,7 @@ export function CieloSopCardForm({
         sopTimeoutRef.current = null;
       }
     };
-  }, [credentials, reference]);
+  }, [credentials, previewOnly, reference]);
 
   const submitPaymentToken = useCallback(
     async (paymentToken: string): Promise<void> => {
@@ -146,6 +153,7 @@ export function CieloSopCardForm({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
     event.preventDefault();
+    if (previewOnly) return;
     if (
       formState !== 'ready' ||
       isSubmitting ||
@@ -208,11 +216,20 @@ export function CieloSopCardForm({
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-4" noValidate>
+      {previewOnly && (
+        <p
+          className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-950"
+          role="status"
+        >
+          Prévia visual: não insira dados reais. Este formulário está desativado e não envia
+          informações nem realiza cobranças.
+        </p>
+      )}
       <div className="rounded-xl bg-neutral-50 p-4 text-sm text-neutral-700">
         <p className="font-bold text-neutral-950">Pagamento seguro com cartão</p>
         <p className="mt-1">{moneyFormatter.format(Number(amount))} · ambiente de testes Cielo</p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <fieldset disabled={previewOnly} className="grid gap-4 sm:grid-cols-2 disabled:opacity-65">
         <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
           Número do cartão
           <input
@@ -265,7 +282,7 @@ export function CieloSopCardForm({
             className="min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
           />
         </label>
-      </div>
+      </fieldset>
       {formState === 'loading' && (
         <p role="status" className="text-sm text-neutral-700">
           Preparando o formulário seguro…
@@ -278,10 +295,14 @@ export function CieloSopCardForm({
       )}
       <button
         type="submit"
-        disabled={formState !== 'ready' || isSubmitting}
+        disabled={previewOnly || formState !== 'ready' || isSubmitting}
         className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-orange-800 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
       >
-        {isSubmitting ? 'Enviando pagamento…' : 'Pagar com cartão'}
+        {previewOnly
+          ? 'Pagamento desativado na prévia'
+          : isSubmitting
+            ? 'Enviando pagamento…'
+            : 'Pagar com cartão'}
       </button>
       <p className="text-xs leading-5 text-neutral-600">
         Os dados do cartão são enviados diretamente à Cielo para gerar um token temporário de

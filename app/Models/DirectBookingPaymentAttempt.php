@@ -98,4 +98,37 @@ class DirectBookingPaymentAttempt extends Model
 
         return ['copyPaste' => $copyPaste, 'qrCodeBase64' => $qrCodeBase64];
     }
+
+    public function safeCieloCheckoutUrl(bool $orderAllowsPayment): ?string
+    {
+        if (! $orderAllowsPayment
+            || ! config('direct-booking.enabled', false)
+            || ! config('direct-booking.payments_enabled', false)
+            || ! config('direct-booking.confirmation_enabled', false)
+            || $this->gateway_provider !== 'cielo_checkout'
+            || ! in_array($this->status, ['pending', 'in_process'], true)
+            || $this->expires_at?->isFuture() !== true) {
+            return null;
+        }
+
+        $checkoutUrl = $this->gateway_retry_payload['checkoutUrl'] ?? null;
+        if (! is_string($checkoutUrl)) {
+            return null;
+        }
+
+        $parts = parse_url($checkoutUrl);
+        if (! is_array($parts)
+            || ($parts['scheme'] ?? null) !== 'https'
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || ! in_array(strtolower((string) ($parts['host'] ?? '')), [
+                'cieloecommerce.cielo.com.br',
+                'cielolink.com.br',
+                'www.cielolink.com.br',
+            ], true)) {
+            return null;
+        }
+
+        return $checkoutUrl;
+    }
 }

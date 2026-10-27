@@ -17,6 +17,7 @@ import type {
 } from '../../services/checkoutApi';
 import { MercadoPagoCardForm } from './MercadoPagoCardForm';
 import { CieloSopCardForm } from './CieloSopCardForm';
+import { CieloCheckoutIframe } from './CieloCheckoutIframe';
 import {
   clearCheckoutResumeToken,
   getCheckoutResumeToken,
@@ -432,11 +433,12 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
   const paymentCapabilities = resumeState.kind === 'ready' ? resumeState.data.payment : null;
   const cardPublicKey = paymentCapabilities?.publicKey ?? null;
   const isCieloProvider = paymentCapabilities?.provider === 'cielo_sandbox';
+  const isHostedCieloProvider = paymentCapabilities?.provider === 'cielo_hosted';
   const canStartCardPayment =
     order !== null &&
     paymentCapabilities?.enabled === true &&
     paymentCapabilities.methods.includes('card') &&
-    (isCieloProvider || cardPublicKey !== null) &&
+    (isCieloProvider || isHostedCieloProvider || cardPublicKey !== null) &&
     reservationIsActive &&
     (order.status === 'pre_reservado' || order.status === 'pagamento_recusado') &&
     canRetryPixPayment;
@@ -445,6 +447,10 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
     canStartPixPayment && (!canStartCardPayment || selectedPaymentMethod === 'pix');
   const showCardPaymentForm =
     canStartCardPayment && (!canStartPixPayment || selectedPaymentMethod === 'card');
+  const showActiveCieloCheckout =
+    paymentAttempt?.method === 'card' && typeof paymentAttempt.checkoutUrl === 'string';
+  const showHostedCieloCheckout =
+    isHostedCieloProvider && (showCardPaymentForm || showActiveCieloCheckout);
   const status = order ? getOrderStatusDetails(order) : null;
   const StatusIcon =
     status?.tone === 'positive' ? BadgeCheck : status?.tone === 'attention' ? CircleAlert : Clock3;
@@ -758,87 +764,96 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                     </section>
                   )}
 
-                  {(canStartPixPayment || canStartCardPayment) && order && (
-                    <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
-                      {showPaymentMethodSelector && (
-                        <div className="flex gap-2" role="group" aria-label="Método de pagamento">
-                          <button
-                            type="button"
-                            aria-pressed={selectedPaymentMethod === 'pix'}
-                            onClick={() => setSelectedPaymentMethod('pix')}
-                            className={`min-h-11 rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'pix' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
-                          >
-                            Pix
-                          </button>
-                          <button
-                            type="button"
-                            aria-pressed={selectedPaymentMethod === 'card'}
-                            onClick={() => setSelectedPaymentMethod('card')}
-                            className={`min-h-11 rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'card' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
-                          >
-                            Cartão
-                          </button>
-                        </div>
-                      )}
-
-                      {showPixPaymentAction && (
-                        <div className="space-y-3" aria-labelledby="checkout-start-payment-title">
-                          <div>
-                            <h2 id="checkout-start-payment-title" className="font-extrabold">
-                              {paymentAttempt
-                                ? 'Nova tentativa Pix disponível'
-                                : 'Pré-reserva pronta para pagamento'}
-                            </h2>
-                            <p className="mt-1 text-sm leading-6 text-neutral-700">
-                              {paymentAttempt
-                                ? 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto a pré-reserva estiver válida.'
-                                : 'A cobrança Pix só será solicitada quando você continuar. A confirmação da estadia depende da validação posterior na Stays.'}
-                            </p>
+                  {(canStartPixPayment || canStartCardPayment || showActiveCieloCheckout) &&
+                    order && (
+                      <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+                        {showPaymentMethodSelector && (
+                          <div className="flex gap-2" role="group" aria-label="Método de pagamento">
+                            <button
+                              type="button"
+                              aria-pressed={selectedPaymentMethod === 'pix'}
+                              onClick={() => setSelectedPaymentMethod('pix')}
+                              className={`min-h-11 rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'pix' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
+                            >
+                              Pix
+                            </button>
+                            <button
+                              type="button"
+                              aria-pressed={selectedPaymentMethod === 'card'}
+                              onClick={() => setSelectedPaymentMethod('card')}
+                              className={`min-h-11 rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'card' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
+                            >
+                              Cartão
+                            </button>
                           </div>
-                          {paymentStartError && (
-                            <p className="text-sm text-rose-800" role="alert">
-                              {paymentStartError}
-                            </p>
-                          )}
-                          <button
-                            type="button"
-                            disabled={isStartingPixPayment}
-                            onClick={() => void startPixPayment(order)}
-                            className="inline-flex min-h-11 max-w-full items-center justify-center rounded-full bg-orange-800 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
-                          >
-                            {isStartingPixPayment
-                              ? 'Solicitando Pix…'
-                              : paymentAttempt
-                                ? 'Tentar novamente com Pix'
-                                : 'Gerar pagamento Pix'}
-                          </button>
-                        </div>
-                      )}
+                        )}
 
-                      {showCardPaymentForm && isCieloProvider && (
-                        <CieloSopCardForm
-                          reference={reference}
-                          amount={order.quoteTotal}
-                          credentials={
-                            resumeState.kind === 'ready' ? resumeState.credentials : null
-                          }
-                          onAttemptFinished={() => setRetryKey((current) => current + 1)}
-                        />
-                      )}
-                      {showCardPaymentForm && !isCieloProvider && cardPublicKey && (
-                        <MercadoPagoCardForm
-                          reference={reference}
-                          amount={order.quoteTotal}
-                          publicKey={cardPublicKey}
-                          credentials={
-                            resumeState.kind === 'ready' ? resumeState.credentials : null
-                          }
-                          isPixAvailable={canStartPixPayment}
-                          onAttemptFinished={() => setRetryKey((current) => current + 1)}
-                        />
-                      )}
-                    </section>
-                  )}
+                        {showPixPaymentAction && (
+                          <div className="space-y-3" aria-labelledby="checkout-start-payment-title">
+                            <div>
+                              <h2 id="checkout-start-payment-title" className="font-extrabold">
+                                {paymentAttempt
+                                  ? 'Nova tentativa Pix disponível'
+                                  : 'Pré-reserva pronta para pagamento'}
+                              </h2>
+                              <p className="mt-1 text-sm leading-6 text-neutral-700">
+                                {paymentAttempt
+                                  ? 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto a pré-reserva estiver válida.'
+                                  : 'A cobrança Pix só será solicitada quando você continuar. A confirmação da estadia depende da validação posterior na Stays.'}
+                              </p>
+                            </div>
+                            {paymentStartError && (
+                              <p className="text-sm text-rose-800" role="alert">
+                                {paymentStartError}
+                              </p>
+                            )}
+                            <button
+                              type="button"
+                              disabled={isStartingPixPayment}
+                              onClick={() => void startPixPayment(order)}
+                              className="inline-flex min-h-11 max-w-full items-center justify-center rounded-full bg-orange-800 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
+                            >
+                              {isStartingPixPayment
+                                ? 'Solicitando Pix…'
+                                : paymentAttempt
+                                  ? 'Tentar novamente com Pix'
+                                  : 'Gerar pagamento Pix'}
+                            </button>
+                          </div>
+                        )}
+
+                        {showCardPaymentForm && isCieloProvider && (
+                          <CieloSopCardForm
+                            reference={reference}
+                            amount={order.quoteTotal}
+                            credentials={
+                              resumeState.kind === 'ready' ? resumeState.credentials : null
+                            }
+                            onAttemptFinished={() => setRetryKey((current) => current + 1)}
+                          />
+                        )}
+                        {showHostedCieloCheckout && (
+                          <CieloCheckoutIframe
+                            reference={reference}
+                            amount={order.quoteTotal}
+                            checkoutUrl={paymentAttempt?.checkoutUrl ?? null}
+                            onAttemptStarted={() => setRetryKey((current) => current + 1)}
+                          />
+                        )}
+                        {showCardPaymentForm && !isCieloProvider && cardPublicKey && (
+                          <MercadoPagoCardForm
+                            reference={reference}
+                            amount={order.quoteTotal}
+                            publicKey={cardPublicKey}
+                            credentials={
+                              resumeState.kind === 'ready' ? resumeState.credentials : null
+                            }
+                            isPixAvailable={canStartPixPayment}
+                            onAttemptFinished={() => setRetryKey((current) => current + 1)}
+                          />
+                        )}
+                      </section>
+                    )}
 
                   {paymentAttempt && (
                     <section
