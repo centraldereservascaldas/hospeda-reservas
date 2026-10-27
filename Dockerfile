@@ -28,9 +28,9 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/html/public \
     LOG_CHANNEL=stderr
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl libpq-dev libpq5 unzip \
-    && docker-php-ext-install opcache pdo_pgsql pdo_sqlite \
-    && apt-get purge -y --auto-remove libpq-dev \
+    && apt-get install -y --no-install-recommends curl libpq-dev libpq5 libsqlite3-dev libsqlite3-0 unzip \
+    && docker-php-ext-install pdo_pgsql pdo_sqlite \
+    && apt-get purge -y --auto-remove libpq-dev libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/* \
     && a2enmod headers rewrite \
     && sed -ri "s!/var/www/html!${APACHE_DOCUMENT_ROOT}!g" /etc/apache2/sites-available/*.conf \

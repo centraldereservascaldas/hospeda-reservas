@@ -135,14 +135,17 @@ test('new cancellation request displays the returned receipt and received status
   crcnBackendApi.requestDirectBookingCancellation = async () => ({
     cancellationReceipt: cancellationOrder.cancellationReceipt,
     alreadyRequested: false,
-    message: 'A solicitação de cancelamento foi recebida para análise da Central; o cancelamento ainda não foi concluído.',
+    message:
+      'A solicitação de cancelamento foi recebida para análise da Central; o cancelamento ainda não foi concluído.',
   });
 
   try {
     const { getByRole, getByText } = render(
       React.createElement(TripsView, {
         reservations: [],
-        directBookingOrders: [{ ...cancellationOrder, status: 'confirmado', cancellationReceipt: null }],
+        directBookingOrders: [
+          { ...cancellationOrder, status: 'confirmado', cancellationReceipt: null },
+        ],
         accessToken: 'access-token',
         currency: 'BRL',
         onCancelReservation: async () => {},
@@ -160,8 +163,9 @@ test('new cancellation request displays the returned receipt and received status
         ),
       );
       assert.equal(
-        document.body.textContent?.match(/Protocolo CANCEL-0123456789abcdef0123456789abcdef01234567/g)
-          ?.length,
+        document.body.textContent?.match(
+          /Protocolo CANCEL-0123456789abcdef0123456789abcdef01234567/g,
+        )?.length,
         2,
       );
     });
