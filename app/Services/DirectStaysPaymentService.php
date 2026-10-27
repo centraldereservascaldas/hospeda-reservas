@@ -103,7 +103,15 @@ class DirectStaysPaymentService
             return $this->attention($order, 'stays_payment_mapping_unconfigured', 'O tipo e o provedor do lançamento financeiro Stays ainda não foram aprovados e configurados.');
         }
 
-        $marker = 'CRCN_DIRECT_ORDER:'.$order->id.':MP:'.$attempt->gateway_payment_id;
+        $gateway = match ($attempt->gateway_provider) {
+            'cielo' => ['marker' => 'CIELO', 'name' => 'CRCN Cielo'],
+            'cielo_checkout' => ['marker' => 'CIELO_CHECKOUT', 'name' => 'CRCN Checkout Cielo'],
+            default => ['marker' => 'MP', 'name' => 'CRCN Mercado Pago'],
+        };
+        $marker = 'CRCN_DIRECT_ORDER:'.$order->id.':'.$gateway['marker'].':'.$attempt->gateway_payment_id;
+        $legacyMarker = $attempt->gateway_provider === 'mercadopago'
+            ? $marker
+            : 'CRCN_DIRECT_ORDER:'.$order->id.':MP:'.$attempt->gateway_payment_id;
         $paidAt = $attempt->paid_at?->toDateString() ?? now()->toDateString();
         $payload = [
             'type' => $paymentType,
@@ -111,7 +119,7 @@ class DirectStaysPaymentService
             'status' => 'completed',
             'expirationDate' => $attempt->expires_at?->toDateString() ?? $paidAt,
             'paymentDate' => $paidAt,
-            'name' => 'CRCN Mercado Pago',
+            'name' => $gateway['name'],
             'desc' => $marker,
         ];
         $payload['_idpaymentProvider'] = trim($providerId);
@@ -122,7 +130,9 @@ class DirectStaysPaymentService
             return $this->attention($order, 'stays_payment_lookup_failed', 'Não foi possível consultar os lançamentos da reserva Stays.');
         }
 
-        $matches = collect($payments)->filter(fn (array $payment): bool => ($payment['desc'] ?? null) === $marker)->values();
+        $matches = collect($payments)
+            ->filter(fn (array $payment): bool => in_array(($payment['desc'] ?? null), [$marker, $legacyMarker], true))
+            ->values();
         if ($matches->count() > 1) {
             return $this->attention($order, 'stays_payment_duplicate', 'Há mais de um lançamento Stays para o pagamento; a confirmação foi interrompida.');
         }
@@ -160,7 +170,9 @@ class DirectStaysPaymentService
         $paymentsAfterWrite = $this->findPayments($endpoint);
         $reconciled = $paymentsAfterWrite === null
             ? collect()
-            : collect($paymentsAfterWrite)->filter(fn (array $payment): bool => ($payment['desc'] ?? null) === $marker)->values();
+            : collect($paymentsAfterWrite)
+                ->filter(fn (array $payment): bool => in_array(($payment['desc'] ?? null), [$marker, $legacyMarker], true))
+                ->values();
         if ($reconciled->count() === 1 && $this->matchesPayment($reconciled->first(), $attempt)) {
             $this->markActionSucceeded($action, (string) ($reconciled->first()['_id'] ?? ''), $this->safePaymentSnapshot($reconciled->first()));
 

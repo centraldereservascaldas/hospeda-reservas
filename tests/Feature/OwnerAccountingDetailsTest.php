@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\OwnerAccess;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
-use Illuminate\Http\Client\Response as ClientResponse;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -23,7 +22,7 @@ class OwnerAccountingDetailsTest extends TestCase
             'services.stays.base_url' => 'https://crcn.stays.net/external/v1',
         ]);
         Http::preventStrayRequests();
-        Http::fake(function (ClientRequest $request): ClientResponse {
+        Http::fake(function (ClientRequest $request) {
             $path = parse_url($request->url(), PHP_URL_PATH);
 
             return match (true) {

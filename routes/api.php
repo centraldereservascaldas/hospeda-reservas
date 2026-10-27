@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CheckoutPaymentController;
+use App\Http\Controllers\Api\CieloSopController;
 use App\Http\Controllers\Api\GuestReservationController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OwnerAccessController;
@@ -49,7 +50,10 @@ Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->mid
 Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');
 Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
+Route::post('/checkout/{publicReference}/cielo-checkout', [CheckoutPaymentController::class, 'createCieloCheckout'])->middleware('throttle:5,1');
 Route::post('/checkout/{publicReference}/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
+Route::get('/checkout/{publicReference}/cielo/sop-token', [CieloSopController::class, 'accessToken'])->middleware('throttle:10,1');
+Route::post('/webhooks/cielo-checkout', [CheckoutPaymentController::class, 'cieloCheckoutNotification'])->middleware('throttle:120,1');
 Route::post('/webhooks/mercadopago', MercadoPagoWebhookController::class)->middleware('throttle:120,1');
 
 Route::get('/external/v1/content/listings', [AccommodationController::class, 'staysListings']);

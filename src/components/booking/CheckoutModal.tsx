@@ -34,6 +34,7 @@ interface CheckoutModalProps {
     discount: number;
     quote: CalculatedPriceResponse;
   } | null;
+  guestPrefill: { fullName: string; email: string; phone: string };
   currency: Currency;
 }
 
@@ -41,6 +42,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   isOpen,
   onClose,
   bookingData,
+  guestPrefill,
   currency,
 }) => {
   const [approvedTerms, setApprovedTerms] = useState<{
@@ -54,12 +56,34 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [quoteOverride, setQuoteOverride] = useState<CalculatedPriceResponse | null>(null);
+  const [guestDetails, setGuestDetails] = useState({ fullName: '', email: '', phone: '' });
   const checkoutSubmissionInFlightRef = useRef(false);
+  const guestPrefillRef = useRef(guestPrefill);
+  guestPrefillRef.current = guestPrefill;
   const fieldId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useDialogFocus(isOpen && bookingData !== null, onClose, {
     initialFocusRef: closeButtonRef,
   });
+
+  useEffect(() => {
+    if (!isOpen) {
+      setGuestDetails({ fullName: '', email: '', phone: '' });
+      return;
+    }
+
+    setGuestDetails({ ...guestPrefillRef.current });
+  }, [isOpen, bookingData?.property.id]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setGuestDetails((current) => ({
+      fullName: current.fullName || guestPrefill.fullName,
+      email: current.email || guestPrefill.email,
+      phone: current.phone || guestPrefill.phone,
+    }));
+  }, [guestPrefill.email, guestPrefill.fullName, guestPrefill.phone, isOpen]);
 
   useEffect(() => {
     if (!isOpen || !bookingData) return;
@@ -143,22 +167,24 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const canSubmit =
     readiness?.ready === true && approvedTerms !== null && termsAccepted && !isSubmitting;
+  const hasPixPayment = readiness?.payment.methods.includes('pix') === true;
+  const hasCardPayment = readiness?.payment.methods.includes('card') === true;
+  const hasAvailablePaymentMethod = readiness?.payment.enabled === true && readiness.payment.methods.length > 0;
 
   const handleCheckoutSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setSubmitError(null);
 
     if (checkoutSubmissionInFlightRef.current) return;
-    if (!canSubmit || !approvedTerms || !readiness?.payment.methods.includes('pix')) {
+    if (!canSubmit || !approvedTerms || !hasAvailablePaymentMethod) {
       setSubmitError('A compra ainda não está pronta para continuar.');
       return;
     }
 
-    const formData = new FormData(event.currentTarget);
     const guest = {
-      fullName: String(formData.get('name') ?? '').trim(),
-      email: String(formData.get('email') ?? '').trim(),
-      phone: String(formData.get('phone') ?? '').trim(),
+      fullName: guestDetails.fullName.trim(),
+      email: guestDetails.email.trim(),
+      phone: guestDetails.phone.trim(),
     };
     const listingId = property.id;
     const quoteTotal = currentQuote?.total ?? totalAmount;
@@ -310,7 +336,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       Dados do responsável pela reserva
                     </h3>
                     <p className="mt-1 text-xs text-neutral-600">
-                      Informe os dados de contato para continuar com a pré-reserva e o pagamento.
+                      {guestPrefill.email
+                        ? 'Confira seus dados e complete o telefone se ele ainda não estiver cadastrado.'
+                        : 'Informe os dados de contato para continuar com a pré-reserva e o pagamento.'}
                     </p>
                   </div>
                   <fieldset disabled={!readiness?.ready || isSubmitting} className="checkout-modal-inputs flex flex-col gap-2">
@@ -326,6 +354,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         name="name"
                         autoComplete="name"
                         required
+                        value={guestDetails.fullName}
+                        onChange={(event) => setGuestDetails((current) => ({ ...current, fullName: event.target.value }))}
                         className="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus-visible:ring-2 focus-visible:ring-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                       />
                     </div>
@@ -342,6 +372,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         type="email"
                         autoComplete="email"
                         required
+                        value={guestDetails.email}
+                        onChange={(event) => setGuestDetails((current) => ({ ...current, email: event.target.value }))}
                         className="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus-visible:ring-2 focus-visible:ring-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                       />
                     </div>
@@ -358,6 +390,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         type="tel"
                         autoComplete="tel"
                         required
+                        value={guestDetails.phone}
+                        onChange={(event) => setGuestDetails((current) => ({ ...current, phone: event.target.value }))}
                         className="mt-1.5 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 outline-none focus-visible:ring-2 focus-visible:ring-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
                       />
                     </div>
@@ -455,8 +489,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                         ? 'Preparando seu pedido…'
                         : readinessLoading
                           ? 'Verificando compra no site…'
-                          : readiness?.ready && readiness.payment.methods.includes('pix')
+                          : readiness?.ready && hasPixPayment
                             ? 'Continuar para pagamento Pix'
+                            : readiness?.ready && hasCardPayment
+                              ? 'Continuar para pagamento com cartão'
                             : 'Compra no site em preparação'}
                     </span>
                   </button>
@@ -464,9 +500,11 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     id={`${fieldId}-checkout-status`}
                     className="text-center text-[10px] text-neutral-600 mt-2"
                   >
-                    {readiness?.ready && readiness.payment.methods.includes('pix')
+                    {readiness?.ready && hasPixPayment
                       ? 'O pedido será validado e pré-reservado antes de você iniciar o pagamento Pix.'
-                      : 'Pix e cartão ainda não estão disponíveis. Nenhum pedido, reserva ou pagamento será iniciado.'}
+                      : readiness?.ready && hasCardPayment
+                        ? 'O pedido será validado e pré-reservado antes de você continuar para o checkout seguro da Cielo.'
+                        : 'Pix e cartão ainda não estão disponíveis. Nenhum pedido, reserva ou pagamento será iniciado.'}
                   </p>
                 </div>
               </form>

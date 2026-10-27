@@ -123,6 +123,7 @@ export interface CheckoutPaymentAttemptSummary {
   currency: 'BRL';
   expiresAt: string | null;
   paidAt: string | null;
+  checkoutUrl: string | null;
   pix: { copyPaste: string | null; qrCodeBase64: string | null } | null;
 }
 
@@ -140,7 +141,7 @@ export type CheckoutPaymentRequestPayload =
       cardholderName: string;
       cardholderEmail: string;
       issuerId?: number;
-      payerIdentification: { type: 'CPF' | 'CNPJ'; number: string };
+      payerIdentification?: { type: 'CPF' | 'CNPJ'; number: string };
       idempotencyKey: string;
     };
 
@@ -156,6 +157,12 @@ export type CheckoutPaymentResult =
   | { kind: 'invalid'; fieldErrors?: Record<string, string[]> }
   | { kind: 'not-found' }
   | { kind: 'unavailable' };
+
+export interface CieloSopAccessToken {
+  accessToken: string;
+  expiresAt: string;
+  environment: 'sandbox' | 'production';
+}
 
 export interface CheckoutResponse {
   success: boolean;
@@ -287,7 +294,8 @@ const isCheckoutPaymentAttempt = (value: unknown): value is CheckoutPaymentAttem
     (value.expiresAt !== null &&
       (typeof value.expiresAt !== 'string' || !Number.isFinite(Date.parse(value.expiresAt)))) ||
     (value.paidAt !== null &&
-      (typeof value.paidAt !== 'string' || !Number.isFinite(Date.parse(value.paidAt))))
+      (typeof value.paidAt !== 'string' || !Number.isFinite(Date.parse(value.paidAt)))) ||
+    (value.checkoutUrl !== null && !isSafeCieloCheckoutUrl(value.checkoutUrl))
   ) {
     return false;
   }
@@ -305,6 +313,20 @@ const isCheckoutPaymentAttempt = (value: unknown): value is CheckoutPaymentAttem
         value.pix.qrCodeBase64.length <= 100_000 &&
         /^[A-Za-z0-9+/]+={0,2}$/.test(value.pix.qrCodeBase64)))
   );
+};
+
+const isSafeCieloCheckoutUrl = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && [
+      'cieloecommerce.cielo.com.br',
+      'cielolink.com.br',
+      'www.cielolink.com.br',
+    ].includes(url.hostname.toLowerCase()) && url.username === '' && url.password === '';
+  } catch {
+    return false;
+  }
 };
 
 const isCheckoutPaymentResponse = (
@@ -955,6 +977,106 @@ class CrcnBackendApiService {
       };
     } catch {
       return { kind: 'unavailable' };
+    }
+  }
+
+  public async createCieloCheckout(
+    reference: string,
+    resumeToken: string,
+    expectedAmount: string,
+    idempotencyKey: string,
+  ): Promise<CheckoutPaymentResult> {
+    if (
+      !/^[A-Za-z0-9]{40}$/.test(reference) ||
+      !/^[A-Za-z0-9]{64}$/.test(resumeToken) ||
+      !/^[A-Za-z0-9._~-]{16,128}$/.test(idempotencyKey) ||
+      !/^\d{1,8}\.\d{2}$/.test(expectedAmount) ||
+      Number(expectedAmount) <= 0
+    ) {
+      return { kind: 'unavailable' };
+    }
+
+    try {
+      const response = await fetch(
+        `/api/checkout/${encodeURIComponent(reference)}/cielo-checkout`,
+        {
+          method: 'POST',
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
+            'X-Checkout-Resume-Token': resumeToken,
+          },
+          body: JSON.stringify({ idempotencyKey }),
+        },
+      );
+
+      if (response.status === 404) return { kind: 'not-found' };
+      if (response.status === 422) return { kind: 'invalid' };
+
+      const json: unknown = await response.json();
+      if (
+        !isCheckoutPaymentResponse(json) ||
+        (response.ok && !json.success) ||
+        (!response.ok && json.success) ||
+        (json.payment &&
+          (json.payment.method !== 'card' ||
+            Math.round(Number(json.payment.amount) * 100) !==
+              Math.round(Number(expectedAmount) * 100))) ||
+        (json.success && json.payment?.checkoutUrl === null)
+      ) {
+        return { kind: 'unavailable' };
+      }
+
+      return {
+        kind: 'response',
+        success: json.success,
+        code: json.code,
+        message: json.message,
+        replayed: json.replayed,
+        payment: json.payment,
+      };
+    } catch {
+      return { kind: 'unavailable' };
+    }
+  }
+
+  public async getCieloSopAccessToken(
+    reference: string,
+    resumeToken: string,
+  ): Promise<CieloSopAccessToken | null> {
+    if (!/^[A-Za-z0-9]{40}$/.test(reference) || !/^[A-Za-z0-9]{64}$/.test(resumeToken)) {
+      return null;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/checkout/${encodeURIComponent(reference)}/cielo/sop-token`,
+        {
+          cache: 'no-store',
+          headers: { 'X-Checkout-Resume-Token': resumeToken },
+        },
+      );
+      if (!response.ok) return null;
+      const value: unknown = await response.json();
+      if (
+        !isRecord(value) ||
+        value.success !== true ||
+        typeof value.accessToken !== 'string' ||
+        value.accessToken.length < 20 ||
+        typeof value.expiresAt !== 'string' ||
+        (value.environment !== 'sandbox' && value.environment !== 'production')
+      ) {
+        return null;
+      }
+
+      return {
+        accessToken: value.accessToken,
+        expiresAt: value.expiresAt,
+        environment: value.environment,
+      };
+    } catch {
+      return null;
     }
   }
 

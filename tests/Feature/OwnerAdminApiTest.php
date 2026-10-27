@@ -87,7 +87,7 @@ class OwnerAdminApiTest extends TestCase
         ]);
 
         $this->withToken('valid-access-token')->getJson('/api/owner/admin/stays-owners?q=ri')
-            ->assertBadGateway()
+            ->assertStatus(502)
             ->assertJsonPath('code', 'stays_owners_unavailable');
     }
 }

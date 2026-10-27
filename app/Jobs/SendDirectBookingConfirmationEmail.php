@@ -43,6 +43,10 @@ class SendDirectBookingConfirmationEmail implements ShouldQueue
      */
     public function handle(): void
     {
+        if (! config('direct-booking.send_confirmation_email', false)) {
+            return;
+        }
+
         $email = null;
         try {
             $email = DB::transaction(function (): ?DirectBookingEmail {

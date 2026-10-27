@@ -288,6 +288,7 @@ class BookingController extends Controller
             ->first();
         $paymentMethods = $payments->availableMethods();
         $pixInstructions = $attempt?->safePixInstructions($order->status->value === 'pagamento_pendente');
+        $cieloCheckoutUrl = $attempt?->safeCieloCheckoutUrl($order->status->value === 'pagamento_pendente');
         $confirmation = null;
         if ($order->status->value === 'confirmado' && $order->payment_status === 'approved') {
             $confirmationAction = $order->staysActions()
@@ -324,6 +325,7 @@ class BookingController extends Controller
                     'currency' => $attempt->currency,
                     'expiresAt' => $attempt->expires_at?->toISOString(),
                     'paidAt' => $attempt->paid_at?->toISOString(),
+                    'checkoutUrl' => $cieloCheckoutUrl,
                     'pix' => $attempt->payment_method === 'pix' ? [
                         'copyPaste' => $pixInstructions['copyPaste'],
                         'qrCodeBase64' => $pixInstructions['qrCodeBase64'],

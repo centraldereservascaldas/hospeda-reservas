@@ -49,6 +49,20 @@ return [
         'webhook_queue_connection' => env('MERCADO_PAGO_WEBHOOK_QUEUE_CONNECTION', 'database'),
     ],
 
+    'cielo' => [
+        'environment' => env('CIELO_ENVIRONMENT', 'sandbox'),
+        'merchant_id' => env('CIELO_MERCHANT_ID'),
+        'merchant_key' => env('CIELO_MERCHANT_KEY'),
+        'sop_client_id' => env('CIELO_SOP_CLIENT_ID'),
+        'sop_client_secret' => env('CIELO_SOP_CLIENT_SECRET'),
+        'transaction_base_url' => env('CIELO_ENVIRONMENT', 'sandbox') === 'production'
+            ? 'https://api.cieloecommerce.cielo.com.br'
+            : 'https://apisandbox.cieloecommerce.cielo.com.br',
+        'query_base_url' => env('CIELO_ENVIRONMENT', 'sandbox') === 'production'
+            ? 'https://apiquery.cieloecommerce.cielo.com.br'
+            : 'https://apiquerysandbox.cieloecommerce.cielo.com.br',
+    ],
+
     'supabase' => [
         'url' => env('SUPABASE_URL', env('VITE_SUPABASE_URL')),
         'anon_key' => env('SUPABASE_ANON_KEY', env('VITE_SUPABASE_ANON_KEY')),

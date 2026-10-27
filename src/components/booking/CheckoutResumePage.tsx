@@ -13,7 +13,7 @@ import type {
   CheckoutResumeResponse,
   DirectBookingOrderSummary,
 } from '../../services/crcnBackendApi';
-import { MercadoPagoCardForm } from './MercadoPagoCardForm';
+import { CieloCheckoutIframe } from './CieloCheckoutIframe';
 import { getCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
 
 const pixIdempotencyStoragePrefix = 'crcn.checkout.pix.';
@@ -410,6 +410,8 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
     canStartPixPayment && (!canStartCardPayment || selectedPaymentMethod === 'pix');
   const showCardPaymentForm =
     canStartCardPayment && (!canStartPixPayment || selectedPaymentMethod === 'card');
+  const showActiveCieloCheckout =
+    paymentAttempt?.method === 'card' && typeof paymentAttempt.checkoutUrl === 'string';
   const status = order ? getOrderStatusDetails(order) : null;
   const StatusIcon =
     status?.tone === 'positive' ? BadgeCheck : status?.tone === 'attention' ? CircleAlert : Clock3;
@@ -650,7 +652,7 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                     </section>
                   )}
 
-                  {(canStartPixPayment || canStartCardPayment) && order && (
+                  {(canStartPixPayment || canStartCardPayment || showActiveCieloCheckout) && order && (
                     <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
                       {showPaymentMethodSelector && (
                         <div className="flex gap-2" role="group" aria-label="Método de pagamento">
@@ -707,12 +709,12 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                         </div>
                       )}
 
-                      {showCardPaymentForm && cardPublicKey && (
-                        <MercadoPagoCardForm
+                      {(showCardPaymentForm || showActiveCieloCheckout) && cardPublicKey === 'cielo-iframe' && (
+                        <CieloCheckoutIframe
                           reference={reference}
                           amount={order.quoteTotal}
-                          publicKey={cardPublicKey}
-                          onAttemptFinished={() => setRetryKey((current) => current + 1)}
+                          checkoutUrl={paymentAttempt?.checkoutUrl ?? null}
+                          onAttemptStarted={() => setRetryKey((current) => current + 1)}
                         />
                       )}
                     </section>

@@ -47,6 +47,7 @@ function createOverlayProps(): AppOverlayLayerProps {
     selectedProperty: null,
     selectedCondominium: null,
     bookingPayload: null,
+    checkoutGuestPrefill: { fullName: '', email: '', phone: '' },
     accountModalMode: null,
     savedPropertyIds: [],
     catalogFocusRef: React.createRef<HTMLElement>(),

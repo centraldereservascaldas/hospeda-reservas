@@ -39,6 +39,12 @@ const CheckoutResumePage = lazy(() =>
   })),
 );
 
+const CieloCheckoutPreviewPage = lazy(() =>
+  import('./components/booking/CieloCheckoutPreviewPage').then(({ CieloCheckoutPreviewPage }) => ({
+    default: CieloCheckoutPreviewPage,
+  })),
+);
+
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
 function MarketplaceApp() {
@@ -269,6 +275,15 @@ function MarketplaceApp() {
         selectedProperty={selectedProperty}
         selectedCondominium={selectedCondominium}
         bookingPayload={bookingPayload}
+        checkoutGuestPrefill={{
+          fullName: String(
+            accountSession?.user.user_metadata?.full_name ||
+              accountSession?.user.user_metadata?.name ||
+              '',
+          ),
+          email: accountSession?.user.email || '',
+          phone: String(accountSession?.user.phone || accountSession?.user.user_metadata?.phone || ''),
+        }}
         accountModalMode={accountModalMode}
         savedPropertyIds={savedPropertyIds}
         catalogFocusRef={catalogFocusRef}
@@ -297,6 +312,14 @@ function MarketplaceApp() {
 }
 
 export default function App() {
+  if (import.meta.env.DEV && window.location.pathname === '/checkout-preview/cielo') {
+    return (
+      <Suspense fallback={<main className="min-h-screen bg-[#f7f4ee] p-8" role="status">Carregando prévia…</main>}>
+        <CieloCheckoutPreviewPage />
+      </Suspense>
+    );
+  }
+
   if (window.location.pathname === '/auth/confirm') {
     return <RecoveryLinkConfirmationPage />;
   }

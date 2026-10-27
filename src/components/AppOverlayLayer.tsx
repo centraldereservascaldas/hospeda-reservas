@@ -50,6 +50,7 @@ export interface AppOverlayLayerProps {
   selectedProperty: Property | null;
   selectedCondominium: CondominiumSummary | null;
   bookingPayload: AppOverlayBookingPayload | null;
+  checkoutGuestPrefill: { fullName: string; email: string; phone: string };
   accountModalMode: AccountModalMode;
   savedPropertyIds: string[];
   catalogFocusRef: RefObject<HTMLElement | null>;
@@ -82,6 +83,7 @@ export function AppOverlayLayer({
   selectedProperty,
   selectedCondominium,
   bookingPayload,
+  checkoutGuestPrefill,
   accountModalMode,
   savedPropertyIds,
   catalogFocusRef,
@@ -141,6 +143,7 @@ export function AppOverlayLayer({
           isOpen={bookingPayload !== null}
           onClose={onCloseCheckout}
           bookingData={bookingPayload}
+          guestPrefill={checkoutGuestPrefill}
           currency={currency}
         />
       </DeferredModal>

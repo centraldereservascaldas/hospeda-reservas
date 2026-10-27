@@ -20,16 +20,19 @@ class DirectCheckoutPaymentService
 {
     public function __construct(
         private readonly MercadoPagoClient $mercadoPago,
+        private readonly CieloClient $cielo,
         private readonly DirectStaysReservationService $reservations,
     ) {}
 
     /** @return list<string> */
     public function availableMethods(): array
     {
+        $sendConfirmationEmail = (bool) config('direct-booking.send_confirmation_email', false);
+
         if (! config('direct-booking.enabled', false)
             || ! config('direct-booking.payments_enabled', false)
             || ! config('direct-booking.confirmation_enabled', false)
-            || ! $this->hasExternalMailTransport()) {
+            || ($sendConfirmationEmail && ! $this->hasExternalMailTransport())) {
             return [];
         }
 
@@ -37,8 +40,6 @@ class DirectCheckoutPaymentService
         $staysPaymentProviderId = config('direct-booking.stays_payment_provider_id');
         $staysClientId = config('services.stays.client_id');
         $staysClientSecret = config('services.stays.client_secret');
-        $mercadoPagoAccessToken = config('services.mercadopago.access_token');
-        $mercadoPagoWebhookSecret = config('services.mercadopago.webhook_secret');
         $webhookQueueConnection = (string) config('services.mercadopago.webhook_queue_connection', 'database');
         $notificationQueueConnection = (string) config('direct-booking.notification_queue_connection', 'database');
         $holdMinutes = filter_var(config('direct-booking.reservation_hold_minutes'), FILTER_VALIDATE_INT);
@@ -52,27 +53,18 @@ class DirectCheckoutPaymentService
             || trim($staysClientId) === ''
             || ! is_string($staysClientSecret)
             || trim($staysClientSecret) === ''
-            || ! is_string($mercadoPagoAccessToken)
-            || trim($mercadoPagoAccessToken) === ''
-            || ! is_string($mercadoPagoWebhookSecret)
-            || trim($mercadoPagoWebhookSecret) === ''
+            || ! $this->hasCieloCheckoutConfiguration()
             || $webhookQueueConnection === 'sync'
             || ! config("queue.connections.{$webhookQueueConnection}")
-            || $notificationQueueConnection === 'sync'
-            || ! config("queue.connections.{$notificationQueueConnection}")
+            || ($sendConfirmationEmail && ($notificationQueueConnection === 'sync'
+                || ! config("queue.connections.{$notificationQueueConnection}")))
             || $holdMinutes === false
             || $holdMinutes > 1440
             || $holdMinutes <= $minimumPixMinutes + $safetyMarginMinutes) {
             return [];
         }
 
-        $methods = ['pix'];
-        $mercadoPagoPublicKey = config('services.mercadopago.public_key');
-        if (is_string($mercadoPagoPublicKey) && trim($mercadoPagoPublicKey) !== '') {
-            $methods[] = 'card';
-        }
-
-        return $methods;
+        return ['card'];
     }
 
     /**
@@ -118,14 +110,204 @@ class DirectCheckoutPaymentService
 
     public function publicKey(): ?string
     {
-        $publicKey = config('services.mercadopago.public_key');
-        if (! in_array('card', $this->availableMethods(), true)
-            || ! is_string($publicKey)
-            || trim($publicKey) === '') {
-            return null;
+        return in_array('card', $this->availableMethods(), true) ? 'cielo-iframe' : null;
+    }
+
+    /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
+    public function createCieloCheckoutPage(DirectBookingOrder $order, string $idempotencyKey): array
+    {
+        if (! in_array('card', $this->availableMethods(), true)) {
+            return $this->result(null, 'payments_disabled', 'O pagamento no site ainda não está habilitado.', 503);
         }
 
-        return trim($publicKey);
+        $amountInCents = MoneyAmount::toCents($order->quote_total);
+        if ($order->currency !== 'BRL' || $amountInCents === null || $amountInCents <= 0) {
+            return $this->result(null, 'unsupported_payment_amount', 'O valor ou a moeda do pedido não são compatíveis com o Checkout Cielo.', 422);
+        }
+
+        $input = ['paymentMethod' => 'card', 'paymentMethodId' => 'cielo_checkout'];
+        $fingerprint = $this->requestFingerprint($input);
+        $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
+        if ($existingAttempt !== null) {
+            return $this->replay($existingAttempt, $order, $fingerprint);
+        }
+
+        $reservationMatches = $this->reservations->validateReservedOrderForPayment($order);
+        if ($reservationMatches === null) {
+            return $this->result(null, 'reservation_state_unavailable', 'Não foi possível confirmar os dados da pré-reserva na Stays. Nenhum checkout foi criado.', 503);
+        }
+        if (! $reservationMatches) {
+            return $this->result(null, 'stays_reservation_mismatch', 'A pré-reserva não corresponde mais ao pedido. Nenhum checkout foi criado.', 409);
+        }
+
+        try {
+            $attempt = DB::transaction(function () use ($order, $idempotencyKey, $fingerprint): DirectBookingPaymentAttempt|array {
+                $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
+                $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
+                if ($existingAttempt !== null) {
+                    return ['existing' => $existingAttempt];
+                }
+
+                if (! in_array($lockedOrder->status, [DirectBookingOrderStatus::PreReservado, DirectBookingOrderStatus::PagamentoRecusado], true)
+                    || $lockedOrder->stays_reservation_id === null
+                    || $lockedOrder->reservation_status !== 'reserved'
+                    || $lockedOrder->expires_at === null
+                    || $lockedOrder->expires_at->lessThanOrEqualTo(now())) {
+                    return ['error' => 'order_not_payable'];
+                }
+
+                $activeAttemptExists = DirectBookingPaymentAttempt::query()
+                    ->where('direct_booking_order_id', $lockedOrder->id)
+                    ->whereIn('status', ['processing', 'pending', 'in_process', 'approved', 'unknown', 'attention_required'])
+                    ->exists();
+                if ($activeAttemptExists) {
+                    return ['error' => 'payment_attempt_in_progress'];
+                }
+
+                $attempt = DirectBookingPaymentAttempt::query()->create([
+                    'direct_booking_order_id' => $lockedOrder->id,
+                    'idempotency_key' => $idempotencyKey,
+                    'request_fingerprint' => $fingerprint,
+                    'payment_method' => 'card',
+                    'payment_method_id' => 'cielo_checkout',
+                    'status' => 'processing',
+                    'amount' => $lockedOrder->quote_total,
+                    'currency' => $lockedOrder->currency,
+                    'expires_at' => $lockedOrder->expires_at,
+                    'gateway_idempotency_key' => 'CRCN'.Str::upper(Str::random(16)),
+                    'gateway_provider' => 'cielo_checkout',
+                    'gateway_submission_started_at' => now(),
+                    'gateway_submission_count' => 1,
+                ]);
+
+                $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoPendente, ['source' => 'cielo_checkout_started']);
+                $lockedOrder->payment_status = 'pending';
+                $lockedOrder->payment_amount = $lockedOrder->quote_total;
+                $lockedOrder->payment_currency = $lockedOrder->currency;
+                $lockedOrder->payment_method = 'card';
+                $lockedOrder->payment_expires_at = $lockedOrder->expires_at;
+                $lockedOrder->save();
+
+                return $attempt;
+            });
+        } catch (UniqueConstraintViolationException) {
+            $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
+            if ($existingAttempt !== null) {
+                return $this->replay($existingAttempt, $order, $fingerprint);
+            }
+
+            return $this->result(null, 'payment_attempt_conflict', 'Não foi possível registrar a tentativa de pagamento.', 409);
+        }
+
+        if (is_array($attempt)) {
+            if (isset($attempt['existing'])) {
+                return $this->replay($attempt['existing'], $order, $fingerprint);
+            }
+
+            return $this->result(null, $attempt['error'], 'Este pedido não está disponível para iniciar um novo checkout.', 409);
+        }
+
+        $order->refresh();
+        $orderNumber = (string) $attempt->gateway_idempotency_key;
+        $listingName = (string) data_get($order->quote_snapshot, 'listingName', 'Hospedagem em Caldas Novas');
+        $customer = [
+            'FullName' => mb_substr($order->guest_name, 0, 255),
+            'Email' => $order->guest_email,
+        ];
+        $phone = preg_replace('/\D+/', '', $order->guest_phone);
+        if (is_string($phone) && $phone !== '') {
+            $customer['Phone'] = $phone;
+        }
+        $sku = preg_replace('/[^A-Za-z0-9]/', '', $order->listing_id);
+        $payload = [
+            'OrderNumber' => $orderNumber,
+            'SoftDescriptor' => 'CRCN CALDAS',
+            'Cart' => ['Items' => [[
+                'Name' => mb_substr($listingName, 0, 100),
+                'Description' => mb_substr('Hospedagem '.$order->check_in->format('d/m/Y').' a '.$order->check_out->format('d/m/Y'), 0, 255),
+                'UnitPrice' => $amountInCents,
+                'Quantity' => 1,
+                'Type' => 'Service',
+                'Sku' => is_string($sku) && $sku !== '' ? mb_substr($sku, 0, 16) : 'HOSPEDA',
+            ]]],
+            'Payment' => ['MaxNumberOfInstallments' => 12],
+            'Customer' => $customer,
+        ];
+
+        try {
+            $checkout = $this->cielo->createCheckoutPage($payload);
+            $attempt->forceFill([
+                'status' => 'pending',
+                'gateway_status' => 'checkout_created',
+                'gateway_retry_payload' => ['checkoutUrl' => $checkout['checkoutUrl']],
+            ])->save();
+        } catch (Throwable) {
+            $attempt->forceFill(['status' => 'unknown', 'error_code' => 'cielo_checkout_creation_unknown'])->save();
+            $this->markOrderForAttention($order, 'cielo_checkout_creation_unknown');
+
+            return $this->result($attempt->refresh(), 'cielo_checkout_creation_unknown', 'Não foi possível confirmar se a Cielo criou o checkout. O pedido ficará em conferência para evitar uma tentativa duplicada.', 503);
+        }
+
+        return $this->result($attempt->refresh(), 'pending', 'Checkout Cielo criado. A reserva só será confirmada após a notificação e validação do pagamento.', 201);
+    }
+
+    /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
+    public function reconcileCieloCheckoutNotification(string $checkoutOrderNumber, string $merchantOrderNumber): array
+    {
+        $attempt = DirectBookingPaymentAttempt::query()
+            ->where('gateway_provider', 'cielo_checkout')
+            ->where('gateway_idempotency_key', $merchantOrderNumber)
+            ->first();
+        if ($attempt === null || ! preg_match('/^[A-Za-z0-9]{1,32}$/', $checkoutOrderNumber)) {
+            return $this->result(null, 'cielo_checkout_order_not_found', 'A notificação não corresponde a um checkout registrado.', 404);
+        }
+
+        $order = $attempt->order;
+        if ($order === null) {
+            return $this->result(null, 'cielo_checkout_order_not_found', 'O pedido associado ao checkout não foi encontrado.', 404);
+        }
+
+        $response = $this->cielo->getCheckoutOrder($checkoutOrderNumber);
+        try {
+            $gatewayPayment = $this->normalizeCieloCheckoutPayment($response, $order, $attempt, $checkoutOrderNumber);
+        } catch (Throwable) {
+            return $this->result($attempt, 'cielo_checkout_payment_mismatch', 'Os dados consultados na Cielo não correspondem ao pedido. A confirmação foi interrompida.', 409);
+        }
+
+        return $this->applyGatewayPayment($order, $attempt, $gatewayPayment);
+    }
+
+    private function hasCieloCardConfiguration(): bool
+    {
+        foreach ([
+            'services.cielo.merchant_id',
+            'services.cielo.merchant_key',
+            'services.cielo.sop_client_id',
+            'services.cielo.sop_client_secret',
+        ] as $configurationKey) {
+            $value = config($configurationKey);
+            if (! is_string($value) || trim($value) === '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function hasCieloCheckoutConfiguration(): bool
+    {
+        foreach ([
+            'services.cielo.merchant_id',
+            'services.cielo.sop_client_id',
+            'services.cielo.sop_client_secret',
+        ] as $configurationKey) {
+            $value = config($configurationKey);
+            if (! is_string($value) || trim($value) === '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
@@ -139,8 +321,6 @@ class DirectCheckoutPaymentService
         $staysPaymentProviderId = config('direct-booking.stays_payment_provider_id');
         $staysClientId = config('services.stays.client_id');
         $staysClientSecret = config('services.stays.client_secret');
-        $mercadoPagoAccessToken = config('services.mercadopago.access_token');
-        $mercadoPagoWebhookSecret = config('services.mercadopago.webhook_secret');
         $webhookQueueConnection = (string) config('services.mercadopago.webhook_queue_connection', 'database');
 
         if (! in_array($staysPaymentType, ['credit', 'debit'], true)
@@ -150,10 +330,7 @@ class DirectCheckoutPaymentService
             || trim($staysClientId) === ''
             || ! is_string($staysClientSecret)
             || trim($staysClientSecret) === ''
-            || ! is_string($mercadoPagoAccessToken)
-            || trim($mercadoPagoAccessToken) === ''
-            || ! is_string($mercadoPagoWebhookSecret)
-            || trim($mercadoPagoWebhookSecret) === ''
+            || ! $this->hasCieloCardConfiguration()
             || $webhookQueueConnection === 'sync'
             || ! config("queue.connections.{$webhookQueueConnection}")) {
             return $this->result(null, 'payment_configuration_incomplete', 'A configuração necessária para cobrar e confirmar a reserva ainda não está completa.', 503);
@@ -162,6 +339,11 @@ class DirectCheckoutPaymentService
         $input = $request->validated();
         if (! in_array($input['paymentMethod'], $this->availableMethods(), true)) {
             return $this->result(null, 'payment_method_unavailable', 'Este método de pagamento ainda não está disponível.', 503);
+        }
+        $orderAmountInCents = MoneyAmount::toCents($order->quote_total);
+        if ($input['paymentMethod'] === 'card'
+            && ($order->currency !== 'BRL' || $orderAmountInCents === null || $orderAmountInCents <= 0)) {
+            return $this->result(null, 'unsupported_payment_amount', 'O valor ou a moeda do pedido não são compatíveis com o pagamento por cartão.', 422);
         }
         if ($input['paymentMethod'] === 'card'
             && mb_strtolower(trim($input['cardholderEmail'])) !== mb_strtolower(trim($order->guest_email))) {
@@ -255,6 +437,7 @@ class DirectCheckoutPaymentService
                     'currency' => $lockedOrder->currency,
                     'expires_at' => $lockedOrder->expires_at,
                     'gateway_idempotency_key' => (string) Str::uuid(),
+                    'gateway_provider' => $input['paymentMethod'] === 'card' ? 'cielo' : 'mercadopago',
                     'gateway_retry_payload' => $input['paymentMethod'] === 'pix'
                         ? ['paymentMethodData' => $methodData, 'additionalData' => $additionalData]
                         : null,
@@ -300,23 +483,44 @@ class DirectCheckoutPaymentService
                 return $this->result($attempt->refresh(), 'payment_attempt_in_progress', 'A tentativa de pagamento está sendo processada.', 409, replayed: true);
             }
 
-            $createdPayment = $this->mercadoPago->createPayment(
-                (string) $order->quote_total,
-                $order->id,
-                (string) $attempt->gateway_idempotency_key,
-                $methodData,
-                $additionalData,
-            );
-            $gatewayId = $createdPayment['id'] ?? null;
+            if ($input['paymentMethod'] === 'card') {
+                $orderReference = $this->cieloMerchantOrderId($order);
+                $createdPayment = $this->cielo->createCreditCardPayment(
+                    $orderReference,
+                    $input['token'],
+                    $input['paymentMethodId'],
+                    $input['cardholderName'],
+                    $orderAmountInCents ?? 0,
+                    (int) $input['installments'],
+                );
+                $gatewayId = data_get($createdPayment, 'Payment.PaymentId');
+                if (! is_string($gatewayId) || $gatewayId === '') {
+                    throw new \RuntimeException('Cielo did not return a payment identifier.');
+                }
+                $gatewayPayment = $this->normalizeCieloPayment($createdPayment, $order, $attempt);
+            } else {
+                $createdPayment = $this->mercadoPago->createPayment(
+                    (string) $order->quote_total,
+                    $order->id,
+                    (string) $attempt->gateway_idempotency_key,
+                    $methodData,
+                    $additionalData,
+                );
+                $gatewayId = $createdPayment['id'] ?? null;
+                if (! is_string($gatewayId) && ! is_int($gatewayId)) {
+                    throw new \RuntimeException('Mercado Pago did not return a payment identifier.');
+                }
+                $gatewayPayment = $this->mercadoPago->getPayment($gatewayId);
+            }
+
             if (! is_string($gatewayId) && ! is_int($gatewayId)) {
-                throw new \RuntimeException('Mercado Pago did not return a payment identifier.');
+                throw new \RuntimeException('The payment gateway did not return a payment identifier.');
             }
             if (! $this->persistGatewayPaymentId($attempt, (string) $gatewayId)) {
                 $this->markOrderForAttention($order, 'gateway_payment_id_conflict');
 
                 return $this->result($attempt->refresh(), 'gateway_payment_id_conflict', 'O gateway retornou mais de um pagamento para esta tentativa. A conciliação foi interrompida para conferência.', 503);
             }
-            $gatewayPayment = $this->mercadoPago->getPayment($gatewayId);
         } catch (Throwable) {
             $attempt->forceFill([
                 'status' => 'unknown',
@@ -334,10 +538,30 @@ class DirectCheckoutPaymentService
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
     public function reconcileGatewayPayment(string $gatewayPaymentId): array
     {
-        $gatewayPayment = $this->mercadoPago->getPayment($gatewayPaymentId);
         $attempt = DirectBookingPaymentAttempt::query()
             ->where('gateway_payment_id', $gatewayPaymentId)
             ->first();
+
+        if ($attempt?->gateway_provider === 'cielo') {
+            $gatewayPayment = $this->normalizeCieloPayment(
+                $this->cielo->getPayment($gatewayPaymentId),
+                $attempt->order,
+                $attempt,
+            );
+        } elseif ($attempt?->gateway_provider === 'cielo_checkout') {
+            $order = $attempt->order;
+            if ($order === null) {
+                throw new \RuntimeException('The Cielo Checkout attempt has no associated order.');
+            }
+            $gatewayPayment = $this->normalizeCieloCheckoutPayment(
+                $this->cielo->getCheckoutOrder($gatewayPaymentId),
+                $order,
+                $attempt,
+                $gatewayPaymentId,
+            );
+        } else {
+            $gatewayPayment = $this->mercadoPago->getPayment($gatewayPaymentId);
+        }
 
         if ($attempt === null && is_string($gatewayPayment['external_reference'] ?? null)) {
             $unlinkedAttempts = DirectBookingPaymentAttempt::query()
@@ -359,15 +583,113 @@ class DirectCheckoutPaymentService
         return $this->applyGatewayPayment($attempt->order, $attempt, $gatewayPayment);
     }
 
+    /** @return array<string, mixed> */
+    private function normalizeCieloPayment(array $response, DirectBookingOrder $order, DirectBookingPaymentAttempt $attempt): array
+    {
+        $payment = $response['Payment'] ?? null;
+        $status = is_array($payment) ? ($payment['Status'] ?? null) : null;
+        $amount = is_array($payment) ? ($payment['Amount'] ?? null) : null;
+        $paymentId = is_array($payment) ? ($payment['PaymentId'] ?? null) : null;
+        $merchantOrderId = $response['MerchantOrderId'] ?? null;
+        $brand = is_array($payment) ? data_get($payment, 'CreditCard.Brand') : null;
+        $expectedBrand = $this->cieloBrand((string) $attempt->payment_method_id);
+
+        if (! is_int($status)
+            || ! is_int($amount)
+            || ! is_string($paymentId)
+            || $merchantOrderId !== $this->cieloMerchantOrderId($order)
+            || ! is_string($brand)
+            || mb_strtolower($brand) !== mb_strtolower($expectedBrand)) {
+            throw new \RuntimeException('Cielo payment response does not match the expected order.');
+        }
+
+        $normalizedStatus = match ($status) {
+            1, 12 => 'pending',
+            2 => 'approved',
+            3 => 'rejected',
+            10, 13 => 'cancelled',
+            11 => 'refunded',
+            default => 'unknown',
+        };
+
+        return [
+            'id' => $paymentId,
+            'status' => $normalizedStatus,
+            'transaction_amount' => number_format($amount / 100, 2, '.', ''),
+            'currency_id' => 'BRL',
+            'external_reference' => $order->id,
+            'payment_method_id' => $attempt->payment_method_id,
+            'status_detail' => is_string($payment['ReturnMessage'] ?? null) ? $payment['ReturnMessage'] : null,
+            'date_approved' => $normalizedStatus === 'approved' ? now()->toISOString() : null,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function normalizeCieloCheckoutPayment(
+        array $response,
+        DirectBookingOrder $order,
+        DirectBookingPaymentAttempt $attempt,
+        string $checkoutOrderNumber,
+    ): array {
+        $merchantOrderNumber = data_get($response, 'order_number') ?? data_get($response, 'OrderNumber');
+        $reportedCheckoutNumber = data_get($response, 'checkout_cielo_order_number') ?? data_get($response, 'Checkout_Cielo_Order_Number');
+        $reportedAmount = data_get($response, 'amount') ?? data_get($response, 'Amount');
+        $amountInCents = is_numeric($reportedAmount) ? (int) $reportedAmount : null;
+        $expectedAmountInCents = MoneyAmount::toCents($attempt->amount);
+
+        if ($merchantOrderNumber !== $attempt->gateway_idempotency_key
+            || $reportedCheckoutNumber !== $checkoutOrderNumber
+            || $amountInCents === null
+            || $amountInCents !== $expectedAmountInCents
+            || data_get($response, 'payment_method_type', data_get($response, 'Payment.Type')) !== null
+                && ! in_array(data_get($response, 'payment_method_type', data_get($response, 'Payment.Type')), [1, '1', 'CreditCard'], true)) {
+            throw new \RuntimeException('Cielo Checkout order details do not match the payment attempt.');
+        }
+
+        $rawStatus = data_get($response, 'payment.status') ?? data_get($response, 'payment_status') ?? data_get($response, 'Payment.Status');
+        $status = match (is_numeric($rawStatus) ? (int) $rawStatus : mb_strtolower((string) $rawStatus)) {
+            1, 'pending' => 'pending',
+            2, 'paid' => 'approved',
+            3, 'denied' => 'rejected',
+            4, 'expired', 5, 'voided' => 'cancelled',
+            7, 10, 'authorized', 'authorizedidpaypending' => 'in_process',
+            default => 'unknown',
+        };
+
+        return [
+            'id' => $checkoutOrderNumber,
+            'status' => $status,
+            'transaction_amount' => number_format($amountInCents / 100, 2, '.', ''),
+            'currency_id' => 'BRL',
+            'external_reference' => $order->id,
+            'payment_method_id' => 'cielo_checkout',
+            'status_detail' => is_string($rawStatus) || is_int($rawStatus) ? (string) $rawStatus : null,
+            'date_approved' => $status === 'approved' ? now()->toISOString() : null,
+        ];
+    }
+
+    private function cieloMerchantOrderId(DirectBookingOrder $order): string
+    {
+        return substr(hash('sha256', $order->id), 0, 20);
+    }
+
+    private function cieloBrand(string $brand): string
+    {
+        return match (mb_strtolower(trim($brand))) {
+            'mastercard', 'master' => 'Master',
+            'american express', 'americanexpress', 'amex' => 'Amex',
+            'jcb' => 'JCB',
+            default => ucfirst(mb_strtolower(trim($brand))),
+        };
+    }
+
     /** @return array{processed: int, attention: int} */
     public function recoverPendingPayments(): array
     {
         $this->purgeExpiredPixInstructions();
 
-        $accessToken = config('services.mercadopago.access_token');
-        if (! is_string($accessToken) || trim($accessToken) === '') {
-            return ['processed' => 0, 'attention' => 0];
-        }
+        $mercadoPagoAccessToken = config('services.mercadopago.access_token');
+        $hasMercadoPagoAccessToken = is_string($mercadoPagoAccessToken) && trim($mercadoPagoAccessToken) !== '';
 
         $staleBefore = now()->subSeconds(max(60, (int) config('direct-booking.payment_reconciliation_interval_seconds', 300)));
         $attempts = DirectBookingPaymentAttempt::query()
@@ -394,6 +716,15 @@ class DirectCheckoutPaymentService
         $processed = 0;
         $attention = 0;
         foreach ($attempts as $attempt) {
+            if ($attempt->gateway_provider === 'cielo_checkout') {
+                // Reconcile Link & Checkout transactions through the authoritative Cielo API lookup.
+                continue;
+            }
+
+            if ($attempt->gateway_provider !== 'cielo' && ! $hasMercadoPagoAccessToken) {
+                continue;
+            }
+
             try {
                 if ($attempt->gateway_payment_id !== null) {
                     $result = $this->reconcileGatewayPayment((string) $attempt->gateway_payment_id);
@@ -662,6 +993,11 @@ class DirectCheckoutPaymentService
      */
     private function applyGatewayPayment(DirectBookingOrder $order, DirectBookingPaymentAttempt $attempt, array $gatewayPayment): array
     {
+        $eventSource = match ($attempt->gateway_provider) {
+            'cielo' => 'cielo_authoritative_lookup',
+            'cielo_checkout' => 'cielo_checkout_authoritative_lookup',
+            default => 'mercadopago_authoritative_lookup',
+        };
         $gatewayId = $gatewayPayment['id'] ?? null;
         $status = $gatewayPayment['status'] ?? null;
         $amount = $gatewayPayment['transaction_amount'] ?? null;
@@ -703,7 +1039,7 @@ class DirectCheckoutPaymentService
             default => 'unknown',
         };
 
-        $gatewayPaymentIdConflict = DB::transaction(function () use ($order, $attempt, $gatewayPayment, $gatewayId, $status, $attemptStatus, $expiresAt, $paidAt, $gatewayUpdatedAt, $transactionData, $pixInstructionsAreCurrent): bool {
+        $gatewayPaymentIdConflict = DB::transaction(function () use ($order, $attempt, $gatewayPayment, $gatewayId, $status, $attemptStatus, $expiresAt, $paidAt, $gatewayUpdatedAt, $transactionData, $pixInstructionsAreCurrent, $eventSource): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
             if ($lockedAttempt->gateway_payment_id !== null && $lockedAttempt->gateway_payment_id !== (string) $gatewayId) {
@@ -771,7 +1107,7 @@ class DirectCheckoutPaymentService
                     DirectBookingOrderStatus::PagamentoPendente,
                     DirectBookingOrderStatus::AtencaoOperacional,
                 ], true)) {
-                    $lockedOrder->transitionTo(DirectBookingOrderStatus::PagoEmConfirmacao, ['source' => 'mercadopago_authoritative_lookup', 'payment_id' => (string) $gatewayId]);
+                    $lockedOrder->transitionTo(DirectBookingOrderStatus::PagoEmConfirmacao, ['source' => $eventSource, 'payment_id' => (string) $gatewayId]);
                 } elseif (! in_array($lockedOrder->status, [
                     DirectBookingOrderStatus::PagoEmConfirmacao,
                     DirectBookingOrderStatus::Confirmado,
@@ -817,7 +1153,7 @@ class DirectCheckoutPaymentService
                     && ($event['code'] ?? null) === 'gateway_refund_verified');
                 if (! $gatewayRefundAlreadyRecorded) {
                     $events[] = [
-                        'source' => 'mercadopago_authoritative_lookup',
+                        'source' => $eventSource,
                         'event' => 'gateway_refund_verified',
                         'code' => 'gateway_refund_verified',
                         'payment_id' => (string) $gatewayId,
@@ -827,16 +1163,16 @@ class DirectCheckoutPaymentService
                 }
                 $lockedOrder->operational_events = $events;
             } elseif (in_array($status, ['rejected', 'cancelled'], true) && $lockedOrder->status === DirectBookingOrderStatus::PagamentoPendente) {
-                $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoRecusado, ['source' => 'mercadopago_authoritative_lookup', 'payment_id' => (string) $gatewayId]);
+                $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoRecusado, ['source' => $eventSource, 'payment_id' => (string) $gatewayId]);
             } elseif ($status === 'charged_back' && $lockedOrder->status !== DirectBookingOrderStatus::Contestado) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::Contestado, [
-                    'source' => 'mercadopago_authoritative_lookup',
+                    'source' => $eventSource,
                     'code' => 'gateway_chargeback_reported',
                     'payment_id' => (string) $gatewayId,
                 ]);
             } elseif ($attemptStatus === 'unknown' || ($attemptStatus === 'attention_required' && $status !== 'charged_back')) {
                 if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
-                    $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'mercadopago_authoritative_lookup', 'payment_id' => (string) $gatewayId]);
+                    $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => $eventSource, 'payment_id' => (string) $gatewayId]);
                 }
             }
 

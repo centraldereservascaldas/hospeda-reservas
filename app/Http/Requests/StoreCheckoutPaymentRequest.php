@@ -17,13 +17,13 @@ class StoreCheckoutPaymentRequest extends FormRequest
         return [
             'idempotencyKey' => ['required', 'string', 'min:16', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
             'paymentMethod' => ['required', 'in:pix,card'],
-            'paymentMethodId' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/'],
-            'token' => ['nullable', 'string', 'max:255', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
+            'paymentMethodId' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/', 'required_if:paymentMethod,card', 'in:pix,Visa,Master,Amex,Elo,Diners,Discover,JCB'],
+            'token' => ['nullable', 'uuid', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
             'installments' => ['nullable', 'integer', 'min:1', 'max:12', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
             'cardholderName' => ['nullable', 'string', 'max:150', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
             'cardholderEmail' => ['nullable', 'email:rfc', 'max:255', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
             'issuerId' => ['nullable', 'integer', 'min:1'],
-            'payerIdentification' => ['nullable', 'array:type,number', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
+            'payerIdentification' => ['nullable', 'array:type,number', 'prohibited_if:paymentMethod,pix'],
             'payerIdentification.type' => ['required_with:payerIdentification', 'string', 'in:CPF,CNPJ'],
             'payerIdentification.number' => ['required_with:payerIdentification', 'string', 'max:20', 'regex:/^[0-9]+$/'],
         ];

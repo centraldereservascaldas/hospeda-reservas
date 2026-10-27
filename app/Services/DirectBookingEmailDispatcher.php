@@ -12,6 +12,10 @@ class DirectBookingEmailDispatcher
 {
     public function dispatch(string $emailId, bool $allowFreshPending = false): bool
     {
+        if (! config('direct-booking.send_confirmation_email', false)) {
+            return false;
+        }
+
         $emailWasQueued = DB::transaction(function () use ($emailId, $allowFreshPending): bool {
             $email = DirectBookingEmail::query()->lockForUpdate()->findOrFail($emailId);
             $now = now();
