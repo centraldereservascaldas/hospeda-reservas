@@ -28,6 +28,9 @@ jobs:
           coverage: none
           tools: composer:v2
 
+      - name: Verify PHP version
+        run: test "$(php -r 'echo PHP_VERSION;')" = '8.5.12'
+
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 

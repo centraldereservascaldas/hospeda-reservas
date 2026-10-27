@@ -114,7 +114,7 @@ test('voucher and cancellation dialogs have names, initial focus, Escape and foc
 });
 
 test('retrieved cancellation receipt is labeled received and not completed', () => {
-  const { getByText } = render(
+  const { getByRole, getByText } = render(
     React.createElement(TripsView, {
       reservations: [],
       directBookingOrders: [cancellationOrder],
@@ -127,7 +127,11 @@ test('retrieved cancellation receipt is labeled received and not completed', () 
 
   assert.ok(getByText('Solicitação recebida; o cancelamento ainda não foi concluído.'));
   assert.ok(getByText(/Protocolo CANCEL-0123456789abcdef0123456789abcdef01234567/));
-  assert.ok(getByText(/recebido em 26\/10\/2026, 12:30/));
+  const displayedRequestTime = new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date(cancellationOrder.cancellationReceipt.requestedAt));
+  assert.ok(getByRole('status').textContent?.includes(`recebido em ${displayedRequestTime}`));
 });
 
 test('new cancellation request displays the returned receipt and received status', async () => {

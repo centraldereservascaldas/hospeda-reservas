@@ -92,7 +92,12 @@ class BookingApiTest extends TestCase
 
     public function test_reservations_use_verified_guest_details_and_are_not_cached(): void
     {
-        config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key']);
+        config([
+            'services.supabase.url' => 'https://auth.example.test',
+            'services.supabase.anon_key' => 'public-key',
+            'services.stays.client_id' => 'stays-client-id',
+            'services.stays.client_secret' => 'stays-client-secret',
+        ]);
         Http::fake([
             '*/auth/v1/user' => Http::response(['id' => '575c8054-6646-443c-bf62-07945019a32f', 'email' => 'guest@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Guest Example']], 200),
             '*/booking/clients/stays-client-1' => Http::response(['client' => ['reservations' => [[
