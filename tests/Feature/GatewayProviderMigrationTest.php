@@ -82,14 +82,23 @@ class GatewayProviderMigrationTest extends TestCase
     public function test_gateway_provider_migrations_upgrade_and_rollback_in_either_order(): void
     {
         $originalConnection = DB::getDefaultConnection();
-        config(['database.connections.gateway_migration_test' => [
-            'driver' => 'sqlite',
-            'database' => ':memory:',
-            'prefix' => '',
-            'foreign_key_constraints' => true,
-        ]]);
-        DB::purge('gateway_migration_test');
-        DB::setDefaultConnection('gateway_migration_test');
+        $connection = DB::connection($originalConnection);
+        $postgresSchema = null;
+
+        if ($connection->getDriverName() === 'pgsql') {
+            $postgresSchema = 'gateway_migration_test_'.Str::lower(Str::random(12));
+            $connection->statement('CREATE SCHEMA "'.$postgresSchema.'"');
+            $connection->statement('SET search_path TO "'.$postgresSchema.'"');
+        } else {
+            config(['database.connections.gateway_migration_test' => [
+                'driver' => 'sqlite',
+                'database' => ':memory:',
+                'prefix' => '',
+                'foreign_key_constraints' => true,
+            ]]);
+            DB::purge('gateway_migration_test');
+            DB::setDefaultConnection('gateway_migration_test');
+        }
 
         try {
             $this->createGatewayMigrationBaseSchema();
@@ -128,8 +137,13 @@ class GatewayProviderMigrationTest extends TestCase
             $this->assertFalse(Schema::hasColumn('direct_booking_payment_attempts', 'gateway_merchant_id'));
             $this->assertFalse(Schema::hasColumn('direct_booking_payment_attempts', 'merchant_order_id'));
         } finally {
-            DB::purge('gateway_migration_test');
-            DB::setDefaultConnection($originalConnection);
+            if ($postgresSchema !== null) {
+                $connection->statement('RESET search_path');
+                $connection->statement('DROP SCHEMA "'.$postgresSchema.'" CASCADE');
+            } else {
+                DB::purge('gateway_migration_test');
+                DB::setDefaultConnection($originalConnection);
+            }
         }
     }
 

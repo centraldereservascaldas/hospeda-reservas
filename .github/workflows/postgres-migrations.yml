@@ -1,0 +1,63 @@
+name: PostgreSQL migration compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postgres-migrations-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: hospeda_test
+          POSTGRES_USER: hospeda_test
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hospeda_test -d hospeda_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: hospeda_test
+      DB_USERNAME: hospeda_test
+      DB_PASSWORD: ci-only-password
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5.12'
+          extensions: ctype, mbstring, openssl, pdo_pgsql
+          coverage: none
+          tools: composer:v2
+
+      - name: Verify PHP version
+        run: test "$(php -r 'echo PHP_VERSION;')" = '8.5.12'
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run PostgreSQL fresh and historical migration tests
+        run: php artisan test --compact tests/Feature/GatewayProviderMigrationTest.php
