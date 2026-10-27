@@ -48,6 +48,8 @@ jobs:
             sleep 2
           done
 
+          docker exec "$CONTAINER_NAME" php artisan migrate --force
+
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
 
