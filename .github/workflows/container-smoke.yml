@@ -34,7 +34,7 @@ jobs:
             --env APP_ENV=production \
             --env APP_DEBUG=false \
             --env DB_CONNECTION=sqlite \
-            --env DB_DATABASE=/tmp/container-smoke.sqlite \
+            --env DB_DATABASE=/var/www/html/database/database.sqlite \
             hospeda-reservas:smoke
 
           deadline=$((SECONDS + 180))
