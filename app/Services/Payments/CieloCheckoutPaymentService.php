@@ -220,16 +220,18 @@ class CieloCheckoutPaymentService
         array $gatewayPayment,
         ?string $expectedPaymentId = null,
     ): array {
-        $paymentId = $gatewayPayment['PaymentId'] ?? null;
         $merchantOrderId = $gatewayPayment['MerchantOrderId'] ?? null;
         $payment = is_array($gatewayPayment['Payment'] ?? null) ? $gatewayPayment['Payment'] : [];
+        $paymentId = $payment['PaymentId'] ?? $gatewayPayment['PaymentId'] ?? null;
+        $conflictingPaymentIds = isset($payment['PaymentId'], $gatewayPayment['PaymentId'])
+            && $payment['PaymentId'] !== $gatewayPayment['PaymentId'];
         $paymentStatus = filter_var($payment['Status'] ?? null, FILTER_VALIDATE_INT);
         $amountCents = filter_var($payment['Amount'] ?? null, FILTER_VALIDATE_INT);
         $orderAmountCents = MoneyAmount::toCents($order->quote_total);
         $attemptAmountCents = MoneyAmount::toCents($attempt->amount);
         $paymentType = $payment['Type'] ?? null;
 
-        if (! is_string($paymentId)
+        if ($conflictingPaymentIds || ! is_string($paymentId)
             || ! preg_match('/^[0-9a-f-]{36}$/iD', $paymentId)
             || ($expectedPaymentId !== null && ! hash_equals($expectedPaymentId, $paymentId))
             || ! is_string($merchantOrderId)
@@ -407,7 +409,7 @@ class CieloCheckoutPaymentService
         }
 
         try {
-            return Carbon::parse($value);
+            return Carbon::parse($value, 'America/Sao_Paulo')->utc();
         } catch (Throwable) {
             return null;
         }

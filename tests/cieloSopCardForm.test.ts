@@ -73,6 +73,7 @@ test('Cielo tokenization sends only the temporary token and cardholder data to t
 
     fireEvent.change(getByLabelText('Número do cartão'), { target: { value: '4111111111111111' } });
     fireEvent.change(getByLabelText('Código de segurança'), { target: { value: '123' } });
+    assert.equal(container.querySelector<HTMLInputElement>('.bp-sop-cardcvv')?.value, '123');
     fireEvent.change(getByLabelText('Nome no cartão'), { target: { value: ' Synthetic Guest ' } });
     fireEvent.change(getByLabelText('E-mail do titular'), {
       target: { value: 'guest@example.test' },

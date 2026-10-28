@@ -151,6 +151,108 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         ]);
     }
 
+    public function test_cielo_sandbox_checkout_confirms_stays_once_after_captured_payment(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        $this->configureCieloSandbox();
+        Http::preventStrayRequests();
+        Mail::fake();
+        $gatewayStatus = 'approved';
+        $this->fakeJourneyHttp($gatewayStatus, 'cielo_credit_card');
+
+        $checkout = $this->postJson('/api/checkout', $this->checkoutPayload(), [
+            'Idempotency-Key' => 'cielo-integrated-checkout-001',
+        ])->assertCreated()->assertJsonPath('order.status', 'pre_reservado');
+        $reference = $checkout->json('resume.reference');
+        $headers = [
+            'Idempotency-Key' => 'cielo-integrated-payment-001',
+            'X-Checkout-Resume-Token' => $checkout->json('resume.token'),
+        ];
+        $payload = [...$this->cardPayload(),
+            'paymentMethodId' => 'cielo_credit_card',
+            'token' => getenv('CIELO_TEST_APPROVED_TOKEN') ?: '123e4567-e89b-12d3-a456-426614174000',
+        ];
+
+        $response = $this->postJson('/api/checkout/'.$reference.'/payments', $payload, $headers);
+        $this->assertSame(201, $response->status(), (string) $response->json('code'));
+        $response->assertJsonPath('payment.status', 'approved');
+        $this->postJson('/api/checkout/'.$reference.'/payments', $payload, $headers)
+            ->assertOk()->assertJsonPath('replayed', true);
+        $this->artisan('direct-booking:recover-reservations')->assertSuccessful();
+        $this->artisan('direct-booking:recover-reservations')->assertSuccessful();
+
+        $order = DirectBookingOrder::query()->sole();
+        $this->assertSame('cielo_sandbox', $order->gateway_provider);
+        $this->assertSame('approved', $order->payment_status);
+        $this->assertSame('booked', $order->reservation_status);
+        $this->assertSame(DirectBookingOrderStatus::Confirmado, $order->status);
+        $this->assertSame(1, DirectBookingPaymentAttempt::query()->count());
+        $this->assertSame(1, $this->recordedRequests('/1/sales/', 'POST'));
+        $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations', 'POST'));
+        $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1/payments', 'POST'));
+        $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1', 'PATCH'));
+
+        $email = DirectBookingEmail::query()->sole();
+        (new SendDirectBookingConfirmationEmail($email->id))->handle();
+        Mail::assertSent(DirectBookingConfirmed::class, 1);
+        $this->getJson('/api/checkout/'.$reference, $headers)->assertOk()
+            ->assertJsonPath('order.reservationConfirmed', true)
+            ->assertJsonPath('payment.attempt.status', 'approved');
+    }
+
+    public function test_cielo_sandbox_decline_keeps_the_stays_reservation_unconfirmed(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        $this->configureCieloSandbox();
+        Http::preventStrayRequests();
+        Mail::fake();
+        $gatewayStatus = 'rejected';
+        $this->fakeJourneyHttp($gatewayStatus, 'cielo_credit_card');
+        $checkout = $this->postJson('/api/checkout', $this->checkoutPayload(), [
+            'Idempotency-Key' => 'cielo-declined-checkout-001',
+        ])->assertCreated();
+
+        $this->postJson('/api/checkout/'.$checkout->json('resume.reference').'/payments', [
+            ...$this->cardPayload(),
+            'paymentMethodId' => 'cielo_credit_card',
+            'token' => getenv('CIELO_TEST_DECLINED_TOKEN') ?: '123e4567-e89b-12d3-a456-426614174000',
+        ], [
+            'Idempotency-Key' => 'cielo-declined-payment-001',
+            'X-Checkout-Resume-Token' => $checkout->json('resume.token'),
+        ])->assertCreated()->assertJsonPath('payment.status', 'rejected');
+
+        $order = DirectBookingOrder::query()->sole();
+        $this->assertSame(DirectBookingOrderStatus::PagamentoRecusado, $order->status);
+        $this->assertSame('reserved', $order->reservation_status);
+        $this->assertSame(0, DirectBookingEmail::query()->count());
+        $this->assertSame(0, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1/payments', 'POST'));
+        $this->assertSame(0, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1', 'PATCH'));
+        Mail::assertNothingOutgoing();
+    }
+
+    private function configureCieloSandbox(): void
+    {
+        $liveSandbox = getenv('CIELO_LIVE_SANDBOX_TESTS') === '1';
+        if ($liveSandbox) {
+            foreach (['CIELO_TEST_MERCHANT_ID', 'CIELO_TEST_MERCHANT_KEY', 'CIELO_TEST_APPROVED_TOKEN', 'CIELO_TEST_DECLINED_TOKEN'] as $name) {
+                $this->assertNotEmpty(getenv($name), 'Missing opt-in sandbox fixture: '.$name);
+            }
+            Http::allowStrayRequests(['https://apisandbox.cieloecommerce.cielo.com.br/1/sales/']);
+        }
+
+        config([
+            'direct-booking.payment_provider' => 'cielo_sandbox',
+            'services.cielo.enabled' => true,
+            'services.cielo.sop_enabled' => true,
+            'services.cielo.merchant_id' => $liveSandbox ? getenv('CIELO_TEST_MERCHANT_ID') : 'sandbox-merchant-test',
+            'services.cielo.merchant_key' => $liveSandbox ? getenv('CIELO_TEST_MERCHANT_KEY') : 'sandbox-key-test',
+            'services.cielo.sop_client_id' => 'sandbox-sop-client-test',
+            'services.cielo.sop_client_secret' => 'sandbox-sop-secret-test',
+        ]);
+    }
+
     private function bindSyntheticApprovedCatalog(): void
     {
         $catalog = [
@@ -382,6 +484,23 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             }
             if ($path === '/v1/payments/987654321' && $method === 'GET') {
                 return Http::response($this->gatewayPayment($reservation, $gatewayStatus, $paymentMethodId), 200);
+            }
+
+            if ($request->url() === 'https://apisandbox.cieloecommerce.cielo.com.br/1/sales/' && $method === 'POST') {
+                if (getenv('CIELO_LIVE_SANDBOX_TESTS') === '1') {
+                    return null;
+                }
+
+                return Http::response([
+                    'MerchantOrderId' => $request['MerchantOrderId'],
+                    'Payment' => [
+                        'PaymentId' => '123e4567-e89b-12d3-a456-426614174001',
+                        'Type' => 'CreditCard',
+                        'Amount' => 300100,
+                        'Currency' => 'BRL',
+                        'Status' => $gatewayStatus === 'approved' ? 2 : 3,
+                    ],
+                ], 201);
             }
 
             throw new RuntimeException('Unexpected HTTP fake request: '.$method.' '.$request->url());

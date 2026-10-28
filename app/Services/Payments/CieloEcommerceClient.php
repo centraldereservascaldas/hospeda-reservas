@@ -50,7 +50,7 @@ class CieloEcommerceClient
         }
 
         $response = $this->request(self::TRANSACTIONAL_BASE_URL)
-            ->post('/v2/sales/', [
+            ->post('/1/sales/', [
                 'MerchantOrderId' => $merchantOrderId,
                 'Customer' => [
                     'Name' => mb_substr(trim($customerName), 0, 255),
