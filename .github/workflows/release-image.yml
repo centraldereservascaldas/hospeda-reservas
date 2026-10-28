@@ -138,7 +138,7 @@ jobs:
             --env APP_ENV=production \
             --env APP_DEBUG=false \
             --env DB_CONNECTION=sqlite \
-            --env DB_DATABASE=/tmp/container-smoke.sqlite \
+            --env DB_DATABASE=/var/www/html/database/database.sqlite \
             hospeda-reservas:release-smoke
 
           deadline=$((SECONDS + 180))
@@ -156,6 +156,12 @@ jobs:
 
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/ --output /tmp/hospeda-smoke-index.html
+          grep --fixed-strings '<div id="root"></div>' /tmp/hospeda-smoke-index.html
+
+          app_asset=$(sed -n 's/.*src="\([^"]*\.js\)".*/\1/p' /tmp/hospeda-smoke-index.html | head -n 1)
+          test -n "$app_asset"
+          curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:8080$app_asset" --output /dev/null
 
       - name: Remove smoke container
         if: always()
