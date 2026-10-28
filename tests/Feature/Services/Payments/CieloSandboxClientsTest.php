@@ -16,7 +16,7 @@ class CieloSandboxClientsTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake([
-            'https://apisandbox.cieloecommerce.cielo.com.br/v2/sales/' => Http::response(['Payment' => ['Status' => 2]], 201),
+            'https://apisandbox.cieloecommerce.cielo.com.br/1/sales/' => Http::response(['Payment' => ['Status' => 2]], 201),
         ]);
         config([
             'services.cielo.enabled' => true,
@@ -35,7 +35,7 @@ class CieloSandboxClientsTest extends TestCase
 
         $this->assertSame(['Payment' => ['Status' => 2]], $payment);
         Http::assertSent(fn (ClientRequest $request): bool => $request->method() === 'POST'
-            && $request->url() === 'https://apisandbox.cieloecommerce.cielo.com.br/v2/sales/'
+            && $request->url() === 'https://apisandbox.cieloecommerce.cielo.com.br/1/sales/'
             && $request->hasHeader('MerchantId', 'merchant-id-sentinel')
             && $request->hasHeader('MerchantKey', 'merchant-key-sentinel')
             && $request->data()['Payment']['Amount'] === 125050
@@ -48,7 +48,7 @@ class CieloSandboxClientsTest extends TestCase
     public function test_raw_pan_and_cvv_are_rejected_without_sending_a_request(): void
     {
         Http::preventStrayRequests();
-        Http::fake(['https://apisandbox.cieloecommerce.cielo.com.br/v2/sales/' => Http::response([])]);
+        Http::fake(['https://apisandbox.cieloecommerce.cielo.com.br/1/sales/' => Http::response([])]);
         config(['services.cielo.enabled' => true, 'services.cielo.merchant_id' => 'id', 'services.cielo.merchant_key' => 'key']);
 
         try {
@@ -64,7 +64,7 @@ class CieloSandboxClientsTest extends TestCase
     public function test_payment_rejects_disabled_or_non_sandbox_configuration_without_request(): void
     {
         Http::preventStrayRequests();
-        Http::fake(['https://apisandbox.cieloecommerce.cielo.com.br/v2/sales/' => Http::response([])]);
+        Http::fake(['https://apisandbox.cieloecommerce.cielo.com.br/1/sales/' => Http::response([])]);
         config(['services.cielo.enabled' => false, 'services.cielo.merchant_id' => 'id', 'services.cielo.merchant_key' => 'key']);
 
         try {

@@ -44,7 +44,7 @@ class CieloCheckoutPaymentTest extends TestCase
             ->shouldReceive('validateReservedOrderForPayment')->twice()->andReturn(true);
         $submissionCount = 0;
         Http::fake(function (ClientRequest $request) use (&$submissionCount): mixed {
-            if ($request->url() !== 'https://apisandbox.cieloecommerce.cielo.com.br/v2/sales/') {
+            if ($request->url() !== 'https://apisandbox.cieloecommerce.cielo.com.br/1/sales/') {
                 throw new \RuntimeException('Unexpected Cielo request in test fake.');
             }
             $submissionCount++;
@@ -78,6 +78,41 @@ class CieloCheckoutPaymentTest extends TestCase
         );
     }
 
+    #[DataProvider('captureDateCases')]
+    public function test_captured_payment_preserves_the_instant_when_cielo_omits_or_supplies_timezone(string $capturedDate): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)
+            ->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        Http::fake(['https://apisandbox.cieloecommerce.cielo.com.br/1/sales/' => function (ClientRequest $request) use ($capturedDate) {
+            $payment = $this->cieloPayment('123e4567-e89b-12d3-a456-426614174010', $request['MerchantOrderId'], 2);
+            $payment['Payment']['CapturedDate'] = $capturedDate;
+            $payment['Payment']['ReceivedDate'] = $capturedDate;
+
+            return Http::response($payment, 201);
+        }]);
+
+        $result = $this->submitCardPayment($order, 'checkout-cielo-capture-date-0001');
+
+        $this->assertSame('approved', $result['payment']['status']);
+        $this->assertSame('2026-10-28T19:51:09+00:00', $order->refresh()->paid_at->toIso8601String());
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        $this->assertSame('2026-10-28T19:51:09+00:00', $attempt->paid_at->toIso8601String());
+        $this->assertSame('2026-10-28T19:51:09+00:00', $attempt->gateway_updated_at->toIso8601String());
+        Http::assertSentCount(1);
+    }
+
+    public static function captureDateCases(): array
+    {
+        return [
+            'Cielo local timestamp without offset' => ['2026-10-28 16:51:09'],
+            'explicit local offset' => ['2026-10-28T16:51:09-03:00'],
+            'explicit UTC' => ['2026-10-28T19:51:09Z'],
+        ];
+    }
+
     #[DataProvider('mismatchPaymentCases')]
     public function test_gateway_identity_or_value_mismatch_never_approves_payment(string $field, mixed $value): void
     {
@@ -89,11 +124,13 @@ class CieloCheckoutPaymentTest extends TestCase
         $gatewayPayment = $this->cieloPayment('123e4567-e89b-12d3-a456-426614174010', 'unused', 2);
         if (in_array($field, ['MerchantOrderId', 'PaymentId'], true)) {
             $gatewayPayment[$field] = $value;
+        } elseif ($field === 'nestedPaymentId') {
+            $gatewayPayment['Payment']['PaymentId'] = $value;
         } else {
             $gatewayPayment['Payment'][$field] = $value;
         }
         Http::fake(function (ClientRequest $request) use ($gatewayPayment): mixed {
-            if ($request->url() !== 'https://apisandbox.cieloecommerce.cielo.com.br/v2/sales/') {
+            if ($request->url() !== 'https://apisandbox.cieloecommerce.cielo.com.br/1/sales/') {
                 throw new \RuntimeException('Unexpected Cielo request in test fake.');
             }
             if ($gatewayPayment['MerchantOrderId'] === 'unused') {
@@ -123,6 +160,7 @@ class CieloCheckoutPaymentTest extends TestCase
             'merchant order' => ['MerchantOrderId', 'wrongorder'],
             'payment type' => ['Type', 'DebitCard'],
             'payment id' => ['PaymentId', 'not-a-uuid'],
+            'conflicting nested payment id' => ['nestedPaymentId', '123e4567-e89b-12d3-a456-426614174099'],
         ];
     }
 
@@ -135,7 +173,7 @@ class CieloCheckoutPaymentTest extends TestCase
             ->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
         $attempt = null;
         Http::fake(function (ClientRequest $request) use (&$attempt): mixed {
-            if ($request->url() === 'https://apisandbox.cieloecommerce.cielo.com.br/v2/sales/') {
+            if ($request->url() === 'https://apisandbox.cieloecommerce.cielo.com.br/1/sales/') {
                 return Http::failedConnection();
             }
             if (str_starts_with($request->url(), 'https://apiquerysandbox.cieloecommerce.cielo.com.br/1/sales?merchantOrderId=')) {
@@ -165,7 +203,7 @@ class CieloCheckoutPaymentTest extends TestCase
 
         $this->assertSame('approved', $result['attempt']?->status);
         $this->assertSame(1, collect(Http::recorded())->filter(fn (array $pair): bool => $pair[0]->method() === 'POST'
-            && $pair[0]->url() === 'https://apisandbox.cieloecommerce.cielo.com.br/v2/sales/')->count());
+            && $pair[0]->url() === 'https://apisandbox.cieloecommerce.cielo.com.br/1/sales/')->count());
         $this->assertSame($lookupPayment['MerchantOrderId'], $attempt->refresh()->merchant_order_id);
         $attempt->refresh();
         $this->assertSame('approved', $attempt->status);

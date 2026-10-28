@@ -252,7 +252,7 @@ export function CieloSopCardForm({
           <input
             autoComplete="cc-csc"
             inputMode="numeric"
-            className="bp-sop-cardcvvc min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+            className="bp-sop-cardcvv bp-sop-cardcvvc min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
           />
         </label>
         <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
