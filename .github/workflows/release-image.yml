@@ -368,8 +368,15 @@ jobs:
                   "$application_url")
                 deployed_tag=$(jq --raw-output '.docker_registry_image_tag // empty' <<< "$application")
                 application_status=$(jq --raw-output '.status // empty' <<< "$application")
-                test "$deployed_tag" = "$IMAGE_TAG"
-                test "$application_status" = 'running:healthy'
+                if [ "$deployed_tag" != "$IMAGE_TAG" ]; then
+                  echo 'Coolify finished with an unexpected image tag.' >&2
+                  exit 1
+                fi
+                if [ "$application_status" != 'running:healthy' ]; then
+                  echo "Waiting for container health: $application_status"
+                  sleep 10
+                  continue
+                fi
                 echo "Coolify deployed healthy image tag $IMAGE_TAG."
                 break
                 ;;
@@ -386,7 +393,7 @@ jobs:
             sleep 10
           done
 
-          if [ "${status:-}" != 'finished' ]; then
+          if [ "${status:-}" != 'finished' ] || [ "${application_status:-}" != 'running:healthy' ]; then
             echo 'Timed out waiting for the Coolify deployment to finish.' >&2
             exit 1
           fi
