@@ -1,0 +1,264 @@
+name: Release image
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint and check types
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Run frontend tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ':memory:'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5.12'
+          extensions: ctype, mbstring, openssl, pdo_sqlite, sqlite3
+          coverage: none
+          tools: composer:v2
+
+      - name: Verify PHP version
+        run: test "$(php -r 'echo PHP_VERSION;')" = '8.5.12'
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run backend tests
+        run: php artisan test --compact
+
+  postgres-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: hospeda_test
+          POSTGRES_USER: hospeda_test
+          POSTGRES_PASSWORD: ci-only-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hospeda_test -d hospeda_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: hospeda_test
+      DB_USERNAME: hospeda_test
+      DB_PASSWORD: ci-only-password
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5.12'
+          extensions: ctype, mbstring, openssl, pdo_pgsql
+          coverage: none
+          tools: composer:v2
+
+      - name: Verify PHP version
+        run: test "$(php -r 'echo PHP_VERSION;')" = '8.5.12'
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Run PostgreSQL migration compatibility test
+        run: php artisan test --compact tests/Feature/GatewayProviderMigrationTest.php
+
+  container-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build container image
+        run: docker build --tag hospeda-reservas:release-smoke .
+
+      - name: Check application health
+        env:
+          CONTAINER_NAME: hospeda-reservas-release-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          app_key="base64:$(openssl rand -base64 32)"
+
+          docker run --detach \
+            --name "$CONTAINER_NAME" \
+            --publish 127.0.0.1:8080:80 \
+            --env "APP_KEY=$app_key" \
+            --env APP_ENV=production \
+            --env APP_DEBUG=false \
+            --env DB_CONNECTION=sqlite \
+            --env DB_DATABASE=/tmp/container-smoke.sqlite \
+            hospeda-reservas:release-smoke
+
+          deadline=$((SECONDS + 180))
+          until [ "$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || true)" = healthy ]; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              docker logs "$CONTAINER_NAME"
+              docker inspect --format '{{json .State.Health}}' "$CONTAINER_NAME"
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker exec "$CONTAINER_NAME" php artisan migrate --force
+
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
+
+      - name: Remove smoke container
+        if: always()
+        env:
+          CONTAINER_NAME: hospeda-reservas-release-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+        run: docker rm --force "$CONTAINER_NAME" 2>/dev/null || true
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - frontend
+      - backend
+      - postgres-migrations
+      - container-smoke
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        id: image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          build-args: |
+            VITE_SUPABASE_URL=${{ vars.VITE_SUPABASE_URL }}
+            VITE_SUPABASE_ANON_KEY=${{ vars.VITE_SUPABASE_ANON_KEY }}
+            VITE_GTM_ID=${{ vars.VITE_GTM_ID }}
+            VITE_MERCADO_PAGO_PUBLIC_KEY=${{ vars.VITE_MERCADO_PAGO_PUBLIC_KEY }}
+
+      - name: Smoke test the published image by digest
+        env:
+          CONTAINER_NAME: hospeda-reservas-published-${{ github.run_id }}-${{ github.run_attempt }}
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+
+          image_ref="$IMAGE@$DIGEST"
+          app_key="base64:$(openssl rand -base64 32)"
+
+          docker pull "$image_ref"
+          docker run --detach \
+            --name "$CONTAINER_NAME" \
+            --publish 127.0.0.1:8080:80 \
+            --env "APP_KEY=$app_key" \
+            --env APP_ENV=production \
+            --env APP_DEBUG=false \
+            --env DB_CONNECTION=sqlite \
+            --env DB_DATABASE=/var/www/html/database/database.sqlite \
+            "$image_ref"
+
+          deadline=$((SECONDS + 180))
+          until [ "$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || true)" = healthy ]; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              docker logs "$CONTAINER_NAME"
+              docker inspect --format '{{json .State.Health}}' "$CONTAINER_NAME"
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          docker exec "$CONTAINER_NAME" php artisan migrate --force
+
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
+          curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/ --output /tmp/hospeda-published-index.html
+          grep --fixed-strings '<div id="root"></div>' /tmp/hospeda-published-index.html
+
+          app_asset=$(sed -n 's/.*src="\([^"]*\.js\)".*/\1/p' /tmp/hospeda-published-index.html | head -n 1)
+          test -n "$app_asset"
+          curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:8080$app_asset" --output /dev/null
+
+      - name: Remove published image smoke container
+        if: always()
+        env:
+          CONTAINER_NAME: hospeda-reservas-published-${{ github.run_id }}-${{ github.run_attempt }}
+        run: docker rm --force "$CONTAINER_NAME" 2>/dev/null || true
+
+      - name: Record immutable image reference
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          {
+            echo '### Published image'
+            echo
+            echo "- Commit tag: \`$IMAGE:${GITHUB_SHA}\`"
+            echo "- Immutable digest: \`$IMAGE@$DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
