@@ -28,6 +28,21 @@ class DirectStaysPaymentService
             return $this->result(false, 'stays_confirmation_disabled', 'A confirmação automática na Stays permanece desabilitada.');
         }
 
+        if (! in_array($order->status, [
+            DirectBookingOrderStatus::PagoEmConfirmacao,
+            DirectBookingOrderStatus::AtencaoOperacional,
+        ], true)) {
+            return $this->result(false, 'confirmation_order_state_changed', 'O estado do pedido não permite iniciar a confirmação automática na Stays.');
+        }
+
+        if (DirectBookingStaysAction::query()
+            ->where('direct_booking_order_id', $order->id)
+            ->where('action_type', 'cancel_reservation')
+            ->whereIn('status', ['processing', 'unknown', 'attention_required'])
+            ->exists()) {
+            return $this->result(false, 'reservation_release_in_progress', 'A liberação da pré-reserva está em andamento ou exige reconciliação. A confirmação Stays foi interrompida.');
+        }
+
         if (! $this->stays->isConfigured()) {
             return $this->attention($order, 'stays_not_configured', 'A Stays não está configurada para confirmar este pedido pago.');
         }
@@ -152,7 +167,7 @@ class DirectStaysPaymentService
             return $this->markAttention($action, $order, 'stays_payment_write_unknown', 'A escrita anterior do pagamento não pode ser reconciliada; não será repetida automaticamente.');
         }
 
-        $claim = $this->claim($action);
+        $claim = $this->claim($action, $order);
         if (! $claim['claimed']) {
             return $this->result(false, $claim['status'], 'O lançamento do pagamento Stays já está em andamento ou requer revisão.');
         }
@@ -206,7 +221,7 @@ class DirectStaysPaymentService
             return $this->markAttention($action, $order, 'stays_booking_state_regressed', 'A reserva voltou a reserved após confirmação anterior; revisão operacional necessária.');
         }
 
-        $claim = $this->claim($action);
+        $claim = $this->claim($action, $order);
         if (! $claim['claimed']) {
             return $this->result(false, $claim['status'], 'A confirmação Stays já está em andamento ou requer revisão.');
         }
@@ -328,7 +343,12 @@ class DirectStaysPaymentService
             if ($paymentStillApproved && $canConfirmLocally && $lockedOrder->status !== DirectBookingOrderStatus::Confirmado) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::Confirmado, ['source' => 'stays_booked_verified', 'external_id' => $lockedOrder->stays_reservation_id]);
             } elseif ((! $paymentStillApproved || ! $canConfirmLocally)
-                && $lockedOrder->status !== DirectBookingOrderStatus::Contestado) {
+                && ! in_array($lockedOrder->status, [
+                    DirectBookingOrderStatus::Contestado,
+                    DirectBookingOrderStatus::ReembolsoPendente,
+                    DirectBookingOrderStatus::Reembolsado,
+                    DirectBookingOrderStatus::Concluido,
+                ], true)) {
                 if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'stays_booked_requires_review']);
                 }
@@ -388,12 +408,29 @@ class DirectStaysPaymentService
     }
 
     /** @return array{claimed: bool, status: string, previousAttempts: int} */
-    private function claim(DirectBookingStaysAction $action): array
+    private function claim(DirectBookingStaysAction $action, DirectBookingOrder $order): array
     {
-        return DB::transaction(function () use ($action): array {
+        return DB::transaction(function () use ($action, $order): array {
+            $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $locked = DirectBookingStaysAction::query()->lockForUpdate()->findOrFail($action->id);
             $previousAttempts = $locked->attempt_count;
             $previousStatus = $locked->status;
+            if (! in_array($lockedOrder->status, [
+                DirectBookingOrderStatus::PagoEmConfirmacao,
+                DirectBookingOrderStatus::AtencaoOperacional,
+            ], true) || $lockedOrder->payment_status !== 'approved' || $lockedOrder->stays_reservation_id === null) {
+                return ['claimed' => false, 'status' => 'order_not_confirmable', 'previousAttempts' => $previousAttempts];
+            }
+
+            $releaseInProgress = DirectBookingStaysAction::query()
+                ->where('direct_booking_order_id', $lockedOrder->id)
+                ->where('action_type', 'cancel_reservation')
+                ->whereIn('status', ['processing', 'unknown', 'attention_required'])
+                ->exists();
+            if ($releaseInProgress) {
+                return ['claimed' => false, 'status' => 'reservation_release_in_progress', 'previousAttempts' => $previousAttempts];
+            }
+
             $timeout = max(10, (int) config('direct-booking.reservation_claim_timeout_seconds', 60));
             if (in_array($previousStatus, ['processing', 'attention_required'], true) && $locked->last_attempt_at?->greaterThan(now()->subSeconds($timeout))) {
                 return ['claimed' => false, 'status' => 'processing', 'previousAttempts' => $previousAttempts];
@@ -427,14 +464,36 @@ class DirectStaysPaymentService
     /** @return array{ready: bool, code: string, message: string} */
     private function markAttention(DirectBookingStaysAction $action, DirectBookingOrder $order, string $code, string $message): array
     {
-        $action->forceFill([
-            'status' => 'attention_required',
-            'attention_required_at' => now(),
-            'error_code' => $code,
-            'error_message' => $message,
-        ])->save();
+        DB::transaction(function () use ($action, $order, $code): void {
+            $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
+            $lockedAction = DirectBookingStaysAction::query()->lockForUpdate()->findOrFail($action->id);
+            $lockedAction->forceFill([
+                'status' => 'attention_required',
+                'attention_required_at' => now(),
+                'error_code' => $code,
+                'error_message' => $message,
+            ])->save();
 
-        return $this->attention($order, $code, $message);
+            if (! in_array($lockedOrder->status, [
+                DirectBookingOrderStatus::AtencaoOperacional,
+                DirectBookingOrderStatus::Expirado,
+                DirectBookingOrderStatus::Contestado,
+                DirectBookingOrderStatus::ReembolsoPendente,
+                DirectBookingOrderStatus::Reembolsado,
+                DirectBookingOrderStatus::Concluido,
+            ], true)) {
+                $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'stays_payment_confirmation', 'code' => $code]);
+            }
+            $events = $lockedOrder->operational_events ?? [];
+            $lastEvent = $events[array_key_last($events)] ?? null;
+            if (($lastEvent['event'] ?? null) !== 'stays_payment_confirmation_attention' || ($lastEvent['code'] ?? null) !== $code) {
+                $events[] = ['event' => 'stays_payment_confirmation_attention', 'at' => now()->toISOString(), 'code' => $code];
+            }
+            $lockedOrder->operational_events = $events;
+            $lockedOrder->save();
+        });
+
+        return $this->result(false, $code, $message);
     }
 
     /** @return array{ready: bool, code: string, message: string} */
@@ -446,6 +505,9 @@ class DirectStaysPaymentService
                 DirectBookingOrderStatus::AtencaoOperacional,
                 DirectBookingOrderStatus::Expirado,
                 DirectBookingOrderStatus::Contestado,
+                DirectBookingOrderStatus::ReembolsoPendente,
+                DirectBookingOrderStatus::Reembolsado,
+                DirectBookingOrderStatus::Concluido,
             ], true)) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'stays_payment_confirmation', 'code' => $code]);
             }

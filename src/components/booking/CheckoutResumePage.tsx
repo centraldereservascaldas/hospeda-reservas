@@ -8,13 +8,20 @@ import {
   Printer,
   ShieldCheck,
 } from 'lucide-react';
-import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { checkoutApi } from '../../services/checkoutApi';
+import { emitConfirmedPurchase, emitFunnelEvent } from '../../utils/measurementEvents';
 import type {
+  CheckoutAccessCredentials,
   CheckoutResumeResponse,
   DirectBookingOrderSummary,
-} from '../../services/crcnBackendApi';
+} from '../../services/checkoutApi';
+import { MercadoPagoCardForm } from './MercadoPagoCardForm';
+import { CieloSopCardForm } from './CieloSopCardForm';
 import { CieloCheckoutIframe } from './CieloCheckoutIframe';
-import { getCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
+import {
+  clearCheckoutResumeToken,
+  getCheckoutResumeToken,
+} from '../../utils/checkoutResumeStorage';
 
 const pixIdempotencyStoragePrefix = 'crcn.checkout.pix.';
 
@@ -51,6 +58,7 @@ function clearPixPaymentIdempotencyKey(reference: string): void {
 
 interface CheckoutResumePageProps {
   reference: string;
+  accessToken?: string;
 }
 
 type ResumeState =
@@ -58,7 +66,7 @@ type ResumeState =
   | { kind: 'missing-token' }
   | { kind: 'not-found' }
   | { kind: 'unavailable' }
-  | { kind: 'ready'; data: CheckoutResumeResponse };
+  | { kind: 'ready'; data: CheckoutResumeResponse; credentials: CheckoutAccessCredentials };
 
 const moneyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -223,7 +231,7 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
   return statusDetails[order.status];
 }
 
-export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
+export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePageProps) {
   const [resumeState, setResumeState] = useState<ResumeState>({ kind: 'loading' });
   const [retryKey, setRetryKey] = useState(0);
   const [pixCopyResult, setPixCopyResult] = useState<{
@@ -232,38 +240,23 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
   } | null>(null);
   const [isStartingPixPayment, setIsStartingPixPayment] = useState(false);
   const [paymentStartError, setPaymentStartError] = useState<string | null>(null);
+  const [cancellationRequestError, setCancellationRequestError] = useState<string | null>(null);
+  const [isRequestingCancellation, setIsRequestingCancellation] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const pixPaymentSubmissionInFlightRef = useRef(false);
+  const pixPaymentInfoEmittedRef = useRef(false);
   const pixPaymentIdempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const previousTitle = document.title;
-    const existingRobots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
-    const previousRobotsContent = existingRobots?.content;
-    const robotsMeta = existingRobots ?? document.createElement('meta');
-    if (!existingRobots) {
-      robotsMeta.name = 'robots';
-      document.head.append(robotsMeta);
-    }
-
-    document.title = 'Acompanhe seu pedido | CRCN';
-    robotsMeta.content = 'noindex, nofollow';
-
-    return () => {
-      document.title = previousTitle;
-      if (existingRobots && previousRobotsContent !== undefined) {
-        existingRobots.content = previousRobotsContent;
-      } else {
-        robotsMeta.remove();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     setPixCopyResult(null);
-    const token = getCheckoutResumeToken(reference);
-    if (!token) {
+    const resumeToken = getCheckoutResumeToken(reference);
+    const credentials: CheckoutAccessCredentials | null = accessToken
+      ? { type: 'authenticated' as const, accessToken }
+      : resumeToken
+        ? { type: 'resume-token' as const, resumeToken }
+        : null;
+    if (!credentials) {
       setResumeState({ kind: 'missing-token' });
       return;
     }
@@ -273,15 +266,25 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
 
     const refresh = async (showLoading: boolean): Promise<void> => {
       if (showLoading) setResumeState({ kind: 'loading' });
-      const result = await crcnBackendApi.resumeCheckout(reference, token);
+      let resolvedCredentials = credentials;
+      let result = await checkoutApi.resumeCheckout(reference, resolvedCredentials);
+      if (result.kind === 'not-found' && accessToken && resumeToken) {
+        resolvedCredentials = { type: 'resume-token', resumeToken };
+        result = await checkoutApi.resumeCheckout(reference, resolvedCredentials);
+      }
       if (!isCurrent) return;
+
+      if (result.kind === 'not-found' && resolvedCredentials.type === 'resume-token') {
+        clearCheckoutResumeToken(reference);
+      }
 
       if (result.kind !== 'ready') {
         setResumeState({ kind: result.kind });
         return;
       }
 
-      setResumeState({ kind: 'ready', data: result.data });
+      setResumeState({ kind: 'ready', data: result.data, credentials: resolvedCredentials });
+      void emitConfirmedPurchase(result.data.order);
       if (
         refreshableStatuses.has(result.data.order.status) ||
         (result.data.order.status === 'expirado' &&
@@ -300,7 +303,7 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
       isCurrent = false;
       if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
     };
-  }, [reference, retryKey]);
+  }, [accessToken, reference, retryKey]);
 
   const copyPixCode = async (copyPaste: string): Promise<void> => {
     try {
@@ -314,22 +317,28 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
   const startPixPayment = async (order: DirectBookingOrderSummary): Promise<void> => {
     if (pixPaymentSubmissionInFlightRef.current) return;
 
-    const token = getCheckoutResumeToken(reference);
-    if (!token) {
+    const credentials = resumeState.kind === 'ready' ? resumeState.credentials : null;
+    if (!credentials) {
       setPaymentStartError('Esta sessão não tem a credencial para continuar o pagamento.');
       return;
     }
 
     pixPaymentSubmissionInFlightRef.current = true;
+    if (!pixPaymentInfoEmittedRef.current) {
+      pixPaymentInfoEmittedRef.current = emitFunnelEvent({
+        event: 'add_payment_info',
+        payment_type: 'pix',
+      });
+    }
     setIsStartingPixPayment(true);
     setPaymentStartError(null);
     try {
       if (!isValidPixPaymentIdempotencyKey(pixPaymentIdempotencyKeyRef.current)) {
         pixPaymentIdempotencyKeyRef.current = getPixPaymentIdempotencyKey(reference);
       }
-      const result = await crcnBackendApi.createCheckoutPayment(
+      const result = await checkoutApi.createCheckoutPayment(
         reference,
-        token,
+        credentials,
         order.quoteTotal,
         {
           paymentMethod: 'pix',
@@ -353,6 +362,9 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
         }
         setRetryKey((current) => current + 1);
       } else {
+        if (result.kind === 'not-found' && credentials.type === 'resume-token') {
+          clearCheckoutResumeToken(reference);
+        }
         setPaymentStartError(
           'Não foi possível iniciar o Pix. Atualize o pedido e tente novamente.',
         );
@@ -362,6 +374,29 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
     } finally {
       pixPaymentSubmissionInFlightRef.current = false;
       setIsStartingPixPayment(false);
+    }
+  };
+
+  const requestCancellation = async (): Promise<void> => {
+    if (resumeState.kind !== 'ready' || isRequestingCancellation) return;
+    const confirmed = window.confirm(
+      'Deseja registrar uma solicitação de cancelamento? A Central analisará o pedido. Esta solicitação não cancela a reserva nem realiza estorno do pagamento.',
+    );
+    if (!confirmed) return;
+
+    setIsRequestingCancellation(true);
+    setCancellationRequestError(null);
+    try {
+      await checkoutApi.requestCheckoutCancellation(reference, resumeState.credentials);
+      setRetryKey((current) => current + 1);
+    } catch (error) {
+      setCancellationRequestError(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível registrar a solicitação. Tente novamente.',
+      );
+    } finally {
+      setIsRequestingCancellation(false);
     }
   };
 
@@ -397,11 +432,13 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
     canRetryPixPayment;
   const paymentCapabilities = resumeState.kind === 'ready' ? resumeState.data.payment : null;
   const cardPublicKey = paymentCapabilities?.publicKey ?? null;
+  const isCieloProvider = paymentCapabilities?.provider === 'cielo_sandbox';
+  const isHostedCieloProvider = paymentCapabilities?.provider === 'cielo_hosted';
   const canStartCardPayment =
     order !== null &&
     paymentCapabilities?.enabled === true &&
     paymentCapabilities.methods.includes('card') &&
-    cardPublicKey !== null &&
+    (isCieloProvider || isHostedCieloProvider || cardPublicKey !== null) &&
     reservationIsActive &&
     (order.status === 'pre_reservado' || order.status === 'pagamento_recusado') &&
     canRetryPixPayment;
@@ -412,15 +449,28 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
     canStartCardPayment && (!canStartPixPayment || selectedPaymentMethod === 'card');
   const showActiveCieloCheckout =
     paymentAttempt?.method === 'card' && typeof paymentAttempt.checkoutUrl === 'string';
+  const showHostedCieloCheckout =
+    isHostedCieloProvider && (showCardPaymentForm || showActiveCieloCheckout);
   const status = order ? getOrderStatusDetails(order) : null;
   const StatusIcon =
     status?.tone === 'positive' ? BadgeCheck : status?.tone === 'attention' ? CircleAlert : Clock3;
 
   return (
-    <main className="min-h-screen bg-[#f7f4ee] px-4 py-8 text-neutral-950 print:min-h-0 print:bg-white print:px-0 print:py-0 sm:px-8 sm:py-12">
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl flex-col print:min-h-0 print:py-5">
-        <header className="flex items-center justify-between border-b border-neutral-300/80 pb-5">
-          <a href="/" className="text-sm font-black tracking-tight text-neutral-950">
+    <main
+      className="min-h-[100dvh] bg-[#f7f4ee] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-8 pb-8 text-neutral-950 print:min-h-0 print:bg-white print:px-0 print:py-0 print:!pt-0 print:!pb-0 sm:pl-[max(2rem,env(safe-area-inset-left,0px))] sm:pr-[max(2rem,env(safe-area-inset-right,0px))] sm:pt-12 sm:pb-12 [@media(max-height:400px)]:pt-3 [@media(max-height:400px)]:pb-3"
+      style={{
+        paddingTop:
+          'max(0.75rem, min(2rem, calc((100dvh - 25rem) / 2)), env(safe-area-inset-top, 0px))',
+        paddingBottom:
+          'max(0.75rem, min(2rem, calc((100dvh - 25rem) / 2)), env(safe-area-inset-bottom, 0px))',
+      }}
+    >
+      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-5xl flex-col print:min-h-0 print:py-5 [@media(max-height:400px)]:min-h-0">
+        <header className="flex items-center justify-between border-b border-neutral-300/80 pb-5 [@media(max-height:400px)]:pb-3 max-[360px]:pb-3">
+          <a
+            href="/"
+            className="inline-flex min-h-11 items-center rounded-md text-sm font-black tracking-tight text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+          >
             CRCN <span className="font-medium text-neutral-500">· Central de Reservas</span>
           </a>
           <span className="flex items-center gap-2 text-xs font-semibold text-neutral-600">
@@ -429,23 +479,23 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
           </span>
         </header>
 
-        <div className="grid flex-1 items-center gap-10 py-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
-          <section aria-labelledby="checkout-resume-title" className="max-w-xl">
+        <div className="grid flex-1 items-center gap-10 py-10 [@media(max-height:400px)]:gap-4 [@media(max-height:400px)]:py-4 max-[360px]:gap-4 max-[360px]:py-4 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
+          <section aria-labelledby="checkout-resume-title" className="min-w-0 max-w-xl">
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-800">
               Acompanhe seu pedido
             </p>
             <h1
               id="checkout-resume-title"
-              className="mt-4 text-4xl font-black leading-tight tracking-tight sm:text-5xl"
+              className="mt-4 text-3xl font-black leading-tight tracking-tight min-[400px]:text-4xl sm:text-5xl [@media(max-height:400px)]:mt-2 [@media(max-height:400px)]:text-3xl"
             >
               Sua estadia, com cada etapa no lugar.
             </h1>
-            <p className="mt-5 max-w-lg text-base leading-7 text-neutral-600">
+            <p className="mt-5 max-w-lg text-base leading-7 text-neutral-600 [@media(max-height:400px)]:hidden max-[360px]:hidden">
               Consulte o estado registrado pela Central de Reservas. A confirmação só aparece depois
               da verificação da reserva na Stays.
             </p>
 
-            <div className="mt-8 rounded-3xl border border-neutral-200 bg-white p-5 shadow-[0_18px_60px_-36px_rgba(37,30,18,0.35)] sm:p-7">
+            <div className="mt-8 rounded-3xl border border-neutral-200 bg-white p-5 shadow-[0_18px_60px_-36px_rgba(37,30,18,0.35)] sm:p-7 [@media(max-height:400px)]:mt-2 [@media(max-height:400px)]:p-3 max-[360px]:mt-4 max-[360px]:p-4">
               {resumeState.kind === 'loading' && (
                 <div
                   className="flex items-center gap-3 py-6 text-sm font-semibold text-neutral-700"
@@ -462,17 +512,18 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
 
               {resumeState.kind === 'missing-token' && (
                 <div className="space-y-3" role="alert">
-                  <h2 className="text-lg font-extrabold">Acesso disponível neste navegador</h2>
+                  <h2 className="text-lg font-extrabold">Entre na conta usada no pedido</h2>
                   <p className="text-sm leading-6 text-neutral-600">
-                    Para proteger seus dados, é necessário o código de acesso gerado na criação do
-                    pedido. Ele fica guardado somente na sessão do navegador em que a compra foi
-                    iniciada.
+                    Entre na sua conta CRCN com o mesmo e-mail confirmado informado no pedido para
+                    recuperá-lo entre dispositivos. Se você fez a compra como visitante, abra este
+                    endereço no navegador em que iniciou o pedido.
                   </p>
                   <a
                     href="/"
-                    className="inline-flex items-center gap-2 pt-2 text-sm font-bold text-orange-800 hover:text-orange-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl px-1 py-2 text-sm font-bold text-orange-800 hover:text-orange-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700"
                   >
-                    <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Voltar aos imóveis
+                    <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Ir para a CRCN e entrar na
+                    minha conta
                   </a>
                 </div>
               )}
@@ -487,7 +538,7 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                   <button
                     type="button"
                     onClick={() => setRetryKey((current) => current + 1)}
-                    className="mt-2 rounded-full bg-neutral-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                    className="mt-2 min-h-11 rounded-full bg-neutral-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
                   >
                     Tentar novamente
                   </button>
@@ -503,7 +554,7 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                   </p>
                   <a
                     href="/"
-                    className="inline-flex items-center gap-2 pt-2 text-sm font-bold text-orange-800 hover:text-orange-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700"
+                    className="inline-flex min-h-11 items-center gap-2 rounded-xl px-1 py-2 text-sm font-bold text-orange-800 hover:text-orange-950 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700"
                   >
                     <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Voltar aos imóveis
                   </a>
@@ -520,7 +571,9 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                     <StatusIcon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
                     <div>
                       <h2 className="font-extrabold">{status.title}</h2>
-                      <p className="mt-1 text-sm leading-6">{status.detail}</p>
+                      <p className="mt-1 break-words text-sm leading-6 [overflow-wrap:anywhere]">
+                        {status.detail}
+                      </p>
                     </div>
                   </div>
                   {order.status === 'pagamento_recusado' && !reservationIsActive && (
@@ -568,7 +621,9 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                       <dt className="text-xs font-bold uppercase tracking-wider text-neutral-500">
                         Responsável
                       </dt>
-                      <dd className="mt-1 font-bold">{order.guestName}</dd>
+                      <dd className="mt-1 break-words font-bold [overflow-wrap:anywhere]">
+                        {order.guestName}
+                      </dd>
                     </div>
                     <div className="rounded-2xl bg-[#f7f4ee] p-4">
                       <dt className="text-xs font-bold uppercase tracking-wider text-neutral-500">
@@ -643,7 +698,7 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                         <button
                           type="button"
                           onClick={() => window.print()}
-                          className="inline-flex items-center gap-2 rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-950 transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
+                          className="inline-flex min-h-11 items-center gap-2 rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-bold text-emerald-950 transition hover:bg-emerald-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800"
                         >
                           <Printer className="h-4 w-4" aria-hidden="true" />
                           Imprimir comprovante
@@ -652,73 +707,153 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                     </section>
                   )}
 
-                  {(canStartPixPayment || canStartCardPayment || showActiveCieloCheckout) && order && (
-                    <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
-                      {showPaymentMethodSelector && (
-                        <div className="flex gap-2" role="group" aria-label="Método de pagamento">
-                          <button
-                            type="button"
-                            aria-pressed={selectedPaymentMethod === 'pix'}
-                            onClick={() => setSelectedPaymentMethod('pix')}
-                            className={`rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'pix' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
-                          >
-                            Pix
-                          </button>
-                          <button
-                            type="button"
-                            aria-pressed={selectedPaymentMethod === 'card'}
-                            onClick={() => setSelectedPaymentMethod('card')}
-                            className={`rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'card' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
-                          >
-                            Cartão
-                          </button>
-                        </div>
+                  {order.status === 'confirmado' && order.paymentStatus === 'approved' && (
+                    <section className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4">
+                      <h2 className="font-extrabold text-neutral-950">Solicitar cancelamento</h2>
+                      <p className="text-sm leading-6 text-neutral-700">
+                        A Central analisará sua solicitação. O pedido não cancela a reserva nem
+                        realiza o estorno do pagamento.
+                      </p>
+                      {cancellationRequestError && (
+                        <p className="text-sm text-red-800" role="alert">
+                          {cancellationRequestError}
+                        </p>
                       )}
-
-                      {showPixPaymentAction && (
-                        <div className="space-y-3" aria-labelledby="checkout-start-payment-title">
-                          <div>
-                            <h2 id="checkout-start-payment-title" className="font-extrabold">
-                              {paymentAttempt
-                                ? 'Nova tentativa Pix disponível'
-                                : 'Pré-reserva pronta para pagamento'}
-                            </h2>
-                            <p className="mt-1 text-sm leading-6 text-neutral-700">
-                              {paymentAttempt
-                                ? 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto a pré-reserva estiver válida.'
-                                : 'A cobrança Pix só será solicitada quando você continuar. A confirmação da estadia depende da validação posterior na Stays.'}
-                            </p>
-                          </div>
-                          {paymentStartError && (
-                            <p className="text-sm text-rose-800" role="alert">
-                              {paymentStartError}
-                            </p>
-                          )}
-                          <button
-                            type="button"
-                            disabled={isStartingPixPayment}
-                            onClick={() => void startPixPayment(order)}
-                            className="rounded-full bg-orange-800 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
-                          >
-                            {isStartingPixPayment
-                              ? 'Solicitando Pix…'
-                              : paymentAttempt
-                                ? 'Tentar novamente com Pix'
-                                : 'Gerar pagamento Pix'}
-                          </button>
-                        </div>
-                      )}
-
-                      {(showCardPaymentForm || showActiveCieloCheckout) && cardPublicKey === 'cielo-iframe' && (
-                        <CieloCheckoutIframe
-                          reference={reference}
-                          amount={order.quoteTotal}
-                          checkoutUrl={paymentAttempt?.checkoutUrl ?? null}
-                          onAttemptStarted={() => setRetryKey((current) => current + 1)}
-                        />
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => void requestCancellation()}
+                        disabled={isRequestingCancellation}
+                        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-bold text-neutral-900 transition hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-800 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isRequestingCancellation && (
+                          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                        )}
+                        {isRequestingCancellation
+                          ? 'Enviando solicitação…'
+                          : 'Solicitar cancelamento'}
+                      </button>
                     </section>
                   )}
+
+                  {order.status === 'cancelamento_solicitado' && order.cancellationReceipt && (
+                    <section
+                      aria-labelledby="checkout-cancellation-receipt-title"
+                      className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4"
+                      role="status"
+                    >
+                      <h2
+                        id="checkout-cancellation-receipt-title"
+                        className="font-extrabold text-amber-950"
+                      >
+                        Solicitação de cancelamento registrada
+                      </h2>
+                      <p className="text-sm leading-6 text-amber-950">
+                        A Central analisará o pedido. A reserva continua ativa até a confirmação do
+                        cancelamento, e o estorno ainda não foi realizado.
+                      </p>
+                      <p className="text-sm text-amber-950">
+                        Protocolo:{' '}
+                        <span className="font-mono font-bold">
+                          {order.cancellationReceipt.protocol}
+                        </span>
+                      </p>
+                      <p className="text-sm text-amber-950">
+                        Registrada em{' '}
+                        {dateTimeFormatter.format(new Date(order.cancellationReceipt.requestedAt))}
+                      </p>
+                    </section>
+                  )}
+
+                  {(canStartPixPayment || canStartCardPayment || showActiveCieloCheckout) &&
+                    order && (
+                      <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+                        {showPaymentMethodSelector && (
+                          <div className="flex gap-2" role="group" aria-label="Método de pagamento">
+                            <button
+                              type="button"
+                              aria-pressed={selectedPaymentMethod === 'pix'}
+                              onClick={() => setSelectedPaymentMethod('pix')}
+                              className={`min-h-11 rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'pix' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
+                            >
+                              Pix
+                            </button>
+                            <button
+                              type="button"
+                              aria-pressed={selectedPaymentMethod === 'card'}
+                              onClick={() => setSelectedPaymentMethod('card')}
+                              className={`min-h-11 rounded-full px-4 py-2 text-sm font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${selectedPaymentMethod === 'card' ? 'bg-orange-800 text-white' : 'border border-neutral-300 text-neutral-800 hover:bg-neutral-100'}`}
+                            >
+                              Cartão
+                            </button>
+                          </div>
+                        )}
+
+                        {showPixPaymentAction && (
+                          <div className="space-y-3" aria-labelledby="checkout-start-payment-title">
+                            <div>
+                              <h2 id="checkout-start-payment-title" className="font-extrabold">
+                                {paymentAttempt
+                                  ? 'Nova tentativa Pix disponível'
+                                  : 'Pré-reserva pronta para pagamento'}
+                              </h2>
+                              <p className="mt-1 text-sm leading-6 text-neutral-700">
+                                {paymentAttempt
+                                  ? 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto a pré-reserva estiver válida.'
+                                  : 'A cobrança Pix só será solicitada quando você continuar. A confirmação da estadia depende da validação posterior na Stays.'}
+                              </p>
+                            </div>
+                            {paymentStartError && (
+                              <p className="text-sm text-rose-800" role="alert">
+                                {paymentStartError}
+                              </p>
+                            )}
+                            <button
+                              type="button"
+                              disabled={isStartingPixPayment}
+                              onClick={() => void startPixPayment(order)}
+                              className="inline-flex min-h-11 max-w-full items-center justify-center rounded-full bg-orange-800 px-5 py-3 text-center text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
+                            >
+                              {isStartingPixPayment
+                                ? 'Solicitando Pix…'
+                                : paymentAttempt
+                                  ? 'Tentar novamente com Pix'
+                                  : 'Gerar pagamento Pix'}
+                            </button>
+                          </div>
+                        )}
+
+                        {showCardPaymentForm && isCieloProvider && (
+                          <CieloSopCardForm
+                            reference={reference}
+                            amount={order.quoteTotal}
+                            credentials={
+                              resumeState.kind === 'ready' ? resumeState.credentials : null
+                            }
+                            onAttemptFinished={() => setRetryKey((current) => current + 1)}
+                          />
+                        )}
+                        {showHostedCieloCheckout && (
+                          <CieloCheckoutIframe
+                            reference={reference}
+                            amount={order.quoteTotal}
+                            checkoutUrl={paymentAttempt?.checkoutUrl ?? null}
+                            onAttemptStarted={() => setRetryKey((current) => current + 1)}
+                          />
+                        )}
+                        {showCardPaymentForm && !isCieloProvider && cardPublicKey && (
+                          <MercadoPagoCardForm
+                            reference={reference}
+                            amount={order.quoteTotal}
+                            publicKey={cardPublicKey}
+                            credentials={
+                              resumeState.kind === 'ready' ? resumeState.credentials : null
+                            }
+                            isPixAvailable={canStartPixPayment}
+                            onAttemptFinished={() => setRetryKey((current) => current + 1)}
+                          />
+                        )}
+                      </section>
+                    )}
 
                   {paymentAttempt && (
                     <section
@@ -760,12 +895,12 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                                 readOnly
                                 rows={3}
                                 value={paymentAttempt.pix.copyPaste}
-                                className="w-full resize-y rounded-xl border border-neutral-300 bg-neutral-50 p-3 font-mono text-xs leading-5 text-neutral-800"
+                                className="block min-h-24 w-full min-w-0 resize-y break-all rounded-xl border border-neutral-300 bg-neutral-50 p-3 font-mono text-xs leading-5 text-neutral-800"
                               />
                               <button
                                 type="button"
                                 onClick={() => void copyPixCode(paymentAttempt.pix!.copyPaste!)}
-                                className="rounded-full bg-neutral-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                                className="inline-flex min-h-11 max-w-full items-center justify-center rounded-full bg-neutral-950 px-4 py-2.5 text-center text-xs font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
                               >
                                 Copiar código Pix
                               </button>
@@ -797,7 +932,7 @@ export function CheckoutResumePage({ reference }: CheckoutResumePageProps) {
                   <button
                     type="button"
                     onClick={() => setRetryKey((current) => current + 1)}
-                    className="rounded-full border border-neutral-300 bg-white px-4 py-2.5 text-xs font-bold text-neutral-800 transition hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 print:hidden"
+                    className="min-h-11 rounded-full border border-neutral-300 bg-white px-4 py-2.5 text-xs font-bold text-neutral-800 transition hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 print:hidden"
                   >
                     Atualizar status
                   </button>

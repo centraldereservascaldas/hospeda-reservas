@@ -6,6 +6,8 @@ use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
 use App\Services\DirectSaleTermsRegistry;
 use App\Services\DirectStaysReservationService;
+use App\Services\Payments\DirectCheckoutPaymentService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
@@ -90,7 +92,12 @@ class BookingApiTest extends TestCase
 
     public function test_reservations_use_verified_guest_details_and_are_not_cached(): void
     {
-        config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key']);
+        config([
+            'services.supabase.url' => 'https://auth.example.test',
+            'services.supabase.anon_key' => 'public-key',
+            'services.stays.client_id' => 'stays-client-id',
+            'services.stays.client_secret' => 'stays-client-secret',
+        ]);
         Http::fake([
             '*/auth/v1/user' => Http::response(['id' => '575c8054-6646-443c-bf62-07945019a32f', 'email' => 'guest@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Guest Example']], 200),
             '*/booking/clients/stays-client-1' => Http::response(['client' => ['reservations' => [[
@@ -166,6 +173,7 @@ class BookingApiTest extends TestCase
 
     public function test_checkout_idempotency_does_not_depend_on_cache_locks(): void
     {
+        $this->mockAvailablePaymentMethods();
         $this->configureCheckoutPaymentReadiness();
         config([
             'cache.default' => 'null',
@@ -182,6 +190,12 @@ class BookingApiTest extends TestCase
 
     public function test_checkout_returns_503_for_unapproved_property_terms_without_creating_an_order(): void
     {
+        $this->mockAvailablePaymentMethods();
+        config([
+            'direct-booking.enabled' => true,
+            'services.stays.client_id' => 'client',
+            'services.stays.client_secret' => 'secret',
+        ]);
         $this->configureCheckoutPaymentReadiness();
         $this->mock(DirectSaleTermsRegistry::class)
             ->shouldReceive('findApprovedListing')
@@ -254,8 +268,36 @@ class BookingApiTest extends TestCase
         $this->assertDatabaseCount('direct_booking_stays_actions', 0);
     }
 
+    public function test_checkout_rejects_live_capacity_below_requested_guests(): void
+    {
+        $this->configureApprovedCheckoutTerms();
+        $requestOrder = [];
+        $this->fakeDirectCheckoutRequests(3001, $requestOrder, availabilityResponse: [['id' => 'JQ08G', '_i_maxGuests' => 1]]);
+
+        $this->postJson('/api/checkout', $this->checkoutPayload(3001), ['Idempotency-Key' => 'checkout-live-capacity-01'])
+            ->assertUnprocessable()
+            ->assertJsonPath('code', 'invalid_guest_count');
+        $this->assertSame(['POST /booking/search-listings'], $requestOrder);
+        $this->assertDatabaseCount('direct_booking_orders', 0);
+    }
+
+    public function test_checkout_accepts_single_listing_quote_without_identifier(): void
+    {
+        $this->configureApprovedCheckoutTerms();
+        $requestOrder = [];
+        $this->fakeDirectCheckoutRequests(3001, $requestOrder, [
+            'bookingPrice' => ['_mctotal' => ['BRL' => 3001], 'feesIncluded' => true, 'fees' => []],
+        ]);
+
+        $this->postJson('/api/checkout', $this->checkoutPayload(3001), ['Idempotency-Key' => 'checkout-single-quote-01'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_unconfigured');
+        $this->assertDatabaseCount('direct_booking_orders', 1);
+    }
+
     public function test_checkout_returns_503_and_replays_the_same_order_without_additional_stays_calls(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-24T17:00:00Z'));
         $termsSnapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.'];
         $this->configureApprovedCheckoutTerms($termsSnapshot);
         $requestOrder = [];
@@ -269,24 +311,39 @@ class BookingApiTest extends TestCase
                 'message' => 'A pré-reserva não está configurada.',
             ]);
         $payload = $this->checkoutPayload(3001);
+        $payload['marketingAttribution'] = [
+            'firstTouch' => [
+                'capturedAt' => 1792861200000,
+                'values' => ['utm_source' => 'google', 'utm_campaign' => 'summer_launch', 'gclid' => 'click-id-123'],
+            ],
+            'lastTouch' => [
+                'capturedAt' => 1792861300000,
+                'values' => ['utm_source' => 'meta', 'utm_medium' => 'paid_social', 'fbclid' => 'meta-click-456'],
+            ],
+        ];
 
         $first = $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attempt-00003'])
             ->assertServiceUnavailable()
             ->assertJsonPath('code', 'reservation_hold_unconfigured')
             ->assertJsonPath('order.status', 'cotado')
             ->assertJsonPath('idempotentReplay', false);
-        $orderReference = $first->json('order.publicReference');
-        $this->assertIsString($orderReference);
+        $publicReference = $first->json('order.publicReference');
+        $this->assertIsString($publicReference);
 
-        $order = DirectBookingOrder::query()->where('public_reference', $orderReference)->firstOrFail();
+        $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->firstOrFail();
         $this->assertModelExists($order);
         $this->assertSame($termsSnapshot, $order->accepted_terms_snapshot);
+        $this->assertSame($payload['marketingAttribution'], $order->marketing_attribution);
         $this->assertSame(1, DirectBookingOrder::query()->count());
 
-        $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attempt-00003'])
+        $replayedPayload = [...$payload, 'marketingAttribution' => [
+            ...$payload['marketingAttribution'],
+            'lastTouch' => ['capturedAt' => 1792861400000, 'values' => ['utm_source' => 'email']],
+        ]];
+        $this->postJson('/api/checkout', $replayedPayload, ['Idempotency-Key' => 'checkout-attempt-00003'])
             ->assertServiceUnavailable()
             ->assertJsonPath('code', 'reservation_hold_unconfigured')
-            ->assertJsonPath('order.publicReference', $orderReference)
+            ->assertJsonPath('order.publicReference', $publicReference)
             ->assertJsonPath('idempotentReplay', true);
 
         $this->postJson('/api/checkout', [...$payload, 'guest' => [...$payload['guest'], 'fullName' => 'Another Guest']], ['Idempotency-Key' => 'checkout-attempt-00003'])
@@ -295,6 +352,79 @@ class BookingApiTest extends TestCase
 
         $this->assertSame(['POST /booking/search-listings', 'POST /booking/calculate-price'], $requestOrder);
         $this->assertSame(1, DirectBookingOrder::query()->count());
+    }
+
+    public function test_checkout_rejects_unapproved_marketing_attribution_fields(): void
+    {
+        $payload = $this->checkoutPayload(3001);
+        $payload['marketingAttribution'] = [
+            'firstTouch' => ['capturedAt' => 1792861200000, 'values' => ['utm_source' => 'google', 'email' => 'guest@example.test']],
+            'lastTouch' => ['capturedAt' => 1792861300000, 'values' => ['utm_source' => 'google']],
+        ];
+
+        $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attribution-invalid-01'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('marketingAttribution.firstTouch.values');
+    }
+
+    public function test_checkout_rejects_implausible_marketing_attribution_timestamps(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-24T17:00:00Z'));
+        $now = now()->valueOf();
+        $cases = [
+            'seconds instead of milliseconds' => (int) floor($now / 1000),
+            'older than the attribution retention window' => $now - (30 * 24 * 60 * 60 * 1000) - 1,
+            'beyond the future clock tolerance' => $now + (5 * 60 * 1000) + 1,
+        ];
+
+        foreach ($cases as $case => $capturedAt) {
+            $payload = $this->checkoutPayload(3001);
+            $payload['marketingAttribution'] = [
+                'firstTouch' => ['capturedAt' => $capturedAt, 'values' => ['utm_source' => 'google']],
+                'lastTouch' => ['capturedAt' => $now, 'values' => ['utm_source' => 'google']],
+            ];
+
+            $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'checkout-attribution-time-'.str_replace(' ', '-', $case)])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors('marketingAttribution.firstTouch.capturedAt');
+        }
+    }
+
+    public function test_checkout_applies_exact_attribution_timestamp_boundaries_and_accepts_null_or_omitted_attribution(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-24T17:00:00Z'));
+        $now = now()->valueOf();
+        $this->configureApprovedCheckoutTerms(expectedLookupCount: 3);
+        $requestOrder = [];
+        $this->fakeDirectCheckoutRequests(3001, $requestOrder);
+
+        $atOldestBoundary = $this->checkoutPayload(3001);
+        $atOldestBoundary['marketingAttribution'] = [
+            'firstTouch' => ['capturedAt' => $now - (30 * 24 * 60 * 60 * 1000), 'values' => ['utm_source' => 'google']],
+            'lastTouch' => ['capturedAt' => $now, 'values' => ['utm_source' => 'google']],
+        ];
+        $this->postJson('/api/checkout', $atOldestBoundary, ['Idempotency-Key' => 'checkout-attribution-old-boundary-01'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('marketingAttribution.firstTouch.capturedAt');
+
+        $atFutureBoundary = $this->checkoutPayload(3001);
+        $atFutureBoundary['marketingAttribution'] = [
+            'firstTouch' => ['capturedAt' => $now, 'values' => ['utm_source' => 'google']],
+            'lastTouch' => ['capturedAt' => $now + (5 * 60 * 1000), 'values' => ['utm_source' => 'google']],
+        ];
+        $this->postJson('/api/checkout', $atFutureBoundary, ['Idempotency-Key' => 'checkout-attribution-future-boundary-01'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_unconfigured');
+
+        $nullAttribution = $this->checkoutPayload(3001);
+        $nullAttribution['marketingAttribution'] = null;
+        $this->postJson('/api/checkout', $nullAttribution, ['Idempotency-Key' => 'checkout-attribution-null-00001'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_unconfigured');
+
+        $this->postJson('/api/checkout', $this->checkoutPayload(3001), ['Idempotency-Key' => 'checkout-attribution-omitted-01'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_unconfigured');
     }
 
     private function checkoutPayload(?float $quoteTotal = null, string $termsVersion = 'terms-2026-01'): array
@@ -311,14 +441,19 @@ class BookingApiTest extends TestCase
         ], fn (mixed $value): bool => $value !== null);
     }
 
-    private function configureApprovedCheckoutTerms(array $snapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.']): void
+    private function configureApprovedCheckoutTerms(array $snapshot = ['version' => 'terms-2026-01', 'cancelamento' => 'Política específica deste imóvel.'], int $expectedLookupCount = 1): void
     {
+        $this->mockAvailablePaymentMethods();
+        config(['direct-booking.enabled' => true, 'cache.default' => 'array']);
         $this->configureCheckoutPaymentReadiness();
-        config(['cache.default' => 'array']);
+        config([
+            'cache.default' => 'array',
+            'direct-booking.reservation_hold_minutes' => null,
+        ]);
         app('cache')->forgetDriver('array');
         $this->mock(DirectSaleTermsRegistry::class)
             ->shouldReceive('findApprovedListing')
-            ->once()
+            ->times($expectedLookupCount)
             ->with('JQ08G')
             ->andReturn([
                 'id' => 'JQ08G',
@@ -329,8 +464,20 @@ class BookingApiTest extends TestCase
             ]);
     }
 
+    private function mockAvailablePaymentMethods(): void
+    {
+        config([
+            'direct-booking.resume_token_ttl_days' => 30,
+            'direct-booking.payments_enabled' => true,
+            'direct-booking.confirmation_enabled' => true,
+        ]);
+        $this->partialMock(DirectCheckoutPaymentService::class)
+            ->shouldReceive('availableMethods')
+            ->andReturn(['pix']);
+    }
+
     /** @param list<string> $requestOrder */
-    private function fakeDirectCheckoutRequests(float $total, array &$requestOrder, ?array $quoteResponse = null): void
+    private function fakeDirectCheckoutRequests(float $total, array &$requestOrder, ?array $quoteResponse = null, ?array $availabilityResponse = null): void
     {
         config([
             'services.stays.client_id' => 'client',
@@ -340,12 +487,12 @@ class BookingApiTest extends TestCase
         ]);
         app('cache')->forgetDriver('array');
         Http::preventStrayRequests();
-        Http::fake(function (ClientRequest $request) use ($total, &$requestOrder, $quoteResponse) {
+        Http::fake(function (ClientRequest $request) use ($total, &$requestOrder, $quoteResponse, $availabilityResponse) {
             $path = parse_url($request->url(), PHP_URL_PATH);
             $requestOrder[] = $request->method().' '.str_replace('/external/v1', '', (string) $path);
 
             return match (true) {
-                str_ends_with((string) $path, '/booking/search-listings') => Http::response([['id' => 'JQ08G']], 200),
+                str_ends_with((string) $path, '/booking/search-listings') => Http::response($availabilityResponse ?? [['id' => 'JQ08G']], 200),
                 str_ends_with((string) $path, '/booking/calculate-price') => Http::response($quoteResponse ?? [['_idlisting' => 'JQ08G', 'bookingPrice' => ['mainCurrency' => 'BRL', '_mctotal' => ['BRL' => $total], 'feesIncluded' => true, 'fees' => []]]], 200),
                 default => Http::response([], 404),
             };

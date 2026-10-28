@@ -44,21 +44,15 @@ function createOverlayProps(): AppOverlayLayerProps {
     filters,
     defaultFilters: createDefaultSearchFilters(),
     setFilters,
-    selectedProperty: null,
     selectedCondominium: null,
     bookingPayload: null,
     checkoutGuestPrefill: { fullName: '', email: '', phone: '' },
     accountModalMode: null,
-    savedPropertyIds: [],
-    catalogFocusRef: React.createRef<HTMLElement>(),
-    filteredPropertiesCount: 0,
+    properties: [],
     isSofiaOpen: false,
     isSearchOpen: false,
     isFilterOpen: false,
     isCreateListingOpen: false,
-    onClosePropertyDetail: () => {},
-    onStartBooking: () => {},
-    onToggleSave: () => {},
     onCloseCondominium: () => {},
     onCloseSofia: () => {},
     onSelectPropertyFromSofia: () => {},
@@ -95,4 +89,56 @@ test('keeps overlays deferred until open and wires the search close action', asy
   assert.ok(dialog);
   fireEvent.click(screen.getByRole('button', { name: 'Fechar busca de hospedagens' }));
   assert.equal(closeCalls, 1);
+});
+
+test('clearing filter-modal facets preserves the active destination, dates, and guests', async () => {
+  crcnBackendApi.getResorts = async () => [];
+  const initialFilters: SearchFilters = {
+    ...createDefaultSearchFilters(),
+    destination: 'Caldas Novas',
+    destinationPropertyId: 'resort-1',
+    checkIn: '2027-05-01',
+    checkOut: '2027-05-04',
+    guests: { adults: 2, children: 1, infants: 1, pets: 0 },
+    category: 'pools_24h',
+    minPrice: 150,
+    maxPrice: 900,
+    amenities: ['Piscina'],
+    minBedrooms: 2,
+    superhostOnly: true,
+  };
+
+  function Harness() {
+    const [filters, setFilters] = React.useState(initialFilters);
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement('output', { 'data-testid': 'current-filters' }, JSON.stringify(filters)),
+      React.createElement(AppOverlayLayer, {
+        ...createOverlayProps(),
+        filters,
+        setFilters,
+        isFilterOpen: true,
+      }),
+    );
+  }
+
+  render(React.createElement(Harness));
+  await waitFor(() => screen.getByRole('dialog', { name: 'Filtros' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Limpar tudo' }));
+
+  const filters = JSON.parse(
+    screen.getByTestId('current-filters').textContent || '{}',
+  ) as SearchFilters;
+  assert.equal(filters.destination, 'Caldas Novas');
+  assert.equal(filters.destinationPropertyId, 'resort-1');
+  assert.equal(filters.checkIn, '2027-05-01');
+  assert.equal(filters.checkOut, '2027-05-04');
+  assert.deepEqual(filters.guests, { adults: 2, children: 1, infants: 1, pets: 0 });
+  assert.equal(filters.category, 'all');
+  assert.equal(filters.minPrice, 0);
+  assert.equal(filters.maxPrice, 5000);
+  assert.deepEqual(filters.amenities, []);
+  assert.equal(filters.minBedrooms, 0);
+  assert.equal(filters.superhostOnly, false);
 });

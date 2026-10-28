@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCheckoutPaymentRequest;
 use App\Models\DirectBookingOrder;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class CheckoutPaymentController extends Controller
@@ -17,9 +19,20 @@ class CheckoutPaymentController extends Controller
         $validated = $request->validate([
             'idempotencyKey' => ['required', 'string', 'min:16', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
         ]);
+        $headerIdempotencyKey = $request->header('Idempotency-Key');
+        if (! is_string($headerIdempotencyKey) || ! hash_equals($validated['idempotencyKey'], $headerIdempotencyKey)) {
+            throw ValidationException::withMessages([
+                'Idempotency-Key' => 'O cabeçalho Idempotency-Key deve corresponder ao corpo da solicitação.',
+            ]);
+        }
+
         $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
         $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
-        if ($order === null || $providedToken === '' || ! hash_equals((string) $order->resume_token, $providedToken)) {
+        $guest = $request->attributes->get('verified_guest');
+        $isAuthorizedGuest = $guest instanceof VerifiedGuest
+            && hash_equals($order?->guest_email ?? '', mb_strtolower(trim($guest->email)));
+        $isValidResumeToken = $order?->hasValidResumeToken($providedToken) ?? false;
+        if ($order === null || (! $isAuthorizedGuest && ! $isValidResumeToken)) {
             return response()->json(['success' => false, 'code' => 'checkout_not_found', 'message' => 'Pedido não encontrado.'], 404)
                 ->header('Cache-Control', 'no-store, private');
         }
@@ -70,7 +83,11 @@ class CheckoutPaymentController extends Controller
     {
         $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
         $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
-        if ($order === null || $providedToken === '' || ! hash_equals((string) $order->resume_token, $providedToken)) {
+        $guest = $request->attributes->get('verified_guest');
+        $isAuthorizedGuest = $guest instanceof VerifiedGuest
+            && hash_equals($order?->guest_email ?? '', mb_strtolower(trim($guest->email)));
+        $isValidResumeToken = $order?->hasValidResumeToken($providedToken) ?? false;
+        if ($order === null || (! $isAuthorizedGuest && ! $isValidResumeToken)) {
             return response()->json(['success' => false, 'code' => 'checkout_not_found', 'message' => 'Pedido não encontrado.'], 404)
                 ->header('Cache-Control', 'no-store, private');
         }
@@ -100,5 +117,32 @@ class CheckoutPaymentController extends Controller
                 ] : null,
             ],
         ], $result['status'])->header('Cache-Control', 'no-store, private');
+    }
+
+    public function cieloSopToken(Request $request, string $publicReference, DirectCheckoutPaymentService $payments): JsonResponse
+    {
+        $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
+        $providedToken = (string) $request->header('X-Checkout-Resume-Token', '');
+        $guest = $request->attributes->get('verified_guest');
+        $isAuthorizedGuest = $guest instanceof VerifiedGuest
+            && hash_equals($order?->guest_email ?? '', mb_strtolower(trim($guest->email)));
+        $isValidResumeToken = $order?->hasValidResumeToken($providedToken) ?? false;
+        if ($order === null || (! $isAuthorizedGuest && ! $isValidResumeToken)) {
+            return response()->json(['success' => false, 'code' => 'checkout_not_found'], 404)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        try {
+            $accessToken = $payments->cieloSopAccessToken($order);
+        } catch (Throwable) {
+            return response()->json(['success' => false, 'code' => 'cielo_sop_unavailable'], 503)
+                ->header('Cache-Control', 'no-store, private');
+        }
+
+        return response()->json([
+            'success' => true,
+            'environment' => 'sandbox',
+            'accessToken' => $accessToken,
+        ])->header('Cache-Control', 'no-store, private');
     }
 }

@@ -2,17 +2,36 @@
 
 use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\BookingController;
+use App\Http\Controllers\Api\CheckoutCancellationController;
 use App\Http\Controllers\Api\CheckoutPaymentController;
 use App\Http\Controllers\Api\CieloSopController;
+use App\Http\Controllers\Api\CieloWebhookController;
 use App\Http\Controllers\Api\GuestReservationController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OwnerAccessController;
 use App\Http\Controllers\Api\OwnerAdminController;
 use App\Http\Controllers\Api\OwnerDashboardController;
+use App\Http\Controllers\Api\PropertyMetadataController;
+use App\Http\Controllers\Api\PublicLegalPageController;
 use App\Http\Controllers\Api\SofiaController;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => response()->json(['success' => true, 'service' => 'hospeda-reservas-api']));
+Route::get('/public/property-metadata/{id}', [PropertyMetadataController::class, 'show'])
+    ->where('id', '[A-Za-z0-9_-]+');
+Route::get('/public/legal-pages', [PublicLegalPageController::class, 'index']);
+Route::get('/public/legal-pages/{slug}', [PublicLegalPageController::class, 'show'])
+    ->whereIn('slug', ['privacidade', 'termos', 'cancelamento']);
+Route::get('/ready', function () {
+    try {
+        DB::connection()->select('SELECT 1');
+
+        return response()->json(['success' => true, 'service' => 'hospeda-reservas-api']);
+    } catch (Throwable) {
+        return response()->json(['success' => false, 'service' => 'hospeda-reservas-api'], 503);
+    }
+});
 
 Route::get('/resorts', [AccommodationController::class, 'resorts']);
 Route::get('/accommodations', [AccommodationController::class, 'index']);
@@ -21,11 +40,19 @@ Route::post('/search', [AccommodationController::class, 'search']);
 Route::get('/accommodations/{id}/calendar', [AccommodationController::class, 'calendar']);
 Route::post('/price', [BookingController::class, 'price']);
 Route::get('/stays/status', [BookingController::class, 'staysStatus']);
+Route::get('/stays-checkout/readiness', [BookingController::class, 'staysCheckoutReadiness'])
+    ->middleware('throttle:30,1');
+Route::post('/stays-checkout', [BookingController::class, 'startStaysCheckout'])
+    ->middleware('throttle:5,1');
 
 Route::middleware('supabase.guest')->group(function (): void {
     Route::post('/auth/sync-stays', [GuestReservationController::class, 'sync']);
     Route::get('/my-reservations', [GuestReservationController::class, 'index']);
-    Route::get('/my-direct-booking-orders', [GuestReservationController::class, 'directBookingOrders']);
+    Route::get('/my-direct-booking-orders', [GuestReservationController::class, 'directBookingOrders'])
+        ->middleware('throttle:direct-booking-orders');
+    Route::get('/my-direct-booking-orders/{publicReference}/checkout', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
+    Route::post('/my-direct-booking-orders/{publicReference}/checkout/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
+    Route::post('/my-direct-booking-orders/{publicReference}/checkout/payments/cielo-sop-token', [CheckoutPaymentController::class, 'cieloSopToken'])->middleware('throttle:10,1');
     Route::post('/my-direct-booking-orders/{publicReference}/cancel', [GuestReservationController::class, 'requestDirectBookingCancellation'])->middleware('throttle:5,1');
     Route::post('/my-reservations/{reservationId}/cancel', [GuestReservationController::class, 'cancel']);
     Route::get('/owner/access', [OwnerAccessController::class, 'show']);
@@ -43,6 +70,7 @@ Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->gro
     Route::post('/direct-booking-orders/{publicReference}/start-manual-cancellation', [OwnerAdminController::class, 'startManualDirectBookingCancellation'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/verify-manual-stays-cancellation', [OwnerAdminController::class, 'verifyManualDirectBookingStaysCancellation'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/verify-manual-gateway-refund', [OwnerAdminController::class, 'verifyManualDirectBookingGatewayRefund'])->middleware('throttle:10,1');
+    Route::post('/direct-booking-orders/{publicReference}/revoke-resume-token', [OwnerAdminController::class, 'revokeDirectBookingResumeToken'])->middleware('throttle:10,1');
     Route::get('/stays-owners', [OwnerAdminController::class, 'staysOwners']);
     Route::post('/approve', [OwnerAdminController::class, 'approve']);
 });
@@ -52,9 +80,12 @@ Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checko
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
 Route::post('/checkout/{publicReference}/cielo-checkout', [CheckoutPaymentController::class, 'createCieloCheckout'])->middleware('throttle:5,1');
 Route::post('/checkout/{publicReference}/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
+Route::post('/checkout/{publicReference}/payments/cielo-sop-token', [CheckoutPaymentController::class, 'cieloSopToken'])->middleware('throttle:10,1');
+Route::post('/checkout/{publicReference}/cancel', [CheckoutCancellationController::class, 'store'])->middleware('throttle:5,1');
 Route::get('/checkout/{publicReference}/cielo/sop-token', [CieloSopController::class, 'accessToken'])->middleware('throttle:10,1');
 Route::post('/webhooks/cielo-checkout', [CheckoutPaymentController::class, 'cieloCheckoutNotification'])->middleware('throttle:120,1');
 Route::post('/webhooks/mercadopago', MercadoPagoWebhookController::class)->middleware('throttle:120,1');
+Route::post('/webhooks/cielo', CieloWebhookController::class)->middleware('throttle:30,1');
 
 Route::get('/external/v1/content/listings', [AccommodationController::class, 'staysListings']);
 Route::get('/external/v1/content/listings/{id}', [AccommodationController::class, 'staysListing']);

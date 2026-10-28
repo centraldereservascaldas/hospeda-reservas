@@ -53,17 +53,30 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
   const descriptionBlocks = formatPropertyDescription(property.description)
     .split(/\n\n+/)
     .filter(Boolean);
+  const propertyDetails = [
+    property.bedrooms > 0
+      ? `${property.bedrooms} ${property.bedrooms === 1 ? 'quarto' : 'quartos'}`
+      : '',
+    property.beds > 0 ? `${property.beds} ${property.beds === 1 ? 'cama' : 'camas'}` : '',
+    property.bathrooms > 0
+      ? `${property.bathrooms} ${property.bathrooms === 1 ? 'banheiro' : 'banheiros'}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' • ');
 
   return (
     <>
       {/* Space Summary */}
       <div className="pb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg sm:text-xl font-bold text-neutral-900">{property.subtitle}</h2>
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="break-words text-lg font-bold text-neutral-900 sm:text-xl">
+              {property.subtitle}
+            </h2>
             <p className="text-xs sm:text-sm text-neutral-500 mt-1">
-              Até {property.maxGuests} hóspedes • {property.bedrooms} quartos • {property.beds}{' '}
-              camas • {property.bathrooms} banheiros
+              Até {property.maxGuests} {property.maxGuests === 1 ? 'hóspede' : 'hóspedes'}
+              {propertyDetails ? ` • ${propertyDetails}` : ''}
             </p>
           </div>
 
@@ -76,15 +89,13 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
           )}
         </div>
 
-        {property.isGuestFavorite && (
+        {property.staysSynced && property.isGuestFavorite && (
           <div className="mt-6 p-4 rounded-2xl border border-neutral-200 bg-neutral-50/70 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Sparkles className="w-6 h-6 text-orange-500 flex-shrink-0" />
               <div>
                 <p className="font-bold text-sm text-neutral-900">Preferido dos hóspedes</p>
-                <p className="text-xs text-neutral-500">
-                  Uma das acomodações mais bem avaliadas no Hospeda pelos hóspedes.
-                </p>
+                <p className="text-xs text-neutral-500">Bem avaliada por quem já se hospedou.</p>
               </div>
             </div>
             <div className="text-right flex-shrink-0">
@@ -162,7 +173,7 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
               >
                 <BedDouble className="w-6 h-6 text-orange-600 mb-3" />
                 <p className="font-extrabold text-xs text-neutral-900">{room.roomName}</p>
-                <p className="text-[11px] text-neutral-600 font-medium mt-1">{room.bedType}</p>
+                <p className="text-caption text-neutral-600 font-medium mt-1">{room.bedType}</p>
               </div>
             ))}
           </div>

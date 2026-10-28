@@ -15,3 +15,8 @@ graphify-out/
 /storage/logs/*.log
 /public/build/
 /public/hot
+.vercel
+.DS_Store
+.phpunit.result.cache
+/.playwright-mcp/
+/wave*.png

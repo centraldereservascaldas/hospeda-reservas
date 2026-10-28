@@ -54,6 +54,54 @@ test('mobile category actions keep accessible names when their visible labels ar
   assert.ok(getByRole('button', { name: 'Ver mapa' }));
 });
 
+test('mobile category cards show compact labels beside icons and keep a full-height touch target', () => {
+  const { getByRole } = renderCategoryBar();
+  const category = getByRole('button', { name: 'Todas as hospedagens' });
+  const iconSurface = category.querySelector('div.relative');
+  const label = category.querySelector('span.w-full');
+
+  assert.match(category.className, /gap-0/);
+  assert.match(category.className, /min-h-16/);
+  assert.match(category.className, /h-16/);
+  assert.match(category.className, /flex-col/);
+  assert.match(category.className, /sm:flex-row/);
+  assert.match(category.className, /sm:h-14/);
+  assert.match(category.className, /sm:w-28 sm:min-w-28/);
+  assert.match(category.className, /max-height:400px/);
+  assert.match(category.className, /h-12/);
+  assert.match(category.className, /min-h-12/);
+  assert.match(category.className, /sm:gap-0/);
+  assert.match(category.className, /sm:py-1/);
+  assert.match(category.className, /sm:px-0/);
+  assert.match(iconSurface?.className ?? '', /h-6 w-6/);
+  assert.match(iconSurface?.className ?? '', /sm:h-6 sm:w-6/);
+  assert.match(iconSurface?.querySelector('svg')?.getAttribute('class') ?? '', /w-4 h-4/);
+  assert.match(label?.className ?? '', /flex-1/);
+  assert.doesNotMatch(label?.className ?? '', /\bhidden\b/);
+  assert.match(label?.textContent ?? '', /Todas as hospedagens/);
+  assert.match(label?.className ?? '', /sm:flex-1/);
+  assert.match(label?.querySelector('span')?.className ?? '', /text-caption/);
+  assert.match(label?.querySelector('span')?.className ?? '', /leading-3/);
+});
+
+test('category, filter, map, and price controls expose visible keyboard focus styles', () => {
+  const { getByRole } = renderCategoryBar();
+
+  assert.match(
+    getByRole('button', { name: 'Todas as hospedagens' }).className,
+    /focus-visible:outline/,
+  );
+  assert.match(
+    getByRole('button', { name: 'Abrir filtros; 2 ativos' }).className,
+    /focus-visible:outline/,
+  );
+  assert.match(getByRole('button', { name: 'Ver mapa' }).className, /focus-visible:outline/);
+  const totalPriceSwitch = getByRole('switch', { name: 'Exibir total da estadia' });
+  assert.match(totalPriceSwitch.className, /h-11 w-11/);
+  assert.match(totalPriceSwitch.className, /focus-visible:outline/);
+  assert.match(totalPriceSwitch.querySelector('span')?.className ?? '', /h-5 w-9/);
+});
+
 test('map toggle name follows the action and category pagination announces its position', () => {
   const setViewMode = (mode: string) => modes.push(mode);
   const modes: string[] = [];

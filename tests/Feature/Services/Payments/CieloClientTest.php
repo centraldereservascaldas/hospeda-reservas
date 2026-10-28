@@ -11,7 +11,7 @@ class CieloClientTest extends TestCase
 {
     public function test_it_creates_a_checkout_page_using_the_merchant_id_only(): void
     {
-        config(['services.cielo.merchant_id' => 'merchant-id']);
+        config(['services.cielo.checkout_merchant_id' => 'merchant-id']);
         Http::preventStrayRequests();
         Http::fake([
             'https://cieloecommerce.cielo.com.br/api/public/v1/orders/' => Http::response([
@@ -36,7 +36,7 @@ class CieloClientTest extends TestCase
 
     public function test_it_rejects_a_checkout_url_outside_cielo_domains(): void
     {
-        config(['services.cielo.merchant_id' => 'merchant-id']);
+        config(['services.cielo.checkout_merchant_id' => 'merchant-id']);
         Http::preventStrayRequests();
         Http::fake([
             'https://cieloecommerce.cielo.com.br/api/public/v1/orders/' => Http::response([
@@ -55,8 +55,8 @@ class CieloClientTest extends TestCase
     public function test_it_uses_link_api_credentials_to_query_the_authoritative_checkout_order(): void
     {
         config([
-            'services.cielo.sop_client_id' => 'link-client-id',
-            'services.cielo.sop_client_secret' => 'link-client-secret',
+            'services.cielo.checkout_sop_client_id' => 'link-client-id',
+            'services.cielo.checkout_sop_client_secret' => 'link-client-secret',
         ]);
         Http::preventStrayRequests();
         Http::fake([
@@ -81,10 +81,10 @@ class CieloClientTest extends TestCase
     public function test_it_requests_an_oauth_token_then_a_sop_access_token(): void
     {
         config([
-            'services.cielo.environment' => 'sandbox',
-            'services.cielo.sop_client_id' => 'sop-client-id',
-            'services.cielo.sop_client_secret' => 'sop-client-secret',
-            'services.cielo.merchant_id' => 'merchant-id',
+            'services.cielo.checkout_environment' => 'sandbox',
+            'services.cielo.checkout_sop_client_id' => 'sop-client-id',
+            'services.cielo.checkout_sop_client_secret' => 'sop-client-secret',
+            'services.cielo.checkout_merchant_id' => 'merchant-id',
         ]);
         Http::preventStrayRequests();
         Http::fake([
@@ -109,9 +109,9 @@ class CieloClientTest extends TestCase
     public function test_it_authorizes_a_credit_card_using_only_the_sop_payment_token(): void
     {
         config([
-            'services.cielo.transaction_base_url' => 'https://apisandbox.cieloecommerce.cielo.com.br',
-            'services.cielo.merchant_id' => 'merchant-id',
-            'services.cielo.merchant_key' => 'merchant-key',
+            'services.cielo.checkout_transaction_base_url' => 'https://apisandbox.cieloecommerce.cielo.com.br',
+            'services.cielo.checkout_merchant_id' => 'merchant-id',
+            'services.cielo.checkout_merchant_key' => 'merchant-key',
         ]);
         Http::preventStrayRequests();
         Http::fake([

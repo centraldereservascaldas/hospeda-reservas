@@ -1,7 +1,11 @@
 import type { Currency, Property } from '../../types';
 import type { CalculatedPriceResponse } from '../../services/crcnBackendApi';
 import { formatCurrency } from '../../utils/formatters';
-import { getPropertyFeeAmount, getPropertyFeeLabel } from '../../utils/propertyPricing';
+import {
+  getPropertyFeeAmount,
+  getPropertyFeeLabel,
+  isConfirmedPropertyQuote,
+} from '../../utils/propertyPricing';
 import type { calculatePropertyPricing } from '../../utils/propertyPricing';
 
 interface PropertyPriceBreakdownProps {
@@ -19,26 +23,31 @@ export function PropertyPriceBreakdown({
   staysPrice,
   pricing,
 }: PropertyPriceBreakdownProps) {
-  const { baseSubtotal, discount, cleaningFee, serviceFee, totalAmount, visibleFees } = pricing;
+  const { baseSubtotal, cleaningFee, serviceFee, totalAmount, visibleFees } = pricing;
+  const confirmedQuote = isConfirmedPropertyQuote(staysPrice) ? staysPrice : null;
+
+  if (!confirmedQuote && property.pricePerNight <= 0) return null;
 
   return (
     <div className="pt-3 border-t border-neutral-200/60 space-y-2.5 text-xs">
       <div className="flex items-center justify-between text-neutral-600">
         <span>
-          {staysPrice?.breakdown?.dailyRateText ||
+          {confirmedQuote?.breakdown?.dailyRateText ||
             `${formatCurrency(property.pricePerNight, currency)} x ${nights} noites`}
         </span>
         <span>{formatCurrency(baseSubtotal, currency)}</span>
       </div>
 
-      {staysPrice?.source !== 'stays-live' && discount > 0 && (
-        <div className="flex items-center justify-between text-emerald-600 font-semibold">
-          <span>Desconto de estadia</span>
-          <span>-{formatCurrency(discount, currency)}</span>
+      {confirmedQuote && confirmedQuote.discount > 0 && (
+        <div className="flex items-center justify-between text-neutral-600">
+          <span>Desconto</span>
+          <span className="font-semibold text-emerald-700">
+            −{formatCurrency(confirmedQuote.discount, currency)}
+          </span>
         </div>
       )}
 
-      {staysPrice?.source === 'stays-live' && visibleFees.length ? (
+      {confirmedQuote && visibleFees.length ? (
         visibleFees.map((fee, index) => (
           <div
             key={fee._id || index}
@@ -46,17 +55,19 @@ export function PropertyPriceBreakdown({
           >
             <span>
               {getPropertyFeeLabel(fee)}
-              {staysPrice.feesIncluded ? ' (incluída no total)' : ''}
+              {confirmedQuote.feesIncluded ? ' (incluída no total)' : ''}
             </span>
-            <span>{formatCurrency(getPropertyFeeAmount(fee, staysPrice.currency), currency)}</span>
+            <span>
+              {formatCurrency(getPropertyFeeAmount(fee, confirmedQuote.currency), currency)}
+            </span>
           </div>
         ))
-      ) : staysPrice?.source === 'stays-live' ? (
+      ) : confirmedQuote ? (
         <>
           {cleaningFee > 0 && (
             <div className="flex items-center justify-between text-neutral-600">
               <span>
-                Taxa de limpeza{staysPrice.cleaningIncluded ? ' (incluída no total)' : ''}
+                Taxa de limpeza{confirmedQuote.cleaningIncluded ? ' (incluída no total)' : ''}
               </span>
               <span>{formatCurrency(cleaningFee, currency)}</span>
             </div>
@@ -68,40 +79,25 @@ export function PropertyPriceBreakdown({
             </div>
           )}
         </>
-      ) : visibleFees.length ? (
-        visibleFees.map((fee, index) => (
-          <div
-            key={fee._id || index}
-            className="flex items-center justify-between text-neutral-600"
-          >
-            <span>
-              {getPropertyFeeLabel(fee)}
-              {staysPrice?.feesIncluded ? ' (incluída no total)' : ''}
-            </span>
-            <span>
-              {formatCurrency(getPropertyFeeAmount(fee, staysPrice?.currency || 'BRL'), currency)}
-            </span>
-          </div>
-        ))
-      ) : !staysPrice?.fees?.length ? (
+      ) : !confirmedQuote ? (
         <>
-          <div className="flex items-center justify-between text-neutral-600">
-            <span>
-              {staysPrice?.breakdown?.cleaningFeeText || 'Taxa de limpeza & higienização'}
-            </span>
-            <span>{formatCurrency(cleaningFee, currency)}</span>
-          </div>
-          <div className="flex items-center justify-between text-neutral-600">
-            <span>
-              {staysPrice?.breakdown?.serviceFeeText || 'Taxa de serviço Central de Reservas'}
-            </span>
-            <span>{formatCurrency(serviceFee, currency)}</span>
-          </div>
+          {cleaningFee > 0 && (
+            <div className="flex items-center justify-between text-neutral-600">
+              <span>Taxa de limpeza estimada</span>
+              <span>{formatCurrency(cleaningFee, currency)}</span>
+            </div>
+          )}
+          {serviceFee > 0 && (
+            <div className="flex items-center justify-between text-neutral-600">
+              <span>Taxas de serviço estimadas</span>
+              <span>{formatCurrency(serviceFee, currency)}</span>
+            </div>
+          )}
         </>
       ) : null}
 
       <div className="pt-3 border-t border-neutral-200 flex items-center justify-between font-bold text-sm text-neutral-900">
-        <span>{staysPrice?.source === 'stays-live' ? 'Total da estadia' : 'Estimativa'}</span>
+        <span>{confirmedQuote ? 'Total da estadia' : 'Estimativa'}</span>
         <span className="text-orange-600 text-base font-black">
           {formatCurrency(totalAmount, currency)}
         </span>

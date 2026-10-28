@@ -4,11 +4,10 @@ namespace Tests\Feature;
 
 use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
-use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingStaysAction;
 use App\Services\DirectSaleTermsRegistry;
-use App\Services\DirectStaysPaymentService;
 use App\Services\DirectStaysReservationService;
+use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
@@ -18,13 +17,48 @@ class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_late_reserved_response_does_not_reopen_closed_order(): void
+    {
+        foreach ([DirectBookingOrderStatus::Expirado, DirectBookingOrderStatus::Reembolsado, DirectBookingOrderStatus::Contestado, DirectBookingOrderStatus::Concluido] as $status) {
+            $order = $this->order($status);
+            $order->reservation_status = 'canceled';
+            $order->expires_at = null;
+            $order->save();
+
+            $reservation = [
+                '_id' => 'late-reservation',
+                '_idlisting' => $order->stays_listing_id,
+                '_idclient' => $order->stays_client_id,
+                'type' => 'reserved',
+                'checkInDate' => $order->check_in->toDateString(),
+                'checkOutDate' => $order->check_out->toDateString(),
+                'internalNote' => 'CRCN_DIRECT_ORDER:'.$order->id,
+                'guests' => 2,
+                'price' => ['currency' => 'BRL', '_f_expected' => 3001],
+            ];
+
+            $result = (fn () => $this->adoptReservation($order, 'late-reservation', 60, null, $reservation))
+                ->call(app(DirectStaysReservationService::class));
+
+            $this->assertFalse($result['ready']);
+            $this->assertSame($status, $order->refresh()->status);
+            $this->assertSame('canceled', $order->reservation_status);
+            $this->assertNull($order->stays_reservation_id);
+            $this->assertNull($order->expires_at);
+            $this->assertSame('stays_reserved_after_order_closed', $order->operational_events[array_key_last($order->operational_events)]['event']);
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
         config([
             'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
             'direct-booking.enabled' => true,
-            'direct-booking.reservation_hold_minutes' => 30,
+            'direct-booking.payments_enabled' => true,
+            'direct-booking.confirmation_enabled' => true,
+            'direct-booking.resume_token_ttl_days' => 30,
+            'direct-booking.reservation_hold_minutes' => 60,
             'services.stays.client_id' => 'test-client',
             'services.stays.client_secret' => 'test-secret',
             'services.stays.base_url' => 'https://stays.test/external/v1',
@@ -33,32 +67,119 @@ class DirectStaysReservationTest extends TestCase
         Http::preventStrayRequests();
     }
 
-    public function test_checkout_does_not_create_order_or_stays_reservation_when_payments_are_disabled(): void
+    public function test_checkout_creates_and_persists_reserved_and_resume_contract_with_payment_readiness(): void
     {
-        $this->postJson('/api/checkout', $this->checkoutPayload(), ['Idempotency-Key' => 'direct-reserve-attempt-001'])
-            ->assertServiceUnavailable()
-            ->assertJsonPath('success', false)
-            ->assertJsonPath('code', 'payments_disabled');
+        $this->approvedTerms();
+        Http::fake(function (ClientRequest $request) {
+            if ($checkoutResponse = $this->checkoutStaysResponse($request)) {
+                return $checkoutResponse;
+            }
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            if (str_ends_with((string) $path, '/booking/clients')) {
+                return $request->method() === 'GET' ? Http::response([], 200) : Http::response(['_id' => 'client-1'], 201);
+            }
+            if (str_ends_with((string) $path, '/booking/reservations')) {
+                return match ($request->method()) {
+                    'POST' => Http::response($this->reservationFrom($request->data(), 'reservation-1'), 201),
+                    'GET' => Http::response([$this->reservationFrom($request->data(), 'reservation-1')], 200),
+                    default => Http::response([], 404),
+                };
+            }
 
-        $this->assertDatabaseCount('direct_booking_orders', 0);
-        Http::assertNothingSent();
+            return Http::response([], 404);
+        });
+
+        $response = $this->postJson('/api/checkout', $this->checkoutPayload(), ['Idempotency-Key' => 'direct-reserve-attempt-001'])
+            ->assertCreated()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('code', 'pre_reserved')
+            ->assertJsonPath('order.status', 'pre_reservado')
+            ->assertJsonPath('payment.enabled', true)
+            ->assertJsonPath('payment.methods', ['pix']);
+
+        $publicReference = $response->json('order.publicReference');
+        $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->firstOrFail();
+        $this->assertSame('reserved', $order->reservation_status);
+        $this->assertSame('reservation-1', $order->stays_reservation_id);
+        $this->assertSame('client-1', $order->stays_client_id);
+        $this->assertNotNull($order->expires_at);
+        $this->assertSame('succeeded', DirectBookingStaysAction::query()->where('action_type', 'create_reservation')->value('status'));
+
+        $resume = $response->json('resume');
+        $this->assertSame('/checkout/'.$order->public_reference, $resume['path']);
+        $this->getJson('/api/checkout/'.$resume['reference'], ['X-Checkout-Resume-Token' => $resume['token']])
+            ->assertOk()->assertJsonPath('order.status', 'pre_reservado')->assertJsonPath('payment.enabled', true);
+        $this->getJson('/api/checkout/'.$resume['reference'].'?quoteTotal=0&acceptedTerms=false', ['X-Checkout-Resume-Token' => 'wrong-token'])
+            ->assertNotFound();
     }
 
-    public function test_confirmed_stays_reservation_does_not_queue_a_duplicate_guest_email_by_default(): void
+    public function test_checkout_rejects_35_minute_hold_without_creating_stays_client_or_reservation(): void
     {
-        config(['direct-booking.send_confirmation_email' => false]);
-        $order = $this->order(DirectBookingOrderStatus::PagoEmConfirmacao, 'reservation-email-managed-by-stays');
-        $order->forceFill(['payment_status' => 'approved', 'reservation_status' => 'booked'])->save();
+        config(['direct-booking.reservation_hold_minutes' => 35]);
+        $this->approvedTerms();
+        Http::fake(function (ClientRequest $request) {
+            if ($checkoutResponse = $this->checkoutStaysResponse($request)) {
+                return $checkoutResponse;
+            }
 
-        $order->transitionTo(DirectBookingOrderStatus::Confirmado, ['source' => 'stays_booked_verified']);
-        $order->save();
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            if (str_ends_with((string) $path, '/booking/clients')) {
+                return Http::response(['_id' => 'client-35'], 201);
+            }
+            if (str_ends_with((string) $path, '/booking/reservations')) {
+                return Http::response($this->reservationFrom($request->data(), 'reservation-35'), 201);
+            }
 
-        $this->assertDatabaseCount('direct_booking_emails', 0);
+            return Http::response([], 404);
+        });
+
+        $response = $this->postJson('/api/checkout', $this->checkoutPayload(), ['Idempotency-Key' => 'direct-reserve-hold-035'])
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'reservation_hold_too_short_for_pix');
+
+        $order = DirectBookingOrder::query()->where('public_reference', $response->json('order.publicReference'))->firstOrFail();
+        $this->assertNull($order->stays_client_id);
+        $this->assertNull($order->stays_reservation_id);
+        $this->assertSame(0, DirectBookingStaysAction::query()->count());
+        Http::assertNotSent(fn (ClientRequest $request): bool => $request->method() === 'POST'
+            && preg_match('~/booking/(clients|reservations)$~', (string) parse_url($request->url(), PHP_URL_PATH)) === 1);
+    }
+
+    public function test_checkout_accepts_36_minute_hold_and_creates_reserved_in_stays(): void
+    {
+        config(['direct-booking.reservation_hold_minutes' => 36]);
+        $this->approvedTerms();
+        Http::fake(function (ClientRequest $request) {
+            if ($checkoutResponse = $this->checkoutStaysResponse($request)) {
+                return $checkoutResponse;
+            }
+
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            if (str_ends_with((string) $path, '/booking/clients')) {
+                return $request->method() === 'GET' ? Http::response([], 200) : Http::response(['_id' => 'client-36'], 201);
+            }
+            if (str_ends_with((string) $path, '/booking/reservations')) {
+                return $request->method() === 'POST'
+                    ? Http::response($this->reservationFrom($request->data(), 'reservation-36'), 201)
+                    : Http::response([], 404);
+            }
+
+            return Http::response([], 404);
+        });
+
+        $response = $this->postJson('/api/checkout', $this->checkoutPayload(), ['Idempotency-Key' => 'direct-reserve-hold-036'])
+            ->assertCreated()
+            ->assertJsonPath('code', 'pre_reserved');
+
+        $order = DirectBookingOrder::query()->where('public_reference', $response->json('order.publicReference'))->firstOrFail();
+        $this->assertSame('client-36', $order->stays_client_id);
+        $this->assertSame('reservation-36', $order->stays_reservation_id);
+        $this->assertSame('reserved', $order->reservation_status);
+        $this->assertSame('succeeded', DirectBookingStaysAction::query()->where('action_type', 'create_reservation')->value('status'));
     }
 
     public function test_reservation_timeout_is_reconciled_without_repeating_post(): void
     {
-        $this->enableTestPayments();
         $this->approvedTerms();
         $reservationPosts = 0;
         Http::fake(function (ClientRequest $request) use (&$reservationPosts) {
@@ -124,105 +245,15 @@ class DirectStaysReservationTest extends TestCase
         $this->assertSame('succeeded', DirectBookingStaysAction::query()->where('action_type', 'cancel_reservation')->value('status'));
     }
 
-    public function test_cielo_checkout_payment_is_registered_with_cielo_identity_in_stays(): void
-    {
-        [$order, $reservation, $attempt] = $this->paidCieloReservationScenario();
-        config([
-            'direct-booking.confirmation_enabled' => true,
-            'direct-booking.stays_payment_type' => 'credit',
-            'direct-booking.stays_payment_provider_id' => 'test-provider',
-        ]);
-        $postedPayment = null;
-        Http::fake(function (ClientRequest $request) use ($reservation, &$postedPayment) {
-            $path = parse_url($request->url(), PHP_URL_PATH);
-            if (str_ends_with((string) $path, '/booking/reservations/reservation-cielo')) {
-                return Http::response($reservation, 200);
-            }
-            if (str_ends_with((string) $path, '/booking/reservations/reservation-cielo/payments')) {
-                if ($request->method() === 'POST') {
-                    $postedPayment = $request->data();
-
-                    return Http::response([...$postedPayment, '_id' => 'stays-payment-cielo'], 201);
-                }
-
-                return Http::response([], 200);
-            }
-
-            return Http::response([], 404);
-        });
-
-        $result = app(DirectStaysPaymentService::class)->confirmPaidReservation($order);
-
-        $this->assertTrue($result['ready']);
-        $this->assertSame('CRCN Checkout Cielo', $postedPayment['name']);
-        $this->assertSame('CRCN_DIRECT_ORDER:'.$order->id.':CIELO_CHECKOUT:'.$attempt->gateway_payment_id, $postedPayment['desc']);
-        $this->assertSame(DirectBookingOrderStatus::Confirmado, $order->refresh()->status);
-    }
-
-    public function test_cielo_checkout_reconciles_legacy_mercado_pago_marker_without_duplicate_stays_write(): void
-    {
-        [$order, $reservation, $attempt] = $this->paidCieloReservationScenario();
-        config([
-            'direct-booking.confirmation_enabled' => true,
-            'direct-booking.stays_payment_type' => 'credit',
-            'direct-booking.stays_payment_provider_id' => 'test-provider',
-        ]);
-        $paymentPosts = 0;
-        $legacyPayment = [
-            '_id' => 'legacy-stays-payment',
-            '_f_val' => 3001,
-            'status' => 'completed',
-            'type' => 'credit',
-            '_idpaymentProvider' => 'test-provider',
-            'desc' => 'CRCN_DIRECT_ORDER:'.$order->id.':MP:'.$attempt->gateway_payment_id,
-        ];
-        Http::fake(function (ClientRequest $request) use ($reservation, $legacyPayment, &$paymentPosts) {
-            $path = parse_url($request->url(), PHP_URL_PATH);
-            if (str_ends_with((string) $path, '/booking/reservations/reservation-cielo')) {
-                return Http::response($reservation, 200);
-            }
-            if (str_ends_with((string) $path, '/booking/reservations/reservation-cielo/payments')) {
-                if ($request->method() === 'POST') {
-                    $paymentPosts++;
-
-                    return Http::response([], 201);
-                }
-
-                return Http::response([$legacyPayment], 200);
-            }
-
-            return Http::response([], 404);
-        });
-
-        $result = app(DirectStaysPaymentService::class)->confirmPaidReservation($order);
-
-        $this->assertTrue($result['ready']);
-        $this->assertSame(0, $paymentPosts);
-        $this->assertSame(DirectBookingOrderStatus::Confirmado, $order->refresh()->status);
-    }
-
     private function approvedTerms(): void
     {
+        $this->partialMock(DirectCheckoutPaymentService::class)
+            ->shouldReceive('availableMethods')
+            ->andReturn(['pix']);
         $snapshot = ['version' => 'terms-test-1', 'cancelamento' => 'Condições específicas da acomodação.'];
         $this->mock(DirectSaleTermsRegistry::class)->shouldReceive('findApprovedListing')->once()->andReturn([
             'id' => 'JQ08G', 'staysListingId' => 'JQ08G', 'maxGuests' => 5,
             'directSaleTermsVersion' => 'terms-test-1', 'directSaleTermsSnapshot' => $snapshot,
-        ]);
-    }
-
-    private function enableTestPayments(): void
-    {
-        config([
-            'direct-booking.payments_enabled' => true,
-            'direct-booking.confirmation_enabled' => true,
-            'direct-booking.reservation_hold_minutes' => 60,
-            'direct-booking.pix_minimum_remaining_minutes' => 10,
-            'direct-booking.payment_safety_margin_minutes' => 5,
-            'direct-booking.stays_payment_type' => 'credit',
-            'direct-booking.stays_payment_provider_id' => 'test-provider',
-            'services.cielo.merchant_id' => 'test-merchant',
-            'services.cielo.sop_client_id' => 'test-cielo-client',
-            'services.cielo.sop_client_secret' => 'test-cielo-secret',
         ]);
     }
 
@@ -237,6 +268,18 @@ class DirectStaysReservationTest extends TestCase
         }
 
         return null;
+    }
+
+    public function test_confirmed_stays_reservation_does_not_queue_a_duplicate_guest_email_by_default(): void
+    {
+        config(['direct-booking.send_confirmation_email' => false]);
+        $order = $this->order(DirectBookingOrderStatus::PagoEmConfirmacao, 'reservation-email-managed-by-stays');
+        $order->forceFill(['payment_status' => 'approved', 'reservation_status' => 'booked'])->save();
+
+        $order->transitionTo(DirectBookingOrderStatus::Confirmado, ['source' => 'stays_booked_verified']);
+        $order->save();
+
+        $this->assertDatabaseCount('direct_booking_emails', 0);
     }
 
     private function checkoutPayload(): array
@@ -259,46 +302,6 @@ class DirectStaysReservationTest extends TestCase
             'quote_total' => '3001.00', 'currency' => 'BRL', 'quote_snapshot' => [], 'accepted_terms_version' => 'terms-test-1', 'accepted_terms_snapshot' => ['version' => 'terms-test-1'],
             'terms_accepted_at' => now(), 'origin' => 'website', 'expires_at' => now()->subMinute(), 'stays_reservation_id' => $reservationId, 'operational_events' => [],
         ]);
-    }
-
-    /** @return array{DirectBookingOrder, array<string, mixed>, DirectBookingPaymentAttempt} */
-    private function paidCieloReservationScenario(): array
-    {
-        $order = $this->order(DirectBookingOrderStatus::PagoEmConfirmacao, 'reservation-cielo');
-        $order->forceFill([
-            'expires_at' => now()->addMinutes(20),
-            'reservation_status' => 'booked',
-            'payment_status' => 'approved',
-        ])->save();
-        $attempt = DirectBookingPaymentAttempt::query()->create([
-            'direct_booking_order_id' => $order->id,
-            'idempotency_key' => 'cielo-confirmation-'.$order->id,
-            'request_fingerprint' => str_repeat('c', 64),
-            'gateway_payment_id' => 'cielo-payment-'.$order->id,
-            'gateway_provider' => 'cielo_checkout',
-            'gateway_idempotency_key' => 'cielo-order-'.$order->id,
-            'payment_method' => 'card',
-            'payment_method_id' => 'cielo_checkout',
-            'installments' => 1,
-            'status' => 'approved',
-            'gateway_status' => 'approved',
-            'amount' => '3001.00',
-            'currency' => 'BRL',
-            'paid_at' => now(),
-        ]);
-        $reservation = [
-            '_id' => 'reservation-cielo',
-            '_idlisting' => 'JQ08G',
-            '_idclient' => 'client-3',
-            'type' => 'booked',
-            'checkInDate' => '2026-11-10',
-            'checkOutDate' => '2026-11-13',
-            'guests' => 2,
-            'price' => ['currency' => 'BRL', '_f_expected' => 3001],
-            'internalNote' => 'CRCN_DIRECT_ORDER:'.$order->id,
-        ];
-
-        return [$order, $reservation, $attempt];
     }
 
     /** @param array<string, mixed> $requestData

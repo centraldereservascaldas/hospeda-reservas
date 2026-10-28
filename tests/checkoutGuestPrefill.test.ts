@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test, { afterEach } from 'node:test';
 import { JSDOM } from 'jsdom';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
-import { crcnBackendApi } from '../src/services/crcnBackendApi.ts';
+import { checkoutApi } from '../src/services/checkoutApi.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
 Object.assign(dom.window, {
@@ -14,6 +14,8 @@ Object.assign(globalThis, {
   window: dom.window,
   document: dom.window.document,
   HTMLElement: dom.window.HTMLElement,
+  HTMLFormElement: dom.window.HTMLFormElement,
+  FormData: dom.window.FormData,
   Element: dom.window.Element,
   Node: dom.window.Node,
   getComputedStyle: dom.window.getComputedStyle,
@@ -74,7 +76,12 @@ const readyForCardPayment = {
     ready: true,
     termsAvailable: true,
     checkoutEnabled: true,
-    payment: { enabled: true, methods: ['card'] as Array<'card'>, publicKey: 'cielo-iframe' },
+    payment: {
+      enabled: true,
+      methods: ['card'] as Array<'card'>,
+      publicKey: null,
+      provider: 'cielo_hosted' as const,
+    },
   },
 };
 
@@ -84,13 +91,13 @@ afterEach(() => {
 });
 
 test('prefills authenticated guest details, updates after session restore, and leaves fields editable', async () => {
-  const originalGetCheckoutTerms = crcnBackendApi.getCheckoutTerms;
-  const originalGetCheckoutReadiness = crcnBackendApi.getCheckoutReadiness;
-  const originalCreateCheckout = crcnBackendApi.createCheckout;
+  const originalGetCheckoutTerms = checkoutApi.getCheckoutTerms;
+  const originalGetCheckoutReadiness = checkoutApi.getCheckoutReadiness;
+  const originalCreateCheckout = checkoutApi.createCheckout;
   let submittedGuest: { fullName: string; email: string; phone: string } | null = null;
-  crcnBackendApi.getCheckoutTerms = async () => readyTerms;
-  crcnBackendApi.getCheckoutReadiness = async () => readyForCardPayment;
-  crcnBackendApi.createCheckout = async (payload) => {
+  checkoutApi.getCheckoutTerms = async () => readyTerms;
+  checkoutApi.getCheckoutReadiness = async () => readyForCardPayment;
+  checkoutApi.createCheckout = async (payload) => {
     submittedGuest = payload.guest;
     return null;
   };
@@ -164,9 +171,9 @@ test('prefills authenticated guest details, updates after session restore, and l
       phone: '+5511999990000',
     });
   } finally {
-    crcnBackendApi.getCheckoutTerms = originalGetCheckoutTerms;
-    crcnBackendApi.getCheckoutReadiness = originalGetCheckoutReadiness;
-    crcnBackendApi.createCheckout = originalCreateCheckout;
+    checkoutApi.getCheckoutTerms = originalGetCheckoutTerms;
+    checkoutApi.getCheckoutReadiness = originalGetCheckoutReadiness;
+    checkoutApi.createCheckout = originalCreateCheckout;
   }
 });
 

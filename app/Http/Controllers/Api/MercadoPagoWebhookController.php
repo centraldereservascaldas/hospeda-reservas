@@ -42,6 +42,7 @@ class MercadoPagoWebhookController extends Controller
             $webhook = DB::transaction(function () use ($eventKey, $paymentId, $requestId, $queueConnection): DirectBookingPaymentWebhook {
                 $webhook = DirectBookingPaymentWebhook::query()->create([
                     'event_key' => $eventKey,
+                    'gateway_provider' => 'mercadopago',
                     'gateway_payment_id' => (string) $paymentId,
                     'request_id' => is_string($requestId) ? Str::limit($requestId, 150, '') : null,
                     'status' => 'received',

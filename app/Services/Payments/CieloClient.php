@@ -16,7 +16,7 @@ class CieloClient
     {
         $response = Http::acceptJson()
             ->asJson()
-            ->withHeader('MerchantId', $this->requiredConfig('services.cielo.merchant_id'))
+            ->withHeader('MerchantId', $this->requiredConfig('services.cielo.checkout_merchant_id'))
             ->connectTimeout(3)
             ->timeout(15)
             ->post('https://cieloecommerce.cielo.com.br/api/public/v1/orders/', $payload)
@@ -41,8 +41,8 @@ class CieloClient
     /** @return array<string, mixed> */
     public function getCheckoutOrder(string $checkoutOrderNumber): array
     {
-        $clientId = $this->requiredConfig('services.cielo.sop_client_id');
-        $clientSecret = $this->requiredConfig('services.cielo.sop_client_secret');
+        $clientId = $this->requiredConfig('services.cielo.checkout_sop_client_id');
+        $clientSecret = $this->requiredConfig('services.cielo.checkout_sop_client_secret');
         $tokenResponse = Http::acceptJson()
             ->withBasicAuth($clientId, $clientSecret)
             ->connectTimeout(3)
@@ -73,10 +73,10 @@ class CieloClient
     /** @return array<string, mixed> */
     public function createSopAccessToken(): array
     {
-        $clientId = $this->requiredConfig('services.cielo.sop_client_id');
-        $clientSecret = $this->requiredConfig('services.cielo.sop_client_secret');
-        $merchantId = $this->requiredConfig('services.cielo.merchant_id');
-        $sandbox = config('services.cielo.environment', 'sandbox') !== 'production';
+        $clientId = $this->requiredConfig('services.cielo.checkout_sop_client_id');
+        $clientSecret = $this->requiredConfig('services.cielo.checkout_sop_client_secret');
+        $merchantId = $this->requiredConfig('services.cielo.checkout_merchant_id');
+        $sandbox = config('services.cielo.checkout_environment', 'sandbox') !== 'production';
 
         $oauth = Http::acceptJson()
             ->asForm()
@@ -178,12 +178,12 @@ class CieloClient
 
     private function transactionRequest(): PendingRequest
     {
-        return Http::baseUrl((string) config('services.cielo.transaction_base_url'))
+        return Http::baseUrl((string) config('services.cielo.checkout_transaction_base_url'))
             ->acceptJson()
             ->asJson()
             ->withHeaders([
-                'MerchantId' => $this->requiredConfig('services.cielo.merchant_id'),
-                'MerchantKey' => $this->requiredConfig('services.cielo.merchant_key'),
+                'MerchantId' => $this->requiredConfig('services.cielo.checkout_merchant_id'),
+                'MerchantKey' => $this->requiredConfig('services.cielo.checkout_merchant_key'),
                 'RequestId' => (string) str()->uuid(),
             ])
             ->connectTimeout(3)
@@ -192,11 +192,11 @@ class CieloClient
 
     private function queryRequest(): PendingRequest
     {
-        return Http::baseUrl((string) config('services.cielo.query_base_url'))
+        return Http::baseUrl((string) config('services.cielo.checkout_query_base_url'))
             ->acceptJson()
             ->withHeaders([
-                'MerchantId' => $this->requiredConfig('services.cielo.merchant_id'),
-                'MerchantKey' => $this->requiredConfig('services.cielo.merchant_key'),
+                'MerchantId' => $this->requiredConfig('services.cielo.checkout_merchant_id'),
+                'MerchantKey' => $this->requiredConfig('services.cielo.checkout_merchant_key'),
             ])
             ->connectTimeout(3)
             ->timeout(10);

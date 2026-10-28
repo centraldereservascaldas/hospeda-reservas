@@ -30,6 +30,18 @@ O worker processa reconciliações do gateway e e-mails transacionais; o schedul
 
 O Vite encaminha `/api/*` e `/external/v1/*` para `VITE_API_PROXY_TARGET`. O padrão local é `http://127.0.0.1:8000`.
 
+### Simulador local de catálogo Stays
+
+Para revisar catálogo, detalhes, calendário e cotação sem depender da API Stays, habilite `STAYS_SIMULATOR_ENABLED=true` apenas no `.env` local. O simulador usa `database/stays-simulator.sqlite`, uma conexão SQLite independente do banco padrão e do projeto Supabase. Crie e carregue essa base com:
+
+```bash
+touch database/stays-simulator.sqlite
+php artisan migrate --database=stays_simulator --path=database/migrations/stays_simulator --no-interaction
+php artisan db:seed --database=stays_simulator --class='Database\Seeders\StaysSimulatorSeeder' --no-interaction
+```
+
+A carga inclui três acomodações, 401 dias de disponibilidade e valores inteiramente fictícios, identificados como ambiente simulado na interface. A flag é ignorada fora de `APP_ENV=local` e `APP_ENV=testing`. O simulador não cria reservas nem processa pagamentos. Desligue a flag no `.env` para voltar ao catálogo normal.
+
 O backend Express anterior permanece disponível durante a migração pelo comando `npm run legacy:dev`; o fluxo padrão usa Laravel. Não remova `server.ts` nem as dependências Express até concluir a migração e validar os endpoints restantes.
 
 ## Verificação
@@ -54,7 +66,7 @@ Neste ambiente, o `.env` ignorado pelo Git contém URL e chaves do Supabase de t
 
 Para outro computador, obtenha as credenciais desse projeto de teste, configure as mesmas variáveis no `.env` e vincule a CLI com `supabase link --project-ref <referência-do-projeto>`. O `supabase start` local exige um runtime de containers e **não é necessário** para usar o projeto hospedado. Os testes automatizados do Laravel continuam isolados em SQLite em memória por `phpunit.xml`; o PostgreSQL hospedado serve ao desenvolvimento e aos testes manuais da aplicação.
 
-A API mantém os contratos consumidos em `src/services/crcnBackendApi.ts` e os aliases `/external/v1` usados pela interface de integração. Reservas e disponibilidade permanecem autoritativas na Stays. O redirecionamento para o checkout hospedado Stays foi desativado. A implementação local inclui criação idempotente de pedido, pré-reserva `reserved`, retomada protegida, tentativa de pagamento Mercado Pago e reconciliação; ela ainda não foi validada ponta a ponta. As flags `DIRECT_BOOKING_ENABLED`, `DIRECT_BOOKING_PAYMENTS_ENABLED` e `DIRECT_BOOKING_CONFIRMATION_ENABLED` permanecem desligadas, e não há condições comerciais aprovadas no catálogo. Por isso a interface mantém a compra desabilitada e a API não inicia pedido ou cobrança. A proposta de compra como visitante não depende de sessão autenticada.
+A API mantém os contratos consumidos em `src/services/crcnBackendApi.ts` e os aliases `/external/v1` usados pela interface de integração. Reservas e disponibilidade permanecem autoritativas na Stays. O redirecionamento para o checkout hospedado Stays foi desativado. A implementação local inclui criação idempotente de pedido, pré-reserva `reserved`, retomada protegida, tentativa de pagamento Mercado Pago e reconciliação; ela ainda não foi validada ponta a ponta. As flags `DIRECT_BOOKING_ENABLED`, `DIRECT_BOOKING_PAYMENTS_ENABLED` e `DIRECT_BOOKING_CONFIRMATION_ENABLED` permanecem desligadas, assim como `DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED`. Em `APP_ENV=production`, essa autorização separada é obrigatória para iniciar cobranças reais. O catálogo também não tem condições comerciais aprovadas; por isso a interface mantém a compra desabilitada e a API não inicia pedido ou cobrança. A proposta de compra como visitante não depende de sessão autenticada.
 
 ## Checkout próprio em implementação
 

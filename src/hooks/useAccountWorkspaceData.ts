@@ -1,12 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Reservation } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
-import type { DirectBookingOrderSummary } from '../services/crcnBackendApi';
+import type { DirectBookingOrderListItem } from '../services/checkoutApi';
 import type { MainView } from '../components/MobileBottomNavigation';
 
 export type OwnerAccessStatus =
   'loading' | 'unavailable' | 'none' | 'pending' | 'approved' | 'suspended';
+
+interface DirectBookingOrdersState {
+  accessToken: string | undefined;
+  items: DirectBookingOrderListItem[];
+  error: string;
+  isLoading: boolean;
+}
+
+interface ReservationsState {
+  accessToken: string | undefined;
+  items: Reservation[];
+  error: string;
+  isLoading: boolean;
+}
+
+interface OwnerAccessState {
+  accessToken: string | undefined;
+  status: OwnerAccessStatus;
+}
+
+interface OwnerAdminState {
+  accessToken: string | undefined;
+  isAdmin: boolean;
+}
 
 interface UseAccountWorkspaceDataOptions {
   accessToken: string | undefined;
@@ -21,85 +45,191 @@ export function useAccountWorkspaceData({
   currentViewRef,
   setCurrentView,
 }: UseAccountWorkspaceDataOptions) {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [directBookingOrders, setDirectBookingOrders] = useState<DirectBookingOrderSummary[]>([]);
-  const [directBookingOrdersError, setDirectBookingOrdersError] = useState('');
-  const [ownerAccessStatus, setOwnerAccessStatus] = useState<OwnerAccessStatus>('none');
-  const [isOwnerAdmin, setIsOwnerAdmin] = useState(false);
+  const [reservationsState, setReservationsState] = useState<ReservationsState>({
+    accessToken: undefined,
+    items: [],
+    error: '',
+    isLoading: false,
+  });
+  const reservations =
+    accessToken && reservationsState.accessToken === accessToken ? reservationsState.items : [];
+  const reservationsError =
+    accessToken && reservationsState.accessToken === accessToken ? reservationsState.error : '';
+  const reservationsLoading = Boolean(
+    accessToken && (reservationsState.accessToken !== accessToken || reservationsState.isLoading),
+  );
+  const setReservations = useCallback<Dispatch<SetStateAction<Reservation[]>>>(
+    (update) => {
+      setReservationsState((currentState) => {
+        const currentStateMatchesAccessToken = currentState.accessToken === accessToken;
+        const currentItems = currentStateMatchesAccessToken ? currentState.items : [];
+        const items = typeof update === 'function' ? update(currentItems) : update;
+
+        return {
+          accessToken,
+          items,
+          error: currentStateMatchesAccessToken ? currentState.error : '',
+          isLoading: currentStateMatchesAccessToken ? currentState.isLoading : false,
+        };
+      });
+    },
+    [accessToken],
+  );
+  const [directBookingOrdersState, setDirectBookingOrdersState] =
+    useState<DirectBookingOrdersState>({
+      accessToken: undefined,
+      items: [],
+      error: '',
+      isLoading: false,
+    });
+  const directBookingOrders =
+    accessToken && directBookingOrdersState.accessToken === accessToken
+      ? directBookingOrdersState.items
+      : [];
+  const directBookingOrdersError =
+    accessToken && directBookingOrdersState.accessToken === accessToken
+      ? directBookingOrdersState.error
+      : '';
+  const directBookingOrdersLoading = Boolean(
+    accessToken &&
+    (currentView === undefined || currentView === 'trips') &&
+    (directBookingOrdersState.accessToken !== accessToken || directBookingOrdersState.isLoading),
+  );
+  const [accountDataRefreshKey, setAccountDataRefreshKey] = useState(0);
+  const refreshAccountData = useCallback((): void => {
+    setAccountDataRefreshKey((currentKey) => currentKey + 1);
+  }, []);
+  const [ownerAccessState, setOwnerAccessState] = useState<OwnerAccessState>({
+    accessToken: undefined,
+    status: 'none',
+  });
+  const ownerAccessStatus =
+    ownerAccessState.accessToken === accessToken
+      ? ownerAccessState.status
+      : accessToken
+        ? 'loading'
+        : 'none';
+  const setOwnerAccessStatus = useCallback<Dispatch<SetStateAction<OwnerAccessStatus>>>(
+    (update) => {
+      setOwnerAccessState((currentState) => {
+        const currentStatus =
+          currentState.accessToken === accessToken
+            ? currentState.status
+            : accessToken
+              ? 'loading'
+              : 'none';
+        const status = typeof update === 'function' ? update(currentStatus) : update;
+
+        return { accessToken, status };
+      });
+    },
+    [accessToken],
+  );
+  const [ownerAdminState, setOwnerAdminState] = useState<OwnerAdminState>({
+    accessToken: undefined,
+    isAdmin: false,
+  });
+  const isOwnerAdmin = ownerAdminState.accessToken === accessToken && ownerAdminState.isAdmin;
 
   useEffect(() => {
     if (!accessToken) {
-      setReservations([]);
-      setDirectBookingOrders([]);
-      setDirectBookingOrdersError('');
+      setReservationsState({ accessToken: undefined, items: [], error: '', isLoading: false });
+      setDirectBookingOrdersState({
+        accessToken: undefined,
+        items: [],
+        error: '',
+        isLoading: false,
+      });
       return;
     }
     let cancelled = false;
+    setReservationsState((currentState) => ({
+      accessToken,
+      items: currentState.accessToken === accessToken ? currentState.items : [],
+      error: '',
+      isLoading: true,
+    }));
     void crcnBackendApi
       .getMyReservations(accessToken)
       .then((items) => {
-        if (!cancelled) setReservations(items);
+        if (!cancelled) setReservationsState({ accessToken, items, error: '', isLoading: false });
       })
       .catch((error) => {
         if (!cancelled) {
-          setReservations([]);
+          setReservationsState({
+            accessToken,
+            items: [],
+            error: 'Não foi possível carregar suas reservas. Tente novamente.',
+            isLoading: false,
+          });
           console.warn('Unable to load guest reservations:', error);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, accountDataRefreshKey]);
 
   useEffect(() => {
     if (!accessToken) {
-      setDirectBookingOrders([]);
-      setDirectBookingOrdersError('');
+      setDirectBookingOrdersState({
+        accessToken: undefined,
+        items: [],
+        error: '',
+        isLoading: false,
+      });
       return;
     }
     if (currentView !== undefined && currentView !== 'trips') {
       return;
     }
     let cancelled = false;
-    setDirectBookingOrdersError('');
+    setDirectBookingOrdersState((currentState) =>
+      currentState.accessToken === accessToken
+        ? { ...currentState, error: '', isLoading: true }
+        : { accessToken, items: [], error: '', isLoading: true },
+    );
     void crcnBackendApi
       .getMyDirectBookingOrders(accessToken)
       .then((items) => {
-        if (!cancelled) setDirectBookingOrders(items);
+        if (!cancelled) {
+          setDirectBookingOrdersState({ accessToken, items, error: '', isLoading: false });
+        }
       })
       .catch((error) => {
         if (cancelled) return;
-        setDirectBookingOrders([]);
-        setDirectBookingOrdersError(
-          error instanceof Error
-            ? error.message
-            : 'Não foi possível carregar suas compras no site.',
-        );
+        setDirectBookingOrdersState({
+          accessToken,
+          items: [],
+          error: 'Não foi possível carregar suas compras. Tente novamente.',
+          isLoading: false,
+        });
+        console.warn('Unable to load guest direct booking orders:', error);
       });
     return () => {
       cancelled = true;
     };
-  }, [accessToken, currentView]);
+  }, [accessToken, accountDataRefreshKey, currentView]);
 
   useEffect(() => {
     if (!accessToken) {
-      setOwnerAccessStatus('none');
-      setIsOwnerAdmin(false);
+      setOwnerAccessState({ accessToken: undefined, status: 'none' });
+      setOwnerAdminState({ accessToken: undefined, isAdmin: false });
       if (currentViewRef.current === 'host' || currentViewRef.current === 'ownerAdmin') {
         setCurrentView('explore');
       }
       return;
     }
     let cancelled = false;
-    setOwnerAccessStatus('loading');
+    setOwnerAccessState({ accessToken, status: 'loading' });
     void crcnBackendApi
       .getOwnerAccess(accessToken)
       .then((status) => {
-        if (!cancelled) setOwnerAccessStatus(status);
+        if (!cancelled) setOwnerAccessState({ accessToken, status });
       })
       .catch((error) => {
         if (!cancelled) {
-          setOwnerAccessStatus('unavailable');
+          setOwnerAccessState({ accessToken, status: 'unavailable' });
           console.warn('Unable to verify owner access:', error);
         }
       });
@@ -110,22 +240,23 @@ export function useAccountWorkspaceData({
 
   useEffect(() => {
     if (!accessToken) {
-      setIsOwnerAdmin(false);
+      setOwnerAdminState({ accessToken: undefined, isAdmin: false });
       return;
     }
     let cancelled = false;
+    setOwnerAdminState({ accessToken, isAdmin: false });
     void crcnBackendApi
       .getOwnerAdminStatus(accessToken)
       .then((isAdmin) => {
         if (cancelled) return;
-        setIsOwnerAdmin(isAdmin);
+        setOwnerAdminState({ accessToken, isAdmin });
         if (!isAdmin && currentViewRef.current === 'ownerAdmin') {
           setCurrentView('explore');
         }
       })
       .catch(() => {
         if (cancelled) return;
-        setIsOwnerAdmin(false);
+        setOwnerAdminState({ accessToken, isAdmin: false });
         if (currentViewRef.current === 'ownerAdmin') setCurrentView('explore');
       });
     return () => {
@@ -135,9 +266,13 @@ export function useAccountWorkspaceData({
 
   return {
     reservations,
+    reservationsError,
+    reservationsLoading,
     setReservations,
     directBookingOrders,
     directBookingOrdersError,
+    directBookingOrdersLoading,
+    refreshAccountData,
     ownerAccessStatus,
     setOwnerAccessStatus,
     isOwnerAdmin,

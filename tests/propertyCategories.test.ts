@@ -40,6 +40,14 @@ test('all category always matches and category inference uses the actual listing
   assert.equal(matchesPropertyCategory(listing, 'near_center'), false);
 });
 
+test('condominium category includes only listings associated with a condominium', () => {
+  assert.equal(
+    matchesPropertyCategory(property({ complexName: 'Lacqua diRoma' }), 'condominiums'),
+    true,
+  );
+  assert.equal(matchesPropertyCategory(property(), 'condominiums'), false);
+});
+
 test('detects pool access, beverage rules and included waterpark only when stated', () => {
   const listing = property({
     title: 'Apto aconchegante',

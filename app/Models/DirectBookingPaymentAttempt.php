@@ -17,6 +17,8 @@ class DirectBookingPaymentAttempt extends Model
         'request_fingerprint',
         'gateway_payment_id',
         'gateway_provider',
+        'gateway_merchant_id',
+        'merchant_order_id',
         'gateway_idempotency_key',
         'payment_method',
         'payment_method_id',

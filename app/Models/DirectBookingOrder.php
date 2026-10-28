@@ -16,7 +16,9 @@ class DirectBookingOrder extends Model
         'idempotency_key',
         'public_reference',
         'resume_token',
+        'resume_token_expires_at',
         'request_fingerprint',
+        'marketing_attribution',
         'listing_id',
         'stays_listing_id',
         'stays_client_id',
@@ -37,6 +39,8 @@ class DirectBookingOrder extends Model
         'expires_at',
         'stays_reservation_id',
         'gateway_payment_id',
+        'gateway_provider',
+        'gateway_merchant_id',
         'payment_status',
         'payment_amount',
         'payment_currency',
@@ -65,14 +69,100 @@ class DirectBookingOrder extends Model
             'guests' => 'array',
             'quote_total' => 'decimal:2',
             'quote_snapshot' => 'array',
+            'marketing_attribution' => 'array',
             'accepted_terms_snapshot' => 'array',
             'terms_accepted_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',
             'payment_expires_at' => 'immutable_datetime',
             'paid_at' => 'immutable_datetime',
             'resume_token' => 'encrypted',
+            'resume_token_expires_at' => 'immutable_datetime',
             'operational_events' => 'array',
         ];
+    }
+
+    public static function resumeTokenTtlDays(): ?int
+    {
+        $ttlDays = filter_var(config('direct-booking.resume_token_ttl_days'), FILTER_VALIDATE_INT);
+
+        return is_int($ttlDays) && $ttlDays > 0 ? $ttlDays : null;
+    }
+
+    public function hasValidResumeToken(string $providedToken): bool
+    {
+        return $providedToken !== ''
+            && is_string($this->resume_token)
+            && $this->resume_token_expires_at?->isFuture() === true
+            && hash_equals($this->resume_token, $providedToken);
+    }
+
+    /**
+     * @return array{protocol: string, requestedAt: string}|null
+     */
+    public function cancellationReceipt(): ?array
+    {
+        foreach (array_reverse($this->operational_events ?? []) as $event) {
+            if (($event['code'] ?? null) !== 'guest_cancellation_requested' || ! is_string($event['at'] ?? null)) {
+                continue;
+            }
+
+            return [
+                'protocol' => 'CANCEL-'.$this->public_reference,
+                'requestedAt' => $event['at'],
+            ];
+        }
+
+        return null;
+    }
+
+    public function confirmedReservationAction(): ?DirectBookingStaysAction
+    {
+        return $this->staysActions()
+            ->where('action_type', 'confirm_reservation')
+            ->where('status', 'succeeded')
+            ->orderByDesc('completed_at')
+            ->first();
+
+    }
+
+    public function confirmedReservationCode(?DirectBookingStaysAction $confirmationAction = null): ?string
+    {
+        $confirmationAction ??= $this->confirmedReservationAction();
+        $reservationSnapshot = $confirmationAction?->response_snapshot;
+
+        foreach ([
+            is_array($reservationSnapshot) ? ($reservationSnapshot['partnerCode'] ?? null) : null,
+            is_array($reservationSnapshot) ? ($reservationSnapshot['id'] ?? null) : null,
+            $confirmationAction?->external_id,
+        ] as $reservationCode) {
+            if (is_string($reservationCode) && trim($reservationCode) !== '') {
+                return trim($reservationCode);
+            }
+        }
+
+        return null;
+    }
+
+    public function revokeResumeToken(string $reviewerId): bool
+    {
+        if (! is_string($this->resume_token)) {
+            return false;
+        }
+
+        $events = $this->operational_events ?? [];
+        $events[] = [
+            'event' => 'visitor_resume_token_revoked',
+            'source' => 'owner_admin',
+            'reviewed_by' => $reviewerId,
+            'at' => now()->toISOString(),
+        ];
+        $this->forceFill([
+            'resume_token' => null,
+            'resume_token_expires_at' => null,
+            'operational_events' => $events,
+        ])->save();
+
+        return true;
     }
 
     public function transitionTo(DirectBookingOrderStatus $status, array $event = []): void

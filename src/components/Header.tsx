@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { 
-  Search, 
+import {
+  Search,
   LogIn,
   UserPlus,
-  Globe, 
-  User, 
-  Heart, 
-  Briefcase, 
+  Globe,
+  User,
+  Heart,
+  Briefcase,
   Sparkles,
   Check,
   ChevronDown,
@@ -29,6 +29,7 @@ interface HeaderProps {
   accountEmail?: string;
   isAccountConnected: boolean;
   onOpenAccount: (mode: 'login' | 'signup') => void;
+  accountButtonRef?: React.RefObject<HTMLButtonElement | null>;
   onSignOut: () => Promise<void>;
   ownerAccessStatus: 'loading' | 'unavailable' | 'none' | 'pending' | 'approved' | 'suspended';
   ownerRequestLoading: boolean;
@@ -48,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   accountEmail,
   isAccountConnected,
   onOpenAccount,
+  accountButtonRef,
   onSignOut,
   ownerAccessStatus,
   ownerRequestLoading,
@@ -58,20 +60,25 @@ export const Header: React.FC<HeaderProps> = ({
   const [isCurrencyMenuOpen, setIsCurrencyMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
-  const accountButtonRef = useRef<HTMLButtonElement>(null);
+  const localAccountButtonRef = useRef<HTMLButtonElement>(null);
+  const accountTriggerRef = accountButtonRef ?? localAccountButtonRef;
   const currencyRef = useRef<HTMLDivElement>(null);
   const [accountMenuPosition, setAccountMenuPosition] = useState({ top: 0, right: 12 });
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState('');
+  const currencyTriggerRef = useRef<HTMLButtonElement>(null);
 
   const toggleAccountMenu = () => {
     if (isUserMenuOpen) {
       setIsUserMenuOpen(false);
       return;
     }
-    const rect = accountButtonRef.current?.getBoundingClientRect();
+    const rect = accountTriggerRef.current?.getBoundingClientRect();
     if (rect) {
-      setAccountMenuPosition({ top: rect.bottom + 10, right: Math.max(12, window.innerWidth - rect.right) });
+      setAccountMenuPosition({
+        top: rect.bottom + 10,
+        right: Math.max(12, window.innerWidth - rect.right),
+      });
     }
     setIsUserMenuOpen(true);
   };
@@ -80,7 +87,11 @@ export const Header: React.FC<HeaderProps> = ({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
-      if (menuRef.current && !menuRef.current.contains(target) && !accountMenuRef.current?.contains(target)) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(target) &&
+        !accountMenuRef.current?.contains(target)
+      ) {
         setIsUserMenuOpen(false);
       }
       if (currencyRef.current && !currencyRef.current.contains(e.target as Node)) {
@@ -97,12 +108,15 @@ export const Header: React.FC<HeaderProps> = ({
       if (event.key !== 'Escape') return;
       event.preventDefault();
       setIsUserMenuOpen(false);
-      accountButtonRef.current?.focus();
+      accountTriggerRef.current?.focus();
     };
     const updatePosition = () => {
-      const rect = accountButtonRef.current?.getBoundingClientRect();
+      const rect = accountTriggerRef.current?.getBoundingClientRect();
       if (rect) {
-        setAccountMenuPosition({ top: rect.bottom + 10, right: Math.max(12, window.innerWidth - rect.right) });
+        setAccountMenuPosition({
+          top: rect.bottom + 10,
+          right: Math.max(12, window.innerWidth - rect.right),
+        });
       }
     };
     window.addEventListener('resize', updatePosition);
@@ -113,15 +127,26 @@ export const Header: React.FC<HeaderProps> = ({
       window.removeEventListener('scroll', updatePosition, true);
       document.removeEventListener('keydown', handleMenuKeyDown);
     };
-  }, [isUserMenuOpen]);
+  }, [isUserMenuOpen, accountTriggerRef]);
+
+  useEffect(() => {
+    if (!isCurrencyMenuOpen) return;
+    const handleCurrencyMenuKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setIsCurrencyMenuOpen(false);
+      currencyTriggerRef.current?.focus();
+    };
+    document.addEventListener('keydown', handleCurrencyMenuKeyDown);
+    return () => document.removeEventListener('keydown', handleCurrencyMenuKeyDown);
+  }, [isCurrencyMenuOpen]);
 
   return (
     <header className="sticky top-0 z-50 liquid-glass border-b border-white/60 shadow-[0_4px_30px_rgba(0,0,0,0.03)] backdrop-blur-2xl">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4">
-          
+        <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4 [@media(max-width:639px)_and_(max-height:400px)]:h-14">
           {/* Official Company Logo: Central de Reservas Caldas Novas */}
-          <button 
+          <button
             onClick={() => setCurrentView('explore')}
             className="flex items-center cursor-pointer group focus:outline-none flex-shrink-0"
             title="Central de Reservas Caldas Novas"
@@ -133,10 +158,11 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex-1 min-w-0 max-w-xl mx-1 sm:mx-4 lg:mx-6">
             <button
               onClick={onOpenSearch}
-              className="w-full flex items-center justify-between pl-3 sm:pl-4 pr-1.5 sm:pr-2 py-1.5 sm:py-2 rounded-full liquid-glass-pill hover:bg-white/90 border border-white/85 shadow-[0_4px_20px_rgba(0,0,0,0.06),inset_0_1px_1.5px_rgba(255,255,255,0.9)] hover:shadow-lg transition-all cursor-pointer group min-w-0"
+              aria-label={`Buscar hospedagens: ${searchSummaryText || 'Caldas Novas & Região'}`}
+              className="min-h-11 w-full flex items-center justify-between pl-3 sm:pl-4 pr-1.5 sm:pr-2 py-1.5 sm:py-2 rounded-full liquid-glass-pill hover:bg-white/90 border border-white/85 shadow-[0_4px_20px_rgba(0,0,0,0.06),inset_0_1px_1.5px_rgba(255,255,255,0.9)] hover:shadow-lg transition-all cursor-pointer group min-w-0 max-[360px]:justify-center max-[360px]:px-0"
             >
               <div className="flex items-center divide-x divide-neutral-200 text-xs sm:text-sm font-semibold text-neutral-800 min-w-0 truncate">
-                <span className="pr-2 sm:pr-3 text-neutral-900 font-bold truncate min-w-0">
+                <span className="pr-2 sm:pr-3 text-neutral-900 font-bold truncate min-w-0 max-[360px]:hidden">
                   {searchSummaryText ? searchSummaryText : 'Caldas Novas & Região'}
                 </span>
                 <span className="hidden md:inline px-2.5 sm:px-3 text-neutral-600 font-medium whitespace-nowrap">
@@ -147,7 +173,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white flex-shrink-0 ml-1.5 sm:ml-2 group-hover:scale-105 shadow-sm shadow-orange-500/30 transition-transform">
-                <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+                <Search className="h-4 w-4 stroke-[2.5]" />
               </div>
             </button>
           </div>
@@ -157,9 +183,14 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Currency selector dropdown */}
             <div className="relative flex-shrink-0" ref={currencyRef}>
               <button
+                ref={currencyTriggerRef}
                 onClick={() => setIsCurrencyMenuOpen(!isCurrencyMenuOpen)}
-                className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-900 liquid-glass-button border border-white/80 rounded-full transition-all cursor-pointer"
-                title="Alterar Moeda"
+                className="flex min-h-11 items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-900 liquid-glass-button border border-white/80 rounded-full transition-all cursor-pointer"
+                aria-label={`Moeda de exibição ${currency}. Conversões em USD e EUR são aproximadas.`}
+                aria-haspopup="true"
+                aria-expanded={isCurrencyMenuOpen}
+                aria-controls="currency-menu-panel"
+                title="Alterar moeda de exibição"
               >
                 <Globe className="w-3.5 h-3.5 text-neutral-600 flex-shrink-0" />
                 <span className="font-bold">{currency}</span>
@@ -167,15 +198,24 @@ export const Header: React.FC<HeaderProps> = ({
 
               {isCurrencyMenuOpen && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40 bg-transparent" 
-                    onClick={() => setIsCurrencyMenuOpen(false)} 
-                    aria-hidden="true" 
+                  <div
+                    className="fixed inset-0 z-40 bg-transparent"
+                    onClick={() => setIsCurrencyMenuOpen(false)}
+                    aria-hidden="true"
                   />
-                  <div className="absolute right-0 mt-2 w-48 bg-white/96 backdrop-blur-3xl rounded-2xl shadow-2xl border border-neutral-200/90 py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
+                  <div
+                    id="currency-menu-panel"
+                    role="group"
+                    aria-label="Opções de moeda"
+                    className="absolute right-0 mt-2 w-48 bg-white/96 backdrop-blur-3xl rounded-2xl shadow-2xl border border-neutral-200/90 py-2 z-50 animate-in fade-in zoom-in-95 duration-100"
+                  >
                     <div className="px-3 py-1.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
                       Moeda
                     </div>
+                    <p className="px-3 pb-2 text-[11px] leading-relaxed text-neutral-600">
+                      Conversões em USD e EUR são aproximadas. O pagamento é processado em reais
+                      (BRL).
+                    </p>
                     {[
                       { code: 'BRL', label: 'Real Brasileiro (R$)' },
                       { code: 'USD', label: 'Dólar Americano ($)' },
@@ -186,13 +226,16 @@ export const Header: React.FC<HeaderProps> = ({
                         onClick={() => {
                           setCurrency(item.code as Currency);
                           setIsCurrencyMenuOpen(false);
+                          currencyTriggerRef.current?.focus();
                         }}
-                        className="w-full text-left px-3 py-2 text-xs text-neutral-800 hover:bg-neutral-100 flex items-center justify-between cursor-pointer transition-colors font-medium"
+                        className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
                       >
                         <span className={currency === item.code ? 'font-bold text-orange-600' : ''}>
                           {item.label}
                         </span>
-                        {currency === item.code && <Check className="w-3.5 h-3.5 text-orange-600" />}
+                        {currency === item.code && (
+                          <Check className="w-3.5 h-3.5 text-orange-600" />
+                        )}
                       </button>
                     ))}
                   </div>
@@ -203,10 +246,10 @@ export const Header: React.FC<HeaderProps> = ({
             {/* User profile & Navigation dropdown - Minha Conta */}
             <div className="relative flex-shrink-0" ref={menuRef}>
               <button
-                ref={accountButtonRef}
+                ref={accountTriggerRef}
                 type="button"
                 onClick={toggleAccountMenu}
-                className={`flex items-center gap-2 pl-2 sm:pl-2.5 pr-2.5 sm:pr-3 py-1 sm:py-1.5 rounded-full bg-white/95 hover:bg-white backdrop-blur-xl border border-neutral-300/90 shadow-xs hover:shadow-md transition-all cursor-pointer flex-shrink-0 ${
+                className={`flex min-h-11 items-center gap-2 pl-2 sm:pl-2.5 pr-2.5 sm:pr-3 py-1 sm:py-1.5 rounded-full bg-white/95 hover:bg-white backdrop-blur-xl border border-neutral-300/90 shadow-xs hover:shadow-md transition-all cursor-pointer flex-shrink-0 ${
                   isUserMenuOpen ? 'ring-2 ring-orange-500/40 border-orange-400' : ''
                 }`}
                 title="Minha Conta"
@@ -224,168 +267,244 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="text-xs font-extrabold text-neutral-900 hidden sm:inline select-none">
                   Minha Conta
                 </span>
-                <ChevronDown className={`w-3.5 h-3.5 text-neutral-500 transition-transform duration-200 flex-shrink-0 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-neutral-500 transition-transform duration-200 flex-shrink-0 ${isUserMenuOpen ? 'rotate-180' : ''}`}
+                />
               </button>
 
               {/* Blur effect specifically and ONLY for the Minha Conta panel */}
-              {isUserMenuOpen && createPortal(
-                <>
-                  {/* Invisible backdrop to dismiss dropdown on click-outside without blurring the header or page */}
-                  <div 
-                    className="fixed inset-0 z-[9998] bg-transparent"
-                    onClick={() => setIsUserMenuOpen(false)} 
-                    aria-hidden="true" 
-                  />
+              {isUserMenuOpen &&
+                createPortal(
+                  <>
+                    {/* Invisible backdrop to dismiss dropdown on click-outside without blurring the header or page */}
+                    <div
+                      className="fixed inset-0 z-[9998] bg-transparent"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      aria-hidden="true"
+                    />
 
-                  {/* Minha Conta Panel with high-legibility frosted blur effect and crisp contrast */}
-                  <div id="account-menu-panel" ref={accountMenuRef} role="group" aria-label="Opções da conta" style={{ top: accountMenuPosition.top, right: accountMenuPosition.right }} className="fixed w-72 max-w-[calc(100vw-1.5rem)] max-h-[min(75vh,36rem)] overflow-y-auto overscroll-contain bg-white/96 backdrop-blur-3xl rounded-2xl shadow-2xl border border-neutral-200/90 py-2.5 z-[9999] text-xs animate-in fade-in zoom-in-95 duration-150 ring-1 ring-black/10">
-                    <div className="px-4 py-3 border-b border-neutral-200/80 bg-neutral-50/90 backdrop-blur-md">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-orange-600 bg-orange-100/90 px-2 py-0.5 rounded-full border border-orange-200 flex-shrink-0">
-                          Minha Conta
-                        </span>
-                        <span className={`flex items-center gap-1 text-[10px] font-bold flex-shrink-0 ${isAccountConnected ? 'text-emerald-600' : 'text-neutral-500'}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${isAccountConnected ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`} />
-                          {isAccountConnected ? 'Conectado' : 'Desconectado'}
-                        </span>
-                      </div>
-                      <p className="font-extrabold text-neutral-950 text-sm truncate">{isAccountConnected ? (accountName || 'Hóspede') : 'Acesse sua conta'}</p>
-                      <p className="text-[11px] text-neutral-600 font-medium truncate">{isAccountConnected ? accountEmail : 'Entre ou crie sua conta para reservar'}</p>
-                    </div>
-
-                    {!isAccountConnected && (
-                      <div className="grid grid-cols-2 gap-2 border-b border-neutral-200/80 p-3">
-                        <button type="button" onClick={() => { onOpenAccount('login'); setIsUserMenuOpen(false); }} className="flex items-center justify-center gap-2 rounded-xl border border-orange-300 bg-white/80 px-3 py-2.5 font-bold text-orange-700 transition hover:bg-orange-50">
-                          <LogIn className="h-4 w-4" /> Entrar
-                        </button>
-                        <button type="button" onClick={() => { onOpenAccount('signup'); setIsUserMenuOpen(false); }} className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-2.5 font-bold text-white shadow-sm transition hover:brightness-105">
-                          <UserPlus className="h-4 w-4" /> Criar conta
-                        </button>
-                      </div>
-                    )}
-                    {isAccountConnected && (
-                      <div className="border-b border-neutral-200/80 px-3 py-3">
-                        <button type="button" onClick={() => { onOpenAccount('login'); setIsUserMenuOpen(false); }} className="flex min-h-10 w-full items-center justify-center rounded-xl border border-neutral-200 bg-white/90 px-3 py-2.5 text-center font-bold text-neutral-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50">Gerenciar conta</button>
-                        <button
-                          type="button"
-                          disabled={signingOut}
-                          onClick={async () => {
-                            setSigningOut(true);
-                            setSignOutError('');
-                            try {
-                              await onSignOut();
-                              setIsUserMenuOpen(false);
-                            } catch {
-                              setSignOutError('Não foi possível sair da conta. Tente novamente.');
-                            } finally {
-                              setSigningOut(false);
-                            }
-                          }}
-                          className="mt-2 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white/90 px-3 py-2.5 text-center font-bold text-neutral-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
-                        >
-                          <LogOut className="h-4 w-4" />
-                          {signingOut ? 'Saindo…' : 'Sair da conta'}
-                        </button>
-                        {signOutError && <p role="alert" className="mt-2 text-center text-[11px] font-semibold text-red-600">{signOutError}</p>}
-                      </div>
-                    )}
-
-                    {isAccountConnected && <div className="py-1">
-                      <button
-                        onClick={() => {
-                          setCurrentView('explore');
-                          setIsUserMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-neutral-100 cursor-pointer transition-colors ${
-                          currentView === 'explore' ? 'font-bold text-orange-600 bg-orange-50' : 'text-neutral-800'
-                        }`}
-                      >
-                        <Sparkles className="w-4 h-4 text-orange-500 flex-shrink-0" />
-                        <span className="font-semibold">Explorar hospedagens</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setCurrentView('trips');
-                          setIsUserMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-neutral-100 cursor-pointer transition-colors ${
-                          currentView === 'trips' ? 'font-bold text-orange-600 bg-orange-50' : 'text-neutral-800'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Briefcase className="w-4 h-4 text-neutral-600 flex-shrink-0" />
-                          <span className="font-semibold">Minhas reservas e vouchers</span>
-                        </div>
-                        {tripsCount > 0 && (
-                          <span className="bg-orange-500 text-white font-bold px-2 py-0.5 rounded-full text-[10px] shadow-xs">
-                            {tripsCount}
+                    {/* Minha Conta Panel with high-legibility frosted blur effect and crisp contrast */}
+                    <div
+                      id="account-menu-panel"
+                      ref={accountMenuRef}
+                      role="group"
+                      aria-label="Opções da conta"
+                      style={{ top: accountMenuPosition.top, right: accountMenuPosition.right }}
+                      className="fixed w-72 max-w-[calc(100vw-1.5rem)] max-h-[min(75vh,36rem)] overflow-y-auto overscroll-contain bg-white/96 backdrop-blur-3xl rounded-2xl shadow-2xl border border-neutral-200/90 py-2.5 z-[9999] text-xs animate-in fade-in zoom-in-95 duration-150 ring-1 ring-black/10"
+                    >
+                      <div className="px-4 py-3 border-b border-neutral-200/80 bg-neutral-50/90 backdrop-blur-md">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-black uppercase tracking-wider text-orange-600 bg-orange-100/90 px-2 py-0.5 rounded-full border border-orange-200 flex-shrink-0">
+                            Minha Conta
                           </span>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setCurrentView('wishlists');
-                          setIsUserMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-4 py-2.5 flex items-center justify-between hover:bg-neutral-100 cursor-pointer transition-colors ${
-                          currentView === 'wishlists' ? 'font-bold text-orange-600 bg-orange-50' : 'text-neutral-800'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Heart className="w-4 h-4 text-neutral-600 flex-shrink-0" />
-                          <span className="font-semibold">Favoritos</span>
+                          <span
+                            className={`flex items-center gap-1 text-[11px] font-bold flex-shrink-0 ${isAccountConnected ? 'text-emerald-600' : 'text-neutral-500'}`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${isAccountConnected ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'}`}
+                            />
+                            {isAccountConnected ? 'Conectado' : 'Desconectado'}
+                          </span>
                         </div>
-                      </button>
-                      {ownerAccessStatus === 'approved' && (
-                        <button
-                          onClick={() => { setCurrentView('host'); setIsUserMenuOpen(false); }}
-                          className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors hover:bg-orange-50 ${currentView === 'host' ? 'bg-orange-50 font-bold text-orange-700' : 'text-neutral-800'}`}
-                        >
-                          <Briefcase className="h-4 w-4 flex-shrink-0 text-orange-600" />
-                          <span className="font-semibold">Painel do proprietário</span>
-                        </button>
-                      )}
-                      {ownerAccessStatus === 'none' && (
-                        <button
-                          type="button"
-                          disabled={ownerRequestLoading}
-                          onClick={() => { void onRequestOwnerAccess(); }}
-                          className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-neutral-800 transition-colors hover:bg-orange-50 disabled:opacity-60"
-                        >
-                          <Sparkles className="h-4 w-4 flex-shrink-0 text-orange-600" />
-                          <span className="font-semibold">{ownerRequestLoading ? 'Enviando solicitação…' : 'Solicitar acesso de proprietário'}</span>
-                        </button>
-                      )}
-                      {ownerAccessStatus === 'pending' && (
-                        <div className="flex items-center gap-3 px-4 py-2.5 text-neutral-600" role="status">
-                          <Sparkles className="h-4 w-4 flex-shrink-0 text-orange-600" />
-                          <span className="font-semibold">Solicitação de proprietário em análise</span>
+                        <p className="font-extrabold text-neutral-950 text-sm truncate">
+                          {isAccountConnected ? accountName || 'Hóspede' : 'Acesse sua conta'}
+                        </p>
+                        <p className="text-[11px] text-neutral-600 font-medium truncate">
+                          {isAccountConnected
+                            ? accountEmail
+                            : 'Entre ou crie sua conta para reservar'}
+                        </p>
+                      </div>
+
+                      {!isAccountConnected && (
+                        <div className="grid grid-cols-2 gap-2 border-b border-neutral-200/80 p-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onOpenAccount('login');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-orange-300 bg-white/80 px-3 py-2.5 font-bold text-orange-700 transition hover:bg-orange-50"
+                          >
+                            <LogIn className="h-4 w-4" /> Entrar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onOpenAccount('signup');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-3 py-2.5 font-bold text-white shadow-sm transition hover:brightness-105"
+                          >
+                            <UserPlus className="h-4 w-4" /> Criar conta
+                          </button>
                         </div>
                       )}
-                      {ownerAccessStatus === 'suspended' && (
-                        <div className="px-4 py-2.5 text-[11px] text-neutral-500" role="status">Para revisar seu acesso de proprietário, fale com a Central.</div>
+                      {isAccountConnected && (
+                        <div className="border-b border-neutral-200/80 px-3 py-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onOpenAccount('login');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className="flex min-h-11 w-full items-center justify-center rounded-xl border border-neutral-200 bg-white/90 px-3 py-2.5 text-center font-bold text-neutral-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50"
+                          >
+                            Gerenciar conta
+                          </button>
+                          <button
+                            type="button"
+                            disabled={signingOut}
+                            onClick={async () => {
+                              setSigningOut(true);
+                              setSignOutError('');
+                              try {
+                                await onSignOut();
+                                setIsUserMenuOpen(false);
+                              } catch {
+                                setSignOutError('Não foi possível sair da conta. Tente novamente.');
+                              } finally {
+                                setSigningOut(false);
+                              }
+                            }}
+                            className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white/90 px-3 py-2.5 text-center font-bold text-neutral-700 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 disabled:opacity-60"
+                          >
+                            <LogOut className="h-4 w-4" />
+                            {signingOut ? 'Saindo…' : 'Sair da conta'}
+                          </button>
+                          {signOutError && (
+                            <p
+                              role="alert"
+                              className="mt-2 text-center text-[11px] font-semibold text-red-600"
+                            >
+                              {signOutError}
+                            </p>
+                          )}
+                        </div>
                       )}
-                      {isOwnerAdmin && (
-                        <button
-                          onClick={() => { setCurrentView('ownerAdmin'); setIsUserMenuOpen(false); }}
-                          className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors hover:bg-orange-50 ${currentView === 'ownerAdmin' ? 'bg-orange-50 font-bold text-orange-700' : 'text-neutral-800'}`}
-                        >
-                          <ShieldCheck className="h-4 w-4 flex-shrink-0 text-orange-600" />
-                          <span className="font-semibold">Analisar acesso de proprietários</span>
-                        </button>
-                      )}
-                    </div>}
 
-                  </div>
-                </>,
-                document.body
-              )}
+                      {isAccountConnected && (
+                        <div className="py-1">
+                          <button
+                            onClick={() => {
+                              setCurrentView('explore');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className={`flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-neutral-100 ${
+                              currentView === 'explore'
+                                ? 'font-bold text-orange-600 bg-orange-50'
+                                : 'text-neutral-800'
+                            }`}
+                          >
+                            <Sparkles className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                            <span className="font-semibold">Explorar hospedagens</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setCurrentView('trips');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className={`flex min-h-11 w-full items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-neutral-100 ${
+                              currentView === 'trips'
+                                ? 'font-bold text-orange-600 bg-orange-50'
+                                : 'text-neutral-800'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Briefcase className="w-4 h-4 text-neutral-600 flex-shrink-0" />
+                              <span className="font-semibold">Minhas reservas e vouchers</span>
+                            </div>
+                            {tripsCount > 0 && (
+                              <span className="bg-orange-500 text-white font-bold px-2 py-0.5 rounded-full text-[11px] shadow-xs">
+                                {tripsCount}
+                              </span>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setCurrentView('wishlists');
+                              setIsUserMenuOpen(false);
+                            }}
+                            className={`flex min-h-11 w-full items-center justify-between px-4 py-2.5 text-left transition-colors hover:bg-neutral-100 ${
+                              currentView === 'wishlists'
+                                ? 'font-bold text-orange-600 bg-orange-50'
+                                : 'text-neutral-800'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Heart className="w-4 h-4 text-neutral-600 flex-shrink-0" />
+                              <span className="font-semibold">Favoritos</span>
+                            </div>
+                          </button>
+                          {ownerAccessStatus === 'approved' && (
+                            <button
+                              onClick={() => {
+                                setCurrentView('host');
+                                setIsUserMenuOpen(false);
+                              }}
+                              className={`flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-orange-50 ${currentView === 'host' ? 'bg-orange-50 font-bold text-orange-700' : 'text-neutral-800'}`}
+                            >
+                              <Briefcase className="h-4 w-4 flex-shrink-0 text-orange-600" />
+                              <span className="font-semibold">Painel do proprietário</span>
+                            </button>
+                          )}
+                          {ownerAccessStatus === 'none' && (
+                            <button
+                              type="button"
+                              disabled={ownerRequestLoading}
+                              onClick={() => {
+                                void onRequestOwnerAccess();
+                              }}
+                              className="flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left text-neutral-800 transition-colors hover:bg-orange-50 disabled:opacity-60"
+                            >
+                              <Sparkles className="h-4 w-4 flex-shrink-0 text-orange-600" />
+                              <span className="font-semibold">
+                                {ownerRequestLoading
+                                  ? 'Enviando solicitação…'
+                                  : 'Solicitar acesso de proprietário'}
+                              </span>
+                            </button>
+                          )}
+                          {ownerAccessStatus === 'pending' && (
+                            <div
+                              className="flex items-center gap-3 px-4 py-2.5 text-neutral-600"
+                              role="status"
+                            >
+                              <Sparkles className="h-4 w-4 flex-shrink-0 text-orange-600" />
+                              <span className="font-semibold">
+                                Solicitação de proprietário em análise
+                              </span>
+                            </div>
+                          )}
+                          {ownerAccessStatus === 'suspended' && (
+                            <div className="px-4 py-2.5 text-[11px] text-neutral-500" role="status">
+                              Para revisar seu acesso de proprietário, fale com a Central.
+                            </div>
+                          )}
+                          {isOwnerAdmin && (
+                            <button
+                              onClick={() => {
+                                setCurrentView('ownerAdmin');
+                                setIsUserMenuOpen(false);
+                              }}
+                              className={`flex min-h-11 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-orange-50 ${currentView === 'ownerAdmin' ? 'bg-orange-50 font-bold text-orange-700' : 'text-neutral-800'}`}
+                            >
+                              <ShieldCheck className="h-4 w-4 flex-shrink-0 text-orange-600" />
+                              <span className="font-semibold">
+                                Analisar acesso de proprietários
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>,
+                  document.body,
+                )}
             </div>
-
           </div>
-
         </div>
       </div>
     </header>

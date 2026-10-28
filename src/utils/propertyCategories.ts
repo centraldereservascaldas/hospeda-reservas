@@ -34,6 +34,8 @@ export function matchesPropertyCategory(property: Property, categoryId: string):
   ].filter(Boolean).join(' '));
 
   switch (categoryId) {
+    case 'condominiums':
+      return Boolean(property.complexName?.trim());
     case 'pools_24h':
       return /piscinas?.{0,45}(?:24\s*h(?:oras?)?|funcionamento 24)|(?:24\s*h(?:oras?)?).{0,45}piscinas?/.test(text);
     case 'pool_access':

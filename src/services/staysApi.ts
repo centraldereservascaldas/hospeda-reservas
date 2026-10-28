@@ -7,6 +7,7 @@ import {
 } from '../types';
 import { isProperty, isRecord } from '../utils/apiValidation';
 import { sanitizePropertyMedia } from '../utils/propertyMedia';
+import { apiFetch } from './apiFetch';
 
 const CONFIG_KEY = 'stays_net_config';
 const LOGS_KEY = 'stays_net_api_logs';
@@ -168,7 +169,7 @@ class StaysApiService {
     const targetConfig = { ...this.config, ...customConfig, clientId: '', clientSecret: '' };
     const startTime = Date.now();
 
-    const response = await fetch('/api/stays/status');
+    const response = await apiFetch('/api/stays/status');
     const status: unknown = await response.json();
     const latencyMs = Date.now() - startTime;
     if (!response.ok || !isRecord(status) || status.connected !== true) {
@@ -210,7 +211,7 @@ class StaysApiService {
     baseDailyRate: number,
   ): Promise<StaysPriceCalculationResponse> {
     void baseDailyRate;
-    const response = await fetch('/api/price', {
+    const response = await apiFetch('/api/price', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -289,7 +290,7 @@ class StaysApiService {
   }> {
     const startTime = Date.now();
     try {
-      const response = await fetch('/api/accommodations');
+      const response = await apiFetch('/api/accommodations');
       const json: unknown = await response.json();
       if (
         !response.ok ||

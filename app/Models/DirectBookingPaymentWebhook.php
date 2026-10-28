@@ -12,6 +12,7 @@ class DirectBookingPaymentWebhook extends Model
     protected $fillable = [
         'event_key',
         'gateway_payment_id',
+        'gateway_provider',
         'request_id',
         'status',
         'error_code',

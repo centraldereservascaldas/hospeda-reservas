@@ -35,7 +35,8 @@ class DirectCheckoutService
             ];
         }
 
-        if ($this->payments->availableMethods() === []) {
+        $resumeTokenTtlDays = DirectBookingOrder::resumeTokenTtlDays();
+        if ($resumeTokenTtlDays === null || $this->payments->availableMethods() === []) {
             return [
                 'order' => null,
                 'code' => 'payments_disabled',
@@ -57,17 +58,20 @@ class DirectCheckoutService
             if (! hash_equals($existingOrder->request_fingerprint, $fingerprint)) {
                 return ['order' => null, 'code' => 'idempotency_key_reused', 'message' => 'Esta chave de tentativa já foi usada com dados diferentes. Inicie uma nova tentativa com outra chave.', 'status' => 409, 'replayed' => false];
             }
+            if (! $existingOrder->hasValidResumeToken($existingOrder->resume_token ?? '')) {
+                return $this->resumeCredentialUnavailable();
+            }
 
             return $this->continueOrder($existingOrder, replayed: true);
         }
 
-        return $this->createOrderOnce($input, $idempotencyKey, $fingerprint);
+        return $this->createOrderOnce($input, $idempotencyKey, $fingerprint, $resumeTokenTtlDays);
     }
 
     /** @param array<string, mixed> $input
      * @return array{order: DirectBookingOrder|null, code: string|null, message: string|null, status: int, replayed: bool, success: bool, resumeReference: string|null, resumeToken: string|null}
      */
-    private function createOrderOnce(array $input, string $idempotencyKey, string $fingerprint): array
+    private function createOrderOnce(array $input, string $idempotencyKey, string $fingerprint, int $resumeTokenTtlDays): array
     {
         $property = $this->terms->findApprovedListing($input['listingId']);
         $termsSnapshot = is_array($property) ? ($property['directSaleTermsSnapshot'] ?? null) : null;
@@ -110,6 +114,10 @@ class DirectCheckoutService
         if (! is_array($availableListing)) {
             return ['order' => null, 'code' => 'dates_unavailable', 'message' => 'Este imóvel não está disponível para as datas selecionadas. Nenhum pedido, reserva ou cobrança foi iniciado.', 'status' => 409, 'replayed' => false];
         }
+        $liveCapacity = $availableListing['_i_maxGuests'] ?? $availableListing['maxGuests'] ?? null;
+        if (is_numeric($liveCapacity) && (int) $liveCapacity < $guestCount) {
+            return ['order' => null, 'code' => 'invalid_guest_count', 'message' => 'A quantidade de hóspedes excede a capacidade atual deste imóvel. Nenhum pedido, reserva ou cobrança foi iniciado.', 'status' => 422, 'replayed' => false];
+        }
 
         $quoteListingIds = array_values(array_unique(array_filter([
             $staysListingId,
@@ -135,13 +143,15 @@ class DirectCheckoutService
         }
 
         try {
-            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $idempotencyKey, $fingerprint): DirectBookingOrder {
+            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $idempotencyKey, $fingerprint, $resumeTokenTtlDays): DirectBookingOrder {
                 $order = DirectBookingOrder::create([
                     'status' => DirectBookingOrderStatus::Cotado,
                     'idempotency_key' => $idempotencyKey,
                     'public_reference' => Str::random(40),
                     'resume_token' => Str::random(64),
+                    'resume_token_expires_at' => now()->addDays($resumeTokenTtlDays),
                     'request_fingerprint' => $fingerprint,
+                    'marketing_attribution' => $input['marketingAttribution'] ?? null,
                     'listing_id' => (string) ($property['id'] ?? $input['listingId']),
                     'stays_listing_id' => $staysListingId,
                     'check_in' => $input['from'],
@@ -157,6 +167,12 @@ class DirectCheckoutService
                     'accepted_terms_snapshot' => $termsSnapshot,
                     'terms_accepted_at' => now(),
                     'origin' => 'website',
+                    'gateway_provider' => $this->configuredPaymentProvider(),
+                    'gateway_merchant_id' => match ($this->configuredPaymentProvider()) {
+                        'cielo_sandbox' => config('services.cielo.merchant_id'),
+                        'cielo_checkout' => config('services.cielo.checkout_merchant_id'),
+                        default => null,
+                    },
                     'operational_events' => [[
                         'status' => DirectBookingOrderStatus::Cotado->value,
                         'at' => now()->toISOString(),
@@ -169,6 +185,10 @@ class DirectCheckoutService
         } catch (UniqueConstraintViolationException) {
             $existingOrder = DirectBookingOrder::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existingOrder !== null && hash_equals($existingOrder->request_fingerprint, $fingerprint)) {
+                if (! $existingOrder->hasValidResumeToken($existingOrder->resume_token ?? '')) {
+                    return $this->resumeCredentialUnavailable();
+                }
+
                 return $this->continueOrder($existingOrder, replayed: true);
             }
 
@@ -176,6 +196,16 @@ class DirectCheckoutService
         }
 
         return $this->continueOrder($order, replayed: false);
+    }
+
+    private function configuredPaymentProvider(): string
+    {
+        $provider = config('direct-booking.payment_provider', 'mercadopago');
+        if (! in_array($provider, ['mercadopago', 'cielo_sandbox', 'cielo_checkout'], true)) {
+            throw new \RuntimeException('The configured direct booking payment provider is invalid.');
+        }
+
+        return $provider;
     }
 
     /** @return array{order: DirectBookingOrder, code: string, message: string, status: int, replayed: bool, success: bool, resumeReference: string|null, resumeToken: string|null} */
@@ -203,10 +233,26 @@ class DirectCheckoutService
         ];
     }
 
+    /** @return array{order: null, code: string, message: string, status: int, replayed: true, success: false, resumeReference: null, resumeToken: null} */
+    private function resumeCredentialUnavailable(): array
+    {
+        return [
+            'order' => null,
+            'code' => 'checkout_resume_unavailable',
+            'message' => 'O link de retomada deste pedido expirou ou foi revogado. Entre na sua conta com o e-mail usado na compra para continuar.',
+            'status' => 410,
+            'replayed' => true,
+            'success' => false,
+            'resumeReference' => null,
+            'resumeToken' => null,
+        ];
+    }
+
     /** @param array<string, mixed> $input */
     private function requestFingerprint(array $input): string
     {
         unset($input['idempotencyKey']);
+        unset($input['marketingAttribution']);
         $input = $this->canonicalize($input);
 
         return hash_hmac('sha256', json_encode($input, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), (string) config('app.key'));

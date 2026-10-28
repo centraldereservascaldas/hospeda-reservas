@@ -15,7 +15,7 @@ class OwnerDashboardController extends Controller
     public function __construct(private readonly StaysExternalApiClient $stays) {}
 
     /**
-     * @param array{owner: array<string, mixed>|null, reason: 'owner_not_found'|'unavailable'|null} $finance
+     * @param  array{owner: array<string, mixed>|null, reason: 'owner_not_found'|'unavailable'|null}  $finance
      */
     private function ownerFinanceFailure(array $finance, string $fallbackCode, string $fallbackMessage): JsonResponse
     {
@@ -66,7 +66,7 @@ class OwnerDashboardController extends Controller
         $reservationByReference = [];
         foreach ($properties as $property) {
             $recordsById = [];
-            foreach (['reserved', 'booked', 'contract', 'blocked', 'maintenance'] as $reservationType) {
+            foreach (['reserved', 'booked', 'contract', 'blocked', 'maintenance', 'canceled'] as $reservationType) {
                 for ($skip = 0; $skip <= 1000; $skip += 20) {
                     $typePage = $this->stays->get('/booking/reservations', ['from' => $from, 'to' => $to, 'dateType' => 'included', 'listingId' => $property['staysListingId'], 'type' => $reservationType, 'skip' => $skip, 'limit' => 20]);
                     if (! is_array($typePage)) {

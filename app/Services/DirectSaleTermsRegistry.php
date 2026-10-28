@@ -10,17 +10,48 @@ class DirectSaleTermsRegistry
 
     private const MAXIMUM_SNAPSHOT_LENGTH = 12_000;
 
+    private const REQUIRED_TERMS_FIELDS = [
+        'Preço e taxas',
+        'Cancelamento e reembolso',
+        'Forma e prazo de pagamento',
+        'Prazo da pré-reserva',
+        'Atendimento e suporte',
+    ];
+
     /** @return array<string, mixed>|null */
     public function findApprovedListing(string $listingId): ?array
     {
-        $catalog = json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
+        $catalog = $this->catalog();
         $property = collect($catalog)->first(fn (array $item): bool => in_array($listingId, [$item['id'] ?? '', $item['staysListingId'] ?? ''], true));
+        $pilotListingIds = config('direct-booking.pilot_listing_ids', []);
+        if (! is_array($pilotListingIds)) {
+            return null;
+        }
 
-        if ($property === null || ! $this->hasDisplayableTermsSnapshot($property)) {
+        $pilotListingIds = array_values(array_unique(array_filter(
+            $pilotListingIds,
+            static fn (mixed $pilotListingId): bool => is_string($pilotListingId) && trim($pilotListingId) !== '',
+        )));
+        $configuredPilotListings = collect($catalog)->filter(
+            fn (array $item): bool => in_array($item['id'] ?? null, $pilotListingIds, true),
+        );
+
+        if (count($pilotListingIds) < 2
+            || count($pilotListingIds) > 5
+            || $configuredPilotListings->count() !== count($pilotListingIds)
+            || $property === null
+            || ! in_array($property['id'] ?? null, $pilotListingIds, true)
+            || $configuredPilotListings->contains(fn (array $pilotListing): bool => ! $this->hasDisplayableTermsSnapshot($pilotListing))) {
             return null;
         }
 
         return $property;
+    }
+
+    /** @return list<array<string, mixed>> */
+    protected function catalog(): array
+    {
+        return json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
     }
 
     /** @param array<string, mixed> $property */
@@ -37,6 +68,12 @@ class DirectSaleTermsRegistry
         $fields = array_diff_key($snapshot, ['version' => true]);
         if ($fields === [] || count($fields) > self::MAXIMUM_TERMS_FIELDS) {
             return false;
+        }
+
+        foreach (self::REQUIRED_TERMS_FIELDS as $requiredField) {
+            if (! is_string($fields[$requiredField] ?? null) || trim($fields[$requiredField]) === '') {
+                return false;
+            }
         }
 
         $snapshotLength = 0;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ExternalLink, LoaderCircle, ShieldCheck } from 'lucide-react';
-import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { checkoutApi } from '../../services/checkoutApi';
 import { getCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
 
 interface CieloCheckoutIframeProps {
@@ -72,7 +72,7 @@ export function CieloCheckoutIframe({
     setIsCreating(true);
     setError(null);
     const idempotencyKey = getCieloCheckoutIdempotencyKey(reference);
-    const result = await crcnBackendApi.createCieloCheckout(
+    const result = await checkoutApi.createCieloCheckout(
       reference,
       resumeToken,
       amount,

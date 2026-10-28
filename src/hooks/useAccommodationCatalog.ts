@@ -37,12 +37,18 @@ export function useAccommodationCatalog() {
   const [properties, setCatalogProperties] = useState<Property[]>(readCachedProperties);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogLoadError, setCatalogLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const externallyUpdated = useRef(false);
 
   const setProperties: Dispatch<SetStateAction<Property[]>> = useCallback((value) => {
     externallyUpdated.current = true;
     setCatalogLoadError(false);
     setCatalogProperties(value);
+  }, []);
+
+  const retryCatalog = useCallback(() => {
+    setCatalogLoading(true);
+    setLoadAttempt((attempt) => attempt + 1);
   }, []);
 
   useEffect(() => {
@@ -65,7 +71,7 @@ export function useAccommodationCatalog() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
 
-  return { properties, setProperties, catalogLoading, catalogLoadError };
+  return { properties, setProperties, catalogLoading, catalogLoadError, retryCatalog };
 }

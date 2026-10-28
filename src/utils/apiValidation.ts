@@ -1,9 +1,11 @@
 import type { Property, Reservation } from '../types';
+import type { DirectBookingOrderListItem } from '../services/checkoutApi';
 import type {
   CalculatedPriceResponse,
   DirectBookingOperationsOrder,
   DirectBookingOperationsWebhook,
 } from '../services/crcnBackendApi';
+import type { DirectBookingCancellationReceipt } from '../services/checkoutApi';
 import type { StaysCalendarDay } from './staysAvailability';
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -27,6 +29,11 @@ export const isIsoDate = (value: unknown): value is string => {
   const date = new Date(`${value}T00:00:00.000Z`);
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 };
+
+const isIsoDateTime = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value) &&
+  Number.isFinite(Date.parse(value));
 
 export const isOwnerAccessRequest = (
   value: unknown,
@@ -83,10 +90,15 @@ export const isDirectBookingOrder = (
   quoteTotal: string;
   currency: 'BRL';
   paymentStatus: string | null;
-  resumeToken?: string | null;
   expiresAt: string | null;
   createdAt: string | null;
 } =>
+  isRecord(value) &&
+  typeof value.guestName === 'string' &&
+  value.guestName.trim() !== '' &&
+  isDirectBookingOrderListItem(value);
+
+export const isDirectBookingOrderListItem = (value: unknown): value is DirectBookingOrderListItem =>
   isRecord(value) &&
   checkoutOrderStatuses.includes(value.status as (typeof checkoutOrderStatuses)[number]) &&
   typeof value.publicReference === 'string' &&
@@ -94,8 +106,6 @@ export const isDirectBookingOrder = (
   typeof value.reservationConfirmed === 'boolean' &&
   typeof value.listingId === 'string' &&
   value.listingId.trim() !== '' &&
-  typeof value.guestName === 'string' &&
-  value.guestName.trim() !== '' &&
   isIsoDate(value.from) &&
   isIsoDate(value.to) &&
   value.to > value.from &&
@@ -104,11 +114,19 @@ export const isDirectBookingOrder = (
   Number(value.quoteTotal) > 0 &&
   value.currency === 'BRL' &&
   (value.paymentStatus === null || typeof value.paymentStatus === 'string') &&
-  (value.resumeToken === undefined ||
-    value.resumeToken === null ||
-    (typeof value.resumeToken === 'string' && /^[A-Za-z0-9]{64}$/.test(value.resumeToken))) &&
-  (value.expiresAt === null || typeof value.expiresAt === 'string') &&
-  (value.createdAt === null || typeof value.createdAt === 'string');
+  (value.expiresAt === null || isIsoDateTime(value.expiresAt)) &&
+  (value.createdAt === null || isIsoDateTime(value.createdAt)) &&
+  (value.cancellationReceipt === undefined ||
+    value.cancellationReceipt === null ||
+    isDirectBookingCancellationReceipt(value.cancellationReceipt));
+
+export const isDirectBookingCancellationReceipt = (
+  value: unknown,
+): value is DirectBookingCancellationReceipt =>
+  isRecord(value) &&
+  typeof value.protocol === 'string' &&
+  /^CANCEL-[A-Za-z0-9]{40}$/.test(value.protocol) &&
+  isIsoDateTime(value.requestedAt);
 
 export const isDirectBookingOperationsOrder = (
   value: unknown,
@@ -133,6 +151,17 @@ export const isDirectBookingOperationsOrder = (
   (value.paymentMethod === null || typeof value.paymentMethod === 'string') &&
   (value.gatewayPaymentId === null || typeof value.gatewayPaymentId === 'string') &&
   (value.staysReservationId === null || typeof value.staysReservationId === 'string') &&
+  (value.hasResumeToken === undefined || typeof value.hasResumeToken === 'boolean') &&
+  (value.resumeTokenExpiresAt === undefined ||
+    value.resumeTokenExpiresAt === null ||
+    isIsoDateTime(value.resumeTokenExpiresAt)) &&
+  (value.resumeTokenRevocation === undefined ||
+    value.resumeTokenRevocation === null ||
+    (isRecord(value.resumeTokenRevocation) &&
+      (value.resumeTokenRevocation.reviewedBy === null ||
+        typeof value.resumeTokenRevocation.reviewedBy === 'string') &&
+      (value.resumeTokenRevocation.at === null ||
+        isIsoDateTime(value.resumeTokenRevocation.at)))) &&
   typeof value.paymentApprovedWithoutConfirmedReservation === 'boolean' &&
   typeof value.latePaymentAfterHold === 'boolean' &&
   typeof value.staysActionFailed === 'boolean' &&
@@ -141,7 +170,10 @@ export const isDirectBookingOperationsOrder = (
   typeof value.gatewayRefundConfirmed === 'boolean' &&
   (value.manualCancellationReview === null ||
     isManualCancellationReview(value.manualCancellationReview)) &&
-  (value.updatedAt === null || typeof value.updatedAt === 'string') &&
+  (value.manualGatewayRefundReview === null ||
+    isManualGatewayRefundReview(value.manualGatewayRefundReview)) &&
+  (value.createdAt === null || isIsoDateTime(value.createdAt)) &&
+  (value.updatedAt === null || isIsoDateTime(value.updatedAt)) &&
   (value.lastEvent === null || isDirectBookingOperationsEvent(value.lastEvent)) &&
   (value.issue === null || isDirectBookingOperationsIssue(value.issue));
 
@@ -158,16 +190,25 @@ export const isDirectBookingOperationsWebhook = (
   Number.isInteger(value.attempts) &&
   (value.attempts as number) >= 0 &&
   typeof value.canRetry === 'boolean' &&
-  (value.receivedAt === null || typeof value.receivedAt === 'string') &&
-  (value.updatedAt === null || typeof value.updatedAt === 'string');
+  (value.receivedAt === null || isIsoDateTime(value.receivedAt)) &&
+  (value.updatedAt === null || isIsoDateTime(value.updatedAt));
 
 const isDirectBookingOperationsEvent = (
   value: unknown,
 ): value is NonNullable<DirectBookingOperationsOrder['lastEvent']> =>
   isRecord(value) &&
-  ['event', 'status', 'source', 'code', 'at'].every(
-    (field) => value[field] === undefined || typeof value[field] === 'string',
-  );
+  [
+    'event',
+    'status',
+    'source',
+    'code',
+    'at',
+    'previous_gateway_status',
+    'gateway_status',
+    'gateway_updated_at',
+  ].every((field) => value[field] === undefined || typeof value[field] === 'string') &&
+  (value.at === undefined || isIsoDateTime(value.at)) &&
+  (value.gateway_updated_at === undefined || isIsoDateTime(value.gateway_updated_at));
 
 const isManualCancellationReview = (
   value: unknown,
@@ -175,19 +216,28 @@ const isManualCancellationReview = (
   isRecord(value) &&
   (value.reason === null || typeof value.reason === 'string') &&
   (value.reviewedBy === null || typeof value.reviewedBy === 'string') &&
-  (value.at === null || typeof value.at === 'string');
+  (value.at === null || isIsoDateTime(value.at));
+
+const isManualGatewayRefundReview = (
+  value: unknown,
+): value is NonNullable<DirectBookingOperationsOrder['manualGatewayRefundReview']> =>
+  isRecord(value) &&
+  (value.reviewedBy === null || typeof value.reviewedBy === 'string') &&
+  (value.at === null || isIsoDateTime(value.at));
 
 const isConfirmationEmailStatus = (
   value: unknown,
 ): value is NonNullable<DirectBookingOperationsOrder['confirmationEmail']> =>
   isRecord(value) &&
-  ['pending', 'queued', 'processing', 'sent', 'failed'].includes(value.status as string) &&
+  ['pending', 'queued', 'processing', 'sent', 'failed', 'skipped'].includes(
+    value.status as string,
+  ) &&
   Number.isInteger(value.attempts) &&
   (value.attempts as number) >= 0 &&
-  (value.lastAttemptAt === null || typeof value.lastAttemptAt === 'string') &&
-  (value.queuedAt === null || typeof value.queuedAt === 'string') &&
-  (value.nextAttemptAt === null || typeof value.nextAttemptAt === 'string') &&
-  (value.sentAt === null || typeof value.sentAt === 'string');
+  (value.lastAttemptAt === null || isIsoDateTime(value.lastAttemptAt)) &&
+  (value.queuedAt === null || isIsoDateTime(value.queuedAt)) &&
+  (value.nextAttemptAt === null || isIsoDateTime(value.nextAttemptAt)) &&
+  (value.sentAt === null || isIsoDateTime(value.sentAt));
 
 const isDirectBookingOperationsIssue = (
   value: unknown,
@@ -307,6 +357,11 @@ export const isProperty = (value: unknown): value is Property => {
     typeof value.instantBook === 'boolean' &&
     (value.staysSynced === undefined || typeof value.staysSynced === 'boolean') &&
     (value.reviewsSynced === undefined || typeof value.reviewsSynced === 'boolean') &&
+    (value.simulatedData === undefined || typeof value.simulatedData === 'boolean') &&
+    (value.dataSource === undefined ||
+      value.dataSource === 'stays-live' ||
+      value.dataSource === 'stays-simulated' ||
+      value.dataSource === 'local-catalog') &&
     isStringArray(value.images) &&
     isNonNegativeNumber(value.bedrooms) &&
     isNonNegativeNumber(value.beds) &&

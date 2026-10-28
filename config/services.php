@@ -39,7 +39,19 @@ return [
         'base_url' => env('STAYS_BASE_URL', 'https://crcn.stays.net/external/v1'),
         'client_id' => env('STAYS_CLIENT_ID'),
         'client_secret' => env('STAYS_CLIENT_SECRET'),
+        'hosted_checkout_enabled' => (bool) env('STAYS_HOSTED_CHECKOUT_ENABLED', false),
+        'hosted_checkout_allowed_hosts' => array_values(array_filter(array_map(
+            static fn (string $host): string => strtolower(trim($host)),
+            explode(',', (string) env(
+                'STAYS_HOSTED_CHECKOUT_ALLOWED_HOSTS',
+                'www.centraldereservascaldas.com.br,centraldereservascaldas.com.br',
+            )),
+        ))),
         'timeout' => (int) env('STAYS_TIMEOUT', 10),
+    ],
+
+    'stays_simulator' => [
+        'enabled' => (bool) env('STAYS_SIMULATOR_ENABLED', false),
     ],
 
     'mercadopago' => [
@@ -50,15 +62,24 @@ return [
     ],
 
     'cielo' => [
-        'environment' => env('CIELO_ENVIRONMENT', 'sandbox'),
-        'merchant_id' => env('CIELO_MERCHANT_ID'),
-        'merchant_key' => env('CIELO_MERCHANT_KEY'),
-        'sop_client_id' => env('CIELO_SOP_CLIENT_ID'),
-        'sop_client_secret' => env('CIELO_SOP_CLIENT_SECRET'),
-        'transaction_base_url' => env('CIELO_ENVIRONMENT', 'sandbox') === 'production'
+        'enabled' => (bool) env('CIELO_SANDBOX_ENABLED', false),
+        'sop_enabled' => (bool) env('CIELO_SANDBOX_SOP_ENABLED', false),
+        'merchant_id' => env('CIELO_SANDBOX_MERCHANT_ID'),
+        'merchant_key' => env('CIELO_SANDBOX_MERCHANT_KEY'),
+        'sop_client_id' => env('CIELO_SANDBOX_SOP_CLIENT_ID'),
+        'sop_client_secret' => env('CIELO_SANDBOX_SOP_CLIENT_SECRET'),
+        'webhook_header_name' => env('CIELO_SANDBOX_WEBHOOK_HEADER_NAME'),
+        'webhook_header_value' => env('CIELO_SANDBOX_WEBHOOK_HEADER_VALUE'),
+        'webhook_queue_connection' => env('CIELO_SANDBOX_WEBHOOK_QUEUE_CONNECTION', 'database'),
+        'checkout_environment' => env('CIELO_ENVIRONMENT', 'sandbox'),
+        'checkout_merchant_id' => env('CIELO_MERCHANT_ID'),
+        'checkout_merchant_key' => env('CIELO_MERCHANT_KEY'),
+        'checkout_sop_client_id' => env('CIELO_SOP_CLIENT_ID'),
+        'checkout_sop_client_secret' => env('CIELO_SOP_CLIENT_SECRET'),
+        'checkout_transaction_base_url' => env('CIELO_ENVIRONMENT', 'sandbox') === 'production'
             ? 'https://api.cieloecommerce.cielo.com.br'
             : 'https://apisandbox.cieloecommerce.cielo.com.br',
-        'query_base_url' => env('CIELO_ENVIRONMENT', 'sandbox') === 'production'
+        'checkout_query_base_url' => env('CIELO_ENVIRONMENT', 'sandbox') === 'production'
             ? 'https://apiquery.cieloecommerce.cielo.com.br'
             : 'https://apiquerysandbox.cieloecommerce.cielo.com.br',
     ],

@@ -19,6 +19,13 @@ return new class extends Migration
             $table->timestampTz('stays_synced_at')->nullable();
             $table->timestamps();
         });
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            DB::unprepared("CREATE TRIGGER guest_profiles_name_check_insert BEFORE INSERT ON guest_profiles WHEN length(trim(NEW.full_name)) NOT BETWEEN 2 AND 160 BEGIN SELECT RAISE(ABORT, 'guest_profiles_name_check'); END");
+            DB::unprepared("CREATE TRIGGER guest_profiles_name_check_update BEFORE UPDATE OF full_name ON guest_profiles WHEN length(trim(NEW.full_name)) NOT BETWEEN 2 AND 160 BEGIN SELECT RAISE(ABORT, 'guest_profiles_name_check'); END");
+
+            return;
+        }
+
         DB::statement('ALTER TABLE guest_profiles ADD CONSTRAINT guest_profiles_name_check CHECK (length(trim(full_name)) BETWEEN 2 AND 160)');
     }
 

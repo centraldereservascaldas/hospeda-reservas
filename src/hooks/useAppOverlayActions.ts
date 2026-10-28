@@ -3,6 +3,9 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { Property, SearchFilters } from '../types';
 import type { AppOverlayBookingPayload } from '../types/booking';
 import { scrollIntoViewRespectingMotion } from '../utils/motion';
+import { emitFunnelEvent } from '../utils/measurementEvents';
+
+export const CHECKOUT_MODAL_HISTORY_ENTRY = '__crcnCheckoutModalEntry';
 
 export interface AppOverlaySuggestedFilters {
   destination?: string;
@@ -14,7 +17,6 @@ interface UseAppOverlayActionsOptions {
   setFilters: Dispatch<SetStateAction<SearchFilters>>;
   setIsSofiaOpen: Dispatch<SetStateAction<boolean>>;
   setBookingPayload: Dispatch<SetStateAction<AppOverlayBookingPayload | null>>;
-  onClosePropertyDetail: () => void;
   onSelectProperty: (property: Property) => void;
   scrollCatalog?: () => void;
 }
@@ -29,7 +31,6 @@ export function useAppOverlayActions({
   setFilters,
   setIsSofiaOpen,
   setBookingPayload,
-  onClosePropertyDetail,
   onSelectProperty,
   scrollCatalog = scrollToAccommodationCatalog,
 }: UseAppOverlayActionsOptions) {
@@ -42,10 +43,21 @@ export function useAppOverlayActions({
 
   const handleStartBooking = useCallback(
     (payload: AppOverlayBookingPayload) => {
-      onClosePropertyDetail();
+      emitFunnelEvent({
+        event: 'begin_checkout',
+        items: [{ item_id: payload.property.staysListingId || payload.property.id }],
+      });
+      const state: Record<string, unknown> =
+        window.history.state && typeof window.history.state === 'object'
+          ? { ...window.history.state }
+          : {};
+      delete state[CHECKOUT_MODAL_HISTORY_ENTRY];
+      const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      window.history.replaceState(state, '', currentUrl);
+      window.history.pushState({ ...state, [CHECKOUT_MODAL_HISTORY_ENTRY]: true }, '', currentUrl);
       setBookingPayload(payload);
     },
-    [onClosePropertyDetail, setBookingPayload],
+    [setBookingPayload],
   );
 
   const handleAssistantApplyFilters = useCallback(

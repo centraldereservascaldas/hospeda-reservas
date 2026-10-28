@@ -11,13 +11,34 @@ import {
   isOwnerAccessStatus,
   isStaysOwnerSummary,
   isStaysCalendarDay,
-  isDirectBookingOrder,
+  isDirectBookingOrderListItem,
+  isDirectBookingCancellationReceipt,
   isDirectBookingOperationsOrder,
   isDirectBookingOperationsWebhook,
 } from '../utils/apiValidation';
 import { isOwnerDashboardData } from '../utils/ownerDashboardValidation';
+import type {
+  DirectBookingCancellationReceipt,
+  DirectBookingOrderListItem,
+  DirectBookingOrderSummary,
+} from './checkoutApi';
 import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
-import { saveCheckoutResumeToken } from '../utils/checkoutResumeStorage';
+import { matchesPropertyDestination } from '../utils/propertySearchFilters';
+import { apiFetch } from './apiFetch';
+
+const API_REQUEST_TIMEOUT_MS = 20_000;
+const STAYS_SEARCH_PAGE_SIZE = 20;
+
+async function withApiRequestTimeout<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await request(controller.signal);
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+  }
+}
 
 export interface SearchAccommodationsParams {
   from?: string;
@@ -59,159 +80,6 @@ export interface CalculatedPriceResponse {
   };
 }
 
-export interface CheckoutRequestPayload {
-  listingId: string;
-  from: string;
-  to: string;
-  guests: { adults: number; children: number; infants: number; pets: number };
-  quoteTotal: number;
-  guest: { fullName: string; email: string; phone: string };
-  acceptedTermsVersion: string;
-  acceptedTerms: true;
-  idempotencyKey: string;
-}
-
-export interface DirectBookingOrderSummary {
-  status:
-    | 'iniciado'
-    | 'cotado'
-    | 'pre_reservado'
-    | 'pagamento_pendente'
-    | 'pago_em_confirmacao'
-    | 'confirmado'
-    | 'atencao_operacional'
-    | 'expirado'
-    | 'pagamento_recusado'
-    | 'liberacao_pendente'
-    | 'cancelamento_solicitado'
-    | 'reembolso_pendente'
-    | 'reembolsado'
-    | 'contestado'
-    | 'concluido';
-  publicReference: string;
-  reservationConfirmed: boolean;
-  listingId: string;
-  guestName: string;
-  from: string;
-  to: string;
-  quoteTotal: string;
-  currency: 'BRL';
-  paymentStatus: string | null;
-  resumeToken?: string | null;
-  expiresAt: string | null;
-  createdAt: string | null;
-}
-
-export interface CheckoutResumeCredentials {
-  reference: string;
-  token: string;
-  path: string;
-}
-
-export interface CheckoutPaymentAttemptSummary {
-  status:
-    | 'processing'
-    | 'pending'
-    | 'in_process'
-    | 'approved'
-    | 'rejected'
-    | 'cancelled'
-    | 'unknown'
-    | 'attention_required';
-  method: 'pix' | 'card';
-  amount: string;
-  currency: 'BRL';
-  expiresAt: string | null;
-  paidAt: string | null;
-  checkoutUrl: string | null;
-  pix: { copyPaste: string | null; qrCodeBase64: string | null } | null;
-}
-
-export type CheckoutPaymentRequestPayload =
-  | {
-      paymentMethod: 'pix';
-      paymentMethodId: 'pix';
-      idempotencyKey: string;
-    }
-  | {
-      paymentMethod: 'card';
-      paymentMethodId: string;
-      token: string;
-      installments: number;
-      cardholderName: string;
-      cardholderEmail: string;
-      issuerId?: number;
-      payerIdentification?: { type: 'CPF' | 'CNPJ'; number: string };
-      idempotencyKey: string;
-    };
-
-export type CheckoutPaymentResult =
-  | {
-      kind: 'response';
-      success: boolean;
-      code: string;
-      message: string;
-      replayed: boolean;
-      payment: CheckoutPaymentAttemptSummary | null;
-    }
-  | { kind: 'invalid'; fieldErrors?: Record<string, string[]> }
-  | { kind: 'not-found' }
-  | { kind: 'unavailable' };
-
-export interface CieloSopAccessToken {
-  accessToken: string;
-  expiresAt: string;
-  environment: 'sandbox' | 'production';
-}
-
-export interface CheckoutResponse {
-  success: boolean;
-  code?: string;
-  message?: string;
-  fieldErrors?: Record<string, string[]>;
-  order?: DirectBookingOrderSummary;
-  resume?: CheckoutResumeCredentials;
-  payment: CheckoutPaymentCapabilities;
-  idempotentReplay: boolean;
-}
-
-export interface CheckoutPaymentCapabilities {
-  enabled: boolean;
-  methods: Array<'pix' | 'card'>;
-  publicKey: string | null;
-}
-
-export interface CheckoutReadinessResponse {
-  success: true;
-  ready: boolean;
-  termsAvailable: boolean;
-  checkoutEnabled: boolean;
-  payment: CheckoutPaymentCapabilities;
-}
-
-export type CheckoutReadinessResult =
-  { kind: 'ready'; data: CheckoutReadinessResponse } | { kind: 'unavailable' };
-
-export interface CheckoutResumeResponse {
-  success: true;
-  order: DirectBookingOrderSummary;
-  confirmation: { reservationCode: string | null; confirmedAt: string | null } | null;
-  payment: CheckoutPaymentCapabilities & {
-    attempt?: CheckoutPaymentAttemptSummary | null;
-  };
-}
-
-export interface CheckoutTermsResponse {
-  success: true;
-  terms: { version: string; snapshot: Record<string, unknown> };
-}
-
-export type CheckoutTermsResult =
-  { kind: 'ready'; data: CheckoutTermsResponse } | { kind: 'unavailable' };
-
-export type CheckoutResumeResult =
-  { kind: 'ready'; data: CheckoutResumeResponse } | { kind: 'not-found' } | { kind: 'unavailable' };
-
 export interface StaysStatusResponse {
   connected: boolean;
   hasCredentials: boolean;
@@ -219,6 +87,15 @@ export interface StaysStatusResponse {
   environment?: string;
   message?: string;
 }
+
+export interface StaysCheckoutReadinessResponse {
+  ready: boolean;
+  code: string | null;
+  message: string;
+}
+
+export type StaysCheckoutStartResponse =
+  { success: true; checkoutUrl: string } | { success: false; code: string; message: string };
 
 export interface SofiaChatResponse {
   success: boolean;
@@ -239,205 +116,6 @@ const isSuggestedFilters = (
   (value.from === undefined || isIsoDate(value.from)) &&
   (value.to === undefined || isIsoDate(value.to)) &&
   (value.from === undefined || value.to === undefined || value.to > value.from);
-
-const isCheckoutResumeCredentials = (value: unknown): value is CheckoutResumeCredentials =>
-  isRecord(value) &&
-  typeof value.reference === 'string' &&
-  /^[A-Za-z0-9]{40}$/.test(value.reference) &&
-  typeof value.token === 'string' &&
-  /^[A-Za-z0-9]{64}$/.test(value.token) &&
-  value.path === `/checkout/${value.reference}`;
-
-const isCheckoutPaymentCapabilities = (value: unknown): value is CheckoutPaymentCapabilities =>
-  isRecord(value) &&
-  typeof value.enabled === 'boolean' &&
-  Array.isArray(value.methods) &&
-  value.methods.every((method) => method === 'pix' || method === 'card') &&
-  value.enabled === value.methods.length > 0 &&
-  (value.publicKey === null ||
-    (typeof value.publicKey === 'string' &&
-      value.publicKey.trim() !== '' &&
-      value.publicKey.length <= 255)) &&
-  value.methods.includes('card') === (typeof value.publicKey === 'string');
-
-const isCheckoutReadinessResponse = (value: unknown): value is CheckoutReadinessResponse =>
-  isRecord(value) &&
-  value.success === true &&
-  typeof value.ready === 'boolean' &&
-  typeof value.termsAvailable === 'boolean' &&
-  typeof value.checkoutEnabled === 'boolean' &&
-  isCheckoutPaymentCapabilities(value.payment) &&
-  value.ready === (value.checkoutEnabled && value.termsAvailable && value.payment.enabled);
-
-const checkoutPaymentAttemptStatuses: CheckoutPaymentAttemptSummary['status'][] = [
-  'processing',
-  'pending',
-  'in_process',
-  'approved',
-  'rejected',
-  'cancelled',
-  'unknown',
-  'attention_required',
-];
-
-const isCheckoutPaymentAttempt = (value: unknown): value is CheckoutPaymentAttemptSummary => {
-  if (
-    !isRecord(value) ||
-    !checkoutPaymentAttemptStatuses.includes(
-      value.status as CheckoutPaymentAttemptSummary['status'],
-    ) ||
-    (value.method !== 'pix' && value.method !== 'card') ||
-    typeof value.amount !== 'string' ||
-    !/^\d+(?:\.\d{2})$/.test(value.amount) ||
-    Number(value.amount) <= 0 ||
-    value.currency !== 'BRL' ||
-    (value.expiresAt !== null &&
-      (typeof value.expiresAt !== 'string' || !Number.isFinite(Date.parse(value.expiresAt)))) ||
-    (value.paidAt !== null &&
-      (typeof value.paidAt !== 'string' || !Number.isFinite(Date.parse(value.paidAt)))) ||
-    (value.checkoutUrl !== null && !isSafeCieloCheckoutUrl(value.checkoutUrl))
-  ) {
-    return false;
-  }
-
-  if (value.method === 'card') return value.pix === null;
-  if (!isRecord(value.pix)) return false;
-
-  return (
-    (value.pix.copyPaste === null ||
-      (typeof value.pix.copyPaste === 'string' &&
-        value.pix.copyPaste.trim() !== '' &&
-        value.pix.copyPaste.length <= 1_000)) &&
-    (value.pix.qrCodeBase64 === null ||
-      (typeof value.pix.qrCodeBase64 === 'string' &&
-        value.pix.qrCodeBase64.length <= 100_000 &&
-        /^[A-Za-z0-9+/]+={0,2}$/.test(value.pix.qrCodeBase64)))
-  );
-};
-
-const isSafeCieloCheckoutUrl = (value: unknown): value is string => {
-  if (typeof value !== 'string') return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && [
-      'cieloecommerce.cielo.com.br',
-      'cielolink.com.br',
-      'www.cielolink.com.br',
-    ].includes(url.hostname.toLowerCase()) && url.username === '' && url.password === '';
-  } catch {
-    return false;
-  }
-};
-
-const isCheckoutPaymentResponse = (
-  value: unknown,
-): value is {
-  success: boolean;
-  code: string;
-  message: string;
-  replayed: boolean;
-  payment: CheckoutPaymentAttemptSummary | null;
-} =>
-  isRecord(value) &&
-  typeof value.success === 'boolean' &&
-  typeof value.code === 'string' &&
-  typeof value.message === 'string' &&
-  typeof value.replayed === 'boolean' &&
-  (value.payment === null || isCheckoutPaymentAttempt(value.payment));
-
-const isCheckoutResumePayment = (value: unknown): value is CheckoutResumeResponse['payment'] =>
-  isRecord(value) &&
-  isCheckoutPaymentCapabilities(value) &&
-  (value.attempt === undefined ||
-    value.attempt === null ||
-    isCheckoutPaymentAttempt(value.attempt));
-
-const isCheckoutResumeResponse = (value: unknown): value is CheckoutResumeResponse =>
-  isRecord(value) &&
-  value.success === true &&
-  isDirectBookingOrder(value.order) &&
-  (value.order.status === 'confirmado'
-    ? value.confirmation !== null
-    : value.confirmation === null) &&
-  (value.confirmation === null ||
-    (isRecord(value.confirmation) &&
-      (value.confirmation.reservationCode === null ||
-        (typeof value.confirmation.reservationCode === 'string' &&
-          value.confirmation.reservationCode.trim() !== '' &&
-          value.confirmation.reservationCode.length <= 100)) &&
-      (value.confirmation.confirmedAt === null ||
-        (typeof value.confirmation.confirmedAt === 'string' &&
-          Number.isFinite(Date.parse(value.confirmation.confirmedAt)))))) &&
-  isCheckoutResumePayment(value.payment);
-
-const isCheckoutTermsResponse = (value: unknown): value is CheckoutTermsResponse => {
-  if (
-    !isRecord(value) ||
-    value.success !== true ||
-    !isRecord(value.terms) ||
-    typeof value.terms.version !== 'string' ||
-    value.terms.version.trim() === '' ||
-    value.terms.version.length > 100 ||
-    !isRecord(value.terms.snapshot) ||
-    value.terms.snapshot.version !== value.terms.version
-  ) {
-    return false;
-  }
-
-  const fields = Object.entries(value.terms.snapshot).filter(([key]) => key !== 'version');
-  if (fields.length === 0 || fields.length > 12) return false;
-
-  let snapshotLength = 0;
-  for (const [name, condition] of fields) {
-    if (
-      name.trim() === '' ||
-      name.length > 100 ||
-      typeof condition !== 'string' ||
-      condition.trim() === '' ||
-      condition.length > 3_000
-    ) {
-      return false;
-    }
-
-    snapshotLength += name.length + condition.length;
-    if (snapshotLength > 12_000) return false;
-  }
-
-  return true;
-};
-
-const checkoutFields = new Set([
-  'listingId',
-  'from',
-  'to',
-  'guests.adults',
-  'guests.children',
-  'guests.infants',
-  'guests.pets',
-  'quoteTotal',
-  'guest.fullName',
-  'guest.email',
-  'guest.phone',
-  'acceptedTermsVersion',
-  'acceptedTerms',
-  'idempotencyKey',
-]);
-
-const parseCheckoutFieldErrors = (value: unknown): Record<string, string[]> | undefined => {
-  if (!isRecord(value)) return undefined;
-
-  const fieldErrors: Record<string, string[]> = {};
-  for (const [field, messages] of Object.entries(value)) {
-    if (!checkoutFields.has(field) || !Array.isArray(messages)) continue;
-    const safeMessages = messages
-      .filter((message): message is string => typeof message === 'string')
-      .map((message) => message.slice(0, 200))
-      .slice(0, 3);
-    if (safeMessages.length > 0) fieldErrors[field] = safeMessages;
-  }
-
-  return Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined;
-};
 
 export type OwnerAccessStatus = 'none' | 'pending' | 'approved' | 'suspended';
 
@@ -463,11 +141,17 @@ export interface DirectBookingOperationsOrder {
   paymentMethod: string | null;
   gatewayPaymentId: string | null;
   staysReservationId: string | null;
+  hasResumeToken?: boolean;
+  resumeTokenExpiresAt?: string | null;
+  resumeTokenRevocation?: {
+    reviewedBy: string | null;
+    at: string | null;
+  } | null;
   paymentApprovedWithoutConfirmedReservation: boolean;
   latePaymentAfterHold: boolean;
   staysActionFailed: boolean;
   confirmationEmail: {
-    status: 'pending' | 'queued' | 'processing' | 'sent' | 'failed';
+    status: 'pending' | 'queued' | 'processing' | 'sent' | 'failed' | 'skipped';
     attempts: number;
     lastAttemptAt: string | null;
     queuedAt: string | null;
@@ -481,6 +165,11 @@ export interface DirectBookingOperationsOrder {
     reviewedBy: string | null;
     at: string | null;
   } | null;
+  manualGatewayRefundReview: {
+    reviewedBy: string | null;
+    at: string | null;
+  } | null;
+  createdAt: string | null;
   updatedAt: string | null;
   lastEvent: {
     event?: string;
@@ -488,6 +177,9 @@ export interface DirectBookingOperationsOrder {
     source?: string;
     code?: string;
     at?: string;
+    previous_gateway_status?: string;
+    gateway_status?: string;
+    gateway_updated_at?: string;
   } | null;
   issue: {
     source: 'stays' | 'payment' | 'webhook' | string;
@@ -575,7 +267,13 @@ export interface OwnerAccountingDetails {
   nights: number;
   fees: Array<{ label: string; amount: number }>;
   payout: number;
-  ledgerEntry: { date: string; type: 'debit' | 'credit'; status: string; description: string; amount: number };
+  ledgerEntry: {
+    date: string;
+    type: 'debit' | 'credit';
+    status: string;
+    description: string;
+    amount: number;
+  };
 }
 
 class CrcnBackendApiService {
@@ -599,7 +297,7 @@ class CrcnBackendApiService {
 
   public async getResorts(): Promise<Array<{ id: string; name: string }>> {
     try {
-      const res = await fetch('/api/resorts');
+      const res = await apiFetch('/api/resorts');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       if (!res.headers.get('content-type')?.includes('application/json')) {
         throw new Error('O servidor respondeu com conteúdo diferente de JSON.');
@@ -629,12 +327,14 @@ class CrcnBackendApiService {
 
   // 1. GET /api/accommodations
   public async getAccommodations(): Promise<Property[]> {
-    const res = await fetch('/api/accommodations');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json: unknown = await res.json();
+    const json: unknown = await withApiRequestTimeout(async (signal) => {
+      const res = await apiFetch('/api/accommodations', { signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    });
     if (
       !isRecord(json) ||
-      json.source !== 'stays-live' ||
+      (json.source !== 'stays-live' && json.source !== 'stays-simulated') ||
       !Array.isArray(json.data) ||
       !json.data.every(isProperty)
     ) {
@@ -644,9 +344,9 @@ class CrcnBackendApiService {
     if (accommodations.length > 0) {
       try {
         localStorage.setItem('hospeda_properties', JSON.stringify(accommodations));
-        localStorage.setItem('hospeda_properties_source', 'stays-live');
+        localStorage.setItem('hospeda_properties_source', json.source);
       } catch (error) {
-        console.warn('Unable to cache the live accommodation catalog:', error);
+        console.warn('Unable to cache the accommodation catalog:', error);
       }
     } else {
       try {
@@ -662,9 +362,11 @@ class CrcnBackendApiService {
   // 2. GET /api/accommodations/:id
   public async getAccommodationById(id: string): Promise<Property | null> {
     try {
-      const res = await fetch(`/api/accommodations/${encodeURIComponent(id)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: unknown = await res.json();
+      const json: unknown = await withApiRequestTimeout(async (signal) => {
+        const res = await apiFetch(`/api/accommodations/${encodeURIComponent(id)}`, { signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      });
       if (!isRecord(json) || (json.data !== null && !isProperty(json.data))) {
         throw new Error('A acomodação retornou dados inválidos.');
       }
@@ -681,7 +383,7 @@ class CrcnBackendApiService {
           if (index >= 0) cached[index] = property;
           else cached.push(property);
           localStorage.setItem('hospeda_properties', JSON.stringify(cached));
-          localStorage.setItem('hospeda_properties_source', 'stays-live');
+          localStorage.setItem('hospeda_properties_source', property.dataSource ?? 'stays-live');
         } catch (error) {
           console.warn('Unable to persist refreshed accommodation gallery:', error);
         }
@@ -700,29 +402,86 @@ class CrcnBackendApiService {
     data: Property[];
   }> {
     try {
-      const res = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: unknown = await res.json();
-      if (
-        !isRecord(json) ||
-        !isFiniteNumber(json.total) ||
-        !Number.isInteger(json.total) ||
-        json.total < 0 ||
-        !Array.isArray(json.data) ||
-        !json.data.every(isProperty)
-      ) {
-        throw new Error('A pesquisa retornou uma resposta inválida.');
+      const initialSkip = Math.max(0, Math.trunc(params.skip ?? 0));
+      const requestedResultCount =
+        params.limit === undefined
+          ? Number.POSITIVE_INFINITY
+          : Math.max(0, Math.trunc(params.limit));
+      const requestedNights =
+        params.from && params.to
+          ? Math.round(
+              (Date.parse(`${params.to}T00:00:00Z`) - Date.parse(`${params.from}T00:00:00Z`)) /
+                86_400_000,
+            )
+          : null;
+      const propertiesById = new Map<string, Property>();
+      let pageOffset = initialSkip;
+
+      while (propertiesById.size < requestedResultCount) {
+        const pageLimit = Math.min(
+          STAYS_SEARCH_PAGE_SIZE,
+          requestedResultCount - propertiesById.size,
+        );
+        const pageParams = { ...params, limit: pageLimit, skip: pageOffset };
+        const json: unknown = await withApiRequestTimeout(async (signal) => {
+          const res = await apiFetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pageParams),
+            signal,
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        });
+
+        if (
+          !isRecord(json) ||
+          !isFiniteNumber(json.total) ||
+          !Number.isInteger(json.total) ||
+          json.total < 0 ||
+          !Array.isArray(json.data) ||
+          json.data.length > pageLimit ||
+          !json.data.every(isProperty) ||
+          (params.from &&
+            params.to &&
+            ((json.source !== 'stays-live' && json.source !== 'stays-simulated') ||
+              json.from !== params.from ||
+              json.to !== params.to ||
+              json.guests !== (params.guests ?? 1)))
+        ) {
+          throw new Error('A pesquisa retornou uma resposta inválida.');
+        }
+
+        let addedProperties = 0;
+        for (const item of json.data) {
+          const property = sanitizePropertyMedia(item);
+          const normalizedProperty =
+            requestedNights !== null &&
+            property.calculatedPrice &&
+            property.calculatedPrice.nights !== requestedNights
+              ? { ...property, calculatedPrice: undefined }
+              : property;
+          if (!propertiesById.has(normalizedProperty.id)) {
+            propertiesById.set(normalizedProperty.id, normalizedProperty);
+            addedProperties += 1;
+          }
+        }
+
+        pageOffset += json.data.length;
+        if (json.data.length < pageLimit) break;
+        if (addedProperties === 0) {
+          throw new Error('A paginação da pesquisa retornou anúncios repetidos.');
+        }
       }
-      return { total: json.total, data: json.data.map(sanitizePropertyMedia) };
+
+      const data = [...propertiesById.values()];
+      return { total: data.length, data };
     } catch (err) {
-      console.warn('Falling back to local search filtering:', err);
+      console.warn('Accommodation search failed:', err);
       if (params.from && params.to) {
         // A static catalog cannot confirm availability or provide a date-specific quote.
-        return { total: 0, data: [] };
+        // Let the caller show an availability error and offer a retry instead of implying no stays exist.
+        throw err;
       }
       const { STAYS_NET_APARTMENTS } = await import('../data/staysApartments');
       let filtered = STAYS_NET_APARTMENTS;
@@ -730,9 +489,8 @@ class CrcnBackendApiService {
         filtered = filtered.filter((p) => p.maxGuests >= (params.guests || 1));
       }
       if (params.destination) {
-        const q = params.destination.toLowerCase();
-        filtered = filtered.filter(
-          (p) => p.title.toLowerCase().includes(q) || p.subtitle.toLowerCase().includes(q),
+        filtered = filtered.filter((property) =>
+          matchesPropertyDestination(property, params.destination || ''),
         );
       }
       if (params.propertyId) {
@@ -759,11 +517,14 @@ class CrcnBackendApiService {
       const query = new URLSearchParams();
       if (from) query.set('from', from);
       if (to) query.set('to', to);
-      const res = await fetch(
-        `/api/accommodations/${encodeURIComponent(id)}/calendar?${query.toString()}`,
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: unknown = await res.json();
+      const json: unknown = await withApiRequestTimeout(async (signal) => {
+        const res = await apiFetch(
+          `/api/accommodations/${encodeURIComponent(id)}/calendar?${query.toString()}`,
+          { signal },
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      });
       if (!isRecord(json) || !Array.isArray(json.data) || !json.data.every(isStaysCalendarDay)) {
         return [];
       }
@@ -783,22 +544,46 @@ class CrcnBackendApiService {
     promocode?: string;
   }): Promise<CalculatedPriceResponse | null> {
     try {
-      const res = await fetch('/api/price', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          listingIds: [payload.listingId],
-          from: payload.from,
-          to: payload.to,
-          guests: payload.guests || 2,
-          promocode: payload.promocode,
-        }),
+      const json: unknown = await withApiRequestTimeout(async (signal) => {
+        const res = await apiFetch('/api/price', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            listingIds: [payload.listingId],
+            from: payload.from,
+            to: payload.to,
+            guests: payload.guests || 2,
+            promocode: payload.promocode,
+          }),
+          signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json: unknown = await res.json();
       if (!isCalculatedPriceResponse(json)) {
         throw new Error('A resposta de preço retornou dados inválidos.');
       }
+
+      const requestedCheckIn = isIsoDate(payload.from)
+        ? Date.parse(`${payload.from}T00:00:00.000Z`)
+        : Number.NaN;
+      const requestedCheckOut = isIsoDate(payload.to)
+        ? Date.parse(`${payload.to}T00:00:00.000Z`)
+        : Number.NaN;
+      const requestedNights = (requestedCheckOut - requestedCheckIn) / 86400000;
+      const matchesRequestedListing =
+        json.listingId === payload.listingId || json.staysListingId === payload.listingId;
+
+      if (
+        !matchesRequestedListing ||
+        !Number.isInteger(requestedNights) ||
+        requestedNights < 1 ||
+        json.nights !== requestedNights ||
+        json.currency !== 'BRL'
+      ) {
+        throw new Error('A cotação não corresponde ao imóvel, período ou moeda solicitados.');
+      }
+
       return json;
     } catch (err) {
       console.warn('Error calculating price on backend:', err);
@@ -806,12 +591,63 @@ class CrcnBackendApiService {
     }
   }
 
-  // 6. POST /api/checkout
+  public async getStaysCheckoutReadiness(): Promise<StaysCheckoutReadinessResponse | null> {
+    try {
+      const response = await apiFetch('/api/stays-checkout/readiness', {
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      const json: unknown = await response.json();
+      if (
+        !response.ok ||
+        !isRecord(json) ||
+        typeof json.ready !== 'boolean' ||
+        (json.code !== null && typeof json.code !== 'string') ||
+        typeof json.message !== 'string'
+      ) {
+        return null;
+      }
+      return { ready: json.ready, code: json.code, message: json.message };
+    } catch {
+      return null;
+    }
+  }
+
+  public async startStaysCheckout(payload: {
+    listingId: string;
+    from: string;
+    to: string;
+    guests: number;
+    quoteTotal: number;
+    guest: { fullName: string; email: string };
+  }): Promise<StaysCheckoutStartResponse | null> {
+    try {
+      const response = await apiFetch('/api/stays-checkout', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json: unknown = await response.json();
+      if (!isRecord(json) || typeof json.success !== 'boolean') return null;
+      if (json.success === true) {
+        return typeof json.checkoutUrl === 'string'
+          ? { success: true, checkoutUrl: json.checkoutUrl }
+          : null;
+      }
+      return typeof json.code === 'string' && typeof json.message === 'string'
+        ? { success: false, code: json.code, message: json.message }
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   public async syncStaysGuest(
     accessToken: string,
   ): Promise<{ success: boolean; message?: string } | null> {
     try {
-      const res = await fetch('/api/auth/sync-stays', {
+      const res = await apiFetch('/api/auth/sync-stays', {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}` },
       });
@@ -834,314 +670,8 @@ class CrcnBackendApiService {
     }
   }
 
-  public async createCheckout(payload: CheckoutRequestPayload): Promise<CheckoutResponse | null> {
-    try {
-      const res = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': payload.idempotencyKey,
-        },
-        body: JSON.stringify({
-          listingId: payload.listingId,
-          from: payload.from,
-          to: payload.to,
-          guests: payload.guests,
-          quoteTotal: payload.quoteTotal,
-          guest: payload.guest,
-          acceptedTermsVersion: payload.acceptedTermsVersion,
-          acceptedTerms: payload.acceptedTerms,
-        }),
-      });
-      const json: unknown = await res.json();
-      if (res.status === 422 && isRecord(json)) {
-        const fieldErrors = parseCheckoutFieldErrors(json.errors);
-
-        return {
-          success: false,
-          code: 'invalid_checkout_request',
-          message: 'Confira os dados informados antes de continuar.',
-          ...(fieldErrors ? { fieldErrors } : {}),
-          payment: { enabled: false, methods: [], publicKey: null },
-          idempotentReplay: false,
-        };
-      }
-      if (
-        !isRecord(json) ||
-        typeof json.success !== 'boolean' ||
-        (json.code !== undefined && typeof json.code !== 'string') ||
-        (json.message !== undefined && typeof json.message !== 'string') ||
-        !isCheckoutPaymentCapabilities(json.payment) ||
-        typeof json.idempotentReplay !== 'boolean'
-      )
-        return null;
-
-      const order = json.order;
-      const resume = json.resume;
-      if (order !== undefined && !isDirectBookingOrder(order)) return null;
-      if (resume !== undefined && !isCheckoutResumeCredentials(resume)) return null;
-      if ((order === undefined) !== (resume === undefined)) return null;
-      if (
-        order &&
-        (order.listingId !== payload.listingId ||
-          order.from !== payload.from ||
-          order.to !== payload.to ||
-          Math.round(Number(order.quoteTotal) * 100) !== Math.round(payload.quoteTotal * 100) ||
-          resume?.reference !== order.publicReference)
-      )
-        return null;
-      if (json.success && (!res.ok || !order || !resume || order.status !== 'pre_reservado'))
-        return null;
-      if (res.ok && !json.success) return null;
-      if (resume) saveCheckoutResumeToken(resume.reference, resume.token);
-
-      return {
-        success: json.success,
-        ...(typeof json.code === 'string' ? { code: json.code } : {}),
-        ...(typeof json.message === 'string' ? { message: json.message } : {}),
-        ...(order ? { order } : {}),
-        ...(resume ? { resume } : {}),
-        payment: json.payment,
-        idempotentReplay: json.idempotentReplay,
-      };
-    } catch (err) {
-      console.warn('Error creating checkout on backend:', err);
-      return null;
-    }
-  }
-
-  public async createCheckoutPayment(
-    reference: string,
-    resumeToken: string,
-    expectedAmount: string,
-    payload: CheckoutPaymentRequestPayload,
-  ): Promise<CheckoutPaymentResult> {
-    if (
-      !/^[A-Za-z0-9]{40}$/.test(reference) ||
-      !/^[A-Za-z0-9]{64}$/.test(resumeToken) ||
-      !/^[A-Za-z0-9._~-]{16,128}$/.test(payload.idempotencyKey) ||
-      !/^\d{1,8}\.\d{2}$/.test(expectedAmount) ||
-      Number(expectedAmount) <= 0
-    ) {
-      return { kind: 'unavailable' };
-    }
-
-    const { idempotencyKey, ...paymentData } = payload;
-
-    try {
-      const res = await fetch(`/api/checkout/${encodeURIComponent(reference)}/payments`, {
-        method: 'POST',
-        cache: 'no-store',
-        headers: {
-          'Content-Type': 'application/json',
-          'Idempotency-Key': idempotencyKey,
-          'X-Checkout-Resume-Token': resumeToken,
-        },
-        body: JSON.stringify(paymentData),
-      });
-
-      if (res.status === 404) return { kind: 'not-found' };
-      if (res.status === 422) {
-        const json: unknown = await res.json();
-        const fieldErrors = isRecord(json) ? parseCheckoutFieldErrors(json.errors) : undefined;
-
-        return { kind: 'invalid', ...(fieldErrors ? { fieldErrors } : {}) };
-      }
-
-      const json: unknown = await res.json();
-      if (
-        !isCheckoutPaymentResponse(json) ||
-        (res.ok && !json.success) ||
-        (!res.ok && json.success) ||
-        (json.success && !json.payment)
-      ) {
-        return { kind: 'unavailable' };
-      }
-
-      if (
-        json.payment &&
-        (json.payment.method !== payload.paymentMethod ||
-          Math.round(Number(json.payment.amount) * 100) !==
-            Math.round(Number(expectedAmount) * 100))
-      ) {
-        return { kind: 'unavailable' };
-      }
-
-      return {
-        kind: 'response',
-        success: json.success,
-        code: json.code,
-        message: json.message,
-        replayed: json.replayed,
-        payment: json.payment,
-      };
-    } catch {
-      return { kind: 'unavailable' };
-    }
-  }
-
-  public async createCieloCheckout(
-    reference: string,
-    resumeToken: string,
-    expectedAmount: string,
-    idempotencyKey: string,
-  ): Promise<CheckoutPaymentResult> {
-    if (
-      !/^[A-Za-z0-9]{40}$/.test(reference) ||
-      !/^[A-Za-z0-9]{64}$/.test(resumeToken) ||
-      !/^[A-Za-z0-9._~-]{16,128}$/.test(idempotencyKey) ||
-      !/^\d{1,8}\.\d{2}$/.test(expectedAmount) ||
-      Number(expectedAmount) <= 0
-    ) {
-      return { kind: 'unavailable' };
-    }
-
-    try {
-      const response = await fetch(
-        `/api/checkout/${encodeURIComponent(reference)}/cielo-checkout`,
-        {
-          method: 'POST',
-          cache: 'no-store',
-          headers: {
-            'Content-Type': 'application/json',
-            'Idempotency-Key': idempotencyKey,
-            'X-Checkout-Resume-Token': resumeToken,
-          },
-          body: JSON.stringify({ idempotencyKey }),
-        },
-      );
-
-      if (response.status === 404) return { kind: 'not-found' };
-      if (response.status === 422) return { kind: 'invalid' };
-
-      const json: unknown = await response.json();
-      if (
-        !isCheckoutPaymentResponse(json) ||
-        (response.ok && !json.success) ||
-        (!response.ok && json.success) ||
-        (json.payment &&
-          (json.payment.method !== 'card' ||
-            Math.round(Number(json.payment.amount) * 100) !==
-              Math.round(Number(expectedAmount) * 100))) ||
-        (json.success && json.payment?.checkoutUrl === null)
-      ) {
-        return { kind: 'unavailable' };
-      }
-
-      return {
-        kind: 'response',
-        success: json.success,
-        code: json.code,
-        message: json.message,
-        replayed: json.replayed,
-        payment: json.payment,
-      };
-    } catch {
-      return { kind: 'unavailable' };
-    }
-  }
-
-  public async getCieloSopAccessToken(
-    reference: string,
-    resumeToken: string,
-  ): Promise<CieloSopAccessToken | null> {
-    if (!/^[A-Za-z0-9]{40}$/.test(reference) || !/^[A-Za-z0-9]{64}$/.test(resumeToken)) {
-      return null;
-    }
-
-    try {
-      const response = await fetch(
-        `/api/checkout/${encodeURIComponent(reference)}/cielo/sop-token`,
-        {
-          cache: 'no-store',
-          headers: { 'X-Checkout-Resume-Token': resumeToken },
-        },
-      );
-      if (!response.ok) return null;
-      const value: unknown = await response.json();
-      if (
-        !isRecord(value) ||
-        value.success !== true ||
-        typeof value.accessToken !== 'string' ||
-        value.accessToken.length < 20 ||
-        typeof value.expiresAt !== 'string' ||
-        (value.environment !== 'sandbox' && value.environment !== 'production')
-      ) {
-        return null;
-      }
-
-      return {
-        accessToken: value.accessToken,
-        expiresAt: value.expiresAt,
-        environment: value.environment,
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  public async getCheckoutTerms(listingId: string): Promise<CheckoutTermsResult> {
-    if (!listingId.trim() || listingId.length > 100) return { kind: 'unavailable' };
-
-    try {
-      const res = await fetch(`/api/checkout/terms/${encodeURIComponent(listingId)}`, {
-        cache: 'no-store',
-      });
-      if (!res.ok) return { kind: 'unavailable' };
-      const json: unknown = await res.json();
-
-      return isCheckoutTermsResponse(json)
-        ? { kind: 'ready', data: json }
-        : { kind: 'unavailable' };
-    } catch (err) {
-      console.warn('Error loading approved checkout terms:', err);
-      return { kind: 'unavailable' };
-    }
-  }
-
-  public async getCheckoutReadiness(listingId: string): Promise<CheckoutReadinessResult> {
-    if (!listingId.trim() || listingId.length > 100) return { kind: 'unavailable' };
-
-    try {
-      const res = await fetch(`/api/checkout/readiness/${encodeURIComponent(listingId)}`, {
-        cache: 'no-store',
-      });
-      if (!res.ok) return { kind: 'unavailable' };
-      const json: unknown = await res.json();
-
-      return isCheckoutReadinessResponse(json)
-        ? { kind: 'ready', data: json }
-        : { kind: 'unavailable' };
-    } catch (err) {
-      console.warn('Error loading direct checkout readiness:', err);
-      return { kind: 'unavailable' };
-    }
-  }
-
-  public async resumeCheckout(reference: string, token: string): Promise<CheckoutResumeResult> {
-    if (!/^[A-Za-z0-9]{40}$/.test(reference) || !/^[A-Za-z0-9]{64}$/.test(token)) {
-      return { kind: 'not-found' };
-    }
-
-    try {
-      const res = await fetch(`/api/checkout/${encodeURIComponent(reference)}`, {
-        cache: 'no-store',
-        headers: { 'X-Checkout-Resume-Token': token },
-      });
-      if (res.status === 404) return { kind: 'not-found' };
-      if (!res.ok) return { kind: 'unavailable' };
-      const json: unknown = await res.json();
-      return isCheckoutResumeResponse(json)
-        ? { kind: 'ready', data: json }
-        : { kind: 'unavailable' };
-    } catch (err) {
-      console.warn('Error resuming direct checkout:', err);
-      return { kind: 'unavailable' };
-    }
-  }
-
   public async getMyReservations(accessToken: string): Promise<Reservation[]> {
-    const res = await fetch('/api/my-reservations', {
+    const res = await apiFetch('/api/my-reservations', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1161,8 +691,10 @@ class CrcnBackendApiService {
     }));
   }
 
-  public async getMyDirectBookingOrders(accessToken: string): Promise<DirectBookingOrderSummary[]> {
-    const res = await fetch('/api/my-direct-booking-orders', {
+  public async getMyDirectBookingOrders(
+    accessToken: string,
+  ): Promise<DirectBookingOrderListItem[]> {
+    const res = await apiFetch('/api/my-direct-booking-orders', {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: 'no-store',
     });
@@ -1174,7 +706,7 @@ class CrcnBackendApiService {
           : 'Não foi possível carregar suas compras no site.',
       );
     }
-    if (!Array.isArray(json.data) || !json.data.every(isDirectBookingOrder)) {
+    if (!Array.isArray(json.data) || !json.data.every(isDirectBookingOrderListItem)) {
       throw new Error('A API retornou dados inválidos para as compras no site.');
     }
     return json.data;
@@ -1183,12 +715,16 @@ class CrcnBackendApiService {
   public async requestDirectBookingCancellation(
     accessToken: string,
     publicReference: string,
-  ): Promise<void> {
+  ): Promise<{
+    cancellationReceipt: DirectBookingCancellationReceipt;
+    alreadyRequested: boolean;
+    message: string;
+  }> {
     if (!/^[A-Za-z0-9]{40}$/.test(publicReference)) {
       throw new Error('Referência do pedido inválida.');
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/my-direct-booking-orders/${encodeURIComponent(publicReference)}/cancel`,
       {
         method: 'POST',
@@ -1202,7 +738,10 @@ class CrcnBackendApiService {
       !isRecord(json) ||
       json.success !== true ||
       json.cancellationStatus !== 'requested' ||
-      typeof json.message !== 'string'
+      typeof json.message !== 'string' ||
+      typeof json.alreadyRequested !== 'boolean' ||
+      !isDirectBookingCancellationReceipt(json.cancellationReceipt) ||
+      json.cancellationReceipt.protocol !== `CANCEL-${publicReference}`
     ) {
       throw new Error(
         isRecord(json) && typeof json.message === 'string'
@@ -1210,13 +749,19 @@ class CrcnBackendApiService {
           : 'Não foi possível registrar a solicitação de cancelamento.',
       );
     }
+
+    return {
+      cancellationReceipt: json.cancellationReceipt,
+      alreadyRequested: json.alreadyRequested,
+      message: json.message,
+    };
   }
 
   public async cancelMyReservation(
     reservationId: string,
     accessToken: string,
   ): Promise<ReservationCancellationResult> {
-    const res = await fetch(`/api/my-reservations/${encodeURIComponent(reservationId)}/cancel`, {
+    const res = await apiFetch(`/api/my-reservations/${encodeURIComponent(reservationId)}/cancel`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -1241,7 +786,7 @@ class CrcnBackendApiService {
   }
 
   public async getOwnerAccess(accessToken: string): Promise<OwnerAccessStatus> {
-    const res = await fetch('/api/owner/access', {
+    const res = await apiFetch('/api/owner/access', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1258,7 +803,7 @@ class CrcnBackendApiService {
   }
 
   public async requestOwnerAccess(accessToken: string): Promise<OwnerAccessStatus> {
-    const res = await fetch('/api/owner/access/request', {
+    const res = await apiFetch('/api/owner/access/request', {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -1281,7 +826,7 @@ class CrcnBackendApiService {
     to: string,
   ): Promise<OwnerDashboardData> {
     const query = new URLSearchParams({ from, to });
-    const res = await fetch(`/api/owner/dashboard?${query}`, {
+    const res = await apiFetch(`/api/owner/dashboard?${query}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1316,23 +861,40 @@ class CrcnBackendApiService {
     to: string,
   ): Promise<OwnerAccountingDetails> {
     const query = new URLSearchParams({ listingId, from, to });
-    const res = await fetch(`/api/owner/accounting/entries/${encodeURIComponent(entryId)}/details?${query}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const res = await fetch(
+      `/api/owner/accounting/entries/${encodeURIComponent(entryId)}/details?${query}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
     const json: unknown = await res.json();
     if (!res.ok || !isRecord(json) || json.success !== true || !isRecord(json.details)) {
-      throw new Error(isRecord(json) && typeof json.message === 'string' ? json.message : 'Não foi possível carregar os detalhes do lançamento.');
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível carregar os detalhes do lançamento.',
+      );
     }
     const detail = json.details;
     const isFee = (value: unknown): value is OwnerAccountingDetails['fees'][number] =>
       isRecord(value) && typeof value.label === 'string' && isFiniteNumber(value.amount);
     const isLedgerEntry = (value: unknown): value is OwnerAccountingDetails['ledgerEntry'] =>
-      isRecord(value) && typeof value.date === 'string' && (value.type === 'debit' || value.type === 'credit') &&
-      typeof value.status === 'string' && typeof value.description === 'string' && isFiniteNumber(value.amount);
+      isRecord(value) &&
+      typeof value.date === 'string' &&
+      (value.type === 'debit' || value.type === 'credit') &&
+      typeof value.status === 'string' &&
+      typeof value.description === 'string' &&
+      isFiniteNumber(value.amount);
     if (
-      typeof detail.reservationCode !== 'string' || typeof detail.guestName !== 'string' || typeof detail.checkIn !== 'string' || typeof detail.checkOut !== 'string' ||
-      !isFiniteNumber(detail.nights) || !Array.isArray(detail.fees) || !detail.fees.every(isFee) ||
-      !isFiniteNumber(detail.payout) || !isLedgerEntry(detail.ledgerEntry)
+      typeof detail.reservationCode !== 'string' ||
+      typeof detail.guestName !== 'string' ||
+      typeof detail.checkIn !== 'string' ||
+      typeof detail.checkOut !== 'string' ||
+      !isFiniteNumber(detail.nights) ||
+      !Array.isArray(detail.fees) ||
+      !detail.fees.every(isFee) ||
+      !isFiniteNumber(detail.payout) ||
+      !isLedgerEntry(detail.ledgerEntry)
     ) {
       throw new Error('A API retornou detalhes financeiros inválidos.');
     }
@@ -1359,7 +921,7 @@ class CrcnBackendApiService {
   }
 
   public async getOwnerAdminStatus(accessToken: string): Promise<boolean> {
-    const res = await fetch('/api/owner/admin/status', {
+    const res = await apiFetch('/api/owner/admin/status', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1374,7 +936,7 @@ class CrcnBackendApiService {
   }
 
   public async getOwnerAccessRequests(accessToken: string): Promise<OwnerAccessRequest[]> {
-    const res = await fetch('/api/owner/admin/requests', {
+    const res = await apiFetch('/api/owner/admin/requests', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1397,7 +959,7 @@ class CrcnBackendApiService {
     webhookPage = 1,
   ): Promise<DirectBookingOperationsPage> {
     const params = new URLSearchParams({ page: String(page), webhookPage: String(webhookPage) });
-    const res = await fetch(`/api/owner/admin/direct-booking-orders?${params}`, {
+    const res = await apiFetch(`/api/owner/admin/direct-booking-orders?${params}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1441,7 +1003,7 @@ class CrcnBackendApiService {
   }
 
   public async retryDirectBookingWebhook(accessToken: string, webhookId: string): Promise<void> {
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/owner/admin/direct-booking-webhooks/${encodeURIComponent(webhookId)}/retry`,
       {
         method: 'POST',
@@ -1466,7 +1028,7 @@ class CrcnBackendApiService {
       throw new Error('Referência do pedido inválida.');
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/start-manual-cancellation`,
       {
         method: 'POST',
@@ -1500,7 +1062,7 @@ class CrcnBackendApiService {
       throw new Error('Referência do pedido inválida.');
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/verify-manual-stays-cancellation`,
       {
         method: 'POST',
@@ -1532,7 +1094,7 @@ class CrcnBackendApiService {
       throw new Error('Referência do pedido inválida.');
     }
 
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/verify-manual-gateway-refund`,
       {
         method: 'POST',
@@ -1555,9 +1117,40 @@ class CrcnBackendApiService {
     }
   }
 
+  public async revokeDirectBookingResumeToken(
+    accessToken: string,
+    publicReference: string,
+  ): Promise<void> {
+    if (!/^[A-Za-z0-9]{40}$/.test(publicReference)) {
+      throw new Error('Referência do pedido inválida.');
+    }
+
+    const res = await apiFetch(
+      `/api/owner/admin/direct-booking-orders/${encodeURIComponent(publicReference)}/revoke-resume-token`,
+      {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
+    const json: unknown = await res.json();
+    if (
+      !res.ok ||
+      !isRecord(json) ||
+      json.success !== true ||
+      (json.status !== 'revoked' && json.status !== 'already_revoked')
+    ) {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível revogar a credencial de retomada.',
+      );
+    }
+  }
+
   public async searchStaysOwners(accessToken: string, query: string): Promise<StaysOwnerSummary[]> {
     const params = new URLSearchParams({ q: query });
-    const res = await fetch(`/api/owner/admin/stays-owners?${params}`, {
+    const res = await apiFetch(`/api/owner/admin/stays-owners?${params}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
@@ -1579,7 +1172,7 @@ class CrcnBackendApiService {
     userId: string,
     staysOwnerId: string,
   ): Promise<void> {
-    const res = await fetch('/api/owner/admin/approve', {
+    const res = await apiFetch('/api/owner/admin/approve', {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, staysOwnerId, identityVerified: true }),
@@ -1597,7 +1190,7 @@ class CrcnBackendApiService {
   // 7. GET /api/stays/status
   public async getStaysStatus(): Promise<StaysStatusResponse | null> {
     try {
-      const res = await fetch('/api/stays/status');
+      const res = await apiFetch('/api/stays/status');
       if (!res.ok) return null;
       const json: unknown = await res.json();
       if (
@@ -1628,7 +1221,7 @@ class CrcnBackendApiService {
     history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
   ): Promise<SofiaChatResponse> {
     try {
-      const res = await fetch('/api/sofia/chat', {
+      const res = await apiFetch('/api/sofia/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, history }),

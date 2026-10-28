@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { selectAvailabilityDay } from '../src/utils/propertyDateSelection.ts';
+import {
+  selectAvailabilityDay,
+  selectAvailabilityRange,
+} from '../src/utils/propertyDateSelection.ts';
 import type { StaysCalendarDay } from '../src/utils/staysAvailability.ts';
 
 const calendar: StaysCalendarDay[] = ['2026-11-19', '2026-11-20', '2026-11-21'].map((date) => ({
@@ -46,4 +49,28 @@ test('restarts the range when the selected day is before or equal to check-in', 
     checkOut: '',
     message: '',
   });
+});
+
+test('accepts a dragged date range only when arrival and every night are available', () => {
+  assert.deepEqual(selectAvailabilityRange(calendar, '2026-11-19', '2026-11-21'), {
+    checkIn: '2026-11-19',
+    checkOut: '2026-11-21',
+    message: '',
+  });
+
+  const blockedArrival = calendar.map((entry) =>
+    entry.date === '2026-11-19' ? { ...entry, closedToArrival: true } : entry,
+  );
+  assert.match(
+    selectAvailabilityRange(blockedArrival, '2026-11-19', '2026-11-21').message,
+    /não está disponível para check-in/,
+  );
+
+  const unavailableNight = calendar.map((entry) =>
+    entry.date === '2026-11-20' ? { ...entry, avail: 0 } : entry,
+  );
+  assert.match(
+    selectAvailabilityRange(unavailableNight, '2026-11-19', '2026-11-21').message,
+    /não atende à estadia mínima/,
+  );
 });

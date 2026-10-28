@@ -7,6 +7,7 @@ use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,9 @@ class ReconcileMercadoPagoPayment implements ShouldQueue
     {
         $shouldProcess = DB::transaction(function (): bool {
             $webhook = DirectBookingPaymentWebhook::query()->lockForUpdate()->findOrFail($this->webhookId);
+            if ($webhook->gateway_provider !== 'mercadopago') {
+                return false;
+            }
             if (in_array($webhook->status, ['processed', 'processing'], true)) {
                 return false;
             }
@@ -86,7 +90,11 @@ class ReconcileMercadoPagoPayment implements ShouldQueue
                 ])->save();
             });
 
-            throw $exception;
+            $failureCode = $exception instanceof RequestException
+                ? 'payment_reconciliation_failed; gateway_http_status='.$exception->response->status()
+                : 'payment_reconciliation_failed';
+
+            throw new \RuntimeException($failureCode);
         }
     }
 

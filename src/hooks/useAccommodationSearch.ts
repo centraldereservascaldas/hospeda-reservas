@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Property, SearchFilters } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
@@ -7,6 +7,8 @@ import { getSurpriseDateCandidates } from '../utils/surpriseDates';
 import type { SurpriseDateOption } from '../utils/surpriseDates';
 import { getAccommodationIdFromPath, parseSearchFilters } from '../utils/searchUrlState';
 import { scrollIntoViewRespectingMotion } from '../utils/motion';
+import { countOccupancyGuests } from '../utils/guestCounts';
+import { isIsoDate } from '../utils/apiValidation';
 
 type SearchResultProperty = Property & { calculatedPrice?: { totalAmount?: number } };
 
@@ -20,10 +22,14 @@ export interface AccommodationWidgetSearchParams {
   surpriseMe?: boolean;
 }
 
+export type AvailabilitySearchState = 'idle' | 'loading' | 'success' | 'error' | 'invalid-dates';
+
 interface UseAccommodationSearchOptions {
   setProperties: Dispatch<SetStateAction<Property[]>>;
   setFilters: Dispatch<SetStateAction<SearchFilters>>;
-  restoreSearchFromUrlRef: MutableRefObject<(filters: SearchFilters) => void>;
+  restoreSearchFromUrlRef: MutableRefObject<
+    (filters: SearchFilters, options?: { scrollCatalog?: boolean }) => void | Promise<void>
+  >;
   searchAccommodations?: (
     params: SearchAccommodationsParams,
   ) => Promise<{ total: number; data: Property[] }>;
@@ -40,6 +46,14 @@ const scrollToAccommodationCatalog = () => {
   if (catalogElement) scrollIntoViewRespectingMotion(catalogElement);
 };
 
+const getTodayIsoDate = () => {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+
+  return `${today.getFullYear()}-${month}-${day}`;
+};
+
 export function useAccommodationSearch({
   setProperties,
   setFilters,
@@ -54,16 +68,58 @@ export function useAccommodationSearch({
   );
   const initialUrlSearchHandledRef = useRef(false);
   const searchGenerationRef = useRef(0);
+  const lastSearchParamsRef = useRef<AccommodationWidgetSearchParams | null>(null);
+  const [availabilitySearchState, setAvailabilitySearchState] = useState<AvailabilitySearchState>(
+    () => {
+      const initialUrl = new URL(initialLocationRef.current, window.location.origin);
+      const initialFilters = parseSearchFilters(initialUrl.search);
+      return initialFilters.checkIn && initialFilters.checkOut ? 'loading' : 'idle';
+    },
+  );
 
   const handleStaysWidgetSearch = useCallback(
-    async (searchParams: AccommodationWidgetSearchParams) => {
+    async (
+      searchParams: AccommodationWidgetSearchParams,
+      { scrollCatalogAfterSearch = true }: { scrollCatalogAfterSearch?: boolean } = {},
+    ) => {
       const searchGeneration = ++searchGenerationRef.current;
+      lastSearchParamsRef.current = searchParams;
+
+      const hasAnySearchDate = Boolean(searchParams.checkIn || searchParams.checkOut);
+      const hasSearchDates = Boolean(
+        isIsoDate(searchParams.checkIn) &&
+        isIsoDate(searchParams.checkOut) &&
+        searchParams.checkIn &&
+        searchParams.checkOut &&
+        searchParams.checkIn >= getTodayIsoDate() &&
+        searchParams.checkOut > searchParams.checkIn,
+      );
+      if (!searchParams.surpriseMe && hasAnySearchDate && !hasSearchDates) {
+        setFilters((previous) => ({
+          ...previous,
+          checkIn: searchParams.checkIn,
+          checkOut: searchParams.checkOut,
+          destination: searchParams.destination || '',
+          destinationPropertyId: searchParams.propertyId || '',
+          guests: searchParams.guests ?? {
+            adults: searchParams.persons,
+            children: 0,
+            infants: 0,
+            pets: 0,
+          },
+        }));
+        setProperties([]);
+        setAvailabilitySearchState('invalid-dates');
+        if (scrollCatalogAfterSearch) scrollCatalog();
+        return;
+      }
+
+      setAvailabilitySearchState('loading');
       let searchedProperties: SearchResultProperty[] | null = null;
       setFilters((previous) => ({
         ...previous,
-        ...(searchParams.surpriseMe
-          ? {}
-          : { checkIn: searchParams.checkIn, checkOut: searchParams.checkOut }),
+        checkIn: searchParams.surpriseMe ? '' : searchParams.checkIn,
+        checkOut: searchParams.surpriseMe ? '' : searchParams.checkOut,
         destination: searchParams.surpriseMe ? '' : searchParams.destination || '',
         destinationPropertyId: searchParams.surpriseMe ? '' : searchParams.propertyId || '',
         guests: searchParams.guests ?? {
@@ -86,6 +142,7 @@ export function useAccommodationSearch({
             },
           ];
       let selectedDateOption: (typeof dateOptions)[number] | null = null;
+      let successfulSearchCount = 0;
 
       for (const dateOption of dateOptions) {
         try {
@@ -97,6 +154,7 @@ export function useAccommodationSearch({
             propertyId: searchParams.propertyId,
           });
           if (searchGeneration !== searchGenerationRef.current) return;
+          successfulSearchCount += 1;
           const results = searchResult?.data || [];
           if (searchParams.surpriseMe) {
             const confirmedQuotes = results.filter(
@@ -145,6 +203,11 @@ export function useAccommodationSearch({
         }
         const chosenProperties = randomizedCandidates.slice(0, 5);
         setProperties(chosenProperties);
+        const completedAllDateOptions =
+          dateOptions.length > 0 && successfulSearchCount === dateOptions.length;
+        setAvailabilitySearchState(
+          chosenProperties.length > 0 || completedAllDateOptions ? 'success' : 'error',
+        );
         if (chosenProperties.length) {
           const suggestedDates = selectedDateOption!;
           setFilters((previous) => ({
@@ -154,10 +217,18 @@ export function useAccommodationSearch({
           }));
         }
       } else if (searchedProperties) {
-        setProperties(searchedProperties);
+        setProperties(
+          hasSearchDates
+            ? searchedProperties
+            : searchedProperties.map((property) => ({ ...property, calculatedPrice: undefined })),
+        );
+        setAvailabilitySearchState(hasSearchDates ? 'success' : 'idle');
+      } else {
+        setProperties([]);
+        setAvailabilitySearchState('error');
       }
 
-      scrollCatalog();
+      if (scrollCatalogAfterSearch) scrollCatalog();
     },
     [
       getSurpriseCandidates,
@@ -169,16 +240,24 @@ export function useAccommodationSearch({
     ],
   );
 
-  restoreSearchFromUrlRef.current = (restoredFilters) => {
-    void handleStaysWidgetSearch({
-      checkIn: restoredFilters.checkIn,
-      checkOut: restoredFilters.checkOut,
-      persons: restoredFilters.guests.adults + restoredFilters.guests.children,
-      guests: restoredFilters.guests,
-      destination: restoredFilters.destination,
-      propertyId: restoredFilters.destinationPropertyId,
-    });
-  };
+  const retryLastSearch = useCallback(async () => {
+    if (lastSearchParamsRef.current) {
+      await handleStaysWidgetSearch(lastSearchParamsRef.current);
+    }
+  }, [handleStaysWidgetSearch]);
+
+  restoreSearchFromUrlRef.current = (restoredFilters, options) =>
+    handleStaysWidgetSearch(
+      {
+        checkIn: restoredFilters.checkIn,
+        checkOut: restoredFilters.checkOut,
+        persons: countOccupancyGuests(restoredFilters.guests),
+        guests: restoredFilters.guests,
+        destination: restoredFilters.destination,
+        propertyId: restoredFilters.destinationPropertyId,
+      },
+      { scrollCatalogAfterSearch: options?.scrollCatalog !== false },
+    );
 
   useEffect(() => {
     if (initialUrlSearchHandledRef.current) return;
@@ -192,12 +271,12 @@ export function useAccommodationSearch({
     void handleStaysWidgetSearch({
       checkIn: initialFilters.checkIn,
       checkOut: initialFilters.checkOut,
-      persons: initialFilters.guests.adults + initialFilters.guests.children,
+      persons: countOccupancyGuests(initialFilters.guests),
       guests: initialFilters.guests,
       destination: initialFilters.destination,
       propertyId: initialFilters.destinationPropertyId,
     });
   }, [handleStaysWidgetSearch]);
 
-  return { handleStaysWidgetSearch };
+  return { handleStaysWidgetSearch, retryLastSearch, availabilitySearchState };
 }

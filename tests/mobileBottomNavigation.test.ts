@@ -40,7 +40,12 @@ test('mobile navigation names its landmark, exposes the active page, and navigat
   const reservations = getByRole('button', { name: 'Reservas' });
 
   assert.ok(navigation);
+  assert.match(navigation.className, /\[@media\(max-height:400px\)\]:py-1/);
   assert.equal(explore.getAttribute('aria-current'), 'page');
+  for (const item of [explore, favorites, reservations]) {
+    assert.match(item.className, /min-h-11/);
+    assert.match(item.className, /min-w-11/);
+  }
   assert.equal(favorites.hasAttribute('aria-current'), false);
   assert.equal(navigation.querySelectorAll('[aria-hidden="true"]').length, 5);
   assert.equal(queryByRole('button', { name: 'Proprietário' }), null);
@@ -62,6 +67,14 @@ test('mobile navigation displays the owner destination when access is approved',
   );
 
   assert.equal(getByRole('button', { name: 'Proprietário' }).getAttribute('aria-current'), 'page');
+  const navigation = getByRole('navigation', { name: 'Navegação principal' });
+  assert.match(navigation.className, /max-\[400px\]:px-2/);
+  for (const label of ['Explorar', 'Favoritos', 'Reservas', 'Proprietário']) {
+    const item = getByRole('button', { name: label });
+    assert.match(item.className, /max-\[400px\]:text-xs/);
+    assert.match(item.className, /min-h-11/);
+    assert.match(item.className, /min-w-11/);
+  }
 });
 
 test('mobile navigation keeps the owner route gated by approved access', () => {

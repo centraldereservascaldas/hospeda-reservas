@@ -1,0 +1,93 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { checkoutApi } from '../src/services/checkoutApi.ts';
+
+const reference = '1234567890123456789012345678901234567890';
+const resumeToken = 'a'.repeat(64);
+const order = {
+  id: '90c0a1c0-27aa-4a23-8a63-d750de9f183e',
+  status: 'pre_reservado',
+  publicReference: reference,
+  reservationStatus: 'reserved',
+  reservationConfirmed: false,
+  listingId: 'JQ08G',
+  guestName: 'Checkout Guest',
+  from: '2026-10-13',
+  to: '2026-10-15',
+  quoteTotal: '850.00',
+  currency: 'BRL',
+  paymentStatus: null,
+  expiresAt: '2026-10-13T12:30:00.000Z',
+  createdAt: '2026-10-13T12:00:00.000Z',
+};
+
+const readResumeWithCapabilities = async (payment: Record<string, unknown>) => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ success: true, order, confirmation: null, payment }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  try {
+    return await checkoutApi.resumeCheckout(reference, resumeToken);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+};
+
+test('resume preserves Cielo card capability without a Mercado Pago public key', async () => {
+  const result = await readResumeWithCapabilities({
+    enabled: true,
+    methods: ['card'],
+    publicKey: null,
+    provider: 'cielo_sandbox',
+  });
+
+  assert.equal(result.kind, 'ready');
+  if (result.kind === 'ready') {
+    assert.deepEqual(result.data.payment, {
+      enabled: true,
+      methods: ['card'],
+      publicKey: null,
+      provider: 'cielo_sandbox',
+    });
+  }
+});
+
+test('resume preserves Mercado Pago card capability and its public key', async () => {
+  const result = await readResumeWithCapabilities({
+    enabled: true,
+    methods: ['pix', 'card'],
+    publicKey: 'mp-public-key-sentinel',
+    provider: 'mercadopago',
+  });
+
+  assert.equal(result.kind, 'ready');
+  if (result.kind === 'ready') {
+    assert.equal(result.data.payment.provider, 'mercadopago');
+    assert.equal(result.data.payment.publicKey, 'mp-public-key-sentinel');
+    assert.deepEqual(result.data.payment.methods, ['pix', 'card']);
+  }
+});
+
+test('legacy payment capability without a provider fails closed', async () => {
+  const result = await readResumeWithCapabilities({
+    enabled: false,
+    methods: [],
+    publicKey: null,
+  });
+
+  assert.deepEqual(result, { kind: 'unavailable' });
+});
+
+test('payment capability with an unknown provider fails closed', async () => {
+  const result = await readResumeWithCapabilities({
+    enabled: true,
+    methods: ['card'],
+    publicKey: null,
+    provider: 'unknown_gateway',
+  });
+
+  assert.deepEqual(result, { kind: 'unavailable' });
+});

@@ -1,5 +1,21 @@
 import type { Property, SearchFilters } from '../types';
 import { matchesPropertyCategory } from './propertyCategories';
+import { countOccupancyGuests } from './guestCounts';
+import { getConfirmedPropertyQuote } from './propertyDisplayPrice';
+import { getCatalogAmenities, matchesPropertyAmenity } from './propertyAmenities';
+
+export function matchesPropertyDestination(property: Property, destination: string): boolean {
+  const normalizedDestination = destination.trim().toLowerCase();
+  if (!normalizedDestination) return true;
+
+  return [
+    property.location.city,
+    property.location.state,
+    property.title,
+    property.location.neighborhood,
+    property.complexName || '',
+  ].some((value) => value.toLowerCase().includes(normalizedDestination));
+}
 
 export function filterPropertiesBySearchFilters(
   properties: Property[],
@@ -15,22 +31,23 @@ export function filterPropertiesBySearchFilters(
       return false;
     }
 
-    if (filters.destination.trim()) {
-      const destination = filters.destination.toLowerCase();
-      const matchesDestination = [
-        property.location.city,
-        property.location.state,
-        property.title,
-        property.location.neighborhood,
-        property.complexName || '',
-      ].some((value) => value.toLowerCase().includes(destination));
-      if (!matchesDestination) return false;
-    }
+    if (!matchesPropertyDestination(property, filters.destination)) return false;
 
-    const requestedGuests = filters.guests.adults + filters.guests.children;
+    const requestedGuests = countOccupancyGuests(filters.guests);
     if (requestedGuests > property.maxGuests) return false;
-    if (property.pricePerNight < filters.minPrice || property.pricePerNight > filters.maxPrice) {
-      return false;
+    const hasPriceFilter = filters.minPrice > 0 || filters.maxPrice < 5000;
+    if (hasPriceFilter) {
+      const hasSearchDates = Boolean(filters.checkIn && filters.checkOut);
+      const confirmedNightlyPrice = hasSearchDates
+        ? (getConfirmedPropertyQuote(property)?.dailyRate ?? null)
+        : property.pricePerNight;
+      if (
+        confirmedNightlyPrice === null ||
+        confirmedNightlyPrice < filters.minPrice ||
+        confirmedNightlyPrice > filters.maxPrice
+      ) {
+        return false;
+      }
     }
     if (
       filters.propertyTypes.length > 0 &&
@@ -46,8 +63,13 @@ export function filterPropertiesBySearchFilters(
     if (
       filters.amenities.length > 0 &&
       !filters.amenities.every((amenity) =>
-        property.amenities.some((propertyAmenity) =>
-          propertyAmenity.toLowerCase().includes(amenity.toLowerCase()),
+        matchesPropertyAmenity(
+          getCatalogAmenities(
+            property.amenities,
+            property.listingAmenities,
+            property.propertyAmenities,
+          ),
+          amenity,
         ),
       )
     ) {
@@ -61,7 +83,7 @@ export function filterPropertiesBySearchFilters(
 export function countActivePropertyFilters(filters: SearchFilters): number {
   let count = 0;
   if (filters.minPrice > 0 || filters.maxPrice < 5000) count += 1;
-  if (filters.propertyTypes.length > 0) count += 1;
+  count += filters.propertyTypes.length;
   count += filters.amenities.length;
   if (filters.minBedrooms > 0) count += 1;
   if (filters.minBaths > 0) count += 1;

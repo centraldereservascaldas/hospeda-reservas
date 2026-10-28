@@ -86,6 +86,8 @@ export interface Property {
   staysListingObjectId?: string;
   staysSynced?: boolean;
   reviewsSynced?: boolean;
+  simulatedData?: boolean;
+  dataSource?: 'stays-live' | 'stays-simulated' | 'local-catalog';
   calculatedPrice?: {
     nights: number;
     dailyRate: number;

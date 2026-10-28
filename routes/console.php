@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('direct-booking:recover-reservations')->everyMinute()->withoutOverlapping(5);
 Schedule::command('direct-booking:recover-confirmation-emails')->everyMinute()->withoutOverlapping(5)->onOneServer();
+Schedule::command('direct-booking:prune-expired-resume-tokens')->dailyAt('03:30')->withoutOverlapping(10);

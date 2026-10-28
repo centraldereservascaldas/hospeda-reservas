@@ -1,5 +1,8 @@
+import { useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
 import type { Currency, Property } from '../../types';
+import { emitViewItemList } from '../../utils/measurementEvents';
+import { CatalogLoadNotice } from './CatalogLoadNotice';
 import { PropertyCard } from './PropertyCard';
 
 type PropertyCatalogStatus = 'loading' | 'error' | 'stale' | 'ready';
@@ -10,9 +13,16 @@ interface PropertyCatalogGridProps {
   currency: Currency;
   savedPropertyIds: string[];
   showTotalWithTaxes: boolean;
+  hasSearchDates?: boolean;
+  availabilityConfirmed?: boolean;
+  hasAvailableSearchResults?: boolean;
+  searchGuestCount?: number;
+  isRefreshingCatalog?: boolean;
+  onRetryCatalog: () => void;
   onToggleSave: (propertyId: string) => void;
   onSelectProperty: (property: Property) => void;
   onResetFilters: () => void;
+  onClearCatalogFilters: () => void;
 }
 
 export function PropertyCatalogGrid({
@@ -21,36 +31,45 @@ export function PropertyCatalogGrid({
   currency,
   savedPropertyIds,
   showTotalWithTaxes,
+  hasSearchDates = false,
+  availabilityConfirmed = false,
+  hasAvailableSearchResults = false,
+  searchGuestCount = 1,
+  isRefreshingCatalog = false,
+  onRetryCatalog,
   onToggleSave,
   onSelectProperty,
   onResetFilters,
+  onClearCatalogFilters,
 }: PropertyCatalogGridProps) {
+  const emittedListIdentityRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (status !== 'ready' && status !== 'stale') return;
+
+    const itemIds = properties.map((property) => property.staysListingId || property.id);
+    if (itemIds.length === 0) {
+      emittedListIdentityRef.current = null;
+      return;
+    }
+
+    const identity = JSON.stringify(itemIds);
+    if (emittedListIdentityRef.current === identity) return;
+
+    if (emitViewItemList(itemIds)) emittedListIdentityRef.current = identity;
+  });
+
   if (status === 'loading') {
-    return (
-      <div role="status" className="py-20 text-center text-sm font-semibold text-neutral-600">
-        Carregando acomodações…
-      </div>
-    );
+    return <CatalogLoadNotice status="loading" isRefreshing={false} onRetry={onRetryCatalog} />;
   }
 
   if (status === 'error') {
-    return (
-      <div role="alert" className="py-20 text-center text-sm font-semibold text-neutral-700">
-        Não foi possível carregar as acomodações. Recarregue a página para tentar novamente.
-      </div>
-    );
+    return <CatalogLoadNotice status="error" isRefreshing={false} onRetry={onRetryCatalog} />;
   }
 
-  const staleNotice =
-    status === 'stale' ? (
-      <div
-        role="alert"
-        className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950"
-      >
-        Não foi possível atualizar as acomodações agora. Você está vendo dados salvos; confirme a
-        disponibilidade e o preço antes de reservar.
-      </div>
-    ) : null;
+  const staleNotice = status === 'stale' && (
+    <CatalogLoadNotice status="stale" isRefreshing={isRefreshingCatalog} onRetry={onRetryCatalog} />
+  );
 
   if (properties.length === 0) {
     return (
@@ -60,17 +79,24 @@ export function PropertyCatalogGrid({
           <div className="w-16 h-16 rounded-full bg-neutral-100 text-neutral-400 flex items-center justify-center mx-auto">
             <Search aria-hidden="true" className="w-8 h-8" />
           </div>
-          <h3 className="text-lg font-bold text-neutral-900">Nenhuma acomodação encontrada</h3>
+          <h3 className="text-lg font-bold text-neutral-900">
+            {hasAvailableSearchResults
+              ? 'Nenhum imóvel corresponde a esses filtros'
+              : 'Nenhuma acomodação encontrada'}
+          </h3>
           <p className="text-xs text-neutral-500">
-            Tente ajustar ou remover alguns filtros como datas, comodidades ou faixa de preço para
-            ver mais resultados.
+            {hasAvailableSearchResults
+              ? 'A busca encontrou acomodações. Remova alguns filtros para ver mais opções sem alterar datas, hóspedes ou destino.'
+              : 'Remova as datas da busca e todos os filtros para voltar a explorar as acomodações.'}
           </p>
           <button
             type="button"
-            onClick={onResetFilters}
-            className="px-6 py-2.5 rounded-full bg-neutral-900 hover:bg-black text-white text-xs font-bold transition-all cursor-pointer"
+            onClick={hasAvailableSearchResults ? onClearCatalogFilters : onResetFilters}
+            className="min-h-11 rounded-full bg-neutral-900 px-6 py-2.5 text-xs font-bold text-white transition-all hover:bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
           >
-            Restaurar todas as acomodações
+            {hasAvailableSearchResults
+              ? 'Limpar filtros'
+              : 'Limpar filtros e ver todas as acomodações'}
           </button>
         </div>
       </div>
@@ -90,6 +116,9 @@ export function PropertyCatalogGrid({
             onToggleSave={onToggleSave}
             onSelectProperty={onSelectProperty}
             showTotalWithTaxes={showTotalWithTaxes}
+            hasSearchDates={hasSearchDates}
+            availabilityConfirmed={availabilityConfirmed}
+            searchGuestCount={searchGuestCount}
             prioritizeImage={index === 0}
           />
         ))}

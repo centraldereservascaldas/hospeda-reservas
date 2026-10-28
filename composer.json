@@ -55,7 +55,7 @@
         ],
         "queue:work": [
             "Composer\\Config::disableProcessTimeout",
-            "@php artisan queue:work database --tries=5"
+            "@php artisan queue:work database --tries=5 --timeout=60"
         ],
         "schedule:work": [
             "Composer\\Config::disableProcessTimeout",

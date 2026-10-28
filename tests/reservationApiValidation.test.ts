@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { crcnBackendApi } from '../src/services/crcnBackendApi.ts';
+import { checkoutApi } from '../src/services/checkoutApi.ts';
 import { isProperty, isReservation } from '../src/utils/apiValidation.ts';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
+import { saveMeasurementConsent } from '../src/utils/measurementConsent.ts';
+import { updateMeasurementAttribution } from '../src/utils/measurementAttribution.ts';
 
 const reservation = {
   id: 'reservation-1',
@@ -72,6 +75,7 @@ const directCheckoutResume = {
   reference: directCheckoutOrder.publicReference,
   token: 'a'.repeat(64),
   path: `/checkout/${directCheckoutOrder.publicReference}`,
+  expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
 };
 
 test('returns validated reservation records from the authenticated API', async () => {
@@ -342,14 +346,19 @@ test('validates the remaining backend response boundaries', async () => {
       message: 'Pré-reserva registrada.',
       order: directCheckoutOrder,
       resume: directCheckoutResume,
-      payment: { enabled: false, methods: [], publicKey: null },
+      payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
       idempotentReplay: false,
     });
-    const checkout = await crcnBackendApi.createCheckout(directCheckoutRequest);
+    const checkout = await checkoutApi.createCheckout(directCheckoutRequest);
     assert.equal(checkout?.success, true);
     assert.deepEqual(checkout?.order, directCheckoutOrder);
     assert.deepEqual(checkout?.resume, directCheckoutResume);
-    assert.deepEqual(checkout?.payment, { enabled: false, methods: [], publicKey: null });
+    assert.deepEqual(checkout?.payment, {
+      enabled: false,
+      methods: [],
+      publicKey: null,
+      provider: 'mercadopago',
+    });
     assert.equal(checkout?.idempotentReplay, false);
 
     respond(
@@ -357,12 +366,12 @@ test('validates the remaining backend response boundaries', async () => {
         success: false,
         code: 'quote_changed',
         message: 'O preço mudou.',
-        payment: { enabled: false, methods: [], publicKey: null },
+        payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
         idempotentReplay: false,
       },
       409,
     );
-    const changedQuote = await crcnBackendApi.createCheckout(directCheckoutRequest);
+    const changedQuote = await checkoutApi.createCheckout(directCheckoutRequest);
     assert.equal(changedQuote?.success, false);
 
     respond({
@@ -370,10 +379,10 @@ test('validates the remaining backend response boundaries', async () => {
       code: 'pre_reserved',
       order: directCheckoutOrder,
       resume: { ...directCheckoutResume, token: 'invalid' },
-      payment: { enabled: false, methods: [], publicKey: null },
+      payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
       idempotentReplay: false,
     });
-    assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
+    assert.equal(await checkoutApi.createCheckout(directCheckoutRequest), null);
 
     respond({ success: true, reservationId: 'different-reservation' });
     await assert.rejects(crcnBackendApi.cancelMyReservation('reservation-1', 'test-token'));
@@ -406,12 +415,12 @@ test('checkout validates the created order and resumes it with a protected token
           success: true,
           order: { ...directCheckoutOrder, listingId: 'OTHER' },
           resume: directCheckoutResume,
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
           idempotentReplay: false,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
-    assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
+    assert.equal(await checkoutApi.createCheckout(directCheckoutRequest), null);
 
     globalThis.fetch = async () =>
       new Response(
@@ -419,12 +428,12 @@ test('checkout validates the created order and resumes it with a protected token
           success: true,
           order: { ...directCheckoutOrder, to: '2026-10-16' },
           resume: directCheckoutResume,
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
           idempotentReplay: false,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
-    assert.equal(await crcnBackendApi.createCheckout(directCheckoutRequest), null);
+    assert.equal(await checkoutApi.createCheckout(directCheckoutRequest), null);
 
     let resumeHeader = '';
     globalThis.fetch = async (_input, init) => {
@@ -434,12 +443,12 @@ test('checkout validates the created order and resumes it with a protected token
           success: true,
           order: directCheckoutOrder,
           confirmation: null,
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
     };
-    const resumed = await crcnBackendApi.resumeCheckout(
+    const resumed = await checkoutApi.resumeCheckout(
       directCheckoutResume.reference,
       directCheckoutResume.token,
     );
@@ -449,7 +458,7 @@ test('checkout validates the created order and resumes it with a protected token
         success: true,
         order: directCheckoutOrder,
         confirmation: null,
-        payment: { enabled: false, methods: [], publicKey: null },
+        payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
       },
     });
     assert.equal(resumeHeader, directCheckoutResume.token);
@@ -458,15 +467,12 @@ test('checkout validates the created order and resumes it with a protected token
       new Response(
         JSON.stringify({
           order: { ...directCheckoutOrder, quoteTotal: '851.00' },
-          payment: { enabled: false, methods: [], publicKey: null },
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
     assert.deepEqual(
-      await crcnBackendApi.resumeCheckout(
-        directCheckoutResume.reference,
-        directCheckoutResume.token,
-      ),
+      await checkoutApi.resumeCheckout(directCheckoutResume.reference, directCheckoutResume.token),
       { kind: 'unavailable' },
     );
   } finally {
@@ -474,7 +480,72 @@ test('checkout validates the created order and resumes it with a protected token
   }
 });
 
-test('creates the Cielo checkout through the backend without sending card data', async () => {
+test('checkout sends only consented first and last touch attribution', async () => {
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
+  const originalGlobals = {
+    window: globalThis.window,
+    document: globalThis.document,
+    fetch: globalThis.fetch,
+  };
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document });
+  const capturedRequest: { body?: Record<string, unknown> } = {};
+
+  try {
+    const consent = { analytics: true, advertising: false };
+    const capturedAt = Date.now();
+    updateMeasurementAttribution(
+      consent,
+      '?utm_source=google&utm_campaign=summer&gclid=must_not_send&email=guest%40example.test&utm_term=123456789',
+      capturedAt,
+    );
+    saveMeasurementConsent(consent);
+    globalThis.fetch = async (_input, init) => {
+      capturedRequest.body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          success: true,
+          code: 'pre_reserved',
+          order: directCheckoutOrder,
+          resume: directCheckoutResume,
+          payment: { enabled: false, methods: [], publicKey: null, provider: 'mercadopago' },
+          idempotentReplay: false,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+
+    assert.equal((await checkoutApi.createCheckout(directCheckoutRequest))?.success, true);
+    assert.deepEqual(capturedRequest.body?.marketingAttribution, {
+      firstTouch: {
+        capturedAt,
+        values: { utm_source: 'google', utm_campaign: 'summer' },
+      },
+      lastTouch: {
+        capturedAt,
+        values: { utm_source: 'google', utm_campaign: 'summer' },
+      },
+    });
+    const serializedRequest = JSON.stringify(capturedRequest.body);
+    assert.equal('version' in (capturedRequest.body?.marketingAttribution as object), false);
+    assert.equal('expiresAt' in (capturedRequest.body?.marketingAttribution as object), false);
+    assert.equal(serializedRequest.includes('must_not_send'), false);
+    assert.equal(serializedRequest.includes('123456789'), false);
+    assert.equal(serializedRequest.includes('guest@example.test'), false);
+
+    saveMeasurementConsent({ analytics: false, advertising: false });
+    await checkoutApi.createCheckout(directCheckoutRequest);
+    assert.equal('marketingAttribution' in (capturedRequest.body ?? {}), false);
+  } finally {
+    globalThis.fetch = originalGlobals.fetch;
+    Object.assign(globalThis, {
+      window: originalGlobals.window,
+      document: originalGlobals.document,
+    });
+    dom.window.close();
+  }
+});
+
+test('creates a hosted Cielo checkout with the resume token and no card data', async () => {
   const originalFetch = globalThis.fetch;
   let requestUrl = '';
   let requestInit: Parameters<typeof fetch>[1];
@@ -504,7 +575,7 @@ test('creates the Cielo checkout through the backend without sending card data',
   };
 
   try {
-    const result = await crcnBackendApi.createCieloCheckout(
+    const result = await checkoutApi.createCieloCheckout(
       'A'.repeat(40),
       'B'.repeat(64),
       '125.00',
@@ -532,7 +603,7 @@ test('creates the Cielo checkout through the backend without sending card data',
   }
 });
 
-test('rejects a Cielo checkout URL from an untrusted host', async () => {
+test('rejects a hosted Cielo checkout URL from an untrusted host', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () =>
     new Response(
@@ -557,7 +628,7 @@ test('rejects a Cielo checkout URL from an untrusted host', async () => {
     );
 
   try {
-    const result = await crcnBackendApi.createCieloCheckout(
+    const result = await checkoutApi.createCieloCheckout(
       'A'.repeat(40),
       'B'.repeat(64),
       '125.00',
@@ -681,6 +752,66 @@ test('applies property, city and pagination filters to the undated search fallba
     );
     assert.equal(result.total, expected.length);
     assert.deepEqual(result.data, expected.slice(1, 2));
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
+test('dated search rejects results without the live availability source', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({ total: 1, data: [STAYS_NET_APARTMENTS[0]], source: 'local-catalog' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  console.warn = () => undefined;
+
+  try {
+    await assert.rejects(
+      crcnBackendApi.searchAccommodations({
+        from: '2026-11-11',
+        to: '2026-11-13',
+        guests: 2,
+      }),
+      /A pesquisa retornou uma resposta inválida/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
+test('dated search rejects availability confirmed for different dates or guest counts', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  const requestedContext = { from: '2026-11-11', to: '2026-11-13', guests: 2 };
+  const mismatchedResponses = [
+    { from: '2026-11-12', to: requestedContext.to, guests: requestedContext.guests },
+    { from: requestedContext.from, to: '2026-11-14', guests: requestedContext.guests },
+    { from: requestedContext.from, to: requestedContext.to, guests: 3 },
+  ];
+  console.warn = () => undefined;
+
+  try {
+    for (const context of mismatchedResponses) {
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({
+            total: 1,
+            ...context,
+            data: [STAYS_NET_APARTMENTS[0]],
+            source: 'stays-live',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+
+      await assert.rejects(
+        crcnBackendApi.searchAccommodations(requestedContext),
+        /A pesquisa retornou uma resposta inválida/,
+      );
+    }
   } finally {
     globalThis.fetch = originalFetch;
     console.warn = originalWarn;
