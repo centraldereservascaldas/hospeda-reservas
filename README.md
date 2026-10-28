@@ -54,6 +54,43 @@ O backend Express anterior permanece disponível durante a migração pelo coman
 
 Use o checklist de novas features e o plano de auditoria em [`docs/frontend-quality-plan.md`](docs/frontend-quality-plan.md); o despacho operacional para subagents está em [`docs/frontend-quality-subagent-plan.md`](docs/frontend-quality-subagent-plan.md).
 
+## Fluxo de branches, CI e publicação
+
+`main` é a referência compartilhada. Para uma mudança, crie uma branch `codex/<tema>` atualizada a partir de `origin/main`, abra uma pull request para `main` e acompanhe os checks nela. Não use uma branch de trabalho antiga nem o ponteiro local de `main` como candidato de publicação: confirme o SHA remoto e a PR no GitHub. A integração é feita pela PR; pushes diretos na `main` não são o fluxo documentado.
+
+Pull requests executam qualidade de frontend, qualidade do backend, compatibilidade das migrations PostgreSQL, smoke do container e o workflow de imagem de release em modo de validação. Em push na `main`, o workflow [`release-image.yml`](.github/workflows/release-image.yml) publica no GHCR após os gates e aciona o Coolify se `PRODUCTION_DEPLOY_ENABLED` for `true`. Em 28/10/2026 essa variável estava ligada; confirme seu valor e o workflow atual antes de integrar uma mudança. A execução em PR não publica nem implanta.
+
+Há um segundo fluxo de produção na branch remota `origin/codex/hospeda-production`: o `publish-image.yml` nela versionado publica a imagem no GHCR e, em seguida, aciona o deploy no Coolify via API, acompanhando o estado até a aplicação ficar saudável. Push nessa branch pode iniciar publicação e deploy automaticamente; confirme o SHA e o workflow dessa ref antes de qualquer alteração. A cópia local não rastreada de `publish-image.yml` pode diferir da versão remota e não é fonte confiável para descrever ou executar o fluxo. CI verde em PR, isoladamente, não significa que houve publicação ou deploy.
+
+O estado atual do Coolify e do banco precisa ser confirmado no ambiente: verifique aplicação, projeto, ambiente, origem da imagem, estratégia de atualização, digest, variáveis privadas, PostgreSQL persistente, migrations, health checks e caminho de rollback. O histórico em [`checklist-implementacao-coolify-hospeda-reservas.md`](docs/checklist-implementacao-coolify-hospeda-reservas.md) registra deploy e restore datados, mas não prova a configuração ou saúde de hoje. Use `/api/health` para saúde do processo e `/api/ready` para prontidão, inclusive disponibilidade do banco. Preserve o volume de dados ao trocar ou reverter uma imagem.
+
+## Como a equipe usa as skills do Codex
+
+Leia [`AGENTS.md`](AGENTS.md) antes de trabalhar. As instruções reutilizáveis do repositório ficam em `.agents/skills/` e a skill de operação Stays fica em `.codex/skills/stays-api/`. Abra o `SKILL.md` pertinente antes de começar; ele define quando usar o fluxo e aponta regras e referências complementares. As skills guiam a execução, mas não substituem os contratos e evidências do código e da documentação. Não trate uma skill como autorização para publicar, mudar produção ou operar dados externos.
+
+| Necessidade | Skill inicial |
+| --- | --- |
+| Entender arquitetura e localizar fluxos no código | [hospeda-reservas](.agents/skills/hospeda-reservas/SKILL.md) |
+| Investigar e planejar sem editar | `analisar` quando disponível no ambiente Codex |
+| Implementar uma mudança aprovada | [implementar](.agents/skills/implementar/SKILL.md) |
+| Alterar, revisar ou refatorar backend Laravel | [laravel-best-practices](.agents/skills/laravel-best-practices/SKILL.md) |
+| Planejar ou revisar testes Laravel | [testing-best-practices](.agents/skills/testing-best-practices/SKILL.md) |
+| Trabalhar em estilos Tailwind e componentes responsivos | [tailwindcss-development](.agents/skills/tailwindcss-development/SKILL.md) |
+| Investigar ou publicar este sistema no Coolify | [hospeda-deploy](.agents/skills/hospeda-deploy/SKILL.md) |
+| Consultar ou operar a API Stays | [stays-api](.codex/skills/stays-api/SKILL.md) |
+| Registrar convenções Laravel | [infer-conventions](.agents/skills/infer-conventions/SKILL.md), somente quando solicitado explicitamente |
+
+`deploying-to-cloud` trata Laravel Cloud. Hospeda Reservas usa Coolify; para esse sistema, siga `hospeda-deploy` e revalide o checklist operacional.
+
+## Documentação para entender arquitetura e fluxos reais
+
+- [Fluxo de checkout e Stays](docs/stays-checkout-flow.md): comportamento e integrações atuais da jornada, com limites do que foi verificado.
+- [Especificação do checkout e pagamentos](docs/especificacao-checkout-pagamentos-proprios.md): estado de implementação, fontes de verdade, estados e pendências de validação ponta a ponta.
+- [ADR 0001](docs/adr/0001-checkout-proprio-e-informacoes-em-camadas.md): decisões de produto/arquitetura e questões comerciais/jurídicas em aberto.
+- [PRD](docs/prd-vendas-diretas.md), [MVP](docs/mvp-vendas-diretas.md) e [roadmap](docs/roadmap-vendas-diretas.md): objetivo, escopo e entregas planejadas; são planos, não evidência de operação habilitada.
+- [Checklist operacional Coolify](docs/checklist-implementacao-coolify-hospeda-reservas.md): fatos históricos e lista de revalidação para deploy.
+- [Plano de qualidade do frontend](docs/frontend-quality-plan.md): critérios de acessibilidade, interação e revisão visual.
+
 ## Autenticação e dados
 
 O navegador usa apenas `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. O middleware valida cada bearer token no Supabase Auth. Laravel grava o vínculo `guest_profiles` e os pedidos de acesso `owner_access`; não há FK para `auth.users`, pois a identidade continua externa. `SUPABASE_SERVICE_ROLE_KEY`, credenciais Stays e chave OpenAI são exclusivamente server-side.
