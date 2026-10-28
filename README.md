@@ -68,17 +68,17 @@ O estado atual do Coolify e do banco precisa ser confirmado no ambiente: verifiq
 
 Leia [`AGENTS.md`](AGENTS.md) antes de trabalhar. As instruções reutilizáveis do repositório ficam em `.agents/skills/` e a skill de operação Stays fica em `.codex/skills/stays-api/`. Abra o `SKILL.md` pertinente antes de começar; ele define quando usar o fluxo e aponta regras e referências complementares. As skills guiam a execução, mas não substituem os contratos e evidências do código e da documentação. Não trate uma skill como autorização para publicar, mudar produção ou operar dados externos.
 
-| Necessidade | Skill inicial |
-| --- | --- |
-| Entender arquitetura e localizar fluxos no código | [hospeda-reservas](.agents/skills/hospeda-reservas/SKILL.md) |
-| Investigar e planejar sem editar | `analisar` quando disponível no ambiente Codex |
-| Implementar uma mudança aprovada | [implementar](.agents/skills/implementar/SKILL.md) |
-| Alterar, revisar ou refatorar backend Laravel | [laravel-best-practices](.agents/skills/laravel-best-practices/SKILL.md) |
-| Planejar ou revisar testes Laravel | [testing-best-practices](.agents/skills/testing-best-practices/SKILL.md) |
-| Trabalhar em estilos Tailwind e componentes responsivos | [tailwindcss-development](.agents/skills/tailwindcss-development/SKILL.md) |
-| Investigar ou publicar este sistema no Coolify | [hospeda-deploy](.agents/skills/hospeda-deploy/SKILL.md) |
-| Consultar ou operar a API Stays | [stays-api](.codex/skills/stays-api/SKILL.md) |
-| Registrar convenções Laravel | [infer-conventions](.agents/skills/infer-conventions/SKILL.md), somente quando solicitado explicitamente |
+| Necessidade                                             | Skill inicial                                                                                            |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Entender arquitetura e localizar fluxos no código       | [hospeda-reservas](.agents/skills/hospeda-reservas/SKILL.md)                                             |
+| Investigar e planejar sem editar                        | `analisar` quando disponível no ambiente Codex                                                           |
+| Implementar uma mudança aprovada                        | [implementar](.agents/skills/implementar/SKILL.md)                                                       |
+| Alterar, revisar ou refatorar backend Laravel           | [laravel-best-practices](.agents/skills/laravel-best-practices/SKILL.md)                                 |
+| Planejar ou revisar testes Laravel                      | [testing-best-practices](.agents/skills/testing-best-practices/SKILL.md)                                 |
+| Trabalhar em estilos Tailwind e componentes responsivos | [tailwindcss-development](.agents/skills/tailwindcss-development/SKILL.md)                               |
+| Investigar ou publicar este sistema no Coolify          | [hospeda-deploy](.agents/skills/hospeda-deploy/SKILL.md)                                                 |
+| Consultar ou operar a API Stays                         | [stays-api](.codex/skills/stays-api/SKILL.md)                                                            |
+| Registrar convenções Laravel                            | [infer-conventions](.agents/skills/infer-conventions/SKILL.md), somente quando solicitado explicitamente |
 
 `deploying-to-cloud` trata Laravel Cloud. Hospeda Reservas usa Coolify; para esse sistema, siga `hospeda-deploy` e revalide o checklist operacional.
 
