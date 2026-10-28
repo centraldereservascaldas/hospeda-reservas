@@ -194,6 +194,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Validate advertising measurement configuration
+        env:
+          VITE_GTM_ID: ${{ vars.VITE_GTM_ID }}
+          VITE_GA_ID: ${{ vars.VITE_GA_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$VITE_GTM_ID"
+          [[ "$VITE_GTM_ID" =~ ^GTM-[A-Z0-9]+$ ]]
+          test -n "$VITE_GA_ID"
+          [[ "$VITE_GA_ID" =~ ^G-[A-Z0-9]+$ ]]
+
       - name: Build and publish image
         id: image
         uses: docker/build-push-action@v6
@@ -205,6 +216,7 @@ jobs:
             VITE_SUPABASE_URL=${{ vars.VITE_SUPABASE_URL }}
             VITE_SUPABASE_ANON_KEY=${{ vars.VITE_SUPABASE_ANON_KEY }}
             VITE_GTM_ID=${{ vars.VITE_GTM_ID }}
+            VITE_GA_ID=${{ vars.VITE_GA_ID }}
             VITE_MERCADO_PAGO_PUBLIC_KEY=${{ vars.VITE_MERCADO_PAGO_PUBLIC_KEY }}
 
       - name: Smoke test the published image by digest
@@ -268,3 +280,150 @@ jobs:
             echo "- Commit tag: \`$IMAGE:${GITHUB_SHA}\`"
             echo "- Immutable digest: \`$IMAGE@$DIGEST\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: Update Coolify image tag and deploy
+        env:
+          COOLIFY_APPLICATION_UUID: ${{ vars.COOLIFY_APPLICATION_UUID }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          test -n "$COOLIFY_APPLICATION_UUID"
+          test -n "$COOLIFY_TOKEN"
+          [[ "$COOLIFY_APPLICATION_UUID" =~ ^[A-Za-z0-9-]+$ ]]
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]
+
+          api_base="https://cy.caldasindica.com/api/v1"
+          application_url="$api_base/applications/$COOLIFY_APPLICATION_UUID"
+
+          application_envs=$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$application_url/envs")
+
+          upsert_runtime_env() {
+            local key="$1" value="$2" method payload
+            if jq --exit-status --arg key "$key" \
+              'any(.[]; .key == $key and .is_preview == false)' \
+              <<< "$application_envs" >/dev/null; then
+              method='PATCH'
+            else
+              method='POST'
+            fi
+            payload=$(jq --null-input --compact-output \
+              --arg key "$key" \
+              --arg value "$value" \
+              '{key: $key, value: $value, is_preview: false, is_literal: true}')
+            curl --fail-with-body --silent --show-error \
+              --request "$method" \
+              --header "Authorization: Bearer $COOLIFY_TOKEN" \
+              --header 'Content-Type: application/json' \
+              --data "$payload" \
+              "$application_url/envs" \
+              --output /dev/null
+          }
+
+          upsert_runtime_env STAYS_HOSTED_CHECKOUT_ENABLED true
+          upsert_runtime_env STAYS_HOSTED_CHECKOUT_ALLOWED_HOSTS 'www.centraldereservascaldas.com.br,centraldereservascaldas.com.br'
+          upsert_runtime_env DIRECT_BOOKING_ENABLED false
+          upsert_runtime_env DIRECT_BOOKING_PAYMENTS_ENABLED false
+          upsert_runtime_env DIRECT_BOOKING_CONFIRMATION_ENABLED false
+          upsert_runtime_env DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED false
+
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data "{\"docker_registry_image_tag\":\"$IMAGE_TAG\"}" \
+            "$application_url" \
+            --output /dev/null
+
+          deployment_response=$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$api_base/deploy?uuid=$COOLIFY_APPLICATION_UUID")
+          deployment_uuid=$(jq --raw-output --exit-status '.deployments[0].deployment_uuid // empty' <<< "$deployment_response")
+          test -n "$deployment_uuid"
+
+          deadline=$((SECONDS + 1500))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            deployment=$(curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $COOLIFY_TOKEN" \
+              "$api_base/deployments/$deployment_uuid")
+            status=$(jq --raw-output '.status // empty' <<< "$deployment")
+
+            case "$status" in
+              finished)
+                application=$(curl --fail-with-body --silent --show-error \
+                  --header "Authorization: Bearer $COOLIFY_TOKEN" \
+                  "$application_url")
+                deployed_tag=$(jq --raw-output '.docker_registry_image_tag // empty' <<< "$application")
+                application_status=$(jq --raw-output '.status // empty' <<< "$application")
+                test "$deployed_tag" = "$IMAGE_TAG"
+                test "$application_status" = 'running:healthy'
+                echo "Coolify deployed healthy image tag $IMAGE_TAG."
+                break
+                ;;
+              failed|cancelled|cancelled-by-user)
+                echo "Coolify deployment ended with status: $status" >&2
+                exit 1
+                ;;
+              '')
+                echo 'Coolify response did not include a deployment status.' >&2
+                exit 1
+                ;;
+            esac
+
+            sleep 10
+          done
+
+          if [ "${status:-}" != 'finished' ]; then
+            echo 'Timed out waiting for the Coolify deployment to finish.' >&2
+            exit 1
+          fi
+
+      - name: Verify the public Stays checkout deployment
+        run: |
+          set -euo pipefail
+
+          base_url='https://crcn.caldasindica.com'
+          deadline=$((SECONDS + 300))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            health=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/health" || true)
+            stays=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/stays/status" || true)
+            checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/stays-checkout/readiness" || true)
+            direct_checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/checkout/readiness/LI17J" || true)
+
+            if jq --exit-status '.success == true' <<< "$health" >/dev/null 2>&1 \
+              && jq --exit-status '.connected == true and .hasCredentials == true and .environment == "production"' <<< "$stays" >/dev/null 2>&1 \
+              && jq --exit-status '.ready == true and .code == null' <<< "$checkout" >/dev/null 2>&1 \
+              && jq --exit-status '.checkoutEnabled == false and .payment.enabled == false' <<< "$direct_checkout" >/dev/null 2>&1; then
+              curl --fail --silent --show-error --max-time 15 \
+                --dump-header /tmp/hospeda-public-headers.txt \
+                --output /dev/null \
+                "$base_url/"
+              grep --ignore-case --fixed-strings 'x-content-type-options: nosniff' /tmp/hospeda-public-headers.txt
+              grep --ignore-case --fixed-strings 'x-frame-options: DENY' /tmp/hospeda-public-headers.txt
+              grep --ignore-case --fixed-strings 'strict-transport-security: max-age=31536000' /tmp/hospeda-public-headers.txt
+              if grep --ignore-case --quiet '^x-powered-by:' /tmp/hospeda-public-headers.txt; then
+                echo 'The public response still exposes X-Powered-By.' >&2
+                exit 1
+              fi
+              echo 'Public domain and hosted Stays checkout are ready.'
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo 'The public domain did not become ready for hosted Stays checkout.' >&2
+          exit 1

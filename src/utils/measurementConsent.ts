@@ -7,8 +7,11 @@ export interface MeasurementConsent {
 
 const STORAGE_KEY = 'crcn.measurementConsent.v1';
 const GTM_SCRIPT_ID = 'crcn-gtm-script';
+const GOOGLE_TAG_SCRIPT_ID = 'crcn-google-tag-script';
 const GTM_ID_PATTERN = /^GTM-[A-Z0-9]+$/;
+const GA_ID_PATTERN = /^G-[A-Z0-9]+$/;
 const CONSENT_DEFAULT_SET_KEY = '__crcnConsentModeDefaultSet';
+const CHECKOUT_LINKER_DOMAINS = ['centraldereservascaldas.com.br', 'stays.net'];
 
 type GoogleConsentState = 'granted' | 'denied';
 
@@ -104,10 +107,22 @@ export function saveMeasurementConsent(consent: MeasurementConsent): void {
   updateMeasurementAttribution(consent);
 }
 
-export function loadGtmIfConsented(consent: MeasurementConsent, configuredId: string): boolean {
+export function loadGtmIfConsented(
+  consent: MeasurementConsent,
+  configuredId: string,
+  configuredGaId = '',
+): boolean {
   const id = configuredId.trim();
-  if (!consent.analytics || !consent.advertising || !GTM_ID_PATTERN.test(id)) return false;
-  if (document.getElementById(GTM_SCRIPT_ID)) return true;
+  const gaId = configuredGaId.trim();
+  const shouldLoadGoogleTag = consent.analytics && GA_ID_PATTERN.test(gaId);
+  const shouldLoadGtm = consent.analytics && consent.advertising && GTM_ID_PATTERN.test(id);
+  if (!shouldLoadGoogleTag && !shouldLoadGtm) return false;
+  if (
+    (!shouldLoadGoogleTag || document.getElementById(GOOGLE_TAG_SCRIPT_ID)) &&
+    (!shouldLoadGtm || document.getElementById(GTM_SCRIPT_ID))
+  ) {
+    return true;
+  }
 
   const dataLayer = getDataLayer(true);
   if (!dataLayer) return false;
@@ -123,11 +138,40 @@ export function loadGtmIfConsented(consent: MeasurementConsent, configuredId: st
   }
   pushGoogleConsentCommand(dataLayer, 'update', toGoogleConsentParameters(consent));
   pushConsentPreferences(consent, dataLayer);
-  dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' });
-  const script = document.createElement('script');
-  script.id = GTM_SCRIPT_ID;
-  script.async = true;
-  script.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(id)}`;
-  document.head.append(script);
+
+  if (shouldLoadGoogleTag && !document.getElementById(GOOGLE_TAG_SCRIPT_ID)) {
+    const activeDataLayer = dataLayer;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    function gtag(..._args: unknown[]): void {
+      // eslint-disable-next-line prefer-rest-params
+      activeDataLayer.push(arguments);
+    }
+
+    gtag('js', new Date());
+    gtag('set', { currency: 'BRL' });
+    gtag('config', gaId, {
+      linker: {
+        domains: CHECKOUT_LINKER_DOMAINS,
+        accept_incoming: true,
+        decorate_forms: true,
+      },
+    });
+
+    const googleTagScript = document.createElement('script');
+    googleTagScript.id = GOOGLE_TAG_SCRIPT_ID;
+    googleTagScript.async = true;
+    googleTagScript.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`;
+    document.head.append(googleTagScript);
+  }
+
+  if (shouldLoadGtm && !document.getElementById(GTM_SCRIPT_ID)) {
+    dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' });
+    const script = document.createElement('script');
+    script.id = GTM_SCRIPT_ID;
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(id)}`;
+    document.head.append(script);
+  }
+
   return true;
 }

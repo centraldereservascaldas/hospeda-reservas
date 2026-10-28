@@ -65,7 +65,11 @@ export function MeasurementPreferences({
 
   useEffect(() => {
     if (savedConsent) {
-      loadGtmIfConsented(savedConsent, import.meta.env?.VITE_GTM_ID ?? '');
+      loadGtmIfConsented(
+        savedConsent,
+        import.meta.env?.VITE_GTM_ID ?? '',
+        import.meta.env?.VITE_GA_ID ?? '',
+      );
     }
   }, [savedConsent]);
 

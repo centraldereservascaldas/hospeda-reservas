@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StartStaysCheckoutRequest;
 use App\Http\Requests\StoreCheckoutRequest;
 use App\Http\Resources\DirectBookingOrderResource;
 use App\Models\DirectBookingOrder;
@@ -11,6 +12,7 @@ use App\Services\DirectCheckoutService;
 use App\Services\DirectSaleTermsRegistry;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
+use App\Services\StaysHostedCheckoutService;
 use App\Services\StaysSimulator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -235,6 +237,22 @@ class BookingController extends Controller
         $body['idempotentReplay'] = $result['replayed'];
 
         return response()->json($body, $result['status'])
+            ->header('Cache-Control', 'no-store, private');
+    }
+
+    public function startStaysCheckout(
+        StartStaysCheckoutRequest $request,
+        StaysHostedCheckoutService $checkout,
+    ): JsonResponse {
+        $result = $checkout->start($request->validated());
+
+        return response()->json($result['body'], $result['status'])
+            ->header('Cache-Control', 'no-store, private');
+    }
+
+    public function staysCheckoutReadiness(StaysHostedCheckoutService $checkout): JsonResponse
+    {
+        return response()->json($checkout->readiness())
             ->header('Cache-Control', 'no-store, private');
     }
 

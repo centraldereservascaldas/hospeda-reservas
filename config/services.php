@@ -39,6 +39,14 @@ return [
         'base_url' => env('STAYS_BASE_URL', 'https://crcn.stays.net/external/v1'),
         'client_id' => env('STAYS_CLIENT_ID'),
         'client_secret' => env('STAYS_CLIENT_SECRET'),
+        'hosted_checkout_enabled' => (bool) env('STAYS_HOSTED_CHECKOUT_ENABLED', false),
+        'hosted_checkout_allowed_hosts' => array_values(array_filter(array_map(
+            static fn (string $host): string => strtolower(trim($host)),
+            explode(',', (string) env(
+                'STAYS_HOSTED_CHECKOUT_ALLOWED_HOSTS',
+                'www.centraldereservascaldas.com.br,centraldereservascaldas.com.br',
+            )),
+        ))),
         'timeout' => (int) env('STAYS_TIMEOUT', 10),
     ],
 

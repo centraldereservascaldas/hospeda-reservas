@@ -40,6 +40,10 @@ Route::post('/search', [AccommodationController::class, 'search']);
 Route::get('/accommodations/{id}/calendar', [AccommodationController::class, 'calendar']);
 Route::post('/price', [BookingController::class, 'price']);
 Route::get('/stays/status', [BookingController::class, 'staysStatus']);
+Route::get('/stays-checkout/readiness', [BookingController::class, 'staysCheckoutReadiness'])
+    ->middleware('throttle:30,1');
+Route::post('/stays-checkout', [BookingController::class, 'startStaysCheckout'])
+    ->middleware('throttle:5,1');
 
 Route::middleware('supabase.guest')->group(function (): void {
     Route::post('/auth/sync-stays', [GuestReservationController::class, 'sync']);

@@ -87,6 +87,58 @@ test('requires both choices and valid GTM ID, then inserts a single script', () 
   assert.equal(lastDataLayerEntry.event, 'gtm.js');
 });
 
+test('configures the current GA property to decorate links to the hosted Stays checkout', () => {
+  assert.equal(
+    loadGtmIfConsented({ analytics: true, advertising: true }, 'GTM-ABC123', 'G-ZH6XYXQV91'),
+    true,
+  );
+  assert.equal(
+    document.querySelector<HTMLScriptElement>('#crcn-google-tag-script')?.src,
+    'https://www.googletagmanager.com/gtag/js?id=G-ZH6XYXQV91',
+  );
+
+  const commands = (window as Window & { dataLayer?: unknown[] }).dataLayer!.filter(
+    (entry): entry is ArrayLike<unknown> =>
+      typeof entry === 'object' && entry !== null && 'length' in entry,
+  );
+  const config = commands.find((entry) => entry[0] === 'config');
+  assert.deepEqual(
+    [config?.[0], config?.[1], config?.[2]],
+    [
+      'config',
+      'G-ZH6XYXQV91',
+      {
+        linker: {
+          domains: ['centraldereservascaldas.com.br', 'stays.net'],
+          accept_incoming: true,
+          decorate_forms: true,
+        },
+      },
+    ],
+  );
+});
+
+test('loads only GA4 when the guest allows analytics but denies advertising', () => {
+  assert.equal(
+    loadGtmIfConsented({ analytics: true, advertising: false }, 'GTM-ABC123', 'G-ZH6XYXQV91'),
+    true,
+  );
+  assert.ok(document.getElementById('crcn-google-tag-script'));
+  assert.equal(document.getElementById('crcn-gtm-script'), null);
+
+  const commands = (window as Window & { dataLayer?: unknown[] }).dataLayer!.filter(
+    (entry): entry is ArrayLike<unknown> =>
+      typeof entry === 'object' && entry !== null && 'length' in entry,
+  );
+  const consentUpdate = commands.find((entry) => entry[0] === 'consent' && entry[1] === 'update');
+  assert.deepEqual(consentUpdate?.[2], {
+    analytics_storage: 'granted',
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+  });
+});
+
 test('revocation persists and prevents loading on the next page', () => {
   saveMeasurementConsent({ analytics: true, advertising: true });
   assert.equal(loadGtmIfConsented(readMeasurementConsent()!, 'GTM-ABC123'), true);

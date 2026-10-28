@@ -88,6 +88,15 @@ export interface StaysStatusResponse {
   message?: string;
 }
 
+export interface StaysCheckoutReadinessResponse {
+  ready: boolean;
+  code: string | null;
+  message: string;
+}
+
+export type StaysCheckoutStartResponse =
+  { success: true; checkoutUrl: string } | { success: false; code: string; message: string };
+
 export interface SofiaChatResponse {
   success: boolean;
   reply: string;
@@ -258,7 +267,13 @@ export interface OwnerAccountingDetails {
   nights: number;
   fees: Array<{ label: string; amount: number }>;
   payout: number;
-  ledgerEntry: { date: string; type: 'debit' | 'credit'; status: string; description: string; amount: number };
+  ledgerEntry: {
+    date: string;
+    type: 'debit' | 'credit';
+    status: string;
+    description: string;
+    amount: number;
+  };
 }
 
 class CrcnBackendApiService {
@@ -576,6 +591,58 @@ class CrcnBackendApiService {
     }
   }
 
+  public async getStaysCheckoutReadiness(): Promise<StaysCheckoutReadinessResponse | null> {
+    try {
+      const response = await apiFetch('/api/stays-checkout/readiness', {
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      const json: unknown = await response.json();
+      if (
+        !response.ok ||
+        !isRecord(json) ||
+        typeof json.ready !== 'boolean' ||
+        (json.code !== null && typeof json.code !== 'string') ||
+        typeof json.message !== 'string'
+      ) {
+        return null;
+      }
+      return { ready: json.ready, code: json.code, message: json.message };
+    } catch {
+      return null;
+    }
+  }
+
+  public async startStaysCheckout(payload: {
+    listingId: string;
+    from: string;
+    to: string;
+    guests: number;
+    quoteTotal: number;
+    guest: { fullName: string; email: string };
+  }): Promise<StaysCheckoutStartResponse | null> {
+    try {
+      const response = await apiFetch('/api/stays-checkout', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json: unknown = await response.json();
+      if (!isRecord(json) || typeof json.success !== 'boolean') return null;
+      if (json.success === true) {
+        return typeof json.checkoutUrl === 'string'
+          ? { success: true, checkoutUrl: json.checkoutUrl }
+          : null;
+      }
+      return typeof json.code === 'string' && typeof json.message === 'string'
+        ? { success: false, code: json.code, message: json.message }
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
   public async syncStaysGuest(
     accessToken: string,
   ): Promise<{ success: boolean; message?: string } | null> {
@@ -794,23 +861,40 @@ class CrcnBackendApiService {
     to: string,
   ): Promise<OwnerAccountingDetails> {
     const query = new URLSearchParams({ listingId, from, to });
-    const res = await fetch(`/api/owner/accounting/entries/${encodeURIComponent(entryId)}/details?${query}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const res = await fetch(
+      `/api/owner/accounting/entries/${encodeURIComponent(entryId)}/details?${query}`,
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      },
+    );
     const json: unknown = await res.json();
     if (!res.ok || !isRecord(json) || json.success !== true || !isRecord(json.details)) {
-      throw new Error(isRecord(json) && typeof json.message === 'string' ? json.message : 'Não foi possível carregar os detalhes do lançamento.');
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível carregar os detalhes do lançamento.',
+      );
     }
     const detail = json.details;
     const isFee = (value: unknown): value is OwnerAccountingDetails['fees'][number] =>
       isRecord(value) && typeof value.label === 'string' && isFiniteNumber(value.amount);
     const isLedgerEntry = (value: unknown): value is OwnerAccountingDetails['ledgerEntry'] =>
-      isRecord(value) && typeof value.date === 'string' && (value.type === 'debit' || value.type === 'credit') &&
-      typeof value.status === 'string' && typeof value.description === 'string' && isFiniteNumber(value.amount);
+      isRecord(value) &&
+      typeof value.date === 'string' &&
+      (value.type === 'debit' || value.type === 'credit') &&
+      typeof value.status === 'string' &&
+      typeof value.description === 'string' &&
+      isFiniteNumber(value.amount);
     if (
-      typeof detail.reservationCode !== 'string' || typeof detail.guestName !== 'string' || typeof detail.checkIn !== 'string' || typeof detail.checkOut !== 'string' ||
-      !isFiniteNumber(detail.nights) || !Array.isArray(detail.fees) || !detail.fees.every(isFee) ||
-      !isFiniteNumber(detail.payout) || !isLedgerEntry(detail.ledgerEntry)
+      typeof detail.reservationCode !== 'string' ||
+      typeof detail.guestName !== 'string' ||
+      typeof detail.checkIn !== 'string' ||
+      typeof detail.checkOut !== 'string' ||
+      !isFiniteNumber(detail.nights) ||
+      !Array.isArray(detail.fees) ||
+      !detail.fees.every(isFee) ||
+      !isFiniteNumber(detail.payout) ||
+      !isLedgerEntry(detail.ledgerEntry)
     ) {
       throw new Error('A API retornou detalhes financeiros inválidos.');
     }
