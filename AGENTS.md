@@ -19,6 +19,14 @@
 - Nunca grave segredos em arquivos versionados, logs, respostas ou código do frontend.
 - Não faça commit, push ou deploy sem solicitação explícita.
 
+## Operação do repositório e produção
+
+- Confira `git status`, a branch e os arquivos alterados antes de trabalhar; preserve alterações preexistentes. Use branch de trabalho e PR para mudanças compartilhadas; registre a revisão e os testes proporcionais ao diff.
+- Leia o README e `docs/checklist-implementacao-coolify-hospeda-reservas.md` antes de operar CI ou Coolify. Confira os workflows no commit e no GitHub: o estado da branch, da `main` e da produção pode ser diferente.
+- O workflow `release-image.yml` executa testes em PR e, após push na `main` e aprovação dos gates, publica a imagem e pode acionar o Coolify quando `PRODUCTION_DEPLOY_ENABLED` for `true`. Confira o valor e a versão do workflow antes de operar: em 28/10/2026 a variável estava ligada. Backup antes de migrations e rollback seguro ainda precisam ser integrados e validados. A branch remota `codex/hospeda-production` também pode acionar o Coolify.
+- Antes de mudar produção, identifique a aplicação, a imagem e o banco corretos; confirme backup recuperável e a compatibilidade das migrations. Evite executar migrations de reversão ou restaurar o banco automaticamente: isso pode apagar reservas, pagamentos e registros posteriores ao backup.
+- Prefira imagens por digest, verificações do artefato implantado e health checks após o deploy. Considere segredos, permissões mínimas, concorrência de deploy e controles de acesso da branch. Não exponha credenciais nem execute comandos de produção durante testes locais.
+
 ## Qualidade do frontend
 
 - Siga o plano de melhorias em `docs/frontend-quality-plan.md` para mudanças da auditoria; preserve os contratos da API Laravel e o fluxo de checkout hospedado.
