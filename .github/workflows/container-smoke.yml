@@ -49,6 +49,8 @@ jobs:
           done
 
           docker exec "$CONTAINER_NAME" php artisan migrate --force
+          docker exec "$CONTAINER_NAME" supervisorctl status apache queue scheduler | tee /tmp/hospeda-supervisor.txt
+          test "$(grep -c RUNNING /tmp/hospeda-supervisor.txt)" -eq 3
 
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
