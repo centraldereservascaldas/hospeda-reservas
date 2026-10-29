@@ -51,7 +51,7 @@ class DirectCheckoutPaymentService
                 return [];
             }
 
-            return ['card'];
+            return $this->cieloPayments->availableMethods();
         }
         if ($paymentProvider === 'cielo_checkout') {
             $merchantId = config('services.cielo.checkout_merchant_id');

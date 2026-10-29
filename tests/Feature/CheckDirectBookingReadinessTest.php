@@ -148,6 +148,38 @@ class CheckDirectBookingReadinessTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_production_diagnostic_requires_sop_and_never_allows_ticket_preview(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        $this->app->instance('env', 'production');
+        $this->app->instance(DirectSaleTermsRegistry::class, $this->registry(['pilot-one', 'pilot-two']));
+        config([
+            'direct-booking.payment_provider' => 'cielo',
+            'services.cielo.direct_environment' => 'production',
+            'services.cielo.production.enabled' => true,
+            'services.cielo.production.sop_enabled' => false,
+            'services.cielo.production.pix_enabled' => true,
+            'services.cielo.production.pix_qr_expiration_seconds' => 1800,
+            'services.cielo.production.merchant_id' => 'sentinel-merchant',
+            'services.cielo.production.merchant_key' => 'sentinel-key',
+            'services.cielo.production.sop_client_id' => 'sentinel-client',
+            'services.cielo.production.sop_client_secret' => 'sentinel-secret',
+            'services.cielo.production.webhook_header_name' => 'x-cielo-secret',
+            'services.cielo.production.webhook_header_value' => 'sentinel-webhook-secret',
+            'park-tickets.preview_enabled' => true,
+        ]);
+        $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertFalse($result['checks']['CIELO_DIRECT_PRODUCTION_SOP_ENABLED']['configured']);
+        $this->assertFalse($result['flags']['PARK_TICKETS_PREVIEW_ENABLED']['enabled']);
+        $this->assertFalse($result['flags']['DIRECT_BOOKING_CHECKOUT_UI_ENABLED']['enabled']);
+        config(['services.cielo.production.sop_enabled' => true]);
+        $this->assertSame(0, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $this->assertStringNotContainsString('sentinel-', Artisan::output());
+        Http::assertNothingSent();
+    }
+
     private function configureCompleteReadiness(): void
     {
         config([

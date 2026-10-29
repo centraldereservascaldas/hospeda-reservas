@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
-import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, QrCode, ShieldCheck } from 'lucide-react';
+import { LogoCRCN } from '../LogoCRCN';
 import {
   ParkTicketSelector,
   getPreviewTicketLines,
   type ParkTicketCart,
 } from './ParkTicketSelector';
 import type { CheckoutModal } from './CheckoutModal';
-import { CieloSopCardForm, type CieloPaymentContext } from './CieloSopCardForm';
+import {
+  CieloSopCardForm,
+  type CieloCardPricing,
+  type CieloPaymentContext,
+} from './CieloSopCardForm';
 import {
   checkoutApi,
   type CheckoutReadinessResponse,
@@ -45,6 +50,8 @@ export function SinglePageCheckout({
   const [guest, setGuest] = useState(guestPrefill ?? { fullName: '', email: '', phone: '' });
   const [terms, setTerms] = useState<{ version: string; fields: [string, string][] } | null>(null);
   const [readiness, setReadiness] = useState<CheckoutReadinessResponse | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
+  const [cardPricing, setCardPricing] = useState<CieloCardPricing | null>(null);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const [accepted, setAccepted] = useState(false);
@@ -144,15 +151,29 @@ export function SinglePageCheckout({
   const { property, checkIn, checkOut, guests, nights } = bookingData;
   const total = quote.total;
   const money = (value: number) => formatCurrency(value, 'BRL');
-  const ready =
+  const cardReady =
+    readiness?.singlePageCheckoutEnabled === true &&
     readiness?.ready === true &&
     terms !== null &&
     readiness.payment.methods.includes('card') &&
     ['cielo', 'cielo_sandbox'].includes(readiness.payment.provider);
+  const pixReady =
+    readiness?.singlePageCheckoutEnabled === true &&
+    readiness?.ready === true &&
+    terms !== null &&
+    readiness.payment.methods.includes('pix') &&
+    ['cielo', 'cielo_sandbox'].includes(readiness.payment.provider) &&
+    quote.source === 'stays-live' &&
+    !prepared &&
+    !attemptFinished;
+  const ready = paymentMethod === 'card' ? cardReady : pixReady;
   const fees = getVisiblePropertyFees(quote.fees || []);
-  const ticketLines = getPreviewTicketLines(ticketCart);
+  const showParkTicketsPreview = readiness?.parkTicketsPreviewEnabled === true;
+  const ticketLines = showParkTicketsPreview ? getPreviewTicketLines(ticketCart) : [];
   const ticketsTotal = ticketLines.reduce((sum, line) => sum + line.totalCents, 0) / 100;
   const hasTickets = ticketLines.length > 0;
+  const paymentTotal =
+    paymentMethod === 'card' && cardPricing ? cardPricing.totalCents / 100 : total;
 
   const preparePayment = async (): Promise<CieloPaymentContext> => {
     if (hasTickets)
@@ -222,6 +243,34 @@ export function SinglePageCheckout({
     );
   };
 
+  const startCieloPix = async (): Promise<void> => {
+    if (hasTickets)
+      throw new Error(
+        'Os ingressos estão em demonstração. Remova-os para continuar somente com a hospedagem.',
+      );
+    if (!pixReady || !accepted)
+      throw new Error('Confira e aceite as condições da hospedagem antes de continuar com o Pix.');
+    const context = await preparePayment();
+    const response = await checkoutApi.createCheckoutPayment(
+      context.reference,
+      context.credentials,
+      context.amount,
+      {
+        paymentMethod: 'pix',
+        paymentMethodId: 'pix',
+        idempotencyKey: crypto.randomUUID(),
+      },
+    );
+    if (response.kind !== 'response' || !response.success) {
+      throw new Error(
+        response.kind === 'response'
+          ? response.message
+          : 'Não foi possível gerar o Pix. Atualize o pedido antes de tentar novamente.',
+      );
+    }
+    setAttemptFinished(true);
+  };
+
   const confirmed =
     result?.order.reservationConfirmed === true &&
     result.order.status === 'confirmado' &&
@@ -230,43 +279,59 @@ export function SinglePageCheckout({
     result?.payment.attempt?.status === 'rejected' || result?.order.status === 'pagamento_recusado';
 
   return (
-    <main className="min-h-screen bg-white pb-24 text-neutral-950">
-      <header className="border-b border-neutral-200 px-5 py-5 sm:px-10">
+    <main className="checkout-purchase min-h-screen pb-24 text-neutral-950">
+      <header className="checkout-purchase-header liquid-glass px-5 py-4 sm:px-10">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          <a href="/" className="text-xl font-black tracking-tight text-orange-800">
-            CRCN
-            <span className="ml-2 hidden text-sm font-medium text-neutral-500 sm:inline">
-              Central de Reservas
-            </span>
+          <a
+            href="/"
+            aria-label="Central de Reservas Caldas Novas — início"
+            className="shrink-0 rounded-xl focus-visible:outline-2 focus-visible:outline-orange-700"
+          >
+            <LogoCRCN size="sm" variant="glass" />
           </a>
-          <span className="flex items-center gap-2 text-xs text-neutral-600">
-            <LockKeyhole size={15} aria-hidden="true" /> Compra segura
+          <span className="liquid-glass-pill flex items-center gap-2 rounded-full px-3 py-2.5 text-xs font-semibold text-neutral-700 sm:px-4">
+            <LockKeyhole size={15} className="text-orange-700" aria-hidden="true" />{' '}
+            <span className="hidden min-[380px]:inline">Checkout seguro</span>
+            <span className="min-[380px]:hidden">Seguro</span>
           </span>
         </div>
       </header>
       <div className="mx-auto max-w-6xl px-5 pt-8 sm:px-10 sm:pt-10">
-        <div className="mb-8 flex items-center gap-4">
+        <div className="mb-7 flex items-center gap-4 sm:mb-9">
           {!prepared && (
             <button
               type="button"
               onClick={onClose}
               aria-label="Voltar para acomodação"
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-orange-700"
+              className="liquid-glass-button flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-700 hover:bg-white focus-visible:outline-2 focus-visible:outline-orange-700"
             >
               <ArrowLeft size={20} />
             </button>
           )}
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            {attemptFinished ? 'Sua reserva' : 'Confirme e pague'}
-          </h1>
+          <div>
+            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-orange-800 sm:text-xs">
+              Central de Reservas · Caldas Novas
+            </p>
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+              {attemptFinished ? 'Sua reserva' : 'Confirme e pague'}
+            </h1>
+            <p className="mt-2 max-w-lg text-sm leading-6 text-neutral-600">
+              {attemptFinished
+                ? 'Acompanhe a confirmação da sua hospedagem.'
+                : 'Sua hospedagem escolhida. Agora, cuide dos últimos detalhes.'}
+            </p>
+          </div>
         </div>
-        <div className="grid items-start gap-8 md:grid-cols-[minmax(0,1fr)_300px] lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-16">
-          <div className="min-w-0">
+        <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_300px] lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
+          <div className="checkout-purchase-form liquid-glass-card min-w-0 rounded-[1.75rem] p-5 sm:p-7">
             <section className="mb-7 border-b border-neutral-200 pb-6" aria-labelledby="trip-title">
-              <h2 id="trip-title" className="mb-4 text-xl font-bold">
+              <h2 id="trip-title" className="mb-4 flex items-center gap-3 text-lg font-bold">
+                <span aria-hidden="true" className="checkout-section-number">
+                  1
+                </span>{' '}
                 Sua viagem
               </h2>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="checkout-trip-details grid grid-cols-2 gap-4 rounded-2xl p-4 text-sm">
                 <div>
                   <p className="font-semibold">Datas</p>
                   <p className="mt-1 text-neutral-600">
@@ -315,6 +380,44 @@ export function SinglePageCheckout({
                     {result.confirmation.reservationCode}
                   </p>
                 )}
+                {result?.payment.attempt?.method === 'pix' &&
+                  result.payment.attempt.status === 'pending' &&
+                  result.payment.attempt.pix && (
+                    <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+                      <p className="font-bold">Pix gerado · aguardando pagamento</p>
+                      {result.payment.attempt.pix.qrCodeBase64 && (
+                        <img
+                          src={`data:image/png;base64,${result.payment.attempt.pix.qrCodeBase64}`}
+                          alt="QR Code Pix para pagamento"
+                          className="mx-auto h-48 w-48 rounded-xl bg-white p-2"
+                        />
+                      )}
+                      {result.payment.attempt.pix.copyPaste && (
+                        <>
+                          <textarea
+                            readOnly
+                            value={result.payment.attempt.pix.copyPaste}
+                            aria-label="Código Pix copia e cola"
+                            className="min-h-24 w-full resize-none rounded-xl border border-emerald-300 bg-white p-3 font-mono text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void navigator.clipboard?.writeText(
+                                result.payment.attempt?.pix?.copyPaste ?? '',
+                              )
+                            }
+                            className="min-h-11 w-full rounded-xl bg-emerald-800 px-4 py-3 text-sm font-bold text-white"
+                          >
+                            Copiar código Pix
+                          </button>
+                        </>
+                      )}
+                      <p className="text-xs leading-5">
+                        A reserva só será confirmada após a consulta segura do pagamento na Cielo.
+                      </p>
+                    </div>
+                  )}
                 <button
                   type="button"
                   onClick={() => setStatusRetry((value) => value + 1)}
@@ -337,15 +440,68 @@ export function SinglePageCheckout({
                 preparePayment={preparePayment}
                 guestPrefill={guest}
                 disabled={!ready || !accepted || hasTickets}
+                paymentMethod={paymentMethod}
+                onPricingChange={setCardPricing}
+                onAlternativeSubmit={startCieloPix}
+                alternativeContent={
+                  <section className="checkout-pix-panel" aria-labelledby="checkout-pix-title">
+                    <h2 id="checkout-pix-title" className="text-lg font-bold text-neutral-950">
+                      <span aria-hidden="true" className="checkout-section-number mr-3">
+                        3
+                      </span>
+                      Pague com Pix
+                    </h2>
+                    <div className="mt-4 flex gap-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-950">
+                      <QrCode className="mt-0.5 shrink-0" size={28} aria-hidden="true" />
+                      <div>
+                        <p className="font-bold">Pix seguro e rápido</p>
+                        <p className="mt-1 text-sm leading-6">
+                          Na próxima etapa, você verá o QR Code e o código copia e cola para
+                          concluir o pagamento da hospedagem.
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                }
                 submitLabel={
                   hasTickets
                     ? 'Compra com ingressos em demonstração'
-                    : `Confirmar e pagar ${money(total)}`
+                    : paymentMethod === 'pix'
+                      ? `Continuar com Pix · ${money(total)}`
+                      : undefined
                 }
                 onAttemptFinished={() => setAttemptFinished(true)}
+                beforeSubmit={
+                  showParkTicketsPreview ? (
+                    <div className="space-y-3">
+                      <ParkTicketSelector
+                        from={checkIn}
+                        to={checkOut}
+                        value={ticketCart}
+                        disabled={prepared}
+                        onChange={(value) => {
+                          setTicketCart(value);
+                          setAccepted(false);
+                        }}
+                      />
+                      {hasTickets && (
+                        <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">
+                          Esta é uma simulação visual. O pagamento com ingressos está bloqueado até
+                          integrarmos a venda e a emissão. Desmarque a oferta para testar apenas a
+                          hospedagem.
+                        </p>
+                      )}
+                    </div>
+                  ) : undefined
+                }
               >
                 <fieldset disabled={prepared} className="mb-7 border-b border-neutral-200 pb-7">
-                  <legend className="mb-2 text-xl font-bold">Seus dados</legend>
+                  <legend className="mb-2 text-lg font-bold">
+                    <span aria-hidden="true" className="checkout-section-number mr-3">
+                      2
+                    </span>
+                    Seus dados
+                  </legend>
                   <p className="mb-4 text-sm text-neutral-500">
                     Enviaremos a confirmação para este e-mail.
                   </p>
@@ -387,23 +543,63 @@ export function SinglePageCheckout({
                     </label>
                   </div>
                 </fieldset>
-                <ParkTicketSelector
-                  from={checkIn}
-                  to={checkOut}
-                  value={ticketCart}
-                  disabled={prepared}
-                  onChange={(value) => {
-                    setTicketCart(value);
-                    setAccepted(false);
-                  }}
-                />
-                {hasTickets && (
-                  <p className="mb-6 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">
-                    Hospedagem + ingressos: esta é uma simulação visual. O pagamento fica bloqueado
-                    até integrarmos a venda e a emissão dos ingressos. Remova os ingressos para
-                    testar apenas a hospedagem.
-                  </p>
-                )}
+                <fieldset disabled={prepared} className="mb-7 border-b border-neutral-200 pb-7">
+                  <legend className="mb-3 text-sm font-bold text-neutral-950">
+                    Como você prefere pagar?
+                  </legend>
+                  <div className="checkout-payment-methods grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      aria-label="Cartão, processado pela Cielo"
+                      aria-pressed={paymentMethod === 'card'}
+                      onClick={() => {
+                        setPaymentMethod('card');
+                        setAccepted(false);
+                      }}
+                      className="checkout-payment-method"
+                    >
+                      <CreditCard size={20} aria-hidden="true" />
+                      <span>
+                        <strong>Cartão</strong>
+                        <small>Cielo</small>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Pix, aprovação rápida"
+                      aria-pressed={paymentMethod === 'pix'}
+                      disabled={!pixReady}
+                      onClick={() => {
+                        setPaymentMethod('pix');
+                        setAccepted(false);
+                      }}
+                      className="checkout-payment-method"
+                    >
+                      <QrCode size={20} aria-hidden="true" />
+                      <span>
+                        <strong>Pix</strong>
+                        <small>{pixReady ? 'Sem taxa' : 'Indisponível'}</small>
+                      </span>
+                    </button>
+                  </div>
+                  <div
+                    className="checkout-trust-badges mt-4 grid gap-2 sm:grid-cols-3"
+                    aria-label="Sinais de segurança do checkout"
+                  >
+                    <span>
+                      <LockKeyhole size={16} aria-hidden="true" />
+                      SSL verificado
+                    </span>
+                    <span>
+                      <ShieldCheck size={16} aria-hidden="true" />
+                      Dados protegidos
+                    </span>
+                    <span>
+                      <BadgeCheck size={16} aria-hidden="true" />
+                      Pagamento acompanhado
+                    </span>
+                  </div>
+                </fieldset>
                 <section
                   className="mb-7 border-b border-neutral-200 pb-6"
                   aria-labelledby="conditions-title"
@@ -439,7 +635,7 @@ export function SinglePageCheckout({
                     />
                     <span>
                       Li e aceito as condições da hospedagem e a cobrança de{' '}
-                      <strong>{money(total)}</strong>.
+                      <strong>{money(paymentTotal)}</strong>.
                     </span>
                   </label>
                   {!ready && (
@@ -466,27 +662,28 @@ export function SinglePageCheckout({
             className="order-first md:sticky md:top-8 md:order-last"
             aria-label="Resumo da compra"
           >
-            <div className="rounded-2xl border border-neutral-300 p-5 sm:p-6">
-              <div className="flex gap-4">
-                <img
-                  src={property.images[0]}
-                  alt=""
-                  className="h-24 w-24 rounded-xl object-cover"
-                />
-                <div className="min-w-0">
-                  <p className="text-xs text-neutral-500">Sua hospedagem em Caldas Novas</p>
-                  <h2 className="mt-1 text-sm font-semibold leading-5">
-                    {getPublicPropertyTitle(property.title)}
-                  </h2>
-                  {property.reviewsSynced && property.reviewCount > 0 && (
-                    <p className="mt-2 text-xs">
-                      ★ {property.rating.toFixed(2)} · {property.reviewCount} avaliações
-                    </p>
-                  )}
-                </div>
+            <div className="checkout-summary-card liquid-glass-card overflow-hidden rounded-[1.75rem] p-5 sm:p-6">
+              <div className="checkout-summary-image relative -mx-5 -mt-5 mb-5 sm:-mx-6 sm:-mt-6">
+                <img src={property.images[0]} alt="" className="h-36 w-full object-cover sm:h-44" />
+                <span className="liquid-glass-pill absolute bottom-3 left-4 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-800">
+                  Sua hospedagem
+                </span>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-orange-800">
+                  {property.subtitle || 'Central de Reservas Caldas Novas'}
+                </p>
+                <h2 className="mt-2 text-base font-bold leading-6">
+                  {getPublicPropertyTitle(property.title)}
+                </h2>
+                {property.reviewsSynced && property.reviewCount > 0 && (
+                  <p className="mt-2 text-xs">
+                    ★ {property.rating.toFixed(2)} · {property.reviewCount} avaliações
+                  </p>
+                )}
               </div>
               <div className="my-5 border-t border-neutral-200" />
-              <h3 className="mb-4 text-lg font-bold">Detalhes do preço</h3>
+              <h3 className="mb-4 text-sm font-bold">Detalhes do preço</h3>
               <dl className="space-y-3 text-sm">
                 <div className="flex justify-between gap-3">
                   <dt>{nights} noites</dt>
@@ -552,12 +749,20 @@ export function SinglePageCheckout({
                     </div>
                   </>
                 )}
+                {!hasTickets && paymentMethod === 'card' && cardPricing && (
+                  <div className="flex justify-between gap-3 text-neutral-700">
+                    <dt>
+                      Acréscimo do cartão · {cardPricing.ratePercent.toLocaleString('pt-BR')}%
+                    </dt>
+                    <dd>{money(cardPricing.feeCents / 100)}</dd>
+                  </div>
+                )}
                 <div
-                  className="flex justify-between gap-3 border-t border-neutral-200 pt-4 text-base font-bold"
+                  className="checkout-summary-total flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 pt-5 font-bold"
                   aria-live="polite"
                 >
                   <dt>{hasTickets ? 'Total da simulação' : 'Total (BRL)'}</dt>
-                  <dd>{money(total + ticketsTotal)}</dd>
+                  <dd>{money(paymentTotal + ticketsTotal)}</dd>
                 </div>
               </dl>
               {hasTickets && (
@@ -565,11 +770,18 @@ export function SinglePageCheckout({
                   Valores ilustrativos. Nenhuma compra ou emissão de ingresso será realizada.
                 </p>
               )}
-              <p className="mt-4 flex items-center gap-2 text-xs text-neutral-500">
-                <CreditCard size={16} aria-hidden="true" /> Pagamento integral no cartão
+              <p className="mt-4 flex items-center gap-2 rounded-xl bg-white/55 px-3 py-2.5 text-xs text-neutral-600">
+                {paymentMethod === 'pix' ? (
+                  <QrCode size={16} aria-hidden="true" />
+                ) : (
+                  <CreditCard size={16} aria-hidden="true" />
+                )}
+                {paymentMethod === 'pix'
+                  ? 'Pagamento seguro com Pix · sem taxa'
+                  : 'Cartão em até 6x · confira o total'}
               </p>
             </div>
-            <div className="mt-5 flex items-start gap-3 px-2">
+            <div className="liquid-glass mt-4 flex items-start gap-3 rounded-2xl p-4">
               <ShieldCheck size={22} className="shrink-0 text-orange-800" aria-hidden="true" />
               <p className="text-xs leading-5 text-neutral-600">
                 <strong className="block text-neutral-900">Reserve com a CRCN</strong>Confira as

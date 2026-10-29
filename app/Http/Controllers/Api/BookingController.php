@@ -294,11 +294,20 @@ class BookingController extends Controller
             && $holdMinutes <= 1440;
         $ready = $checkoutReady && $paymentMethods !== [];
 
+        $singlePageCheckoutEnabled = (bool) config('direct-booking.checkout_ui_enabled', false)
+            && $ready
+            && in_array($payments->provider(), ['cielo', 'cielo_sandbox'], true)
+            && in_array('card', $paymentMethods, true);
+
         return response()->json([
             'success' => true,
             'ready' => $ready,
             'termsAvailable' => $approvedListing !== null,
             'checkoutEnabled' => $checkoutReady,
+            'singlePageCheckoutEnabled' => $singlePageCheckoutEnabled,
+            'parkTicketsPreviewEnabled' => $singlePageCheckoutEnabled
+                && app()->environment(['local', 'testing'])
+                && (bool) config('park-tickets.preview_enabled', false),
             'payment' => [
                 'enabled' => $paymentMethods !== [],
                 'methods' => $paymentMethods,
@@ -353,6 +362,11 @@ class BookingController extends Controller
                     'status' => $attempt->status,
                     'method' => $attempt->payment_method,
                     'amount' => $attempt->amount,
+                    'baseAmount' => $attempt->base_amount,
+                    'processingFeeAmount' => $attempt->processing_fee_amount,
+                    'processingFeeRate' => $attempt->processing_fee_basis_points === null
+                        ? null
+                        : number_format($attempt->processing_fee_basis_points / 100, 2, '.', ''),
                     'currency' => $attempt->currency,
                     'expiresAt' => $attempt->expires_at?->toISOString(),
                     'paidAt' => $attempt->paid_at?->toISOString(),

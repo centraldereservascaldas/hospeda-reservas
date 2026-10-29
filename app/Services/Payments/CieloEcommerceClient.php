@@ -34,6 +34,7 @@ class CieloEcommerceClient
         string $currency,
         string $customerName,
         string $customerIdentity,
+        int $installments = 1,
     ): array {
         if (! $this->configuration->canCharge()) {
             throw new RuntimeException('Cielo direct payments are disabled.');
@@ -50,6 +51,9 @@ class CieloEcommerceClient
         if ($amountCents === null || $amountCents < 1 || $currency !== 'BRL') {
             throw new InvalidArgumentException('Cielo payments require a positive BRL amount.');
         }
+        if ($installments < 1 || $installments > 6 || intdiv($amountCents, $installments) < 500) {
+            throw new InvalidArgumentException('Cielo card payments require 1 to 6 installments of at least R$ 5.00 each.');
+        }
 
         $response = $this->request($this->configuration->endpoint('transaction'))
             ->post('/1/sales/', [
@@ -63,10 +67,54 @@ class CieloEcommerceClient
                     'Amount' => $amountCents,
                     'Currency' => 'BRL',
                     'Capture' => true,
-                    'Installments' => 1,
+                    'Installments' => $installments,
+                    'Interest' => 'ByMerchant',
                     ...($this->configuration->environment() === 'sandbox' ? ['Provider' => 'Simulado'] : []),
                     'CreditCard' => ['PaymentToken' => $paymentToken],
                 ],
+            ]);
+
+        return $this->decodeObjectResponse($response->throw());
+    }
+
+    /** @return array<string, mixed> */
+    public function createPixPayment(
+        string $merchantOrderId,
+        string $amount,
+        string $currency,
+        string $customerName,
+        int $expirationSeconds,
+    ): array {
+        if (! $this->configuration->canCharge() || ! (bool) $this->configuration->value('pix_enabled')) {
+            throw new RuntimeException('Cielo Pix payments are disabled.');
+        }
+        if (! preg_match('/^[A-Za-z0-9]{1,36}$/D', $merchantOrderId)) {
+            throw new InvalidArgumentException('A valid Cielo MerchantOrderId is required.');
+        }
+
+        $amountCents = MoneyAmount::toCents($amount);
+        if ($amountCents === null || $amountCents < 1 || $currency !== 'BRL') {
+            throw new InvalidArgumentException('Cielo Pix payments require a positive BRL amount.');
+        }
+        if ($expirationSeconds < 60 || $expirationSeconds > 86_400) {
+            throw new InvalidArgumentException('Cielo Pix expiration must be between 60 seconds and 24 hours.');
+        }
+
+        $payment = [
+            'Type' => 'Pix',
+            'Amount' => $amountCents,
+            'Currency' => 'BRL',
+            'QrCode' => ['Expiration' => $expirationSeconds],
+        ];
+        if ($this->configuration->environment() === 'production') {
+            $payment['Provider'] = 'Cielo2';
+        }
+
+        $response = $this->request($this->configuration->endpoint('transaction'))
+            ->post('/1/sales/', [
+                'MerchantOrderId' => $merchantOrderId,
+                'Customer' => ['Name' => mb_substr(trim($customerName), 0, 255)],
+                'Payment' => $payment,
             ]);
 
         return $this->decodeObjectResponse($response->throw());

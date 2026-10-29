@@ -21,12 +21,12 @@ class CieloCheckoutPaymentService
         private readonly CieloSilentOrderPostClient $sop,
         private readonly DirectStaysReservationService $reservations,
         private readonly CieloDirectConfiguration $configuration,
+        private readonly CieloCardPricing $pricing,
     ) {}
 
     public function isAvailable(): bool
     {
         return $this->cielo->isConfigured()
-            && $this->sop->isConfigured()
             && $this->configuration->canCharge()
             && (bool) config('direct-booking.enabled', false)
             && (bool) config('direct-booking.payments_enabled', false)
@@ -44,6 +44,19 @@ class CieloCheckoutPaymentService
             && config('queue.connections.'.config('direct-booking.notification_queue_connection', 'database')) !== null;
     }
 
+    /** @return list<string> */
+    public function availableMethods(): array
+    {
+        if (! $this->isAvailable()) {
+            return [];
+        }
+
+        return array_values(array_filter([
+            $this->sop->isConfigured() ? 'card' : null,
+            (bool) $this->configuration->value('pix_enabled') ? 'pix' : null,
+        ]));
+    }
+
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
     public function createAttempt(DirectBookingOrder $order, StoreCheckoutPaymentRequest $request): array
     {
@@ -52,12 +65,24 @@ class CieloCheckoutPaymentService
         }
 
         $input = $request->validated();
-        if ($input['paymentMethod'] !== 'card'
-            || mb_strtolower(trim($input['cardholderEmail'])) !== mb_strtolower(trim($order->guest_email))) {
+        $paymentMethod = $input['paymentMethod'];
+        if (! in_array($paymentMethod, $this->availableMethods(), true)
+            || ($paymentMethod === 'card'
+                && mb_strtolower(trim($input['cardholderEmail'])) !== mb_strtolower(trim($order->guest_email)))) {
             return $this->result(null, 'payment_method_unavailable', 'Este método de pagamento ainda não está disponível.', 503);
         }
-        if (! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iD', $input['token'])) {
+        if ($paymentMethod === 'card' && ! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iD', $input['token'])) {
             return $this->result(null, 'invalid_payment_token', 'Não foi possível validar o token do cartão. Recarregue os campos e tente novamente.', 422);
+        }
+        $baseAmountCents = MoneyAmount::toCents($order->quote_total);
+        if ($baseAmountCents === null) {
+            return $this->result(null, 'unsupported_payment_amount', 'O valor do pedido não é compatível com o pagamento.', 422);
+        }
+        $paymentPricing = $paymentMethod === 'card'
+            ? $this->pricing->calculate($order->quote_total, (int) $input['installments'])
+            : ['baseCents' => $baseAmountCents, 'feeCents' => 0, 'totalCents' => $baseAmountCents, 'rateBasisPoints' => 0];
+        if ($paymentMethod === 'card' && intdiv($paymentPricing['totalCents'], (int) $input['installments']) < 500) {
+            return $this->result(null, 'invalid_installments', 'Cada parcela precisa ter o valor mínimo de R$ 5,00.', 422);
         }
 
         $idempotencyKey = $input['idempotencyKey'];
@@ -76,7 +101,7 @@ class CieloCheckoutPaymentService
         }
 
         try {
-            $attempt = DB::transaction(function () use ($order, $idempotencyKey, $fingerprint): DirectBookingPaymentAttempt|array {
+            $attempt = DB::transaction(function () use ($order, $idempotencyKey, $fingerprint, $input, $paymentMethod, $paymentPricing): DirectBookingPaymentAttempt|array {
                 $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
                 $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
                 if ($existingAttempt !== null) {
@@ -107,11 +132,14 @@ class CieloCheckoutPaymentService
                     'gateway_provider' => $this->configuration->provider(),
                     'gateway_merchant_id' => $lockedOrder->gateway_merchant_id,
                     'merchant_order_id' => str_replace('-', '', (string) Str::uuid()),
-                    'payment_method' => 'card',
-                    'payment_method_id' => 'cielo_credit_card',
-                    'installments' => 1,
+                    'payment_method' => $paymentMethod,
+                    'payment_method_id' => $paymentMethod === 'card' ? 'cielo_credit_card' : 'cielo_pix',
+                    'installments' => $paymentMethod === 'card' ? (int) $input['installments'] : null,
                     'status' => 'processing',
-                    'amount' => $lockedOrder->quote_total,
+                    'amount' => $this->pricing->decimal($paymentPricing['totalCents']),
+                    'base_amount' => $this->pricing->decimal($paymentPricing['baseCents']),
+                    'processing_fee_amount' => $this->pricing->decimal($paymentPricing['feeCents']),
+                    'processing_fee_basis_points' => $paymentPricing['rateBasisPoints'],
                     'currency' => $lockedOrder->currency,
                     'expires_at' => $lockedOrder->expires_at,
                     'gateway_submission_started_at' => now(),
@@ -122,9 +150,9 @@ class CieloCheckoutPaymentService
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoPendente, ['source' => 'payment_attempt_started', 'gateway' => $this->configuration->provider()]);
                 }
                 $lockedOrder->payment_status = 'pending';
-                $lockedOrder->payment_amount = $lockedOrder->quote_total;
+                $lockedOrder->payment_amount = $this->pricing->decimal($paymentPricing['totalCents']);
                 $lockedOrder->payment_currency = $lockedOrder->currency;
-                $lockedOrder->payment_method = 'card';
+                $lockedOrder->payment_method = $paymentMethod;
                 $lockedOrder->payment_expires_at = $lockedOrder->expires_at;
                 $lockedOrder->save();
 
@@ -147,14 +175,27 @@ class CieloCheckoutPaymentService
         }
 
         try {
-            $gatewayPayment = $this->cielo->createCardPayment(
-                $input['token'],
-                (string) $attempt->merchant_order_id,
-                (string) $attempt->amount,
-                (string) $attempt->currency,
-                $order->guest_name,
-                $input['payerIdentification']['number'],
-            );
+            if ($paymentMethod === 'card') {
+                $gatewayPayment = $this->cielo->createCardPayment(
+                    $input['token'],
+                    (string) $attempt->merchant_order_id,
+                    (string) $attempt->amount,
+                    (string) $attempt->currency,
+                    $order->guest_name,
+                    $input['payerIdentification']['number'],
+                    (int) $input['installments'],
+                );
+            } else {
+                $configuredExpiration = max(60, min(86_400, (int) $this->configuration->value('pix_qr_expiration_seconds')));
+                $remainingSeconds = max(60, min(86_400, now()->diffInSeconds($order->expires_at, false)));
+                $gatewayPayment = $this->cielo->createPixPayment(
+                    (string) $attempt->merchant_order_id,
+                    (string) $attempt->amount,
+                    (string) $attempt->currency,
+                    $order->guest_name,
+                    min($configuredExpiration, $remainingSeconds),
+                );
+            }
 
             return $this->applyGatewayPayment($attempt->order, $attempt, $gatewayPayment);
         } catch (Throwable) {
@@ -229,8 +270,20 @@ class CieloCheckoutPaymentService
         $paymentStatus = filter_var($payment['Status'] ?? null, FILTER_VALIDATE_INT);
         $amountCents = filter_var($payment['Amount'] ?? null, FILTER_VALIDATE_INT);
         $orderAmountCents = MoneyAmount::toCents($order->quote_total);
+        $attemptBaseAmountCents = MoneyAmount::toCents($attempt->base_amount ?? $attempt->amount);
         $attemptAmountCents = MoneyAmount::toCents($attempt->amount);
         $paymentType = $payment['Type'] ?? null;
+        $expectedPaymentType = $attempt->payment_method === 'pix' ? 'Pix' : 'CreditCard';
+        $pixCopyPaste = $attempt->payment_method === 'pix'
+            ? $this->safePixCopyPaste($payment['QrCodeString'] ?? null)
+            : null;
+        $pixQrCode = $attempt->payment_method === 'pix'
+            ? $this->safePixQrCode($payment['QrCodeBase64Image'] ?? null)
+            : null;
+        $initialPixResponseMissingInstructions = $attempt->payment_method === 'pix'
+            && $attempt->gateway_payment_id === null
+            && $paymentStatus === 12
+            && ($pixCopyPaste === null || $pixQrCode === null);
 
         if ($conflictingPaymentIds || ! is_string($paymentId)
             || ! preg_match('/^[0-9a-f-]{36}$/iD', $paymentId)
@@ -240,10 +293,11 @@ class CieloCheckoutPaymentService
             || $paymentStatus === false
             || $amountCents === false
             || $orderAmountCents === null
-            || $attemptAmountCents !== $orderAmountCents
-            || $amountCents !== $orderAmountCents
+            || $attemptBaseAmountCents !== $orderAmountCents
+            || $amountCents !== $attemptAmountCents
             || ($payment['Currency'] ?? null) !== $order->currency
-            || $paymentType !== 'CreditCard') {
+            || $paymentType !== $expectedPaymentType
+            || $initialPixResponseMissingInstructions) {
             $attempt->forceFill(['status' => 'attention_required', 'error_code' => 'gateway_payment_mismatch'])->save();
             $this->markOrderForAttention($order, 'gateway_payment_mismatch');
 
@@ -266,9 +320,12 @@ class CieloCheckoutPaymentService
             default => 'attention_required',
         };
         $paidAt = $status === 'captured' ? ($this->parseDate($payment['CapturedDate'] ?? null) ?? now()) : null;
-        $expiresAt = $this->parseDate($payment['ExpirationDate'] ?? null) ?? $order->expires_at;
+        $gatewayExpiration = $this->parseDate($payment['ExpirationDate'] ?? null);
+        $expiresAt = $gatewayExpiration !== null && $order->expires_at !== null && $gatewayExpiration->lessThan($order->expires_at)
+            ? $gatewayExpiration
+            : $order->expires_at;
 
-        $paymentIdConflict = DB::transaction(function () use ($order, $attempt, $paymentId, $status, $attemptStatus, $payment, $paidAt, $expiresAt): bool {
+        $paymentIdConflict = DB::transaction(function () use ($order, $attempt, $paymentId, $status, $attemptStatus, $payment, $paidAt, $expiresAt, $pixCopyPaste, $pixQrCode): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
             if ($lockedAttempt->gateway_payment_id !== null && $lockedAttempt->gateway_payment_id !== $paymentId) {
@@ -284,10 +341,16 @@ class CieloCheckoutPaymentService
                 'status' => $attemptStatus,
                 'gateway_status' => $status,
                 'gateway_status_detail' => is_string($gatewayStatusDetail) ? mb_substr($gatewayStatusDetail, 0, 100) : null,
-                'payment_method_detail' => 'CreditCard',
+                'payment_method_detail' => $lockedAttempt->payment_method === 'pix' ? 'Pix' : 'CreditCard',
                 'expires_at' => $expiresAt,
                 'paid_at' => $paidAt,
                 'gateway_updated_at' => $this->parseDate($payment['ReceivedDate'] ?? null) ?? now(),
+                'pix_copy_paste' => $attemptStatus === 'pending'
+                    ? ($pixCopyPaste ?? $lockedAttempt->pix_copy_paste)
+                    : null,
+                'pix_qr_code_base64' => $attemptStatus === 'pending'
+                    ? ($pixQrCode ?? $lockedAttempt->pix_qr_code_base64)
+                    : null,
                 'error_code' => $status === 'refunded' ? 'gateway_refund_reported' : null,
             ])->save();
 
@@ -295,8 +358,8 @@ class CieloCheckoutPaymentService
             $lockedOrder->payment_status = $status === 'captured' ? 'approved' : $status;
             $lockedOrder->payment_amount = $lockedAttempt->amount;
             $lockedOrder->payment_currency = $lockedAttempt->currency;
-            $lockedOrder->payment_method = 'card';
-            $lockedOrder->payment_detail = 'CreditCard';
+            $lockedOrder->payment_method = $lockedAttempt->payment_method;
+            $lockedOrder->payment_detail = $lockedAttempt->payment_method === 'pix' ? 'Pix' : 'CreditCard';
             $lockedOrder->payment_status_detail = is_string($gatewayStatusDetail) ? mb_substr($gatewayStatusDetail, 0, 100) : null;
             $lockedOrder->payment_expires_at = $expiresAt;
             if ($status === 'captured') {
@@ -414,6 +477,31 @@ class CieloCheckoutPaymentService
         } catch (Throwable) {
             return null;
         }
+    }
+
+    private function safePixCopyPaste(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return $value !== '' && mb_strlen($value) <= 1_000 ? $value : null;
+    }
+
+    private function safePixQrCode(mixed $value): ?string
+    {
+        if (! is_string($value) || strlen($value) > 100_000) {
+            return null;
+        }
+
+        $decoded = base64_decode($value, true);
+        if (! is_string($decoded) || ! str_starts_with($decoded, "\x89PNG\r\n\x1a\n")) {
+            return null;
+        }
+
+        return $value;
     }
 
     private function paymentMessage(string $status): string

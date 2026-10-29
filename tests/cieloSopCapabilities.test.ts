@@ -4,6 +4,46 @@ import { checkoutApi } from '../src/services/checkoutApi.ts';
 
 const reference = '1234567890123456789012345678901234567890';
 const resumeToken = 'a'.repeat(64);
+
+for (const [label, fields, expected] of [
+  ['old backend', {}, 'ready'],
+  [
+    'explicit pilot',
+    { singlePageCheckoutEnabled: true, parkTicketsPreviewEnabled: false },
+    'ready',
+  ],
+  [
+    'preview requires pilot',
+    { singlePageCheckoutEnabled: false, parkTicketsPreviewEnabled: true },
+    'unavailable',
+  ],
+  ['invalid UI flag', { singlePageCheckoutEnabled: 'true' }, 'unavailable'],
+  ['invalid preview flag', { parkTicketsPreviewEnabled: 1 }, 'unavailable'],
+] as const) {
+  test(`readiness validates independent entry flags: ${label}`, async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          success: true,
+          ready: true,
+          checkoutEnabled: true,
+          termsAvailable: true,
+          payment: { enabled: true, methods: ['card'], publicKey: null, provider: 'cielo' },
+          ...fields,
+        }),
+        { status: 200 },
+      );
+    try {
+      const result = await checkoutApi.getCheckoutReadiness('JQ08G');
+      assert.equal(result.kind, expected);
+      if (label === 'old backend' && result.kind === 'ready')
+        assert.notEqual(result.data.singlePageCheckoutEnabled, true);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+}
 const order = {
   id: '90c0a1c0-27aa-4a23-8a63-d750de9f183e',
   status: 'pre_reservado',

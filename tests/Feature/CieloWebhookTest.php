@@ -76,6 +76,28 @@ class CieloWebhookTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_production_webhook_is_unavailable_without_a_configured_secret(): void
+    {
+        Http::preventStrayRequests();
+        Queue::fake([ReconcileCieloPaymentWebhook::class]);
+        $this->app->detectEnvironment(fn () => 'production');
+        config([
+            'services.cielo.direct_environment' => 'production',
+            'services.cielo.production.enabled' => true,
+            'services.cielo.production.webhook_header_name' => null,
+            'services.cielo.production.webhook_header_value' => null,
+            'direct-booking.live_payments_enabled' => true,
+        ]);
+
+        $this->postJson('/api/webhooks/cielo', $this->notification())
+            ->assertServiceUnavailable()
+            ->assertJsonPath('code', 'cielo_webhook_secret_required');
+
+        $this->assertDatabaseCount('direct_booking_payment_webhooks', 0);
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
+    }
+
     public function test_invalid_notification_authentication_is_rejected_without_persisting_or_dispatching(): void
     {
         $this->configureWebhook();

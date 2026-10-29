@@ -49,7 +49,7 @@ test('the card form uses the environment supplied by the backend without hardcod
     );
     await waitFor(() =>
       assert.equal(
-        getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'),
+        getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
         false,
       ),
     );
@@ -109,7 +109,7 @@ test('Cielo tokenization sends only the temporary token and cardholder data to t
     );
     await waitFor(() =>
       assert.equal(
-        getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'),
+        getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
         false,
       ),
     );
@@ -124,6 +124,7 @@ test('Cielo tokenization sends only the temporary token and cardholder data to t
     fireEvent.change(getByLabelText('CPF ou CNPJ do titular'), {
       target: { value: '123.456.789-01' },
     });
+    fireEvent.change(getByLabelText(/^Parcelamento/), { target: { value: '6' } });
     fireEvent.submit(container.querySelector('form')!);
 
     assert.equal(capturedSop.options?.environment, 'sandbox');
@@ -135,7 +136,7 @@ test('Cielo tokenization sends only the temporary token and cardholder data to t
     await waitFor(() => assert.ok(submitted));
     assert.equal(submitted?.[0], 'R'.repeat(40));
     assert.deepEqual(submitted?.[1], { type: 'resume-token', resumeToken: 'T'.repeat(64) });
-    assert.equal(submitted?.[2], '850.00');
+    assert.equal(submitted?.[2], '1036.59');
     const payload = submitted?.[3] as Record<string, unknown>;
     assert.deepEqual(
       {
@@ -151,7 +152,7 @@ test('Cielo tokenization sends only the temporary token and cardholder data to t
         paymentMethod: 'card',
         paymentMethodId: 'cielo_credit_card',
         token: '123e4567-e89b-12d3-a456-426614174000',
-        installments: 1,
+        installments: 6,
         cardholderName: 'Synthetic Guest',
         cardholderEmail: 'guest@example.test',
         payerIdentification: { type: 'CPF', number: '12345678901' },
@@ -214,7 +215,7 @@ test('pending submission blocks duplicate tokenization and backend errors allow 
     );
     await waitFor(() =>
       assert.equal(
-        getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'),
+        getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
         false,
       ),
     );
@@ -254,7 +255,10 @@ test('pending submission blocks duplicate tokenization and backend errors allow 
     });
     assert.ok(await findByRole('alert'));
     await waitFor(() => assert.equal(finished, 1));
-    assert.equal(getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'), false);
+    assert.equal(
+      getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
+      false,
+    );
 
     fireEvent.submit(form);
     await waitFor(() => assert.equal(sopCalls, 2));
@@ -287,14 +291,17 @@ test('synchronous SOP errors restore the form and present a retryable error', as
     );
     await waitFor(() =>
       assert.equal(
-        getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'),
+        getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
         false,
       ),
     );
 
     assert.doesNotThrow(() => fireEvent.submit(container.querySelector('form')!));
     assert.match((await findByRole('alert')).textContent ?? '', /validação segura do cartão/);
-    assert.equal(getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'), false);
+    assert.equal(
+      getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
+      false,
+    );
   } finally {
     checkoutApi.getCieloSopAccessToken = originalGetToken;
   }
@@ -331,7 +338,7 @@ test('tokenization timeout unlocks the form and lets the guest retry', async () 
     );
     await waitFor(() =>
       assert.equal(
-        getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'),
+        getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
         false,
       ),
     );
@@ -343,7 +350,10 @@ test('tokenization timeout unlocks the form and lets the guest retry', async () 
     );
     timeout.callback?.();
     assert.match((await findByRole('alert')).textContent ?? '', /demorou mais que o esperado/);
-    assert.equal(getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'), false);
+    assert.equal(
+      getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
+      false,
+    );
 
     fireEvent.submit(container.querySelector('form')!);
     assert.equal(sopCalls, 2);
@@ -381,7 +391,7 @@ test('late tokenization callbacks after unmount do not initiate a payment', asyn
     );
     await waitFor(() =>
       assert.equal(
-        getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'),
+        getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
         false,
       ),
     );
@@ -428,7 +438,7 @@ test('SOP validation errors restore the form so the guest can submit again', asy
     );
     await waitFor(() =>
       assert.equal(
-        getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'),
+        getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
         false,
       ),
     );
@@ -437,7 +447,10 @@ test('SOP validation errors restore the form so the guest can submit again', asy
     options[0]!.onError({});
     await findByRole('alert');
     assert.match(getByRole('alert').textContent ?? '', /validar o cartão/);
-    assert.equal(getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'), false);
+    assert.equal(
+      getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
+      false,
+    );
 
     fireEvent.submit(container.querySelector('form')!);
     assert.equal(calls, 2);

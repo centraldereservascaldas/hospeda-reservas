@@ -72,6 +72,27 @@ class CieloSandboxClientsTest extends TestCase
             && $request->hasHeader('MerchantId', 'production-merchant-fixture'));
     }
 
+    public function test_production_pix_uses_cielo2_and_never_adds_a_card_fee(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureProductionFixtures();
+        config(['services.cielo.production.pix_enabled' => true]);
+        Http::fake([
+            'https://api.cieloecommerce.cielo.com.br/1/sales/' => Http::response(['Payment' => ['Status' => 12]], 201),
+        ]);
+
+        app(CieloEcommerceClient::class)->createPixPayment('pixorder123', '3001.00', 'BRL', 'Guest', 1800);
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request): bool => $request->data()['Payment'] === [
+            'Type' => 'Pix',
+            'Amount' => 300100,
+            'Currency' => 'BRL',
+            'QrCode' => ['Expiration' => 1800],
+            'Provider' => 'Cielo2',
+        ]);
+    }
+
     private function configureProductionFixtures(): void
     {
         $this->app->detectEnvironment(fn () => 'production');

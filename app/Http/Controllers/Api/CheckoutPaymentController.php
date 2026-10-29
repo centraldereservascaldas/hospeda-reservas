@@ -51,6 +51,11 @@ class CheckoutPaymentController extends Controller
                 'status' => $attempt->status,
                 'method' => $attempt->payment_method,
                 'amount' => $attempt->amount,
+                'baseAmount' => $attempt->base_amount,
+                'processingFeeAmount' => $attempt->processing_fee_amount,
+                'processingFeeRate' => $attempt->processing_fee_basis_points === null
+                    ? null
+                    : number_format($attempt->processing_fee_basis_points / 100, 2, '.', ''),
                 'currency' => $attempt->currency,
                 'expiresAt' => $attempt->expires_at?->toISOString(),
                 'paidAt' => $attempt->paid_at?->toISOString(),
@@ -107,6 +112,11 @@ class CheckoutPaymentController extends Controller
                 'status' => $attempt->status,
                 'method' => $attempt->payment_method,
                 'amount' => $attempt->amount,
+                'baseAmount' => $attempt->base_amount,
+                'processingFeeAmount' => $attempt->processing_fee_amount,
+                'processingFeeRate' => $attempt->processing_fee_basis_points === null
+                    ? null
+                    : number_format($attempt->processing_fee_basis_points / 100, 2, '.', ''),
                 'currency' => $attempt->currency,
                 'expiresAt' => $attempt->expires_at?->toISOString(),
                 'paidAt' => $attempt->paid_at?->toISOString(),

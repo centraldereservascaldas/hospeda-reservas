@@ -7,7 +7,7 @@ use Illuminate\Validation\Validator;
 
 class StoreCheckoutPaymentRequest extends FormRequest
 {
-    private const MAX_CARD_INSTALLMENTS = 1;
+    private const MAX_CARD_INSTALLMENTS = 6;
 
     public function authorize(): bool
     {

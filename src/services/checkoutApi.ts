@@ -100,6 +100,9 @@ export interface CheckoutPaymentAttemptSummary {
     | 'attention_required';
   method: 'pix' | 'card';
   amount: string;
+  baseAmount?: string | null;
+  processingFeeAmount?: string | null;
+  processingFeeRate?: string | null;
   currency: 'BRL';
   expiresAt: string | null;
   paidAt: string | null;
@@ -172,6 +175,8 @@ export interface CheckoutReadinessResponse {
   ready: boolean;
   termsAvailable: boolean;
   checkoutEnabled: boolean;
+  singlePageCheckoutEnabled?: boolean;
+  parkTicketsPreviewEnabled?: boolean;
   payment: CheckoutPaymentCapabilities;
 }
 
@@ -247,7 +252,16 @@ const isCheckoutReadinessResponse = (value: unknown): value is CheckoutReadiness
   typeof value.ready === 'boolean' &&
   typeof value.termsAvailable === 'boolean' &&
   typeof value.checkoutEnabled === 'boolean' &&
+  (value.singlePageCheckoutEnabled === undefined ||
+    typeof value.singlePageCheckoutEnabled === 'boolean') &&
+  (value.parkTicketsPreviewEnabled === undefined ||
+    typeof value.parkTicketsPreviewEnabled === 'boolean') &&
   isCheckoutPaymentCapabilities(value.payment) &&
+  (value.singlePageCheckoutEnabled !== true ||
+    (value.ready === true &&
+      ['cielo', 'cielo_sandbox'].includes(value.payment.provider) &&
+      value.payment.methods.includes('card'))) &&
+  (value.parkTicketsPreviewEnabled !== true || value.singlePageCheckoutEnabled === true) &&
   value.ready === (value.checkoutEnabled && value.termsAvailable && value.payment.enabled);
 
 const checkoutPaymentAttemptStatuses: CheckoutPaymentAttemptSummary['status'][] = [
@@ -289,6 +303,17 @@ const isCheckoutPaymentAttempt = (value: unknown): value is CheckoutPaymentAttem
     typeof value.amount !== 'string' ||
     !/^\d+(?:\.\d{2})$/.test(value.amount) ||
     Number(value.amount) <= 0 ||
+    (value.baseAmount !== undefined &&
+      value.baseAmount !== null &&
+      (typeof value.baseAmount !== 'string' || !/^\d+(?:\.\d{2})$/.test(value.baseAmount))) ||
+    (value.processingFeeAmount !== undefined &&
+      value.processingFeeAmount !== null &&
+      (typeof value.processingFeeAmount !== 'string' ||
+        !/^\d+(?:\.\d{2})$/.test(value.processingFeeAmount))) ||
+    (value.processingFeeRate !== undefined &&
+      value.processingFeeRate !== null &&
+      (typeof value.processingFeeRate !== 'string' ||
+        !/^\d{1,2}(?:\.\d{2})$/.test(value.processingFeeRate))) ||
     value.currency !== 'BRL' ||
     (value.expiresAt !== null &&
       (typeof value.expiresAt !== 'string' || !Number.isFinite(Date.parse(value.expiresAt)))) ||

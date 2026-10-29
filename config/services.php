@@ -66,6 +66,8 @@ return [
         'production' => [
             'enabled' => (bool) env('CIELO_DIRECT_PRODUCTION_ENABLED', false),
             'sop_enabled' => (bool) env('CIELO_DIRECT_PRODUCTION_SOP_ENABLED', false),
+            'pix_enabled' => (bool) env('CIELO_DIRECT_PRODUCTION_PIX_ENABLED', false),
+            'pix_qr_expiration_seconds' => (int) env('CIELO_DIRECT_PRODUCTION_PIX_EXPIRATION_SECONDS', 1800),
             'merchant_id' => env('CIELO_DIRECT_PRODUCTION_MERCHANT_ID'),
             'merchant_key' => env('CIELO_DIRECT_PRODUCTION_MERCHANT_KEY'),
             'sop_client_id' => env('CIELO_DIRECT_PRODUCTION_SOP_CLIENT_ID'),
@@ -76,6 +78,8 @@ return [
         ],
         'enabled' => (bool) env('CIELO_SANDBOX_ENABLED', false),
         'sop_enabled' => (bool) env('CIELO_SANDBOX_SOP_ENABLED', false),
+        'pix_enabled' => (bool) env('CIELO_SANDBOX_PIX_ENABLED', false),
+        'pix_qr_expiration_seconds' => (int) env('CIELO_SANDBOX_PIX_EXPIRATION_SECONDS', 1800),
         'merchant_id' => env('CIELO_SANDBOX_MERCHANT_ID'),
         'merchant_key' => env('CIELO_SANDBOX_MERCHANT_KEY'),
         'sop_client_id' => env('CIELO_SANDBOX_SOP_CLIENT_ID'),

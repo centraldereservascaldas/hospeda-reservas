@@ -12,9 +12,9 @@ const CondominiumDetailModal = React.lazy(() =>
     default: CondominiumDetailModal,
   })),
 );
-const StaysCheckoutModal = React.lazy(() =>
-  import('./booking/StaysCheckoutModal').then(({ StaysCheckoutModal }) => ({
-    default: StaysCheckoutModal,
+const CheckoutEntry = React.lazy(() =>
+  import('./booking/CheckoutEntry').then(({ CheckoutEntry }) => ({
+    default: CheckoutEntry,
   })),
 );
 const GuestAccountModal = React.lazy(() =>
@@ -111,7 +111,7 @@ export function AppOverlayLayer({
       </DeferredModal>
 
       <DeferredModal active={bookingPayload !== null}>
-        <StaysCheckoutModal
+        <CheckoutEntry
           isOpen={bookingPayload !== null}
           onClose={onCloseCheckout}
           bookingData={bookingPayload}

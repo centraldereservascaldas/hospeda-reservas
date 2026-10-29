@@ -18,8 +18,10 @@ Object.assign(globalThis, {
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 const { SinglePageCheckout } = await import('../src/components/booking/SinglePageCheckout.tsx');
+const { CheckoutEntry } = await import('../src/components/booking/CheckoutEntry.tsx');
 const originals = { ...checkoutApi };
 const originalPrice = crcnBackendApi.calculatePrice;
+const originalHostedReadiness = crcnBackendApi.getStaysCheckoutReadiness;
 const reference = 'U'.repeat(40);
 const bookingData = {
   property: STAYS_NET_APARTMENTS[0]!,
@@ -78,11 +80,15 @@ afterEach(() => {
   cleanup();
   Object.assign(checkoutApi, originals);
   crcnBackendApi.calculatePrice = originalPrice;
+  crcnBackendApi.getStaysCheckoutReadiness = originalHostedReadiness;
   delete window.bpSop_silentOrderPost;
   window.history.replaceState(null, '', '/');
 });
 
-function setup() {
+function setup(
+  parkTicketsPreviewEnabled = false,
+  checkoutPayment: CheckoutResumeResponse['payment'] = payment,
+) {
   checkoutApi.getCheckoutTerms = async () => ({
     kind: 'ready',
     data: {
@@ -92,7 +98,15 @@ function setup() {
   });
   checkoutApi.getCheckoutReadiness = async () => ({
     kind: 'ready',
-    data: { success: true, ready: true, termsAvailable: true, checkoutEnabled: true, payment },
+    data: {
+      success: true,
+      ready: true,
+      termsAvailable: true,
+      checkoutEnabled: true,
+      singlePageCheckoutEnabled: true,
+      parkTicketsPreviewEnabled,
+      payment: checkoutPayment,
+    },
   });
   return render(
     React.createElement(SinglePageCheckout, {
@@ -108,8 +122,13 @@ function setup() {
 }
 
 async function fill(view: ReturnType<typeof setup>) {
-  await waitFor(() => assert.equal(view.getByRole('checkbox').hasAttribute('disabled'), false));
-  fireEvent.click(view.getByRole('checkbox'));
+  await waitFor(() =>
+    assert.equal(
+      view.getByRole('checkbox', { name: /Li e aceito/ }).hasAttribute('disabled'),
+      false,
+    ),
+  );
+  fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
   for (const [label, value] of [
     ['Número do cartão', '4111111111111111'],
     ['Validade (MM/AAAA)', '12/2030'],
@@ -191,6 +210,90 @@ test('one submit prepares the reservation then tokenizes and pays without leavin
   assert.ok(view.getByText('SIMULATED-1'));
 });
 
+test('Pix stays on the checkout, has no surcharge and waits for authoritative confirmation', async () => {
+  const calls: string[] = [];
+  const pixPayment = {
+    ...payment,
+    methods: ['card', 'pix'] as Array<'card' | 'pix'>,
+  };
+  checkoutApi.createCheckout = async () => {
+    calls.push('reservation');
+    return {
+      success: true,
+      order,
+      payment: pixPayment,
+      idempotentReplay: false,
+      resume: {
+        reference,
+        token: 'T'.repeat(64),
+        path: `/checkout/${reference}`,
+        expiresAt: order.expiresAt!,
+      },
+    };
+  };
+  checkoutApi.getCieloSopAccessToken = async () => {
+    calls.push('unexpected-tokenization');
+    return null;
+  };
+  checkoutApi.createCheckoutPayment = async (_reference, _credentials, amount, payload) => {
+    calls.push('pix');
+    assert.equal(amount, '3001.00');
+    assert.deepEqual(
+      { paymentMethod: payload.paymentMethod, paymentMethodId: payload.paymentMethodId },
+      { paymentMethod: 'pix', paymentMethodId: 'pix' },
+    );
+    return {
+      kind: 'response',
+      success: true,
+      code: 'payment_pending',
+      message: 'Pix gerado.',
+      replayed: false,
+      payment: null,
+    };
+  };
+  checkoutApi.resumeCheckout = async () => ({
+    kind: 'ready',
+    data: {
+      success: true,
+      order: { ...order, status: 'pagamento_pendente', paymentStatus: 'pending' },
+      confirmation: null,
+      payment: {
+        ...pixPayment,
+        attempt: {
+          status: 'pending',
+          method: 'pix',
+          amount: '3001.00',
+          baseAmount: '3001.00',
+          processingFeeAmount: '0.00',
+          processingFeeRate: '0.00',
+          currency: 'BRL',
+          expiresAt: order.expiresAt,
+          paidAt: null,
+          pix: {
+            copyPaste: '00020101021226890014br.gov.bcb.pix',
+            qrCodeBase64:
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          },
+        },
+      },
+    },
+  });
+
+  const view = setup(false, pixPayment);
+  await waitFor(() =>
+    assert.equal(view.getByRole('button', { name: 'Pix, aprovação rápida' }).hasAttribute('disabled'), false),
+  );
+  fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
+  fireEvent.submit(view.container.querySelector('form')!);
+
+  await waitFor(() => assert.ok(view.getByText('Pix gerado · aguardando pagamento')));
+  assert.deepEqual(calls, ['reservation', 'pix']);
+  assert.equal(window.location.pathname, `/checkout/${reference}`);
+  assert.ok(view.getByLabelText('Código Pix copia e cola'));
+  assert.ok(view.getByText(/só será confirmada após a consulta segura do pagamento/i));
+});
+
 test('a changed quote requires fresh consent and never starts Cielo', async () => {
   let tokens = 0;
   checkoutApi.createCheckout = async () => ({
@@ -210,10 +313,13 @@ test('a changed quote requires fresh consent and never starts Cielo', async () =
   await waitFor(() =>
     assert.match(view.getByRole('alert').textContent!, /preço ou a disponibilidade mudou/),
   );
-  assert.equal((view.getByRole('checkbox') as HTMLInputElement).checked, false);
+  assert.equal(
+    (view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement).checked,
+    false,
+  );
   assert.equal(tokens, 0);
   assert.equal(window.location.pathname, '/');
-  assert.match(view.getByRole('button', { name: /Confirmar e pagar/ }).textContent!, /3.200/);
+  assert.match(view.getByRole('button', { name: /Confirmar e pagar/ }).textContent!, /3.403,90/);
 });
 
 test('a recovered paid order is displayed without tokenization or another payment', async () => {
@@ -259,14 +365,21 @@ test('park ticket preview updates quantities, dates and totals while blocking al
     reservations++;
     return null;
   };
-  const view = setup();
+  const view = setup(true);
   await fill(view);
-  fireEvent.click(view.getByText('Hot Park').closest('summary')!);
-  fireEvent.click(view.getByRole('button', { name: 'Adicionar adulto — Hot Park' }));
+  const bump = view.getByRole('checkbox', {
+    name: /Sim, quero adicionar ingressos/,
+  }) as HTMLInputElement;
+  assert.equal(bump.checked, false);
+  assert.equal(view.queryByText('Total da simulação'), null);
+  fireEvent.click(bump);
   fireEvent.click(view.getByRole('button', { name: 'Adicionar adulto — Hot Park' }));
   fireEvent.click(view.getByRole('button', { name: 'Adicionar infantil — Hot Park' }));
   assert.equal(view.getByLabelText('Adulto — Hot Park').textContent, '2');
-  assert.equal((view.getByRole('checkbox') as HTMLInputElement).checked, false);
+  assert.equal(
+    (view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement).checked,
+    false,
+  );
   assert.equal(
     view
       .getByRole('button', { name: 'Compra com ingressos em demonstração' })
@@ -274,7 +387,7 @@ test('park ticket preview updates quantities, dates and totals while blocking al
     true,
   );
   const summary = view.getByRole('complementary', { name: 'Resumo da compra' });
-  assert.match(summary.textContent!, /3\.321,00/);
+  assert.match(summary.textContent!, /3\.512,22/);
   fireEvent.change(view.getByLabelText('Data da visita · Hot Park'), {
     target: { value: '2026-11-12' },
   });
@@ -282,13 +395,167 @@ test('park ticket preview updates quantities, dates and totals while blocking al
   fireEvent.submit(view.container.querySelector('form')!);
   assert.equal(reservations, 0);
   fireEvent.click(view.getByRole('button', { name: 'Remover adulto — Hot Park' }));
-  assert.match(summary.textContent!, /3\.201,00/);
+  assert.match(summary.textContent!, /3\.392,22/);
   fireEvent.click(view.getByRole('button', { name: 'Remover ingressos deste parque' }));
+  assert.equal(bump.checked, false);
   assert.equal(view.queryByText('Total da simulação'), null);
-  assert.match(summary.textContent!, /3\.001,00/);
+  assert.match(summary.textContent!, /3\.192,22/);
+  fireEvent.click(bump);
+  assert.match(summary.textContent!, /3\.312,22/);
+  fireEvent.click(bump);
+  assert.equal(view.queryByText('Total da simulação'), null);
+  assert.match(summary.textContent!, /3\.192,22/);
   assert.equal(reservations, 0);
   assert.equal(
     view.getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
     true,
   );
+});
+
+test('park preview is absent by default while own-checkout payment stays available', async () => {
+  const view = setup();
+  await fill(view);
+  assert.equal(view.queryByRole('checkbox', { name: /Sim, quero adicionar ingressos/ }), null);
+  assert.equal(
+    view.getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
+    false,
+  );
+});
+
+for (const enabled of [false, undefined, true]) {
+  test(`checkout entry selects only an explicitly enabled pilot: ${String(enabled)}`, async () => {
+    let orders = 0;
+    checkoutApi.createCheckout = async () => {
+      orders++;
+      return null;
+    };
+    checkoutApi.getCheckoutReadiness = async () => ({
+      kind: 'ready',
+      data: {
+        success: true,
+        ready: true,
+        checkoutEnabled: true,
+        termsAvailable: true,
+        singlePageCheckoutEnabled: enabled,
+        parkTicketsPreviewEnabled: false,
+        payment,
+      },
+    });
+    checkoutApi.getCheckoutTerms = async () => ({
+      kind: 'ready',
+      data: {
+        success: true,
+        terms: { version: 'v1', snapshot: { Cancelamento: 'Condições de teste.' } },
+      },
+    });
+    crcnBackendApi.getStaysCheckoutReadiness = async () => ({
+      ready: true,
+      code: null,
+      message: 'Checkout Stays disponível.',
+    });
+    const view = render(
+      React.createElement(CheckoutEntry, {
+        isOpen: true,
+        bookingData,
+        currency: 'BRL',
+        guestPrefill: {
+          fullName: 'Sandbox Guest',
+          email: 'guest@example.test',
+          phone: '11999999999',
+        },
+        onClose() {},
+      }),
+    );
+    await waitFor(
+      () =>
+        assert.ok(
+          view.getByRole('heading', {
+            name: enabled === true ? 'Confirme e pague' : 'Resumo da reserva',
+          }),
+        ),
+      { timeout: 10000 },
+    );
+    assert.equal(view.queryByRole('checkbox', { name: /Sim, quero adicionar ingressos/ }), null);
+    assert.equal(orders, 0);
+  });
+}
+
+test('readiness failure falls back to Stays without creating an order', async () => {
+  checkoutApi.getCheckoutReadiness = async () => {
+    throw new Error('Network unavailable');
+  };
+  crcnBackendApi.getStaysCheckoutReadiness = async () => ({
+    ready: true,
+    code: null,
+    message: 'Checkout Stays disponível.',
+  });
+  const view = render(
+    React.createElement(CheckoutEntry, {
+      isOpen: true,
+      bookingData,
+      currency: 'BRL',
+      guestPrefill: { fullName: '', email: '', phone: '' },
+      onClose() {},
+    }),
+  );
+  await waitFor(() => assert.ok(view.getByRole('button', { name: 'Continuar na Stays' })), {
+    timeout: 10000,
+  });
+});
+
+test('a slow readiness response cannot replace Stays after the timeout', async () => {
+  const originalTimeout = window.setTimeout;
+  let expire: (() => void) | undefined;
+  let finish:
+    ((value: Awaited<ReturnType<typeof checkoutApi.getCheckoutReadiness>>) => void) | undefined;
+  window.setTimeout = ((callback: () => void, delay?: number) => {
+    if (delay === 2500) {
+      expire = callback;
+      return 12345;
+    }
+    return originalTimeout(callback, delay);
+  }) as typeof window.setTimeout;
+  checkoutApi.getCheckoutReadiness = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  crcnBackendApi.getStaysCheckoutReadiness = async () => ({
+    ready: true,
+    code: null,
+    message: 'Checkout Stays disponível.',
+  });
+  try {
+    const view = render(
+      React.createElement(CheckoutEntry, {
+        isOpen: true,
+        bookingData,
+        currency: 'BRL',
+        guestPrefill: { fullName: '', email: '', phone: '' },
+        onClose() {},
+      }),
+    );
+    const { act } = await import('@testing-library/react');
+    await act(async () => {
+      expire!();
+    });
+    await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Resumo da reserva' })), {
+      timeout: 10000,
+    });
+    await act(async () => {
+      finish!({
+        kind: 'ready',
+        data: {
+          success: true,
+          ready: true,
+          checkoutEnabled: true,
+          termsAvailable: true,
+          singlePageCheckoutEnabled: true,
+          payment,
+        },
+      });
+    });
+    assert.equal(view.queryByRole('heading', { name: 'Confirme e pague' }), null);
+  } finally {
+    window.setTimeout = originalTimeout;
+  }
 });
