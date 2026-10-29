@@ -18,6 +18,64 @@ class CieloWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_production_webhook_remains_disabled_without_explicit_authorization(): void
+    {
+        Http::preventStrayRequests();
+        Queue::fake([ReconcileCieloPaymentWebhook::class]);
+        $this->app->detectEnvironment(fn () => 'production');
+        config(['services.cielo.direct_environment' => 'production', 'services.cielo.production.enabled' => false]);
+        $this->postJson('/api/webhooks/cielo', $this->notification())->assertStatus(503);
+        $this->assertDatabaseCount('direct_booking_payment_webhooks', 0);
+        Queue::assertNothingPushed();
+        Http::assertNothingSent();
+    }
+
+    public function test_production_notification_is_not_queried_using_sandbox_configuration(): void
+    {
+        Http::preventStrayRequests();
+        $webhook = DirectBookingPaymentWebhook::query()->create([
+            'event_key' => 'production-event-fixture',
+            'gateway_provider' => 'cielo',
+            'gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174040',
+            'status' => 'queued', 'received_at' => now(),
+        ]);
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
+        $this->assertSame('failed', $webhook->refresh()->status);
+        $this->assertSame('gateway_environment_mismatch', $webhook->error_code);
+        Http::assertNothingSent();
+    }
+
+    public function test_processed_notification_keeps_its_terminal_state_after_an_environment_change(): void
+    {
+        Http::preventStrayRequests();
+        $webhook = DirectBookingPaymentWebhook::query()->create([
+            'event_key' => 'processed-production-event-fixture', 'gateway_provider' => 'cielo',
+            'gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174040', 'status' => 'processed', 'received_at' => now(),
+        ]);
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
+        $this->assertSame('processed', $webhook->refresh()->status);
+        Http::assertNothingSent();
+    }
+
+    public function test_production_webhook_keeps_its_own_provider_identity_and_queue(): void
+    {
+        Http::preventStrayRequests();
+        Queue::fake([ReconcileCieloPaymentWebhook::class]);
+        $this->app->detectEnvironment(fn () => 'production');
+        config([
+            'services.cielo.direct_environment' => 'production',
+            'services.cielo.production.enabled' => true,
+            'direct-booking.live_payments_enabled' => true,
+            'services.cielo.production.webhook_header_name' => 'X-Cielo-Production-Secret',
+            'services.cielo.production.webhook_header_value' => 'production-header-fixture',
+            'services.cielo.production.webhook_queue_connection' => 'database',
+        ]);
+        $this->postJson('/api/webhooks/cielo', $this->notification(), ['X-Cielo-Production-Secret' => 'production-header-fixture'])->assertAccepted();
+        $this->assertDatabaseHas('direct_booking_payment_webhooks', ['gateway_provider' => 'cielo']);
+        Queue::assertPushed(ReconcileCieloPaymentWebhook::class, 1);
+        Http::assertNothingSent();
+    }
+
     public function test_invalid_notification_authentication_is_rejected_without_persisting_or_dispatching(): void
     {
         $this->configureWebhook();

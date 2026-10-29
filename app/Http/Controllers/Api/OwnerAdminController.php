@@ -16,6 +16,7 @@ use App\Models\DirectBookingStaysAction;
 use App\Models\OwnerAccess;
 use App\Services\DirectStaysReservationMatcher;
 use App\Services\MoneyAmount;
+use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
 use App\Services\SupabaseAuthClient;
@@ -183,7 +184,7 @@ class OwnerAdminController extends Controller
     public function retryDirectBookingWebhook(string $webhookId): JsonResponse
     {
         $webhook = DirectBookingPaymentWebhook::query()->findOrFail($webhookId);
-        if (! in_array($webhook->gateway_provider, ['mercadopago', 'cielo_sandbox'], true)) {
+        if (! in_array($webhook->gateway_provider, ['mercadopago', 'cielo_sandbox', 'cielo'], true)) {
             return response()->json([
                 'success' => false,
                 'code' => 'unknown_gateway_provider',
@@ -191,8 +192,8 @@ class OwnerAdminController extends Controller
             ], 409);
         }
         $queueConnection = (string) config(
-            $webhook->gateway_provider === 'cielo_sandbox'
-                ? 'services.cielo.webhook_queue_connection'
+            CieloDirectConfiguration::isProvider($webhook->gateway_provider)
+                ? ($webhook->gateway_provider === 'cielo' ? 'services.cielo.production.webhook_queue_connection' : 'services.cielo.webhook_queue_connection')
                 : 'services.mercadopago.webhook_queue_connection',
             'database',
         );
@@ -224,7 +225,7 @@ class OwnerAdminController extends Controller
                     'error_code' => null,
                 ])->save();
 
-                if ($webhook->gateway_provider === 'cielo_sandbox') {
+                if (CieloDirectConfiguration::isProvider($webhook->gateway_provider)) {
                     ReconcileCieloPaymentWebhook::dispatch($webhook->id)->onConnection($queueConnection)->afterCommit();
                 } else {
                     ReconcileMercadoPagoPayment::dispatch($webhook->id)->onConnection($queueConnection)->afterCommit();

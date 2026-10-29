@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\DirectBookingOrderStatus;
 use App\Http\Requests\StoreCheckoutRequest;
 use App\Models\DirectBookingOrder;
+use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -169,7 +170,7 @@ class DirectCheckoutService
                     'origin' => 'website',
                     'gateway_provider' => $this->configuredPaymentProvider(),
                     'gateway_merchant_id' => match ($this->configuredPaymentProvider()) {
-                        'cielo_sandbox' => config('services.cielo.merchant_id'),
+                        'cielo_sandbox', 'cielo' => app(CieloEcommerceClient::class)->merchantId(),
                         'cielo_checkout' => config('services.cielo.checkout_merchant_id'),
                         default => null,
                     },
@@ -201,7 +202,7 @@ class DirectCheckoutService
     private function configuredPaymentProvider(): string
     {
         $provider = config('direct-booking.payment_provider', 'mercadopago');
-        if (! in_array($provider, ['mercadopago', 'cielo_sandbox', 'cielo_checkout'], true)) {
+        if (! in_array($provider, ['mercadopago', 'cielo_sandbox', 'cielo', 'cielo_checkout'], true)) {
             throw new \RuntimeException('The configured direct booking payment provider is invalid.');
         }
 

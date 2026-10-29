@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\DirectBookingOrder;
+use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,7 @@ class CieloSopController extends Controller
         if (! in_array($order->status, [DirectBookingOrderStatus::PreReservado, DirectBookingOrderStatus::PagamentoRecusado], true)
             || $order->expires_at === null
             || $order->expires_at->isPast()
-            || $order->gateway_provider !== 'cielo_sandbox'
+            || ! CieloDirectConfiguration::isProvider($order->gateway_provider)
             || ! in_array('card', $payments->availableMethods($order), true)) {
             return response()->json(['success' => false, 'code' => 'checkout_not_payable'], 409)
                 ->header('Cache-Control', 'no-store, private');
@@ -44,7 +45,7 @@ class CieloSopController extends Controller
         try {
             return response()->json([
                 'success' => true,
-                'environment' => 'sandbox',
+                'environment' => $payments->cieloEnvironment(),
                 'accessToken' => $payments->cieloSopAccessToken($order),
             ])
                 ->header('Cache-Control', 'no-store, private');

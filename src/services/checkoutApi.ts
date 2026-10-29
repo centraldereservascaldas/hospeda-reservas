@@ -159,11 +159,11 @@ export interface CheckoutPaymentCapabilities {
   enabled: boolean;
   methods: Array<'pix' | 'card'>;
   publicKey: string | null;
-  provider: 'mercadopago' | 'cielo_sandbox' | 'cielo_hosted' | 'unavailable';
+  provider: 'mercadopago' | 'cielo_sandbox' | 'cielo' | 'cielo_hosted' | 'unavailable';
 }
 
 export interface CieloSopAccessToken {
-  environment: 'sandbox';
+  environment: 'sandbox' | 'production';
   accessToken: string;
 }
 
@@ -214,6 +214,7 @@ const isCheckoutPaymentCapabilities = (value: unknown): value is CheckoutPayment
   typeof value.enabled === 'boolean' &&
   (value.provider === 'mercadopago' ||
     value.provider === 'cielo_sandbox' ||
+    value.provider === 'cielo' ||
     value.provider === 'cielo_hosted' ||
     value.provider === 'unavailable') &&
   Array.isArray(value.methods) &&
@@ -228,12 +229,14 @@ const isCheckoutPaymentCapabilities = (value: unknown): value is CheckoutPayment
     : value.publicKey === null &&
       (value.provider === 'cielo_hosted'
         ? value.methods.length === 1 && value.methods[0] === 'card'
-        : !value.methods.includes('card') || value.provider === 'cielo_sandbox'));
+        : !value.methods.includes('card') ||
+          value.provider === 'cielo_sandbox' ||
+          value.provider === 'cielo'));
 
 const isCieloSopAccessToken = (value: unknown): value is CieloSopAccessToken =>
   isRecord(value) &&
   value.success === true &&
-  value.environment === 'sandbox' &&
+  (value.environment === 'sandbox' || value.environment === 'production') &&
   typeof value.accessToken === 'string' &&
   value.accessToken.trim() !== '' &&
   value.accessToken.length <= 4096;

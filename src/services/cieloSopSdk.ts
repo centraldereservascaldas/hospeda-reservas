@@ -2,9 +2,11 @@ export interface CieloSopResponse {
   PaymentToken?: string;
 }
 
+export type CieloSopEnvironment = 'sandbox' | 'production';
+
 export interface CieloSopOptions {
   accessToken: string;
-  environment: 'sandbox';
+  environment: CieloSopEnvironment;
   language: 'pt';
   enableTokenize: false;
   onSuccess: (response: CieloSopResponse) => void;
@@ -23,7 +25,7 @@ declare global {
 let cieloSopScriptPromise: Promise<void> | null = null;
 const scriptTimeoutMs = 15_000;
 
-export function loadCieloSopSdk(): Promise<void> {
+export function loadCieloSopSdk(environment: CieloSopEnvironment = 'sandbox'): Promise<void> {
   if (window.bpSop_silentOrderPost) return Promise.resolve();
   if (cieloSopScriptPromise) return cieloSopScriptPromise;
 
@@ -64,7 +66,9 @@ export function loadCieloSopSdk(): Promise<void> {
 
     if (!existingScript) {
       script.src =
-        'https://transactionsandbox.pagador.com.br/post/Scripts/silentorderpost-1.0.min.js';
+        environment === 'production'
+          ? 'https://www.pagador.com.br/post/Scripts/silentorderpost-1.0.min.js'
+          : 'https://transactionsandbox.pagador.com.br/post/Scripts/silentorderpost-1.0.min.js';
       script.async = true;
       script.dataset.cieloSop = 'true';
       document.head.append(script);

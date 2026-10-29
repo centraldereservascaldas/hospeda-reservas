@@ -7,34 +7,30 @@ use RuntimeException;
 
 class CieloSilentOrderPostClient
 {
-    private const AUTH_URL = 'https://authsandbox.braspag.com.br/oauth2/token';
-
-    private const ACCESS_TOKEN_URL = 'https://transactionsandbox.pagador.com.br/post/api/public/v2/accesstoken';
-
-    public function __construct(private readonly CieloEcommerceClient $ecommerce) {}
+    public function __construct(private readonly CieloEcommerceClient $ecommerce, private readonly CieloDirectConfiguration $configuration) {}
 
     public function isConfigured(): bool
     {
-        return (bool) config('services.cielo.sop_enabled', false)
+        return (bool) $this->configuration->value('sop_enabled')
             && $this->ecommerce->isConfigured()
-            && $this->configuredValue('services.cielo.sop_client_id') !== null
-            && $this->configuredValue('services.cielo.sop_client_secret') !== null;
+            && $this->configuredValue('sop_client_id') !== null
+            && $this->configuredValue('sop_client_secret') !== null;
     }
 
     public function createBrowserAccessToken(): string
     {
         if (! $this->isConfigured()) {
-            throw new RuntimeException('Cielo Silent Order Post sandbox is not enabled.');
+            throw new RuntimeException('Cielo Silent Order Post is not enabled for this environment.');
         }
 
-        $clientId = $this->configuredValue('services.cielo.sop_client_id');
-        $clientSecret = $this->configuredValue('services.cielo.sop_client_secret');
+        $clientId = $this->configuredValue('sop_client_id');
+        $clientSecret = $this->configuredValue('sop_client_secret');
         $oauthResponse = Http::asForm()
             ->acceptJson()
             ->withBasicAuth((string) $clientId, (string) $clientSecret)
             ->connectTimeout(3)
             ->timeout(10)
-            ->post(self::AUTH_URL, ['grant_type' => 'client_credentials'])
+            ->post($this->configuration->endpoint('oauth'), ['grant_type' => 'client_credentials'])
             ->throw()
             ->json();
 
@@ -48,7 +44,7 @@ class CieloSilentOrderPostClient
             ->withHeaders(['MerchantId' => $this->ecommerce->merchantId()])
             ->connectTimeout(3)
             ->timeout(10)
-            ->post(self::ACCESS_TOKEN_URL)
+            ->post($this->configuration->endpoint('sop'))
             ->throw()
             ->json();
 
@@ -62,7 +58,7 @@ class CieloSilentOrderPostClient
 
     private function configuredValue(string $key): ?string
     {
-        $value = config($key);
+        $value = $this->configuration->value($key);
 
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }

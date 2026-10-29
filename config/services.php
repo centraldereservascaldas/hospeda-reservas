@@ -62,6 +62,18 @@ return [
     ],
 
     'cielo' => [
+        'direct_environment' => env('CIELO_DIRECT_ENVIRONMENT', 'sandbox'),
+        'production' => [
+            'enabled' => (bool) env('CIELO_DIRECT_PRODUCTION_ENABLED', false),
+            'sop_enabled' => (bool) env('CIELO_DIRECT_PRODUCTION_SOP_ENABLED', false),
+            'merchant_id' => env('CIELO_DIRECT_PRODUCTION_MERCHANT_ID'),
+            'merchant_key' => env('CIELO_DIRECT_PRODUCTION_MERCHANT_KEY'),
+            'sop_client_id' => env('CIELO_DIRECT_PRODUCTION_SOP_CLIENT_ID'),
+            'sop_client_secret' => env('CIELO_DIRECT_PRODUCTION_SOP_CLIENT_SECRET'),
+            'webhook_header_name' => env('CIELO_DIRECT_PRODUCTION_WEBHOOK_HEADER_NAME'),
+            'webhook_header_value' => env('CIELO_DIRECT_PRODUCTION_WEBHOOK_HEADER_VALUE'),
+            'webhook_queue_connection' => env('CIELO_DIRECT_PRODUCTION_WEBHOOK_QUEUE_CONNECTION', 'database'),
+        ],
         'enabled' => (bool) env('CIELO_SANDBOX_ENABLED', false),
         'sop_enabled' => (bool) env('CIELO_SANDBOX_SOP_ENABLED', false),
         'merchant_id' => env('CIELO_SANDBOX_MERCHANT_ID'),

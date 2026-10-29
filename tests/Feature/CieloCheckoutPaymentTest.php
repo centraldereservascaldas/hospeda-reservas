@@ -34,6 +34,33 @@ class CieloCheckoutPaymentTest extends TestCase
         $this->assertSame('mercadopago', $payments->provider($mercadoPagoOrder));
     }
 
+    public function test_sandbox_order_cannot_be_charged_with_production_configuration(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        $order = $this->createPayableOrder();
+        $this->app->detectEnvironment(fn () => 'production');
+        config([
+            'services.cielo.direct_environment' => 'production',
+            'services.cielo.production.enabled' => true,
+            'services.cielo.production.sop_enabled' => true,
+            'services.cielo.production.merchant_id' => 'cielo-merchant-sentinel',
+            'services.cielo.production.merchant_key' => 'production-key-fixture',
+            'services.cielo.production.sop_client_id' => 'production-client-fixture',
+            'services.cielo.production.sop_client_secret' => 'production-secret-fixture',
+            'direct-booking.live_payments_enabled' => true,
+            'direct-booking.payment_provider' => 'cielo',
+        ]);
+
+        $this->assertSame([], app(DirectCheckoutPaymentService::class)->availableMethods($order));
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', $this->cardPayload(), [
+            'Idempotency-Key' => 'sandbox-production-boundary-001',
+            'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertStatus(503)->assertJsonPath('code', 'payments_disabled');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+        Http::assertNothingSent();
+    }
+
     public function test_authorized_status_remains_pending_and_captured_status_approves_only_matching_payment(): void
     {
         Http::preventStrayRequests();

@@ -39,3 +39,18 @@ test('SOP script timeout rejects and removes its script so another load can retr
     window.setTimeout = originalSetTimeout;
   }
 });
+
+test('production SOP loads the production script and waits for the supported API', async () => {
+  const pending = loadCieloSopSdk('production');
+  const script = document.querySelector<HTMLScriptElement>('script[data-cielo-sop="true"]');
+  assert.ok(script);
+  assert.equal(script.src, 'https://www.pagador.com.br/post/Scripts/silentorderpost-1.0.min.js');
+  window.bpSop_silentOrderPost = () => {};
+  try {
+    script.dispatchEvent(new dom.window.Event('load'));
+    await pending;
+  } finally {
+    delete window.bpSop_silentOrderPost;
+    script.remove();
+  }
+});
