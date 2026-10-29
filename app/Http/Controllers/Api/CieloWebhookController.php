@@ -24,6 +24,9 @@ class CieloWebhookController extends Controller
         $headerConfigured = is_string($headerName) && trim($headerName) !== ''
             && is_string($headerValue) && trim($headerValue) !== '';
         $headerConfigurationInvalid = ($headerName !== null || $headerValue !== null) && ! $headerConfigured;
+        if ($configuration->environment() === 'production' && ! $headerConfigured) {
+            return response()->json(['success' => false, 'code' => 'cielo_webhook_secret_required'], 503);
+        }
         if ($headerConfigurationInvalid || ($headerConfigured
             && ! hash_equals($headerValue, (string) $request->header($headerName, '')))) {
             return response()->json(['success' => false, 'code' => 'invalid_notification'], 401);

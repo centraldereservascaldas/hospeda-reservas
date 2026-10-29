@@ -116,10 +116,14 @@ class CheckDirectBookingReadiness extends Command
                     'CIELO_DIRECT_ENVIRONMENT' => $configuration->environment() === 'production',
                     'CIELO_DIRECT_PRODUCTION_ENABLED' => $configuration->isAllowed(),
                     'CIELO_DIRECT_PRODUCTION_SOP_ENABLED' => (bool) $configuration->value('sop_enabled'),
+                    'CIELO_DIRECT_PRODUCTION_PIX_ENABLED' => (bool) $configuration->value('pix_enabled'),
+                    'CIELO_DIRECT_PRODUCTION_PIX_EXPIRATION_SECONDS' => $this->isValidPixExpiration($configuration->value('pix_qr_expiration_seconds')),
                     'CIELO_DIRECT_PRODUCTION_MERCHANT_ID' => $this->isConfiguredString($configuration->value('merchant_id')),
                     'CIELO_DIRECT_PRODUCTION_MERCHANT_KEY' => $this->isConfiguredString($configuration->value('merchant_key')),
                     'CIELO_DIRECT_PRODUCTION_SOP_CLIENT_ID' => $this->isConfiguredString($configuration->value('sop_client_id')),
                     'CIELO_DIRECT_PRODUCTION_SOP_CLIENT_SECRET' => $this->isConfiguredString($configuration->value('sop_client_secret')),
+                    'CIELO_DIRECT_PRODUCTION_WEBHOOK_HEADER_NAME' => $this->isConfiguredString($configuration->value('webhook_header_name')),
+                    'CIELO_DIRECT_PRODUCTION_WEBHOOK_HEADER_VALUE' => $this->isConfiguredString($configuration->value('webhook_header_value')),
                     'CIELO_DIRECT_PRODUCTION_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady($configuration->value('webhook_queue_connection')),
                 ];
             }
@@ -143,6 +147,13 @@ class CheckDirectBookingReadiness extends Command
         }
 
         return $checks;
+    }
+
+    private function isValidPixExpiration(mixed $value): bool
+    {
+        $seconds = filter_var($value, FILTER_VALIDATE_INT);
+
+        return $seconds !== false && $seconds >= 60 && $seconds <= 86400;
     }
 
     private function isConfiguredString(mixed $value): bool

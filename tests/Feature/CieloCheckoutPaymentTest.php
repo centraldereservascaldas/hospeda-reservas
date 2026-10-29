@@ -98,11 +98,148 @@ class CieloCheckoutPaymentTest extends TestCase
         $this->assertSame('approved', $attempt->status);
         $this->assertSame(DirectBookingOrderStatus::PagoEmConfirmacao, $capturedOrder->refresh()->status);
         $this->assertSame('approved', $capturedOrder->payment_status);
-        Http::assertSent(fn (ClientRequest $request): bool => $request->data()['Payment']['Amount'] === 125050
+        Http::assertSent(fn (ClientRequest $request): bool => $request->data()['Payment']['Amount'] === 133018
             && $request->data()['Payment']['Currency'] === 'BRL'
             && $request->data()['Payment']['Type'] === 'CreditCard'
+            && $request->data()['Payment']['Installments'] === 1
+            && $request->data()['Payment']['Interest'] === 'ByMerchant'
             && isset($request->data()['Payment']['CreditCard']['PaymentToken'])
         );
+    }
+
+    public function test_card_payment_accepts_six_installments_without_changing_the_order_total(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)
+            ->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        Http::fake(['https://apisandbox.cieloecommerce.cielo.com.br/1/sales/' => function (ClientRequest $request) {
+            return Http::response($this->cieloPayment(
+                '123e4567-e89b-12d3-a456-426614174060',
+                $request['MerchantOrderId'],
+                2,
+                $request['Payment']['Amount'],
+            ), 201);
+        }]);
+
+        $payload = [...$this->cardPayload(), 'installments' => 6];
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', $payload, [
+            'Idempotency-Key' => 'checkout-cielo-six-installments-0001',
+            'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertCreated()->assertJsonPath('payment.amount', '1525.00');
+
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        $this->assertSame(6, $attempt->installments);
+        $this->assertSame('1250.50', $attempt->base_amount);
+        $this->assertSame('274.50', $attempt->processing_fee_amount);
+        $this->assertSame(1800, $attempt->processing_fee_basis_points);
+        $this->assertSame('1525.00', $attempt->amount);
+        Http::assertSent(fn (ClientRequest $request): bool => $request->data()['Payment']['Installments'] === 6
+            && $request->data()['Payment']['Interest'] === 'ByMerchant'
+            && $request->data()['Payment']['Amount'] === 152500);
+    }
+
+    public function test_card_payment_rejects_more_than_six_installments_before_contacting_cielo(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        $order = $this->createPayableOrder();
+
+        $payload = [...$this->cardPayload(), 'installments' => 7];
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', $payload, [
+            'Idempotency-Key' => 'checkout-cielo-too-many-installments-0001',
+            'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertUnprocessable()->assertJsonValidationErrors('installments');
+
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_pix_stays_pending_without_fee_and_only_authoritative_lookup_approves_it(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['services.cielo.pix_enabled' => true, 'services.cielo.pix_qr_expiration_seconds' => 1800]);
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)
+            ->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        $paymentId = '123e4567-e89b-12d3-a456-426614174080';
+        Http::fake(function (ClientRequest $request) use ($paymentId): mixed {
+            if ($request->method() === 'POST') {
+                return Http::response($this->cieloPixPayment(
+                    $paymentId,
+                    $request['MerchantOrderId'],
+                    12,
+                    true,
+                ), 201);
+            }
+
+            return Http::response($this->cieloPixPayment(
+                $paymentId,
+                DirectBookingPaymentAttempt::query()->sole()->merchant_order_id,
+                2,
+                false,
+            ));
+        });
+
+        $response = $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            'paymentMethod' => 'pix',
+            'paymentMethodId' => 'pix',
+        ], [
+            'Idempotency-Key' => 'checkout-cielo-pix-pending-0001',
+            'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertCreated()
+            ->assertJsonPath('payment.status', 'pending')
+            ->assertJsonPath('payment.amount', '1250.50')
+            ->assertJsonPath('payment.processingFeeAmount', '0.00');
+
+        $this->assertNotEmpty($response->json('payment.pix.copyPaste'));
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        $this->assertSame('pix', $attempt->payment_method);
+        $this->assertSame(0, $attempt->processing_fee_basis_points);
+        $this->assertSame(DirectBookingOrderStatus::PagamentoPendente, $order->refresh()->status);
+        Http::assertSent(fn (ClientRequest $request): bool => $request->method() === 'POST'
+            && $request->data()['Payment']['Type'] === 'Pix'
+            && $request->data()['Payment']['Amount'] === 125050
+            && ! isset($request->data()['Payment']['Provider']));
+
+        $result = app(DirectCheckoutPaymentService::class)->reconcileCieloPaymentId($paymentId);
+        $this->assertSame('approved', $result['attempt']?->status);
+        $this->assertSame(DirectBookingOrderStatus::PagoEmConfirmacao, $order->refresh()->status);
+        $this->assertNull($attempt->refresh()->pix_copy_paste);
+        $this->assertNull($attempt->pix_qr_code_base64);
+    }
+
+    public function test_initial_pending_pix_without_safe_qr_instructions_fails_closed(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['services.cielo.pix_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)
+            ->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        Http::fake(['https://apisandbox.cieloecommerce.cielo.com.br/1/sales/' => function (ClientRequest $request) {
+            return Http::response($this->cieloPixPayment(
+                '123e4567-e89b-12d3-a456-426614174081',
+                $request['MerchantOrderId'],
+                12,
+                false,
+            ), 201);
+        }]);
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            'paymentMethod' => 'pix',
+            'paymentMethodId' => 'pix',
+        ], [
+            'Idempotency-Key' => 'checkout-cielo-pix-invalid-qr-0001',
+            'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertStatus(503)->assertJsonPath('code', 'gateway_payment_mismatch');
+
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        $this->assertSame('attention_required', $attempt->status);
+        $this->assertNull($attempt->pix_copy_paste);
+        $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->refresh()->status);
     }
 
     #[DataProvider('captureDateCases')]
@@ -374,7 +511,7 @@ class CieloCheckoutPaymentTest extends TestCase
         ];
     }
 
-    private function cieloPayment(string $paymentId, ?string $merchantOrderId, int $status): array
+    private function cieloPayment(string $paymentId, ?string $merchantOrderId, int $status, int $amountCents = 133018): array
     {
         return [
             'PaymentId' => $paymentId,
@@ -382,9 +519,29 @@ class CieloCheckoutPaymentTest extends TestCase
             'Payment' => [
                 'Type' => 'CreditCard',
                 'Status' => $status,
+                'Amount' => $amountCents,
+                'Currency' => 'BRL',
+                'CapturedDate' => $status === 2 ? now()->toIso8601String() : null,
+            ],
+        ];
+    }
+
+    private function cieloPixPayment(string $paymentId, ?string $merchantOrderId, int $status, bool $withQr): array
+    {
+        return [
+            'MerchantOrderId' => $merchantOrderId,
+            'Payment' => [
+                'PaymentId' => $paymentId,
+                'Type' => 'Pix',
+                'Status' => $status,
                 'Amount' => 125050,
                 'Currency' => 'BRL',
                 'CapturedDate' => $status === 2 ? now()->toIso8601String() : null,
+                'ExpirationDate' => now()->addMinutes(30)->toIso8601String(),
+                ...($withQr ? [
+                    'QrCodeString' => '00020101021226890014br.gov.bcb.pix2563pix-sandbox.example.test/fixture6304ABCD',
+                    'QrCodeBase64Image' => base64_encode("\x89PNG\r\n\x1a\nsynthetic-png-fixture"),
+                ] : []),
             ],
         ];
     }

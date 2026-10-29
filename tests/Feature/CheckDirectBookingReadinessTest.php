@@ -159,10 +159,14 @@ class CheckDirectBookingReadinessTest extends TestCase
             'services.cielo.direct_environment' => 'production',
             'services.cielo.production.enabled' => true,
             'services.cielo.production.sop_enabled' => false,
+            'services.cielo.production.pix_enabled' => true,
+            'services.cielo.production.pix_qr_expiration_seconds' => 1800,
             'services.cielo.production.merchant_id' => 'sentinel-merchant',
             'services.cielo.production.merchant_key' => 'sentinel-key',
             'services.cielo.production.sop_client_id' => 'sentinel-client',
             'services.cielo.production.sop_client_secret' => 'sentinel-secret',
+            'services.cielo.production.webhook_header_name' => 'x-cielo-secret',
+            'services.cielo.production.webhook_header_value' => 'sentinel-webhook-secret',
             'park-tickets.preview_enabled' => true,
         ]);
         $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));

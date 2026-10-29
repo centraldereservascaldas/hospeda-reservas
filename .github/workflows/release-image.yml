@@ -340,6 +340,7 @@ jobs:
           upsert_runtime_env DIRECT_BOOKING_PAYMENTS_ENABLED false
           upsert_runtime_env DIRECT_BOOKING_CONFIRMATION_ENABLED false
           upsert_runtime_env DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED false
+          upsert_runtime_env CIELO_DIRECT_PRODUCTION_PIX_ENABLED false
 
           curl --fail-with-body --silent --show-error \
             --request PATCH \

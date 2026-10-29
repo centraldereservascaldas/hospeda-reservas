@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { checkoutApi } from '../../services/checkoutApi';
 import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
 import { loadCieloSopSdk } from '../../services/cieloSopSdk';
@@ -18,6 +26,10 @@ interface CieloSopCardFormProps {
   guestPrefill?: { fullName: string; email: string };
   submitLabel?: string;
   disabled?: boolean;
+  paymentMethod?: 'card' | 'pix';
+  alternativeContent?: ReactNode;
+  onAlternativeSubmit?: () => Promise<void>;
+  onPricingChange?: (pricing: CieloCardPricing) => void;
 }
 
 export interface CieloPaymentContext {
@@ -30,6 +42,65 @@ type FormState = 'loading' | 'ready' | 'error';
 const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const paymentTokenPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const maximumCardInstallments = 6;
+
+export interface CieloCardPricing {
+  installments: number;
+  ratePercent: number;
+  baseCents: number;
+  feeCents: number;
+  totalCents: number;
+}
+
+export function getCieloCardPricing(amount: string, installments: number): CieloCardPricing {
+  const totalCents = Math.round(Number(amount) * 100);
+  if (
+    !Number.isSafeInteger(totalCents) ||
+    totalCents < 1 ||
+    !Number.isInteger(installments) ||
+    installments < 1 ||
+    installments > maximumCardInstallments
+  ) {
+    throw new Error('Valor ou parcelamento inválido.');
+  }
+  const rateBasisPoints = installments === 1 ? 599 : installments <= 3 ? 1250 : 1800;
+  const chargedCents = Math.ceil((totalCents * 10_000) / (10_000 - rateBasisPoints));
+
+  return {
+    installments,
+    ratePercent: rateBasisPoints / 100,
+    baseCents: totalCents,
+    feeCents: chargedCents - totalCents,
+    totalCents: chargedCents,
+  };
+}
+
+function getInstallmentOptions(amount: string): Array<CieloCardPricing & { label: string }> {
+  let pricing: CieloCardPricing[];
+  try {
+    pricing = Array.from({ length: maximumCardInstallments }, (_, index) =>
+      getCieloCardPricing(amount, index + 1),
+    );
+  } catch {
+    return [];
+  }
+
+  return pricing
+    .filter(({ installments, totalCents }) => Math.floor(totalCents / installments) >= 500)
+    .map((option) => {
+      const baseCents = Math.floor(option.totalCents / option.installments);
+      const remainderCents = option.totalCents % option.installments;
+      const regularInstallment = moneyFormatter.format(baseCents / 100);
+      const finalInstallment = moneyFormatter.format((baseCents + remainderCents) / 100);
+      const split = remainderCents
+        ? `${option.installments - 1}x de ${regularInstallment} + 1x de ${finalInstallment}`
+        : `${option.installments}x de ${regularInstallment}`;
+      return {
+        ...option,
+        label: `${split} · total ${moneyFormatter.format(option.totalCents / 100)}`,
+      };
+    });
+}
 
 export function CieloSopCardForm({
   reference,
@@ -43,6 +114,10 @@ export function CieloSopCardForm({
   guestPrefill,
   submitLabel,
   disabled = false,
+  paymentMethod = 'card',
+  alternativeContent,
+  onAlternativeSubmit,
+  onPricingChange,
 }: CieloSopCardFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const accessTokenRef = useRef<string | null>(null);
@@ -57,6 +132,15 @@ export function CieloSopCardForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [environment, setEnvironment] = useState<CieloSopEnvironment>('sandbox');
   const [error, setError] = useState<string | null>(null);
+  const [installments, setInstallments] = useState(1);
+  const installmentOptions = useMemo(() => getInstallmentOptions(amount), [amount]);
+  const selectedPricing =
+    installmentOptions.find((option) => option.installments === installments) ??
+    installmentOptions[0];
+
+  useEffect(() => {
+    if (selectedPricing) onPricingChange?.(selectedPricing);
+  }, [onPricingChange, selectedPricing]);
 
   useEffect(() => {
     if (previewOnly || usesPreparation) {
@@ -148,12 +232,12 @@ export function CieloSopCardForm({
         const result = await checkoutApi.createCheckoutPayment(
           context.reference,
           context.credentials,
-          context.amount,
+          selectedPricing ? (selectedPricing.totalCents / 100).toFixed(2) : context.amount,
           {
             paymentMethod: 'card',
             paymentMethodId: 'cielo_credit_card',
             token: paymentToken,
-            installments: 1,
+            installments,
             cardholderName,
             cardholderEmail,
             payerIdentification: { type: documentType, number: documentNumber },
@@ -184,7 +268,7 @@ export function CieloSopCardForm({
         }
       }
     },
-    [amount, credentials, onAttemptFinished, reference],
+    [amount, credentials, installments, onAttemptFinished, reference, selectedPricing],
   );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -192,6 +276,27 @@ export function CieloSopCardForm({
     let paymentEnvironment = environment;
     if (previewOnly || disabled) return;
     if (preparePayment && !event.currentTarget.reportValidity()) return;
+    if (paymentMethod === 'pix') {
+      if (isSubmitting || submittingRef.current || !onAlternativeSubmit) return;
+      setError(null);
+      submittingRef.current = true;
+      setIsSubmitting(true);
+      try {
+        await onAlternativeSubmit();
+      } catch (failure) {
+        if (mountedRef.current) {
+          setError(
+            failure instanceof Error
+              ? failure.message
+              : 'Não foi possível abrir o pagamento Pix. Tente novamente.',
+          );
+        }
+      } finally {
+        submittingRef.current = false;
+        if (mountedRef.current) setIsSubmitting(false);
+      }
+      return;
+    }
     if (
       formState !== 'ready' ||
       isSubmitting ||
@@ -284,7 +389,7 @@ export function CieloSopCardForm({
     <form
       ref={formRef}
       onSubmit={(event) => void handleSubmit(event)}
-      className="space-y-4"
+      className="checkout-card-payment space-y-5"
       noValidate
       aria-busy={isSubmitting}
     >
@@ -302,7 +407,7 @@ export function CieloSopCardForm({
           informações nem realiza cobranças.
         </p>
       )}
-      {!usesPreparation && (
+      {!usesPreparation && paymentMethod === 'card' && (
         <div className="rounded-xl bg-neutral-50 p-4 text-sm text-neutral-700">
           <p className="font-bold text-neutral-950">Pagamento seguro com cartão</p>
           <p className="mt-1">
@@ -311,73 +416,111 @@ export function CieloSopCardForm({
           </p>
         </div>
       )}
-      <fieldset
-        disabled={previewOnly || isSubmitting}
-        className="grid gap-4 sm:grid-cols-2 disabled:opacity-65"
-      >
-        <legend className="mb-4 text-xl font-bold text-neutral-950">Pague com cartão</legend>
-        <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
-          Número do cartão
-          <input
-            autoComplete="cc-number"
-            required
-            inputMode="numeric"
-            className="bp-sop-cardnumber min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
-          />
-        </label>
-        <label className="space-y-1 text-sm font-semibold text-neutral-800">
-          Validade (MM/AAAA)
-          <input
-            autoComplete="cc-exp"
-            required
-            inputMode="numeric"
-            placeholder="MM/AAAA"
-            className="bp-sop-cardexpirationdate min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
-          />
-        </label>
-        <label className="space-y-1 text-sm font-semibold text-neutral-800">
-          Código de segurança
-          <input
-            autoComplete="cc-csc"
-            required
-            inputMode="numeric"
-            className="bp-sop-cardcvv bp-sop-cardcvvc min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
-          />
-        </label>
-        <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
-          Nome no cartão
-          <input
-            name="cardholderName"
-            required
-            defaultValue={guestPrefill?.fullName}
-            autoComplete="cc-name"
-            className="bp-sop-cardholdername min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
-          />
-        </label>
-        <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
-          E-mail do titular
-          <input
-            name="cardholderEmail"
-            required
-            defaultValue={guestPrefill?.email}
-            type="email"
-            autoComplete="email"
-            className="min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
-          />
-        </label>
-        <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
-          CPF ou CNPJ do titular
-          <input
-            name="payerDocument"
-            required
-            minLength={11}
-            autoComplete="off"
-            inputMode="numeric"
-            maxLength={18}
-            className="min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
-          />
-        </label>
-      </fieldset>
+      {paymentMethod === 'card' ? (
+        <fieldset
+          disabled={previewOnly || isSubmitting}
+          className="grid gap-4 sm:grid-cols-2 disabled:opacity-65"
+        >
+          <legend className="mb-4 text-lg font-bold text-neutral-950">
+            {usesPreparation && (
+              <span aria-hidden="true" className="checkout-section-number mr-3">
+                3
+              </span>
+            )}
+            Pague com cartão
+          </legend>
+          <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
+            Número do cartão
+            <input
+              autoComplete="cc-number"
+              required
+              inputMode="numeric"
+              className="bp-sop-cardnumber min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-semibold text-neutral-800">
+            Validade (MM/AAAA)
+            <input
+              autoComplete="cc-exp"
+              required
+              inputMode="numeric"
+              placeholder="MM/AAAA"
+              className="bp-sop-cardexpirationdate min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-semibold text-neutral-800">
+            Código de segurança
+            <input
+              autoComplete="cc-csc"
+              required
+              inputMode="numeric"
+              className="bp-sop-cardcvv bp-sop-cardcvvc min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
+            Nome no cartão
+            <input
+              name="cardholderName"
+              required
+              defaultValue={guestPrefill?.fullName}
+              autoComplete="cc-name"
+              className="bp-sop-cardholdername min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
+            E-mail do titular
+            <input
+              name="cardholderEmail"
+              required
+              defaultValue={guestPrefill?.email}
+              type="email"
+              autoComplete="email"
+              className="min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
+            CPF ou CNPJ do titular
+            <input
+              name="payerDocument"
+              required
+              minLength={11}
+              autoComplete="off"
+              inputMode="numeric"
+              maxLength={18}
+              className="min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+            />
+          </label>
+          <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
+            Parcelamento
+            <select
+              name="installments"
+              required
+              value={installments}
+              onChange={(event) => setInstallments(Number(event.target.value))}
+              className="min-h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+            >
+              {installmentOptions.map((option) => (
+                <option key={option.installments} value={option.installments}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <span className="block text-xs font-normal leading-5 text-neutral-600">
+              Hospedagem {moneyFormatter.format(Number(amount))} + acréscimo do cartão{' '}
+              {selectedPricing
+                ? `${moneyFormatter.format(selectedPricing.feeCents / 100)} (${selectedPricing.ratePercent.toLocaleString('pt-BR')}%)`
+                : 'indisponível'}
+              . Total final{' '}
+              {selectedPricing
+                ? moneyFormatter.format(selectedPricing.totalCents / 100)
+                : 'indisponível'}
+              .
+            </span>
+          </label>
+        </fieldset>
+      ) : (
+        alternativeContent
+      )}
       {formState === 'loading' && (
         <p role="status" className="text-sm text-neutral-700">
           Preparando o formulário seguro…
@@ -396,17 +539,23 @@ export function CieloSopCardForm({
       <button
         type="submit"
         disabled={disabled || previewOnly || formState !== 'ready' || isSubmitting}
-        className="inline-flex min-h-11 w-full items-center justify-center rounded-full bg-orange-800 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
+        className="checkout-payment-submit inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-orange-800 px-5 py-4 text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {previewOnly
           ? 'Pagamento desativado na prévia'
           : isSubmitting
-            ? 'Enviando pagamento…'
-            : (submitLabel ?? 'Pagar com cartão')}
+            ? paymentMethod === 'pix'
+              ? 'Abrindo Pix seguro…'
+              : 'Enviando pagamento…'
+            : (submitLabel ??
+              (paymentMethod === 'card' && selectedPricing
+                ? `Confirmar e pagar ${moneyFormatter.format(selectedPricing.totalCents / 100)}`
+                : 'Pagar com cartão'))}
       </button>
       <p className="text-xs leading-5 text-neutral-600">
-        Os dados do cartão são enviados diretamente à Cielo para gerar um token temporário de
-        pagamento.
+        {paymentMethod === 'pix'
+          ? 'O QR Code e o código copia e cola serão apresentados na próxima etapa segura.'
+          : 'Os dados do cartão são enviados diretamente à Cielo para gerar um token temporário de pagamento.'}
       </p>
     </form>
   );

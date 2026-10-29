@@ -87,7 +87,8 @@ export function ParkTicketSelector({
   }
   return (
     <section
-      className={`rounded-2xl border-2 p-4 sm:p-5 ${totalQuantity ? 'border-orange-700 bg-orange-50/50' : 'border-dashed border-orange-300 bg-orange-50/40'}`}
+      className="checkout-order-bump liquid-glass rounded-2xl border-2 p-4 sm:p-5"
+      data-selected={totalQuantity > 0}
       aria-labelledby="park-tickets-title"
     >
       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-orange-800">

@@ -60,7 +60,7 @@ class DirectStaysPaymentService
         }
 
         $attempt = $approvedAttempts->first();
-        $attemptAmountCents = MoneyAmount::toCents($attempt->amount);
+        $attemptAmountCents = MoneyAmount::toCents($attempt->base_amount ?? $attempt->amount);
         $orderAmountCents = MoneyAmount::toCents($order->quote_total);
         if ($attempt->gateway_payment_id === null
             || $attemptAmountCents === null
@@ -130,7 +130,7 @@ class DirectStaysPaymentService
         $paidAt = $attempt->paid_at?->toDateString() ?? now()->toDateString();
         $payload = [
             'type' => $paymentType,
-            '_f_val' => (float) $attempt->amount,
+            '_f_val' => (float) ($attempt->base_amount ?? $attempt->amount),
             'status' => 'completed',
             'expirationDate' => $attempt->expires_at?->toDateString() ?? $paidAt,
             'paymentDate' => $paidAt,
@@ -294,7 +294,7 @@ class DirectStaysPaymentService
     private function matchesPayment(array $payment, DirectBookingPaymentAttempt $attempt): bool
     {
         $paymentAmountCents = MoneyAmount::toCents($payment['_f_val'] ?? null);
-        $attemptAmountCents = MoneyAmount::toCents($attempt->amount);
+        $attemptAmountCents = MoneyAmount::toCents($attempt->base_amount ?? $attempt->amount);
 
         return $paymentAmountCents !== null
             && $attemptAmountCents !== null

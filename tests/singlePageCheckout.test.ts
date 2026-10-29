@@ -85,7 +85,10 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-function setup(parkTicketsPreviewEnabled = false) {
+function setup(
+  parkTicketsPreviewEnabled = false,
+  checkoutPayment: CheckoutResumeResponse['payment'] = payment,
+) {
   checkoutApi.getCheckoutTerms = async () => ({
     kind: 'ready',
     data: {
@@ -102,7 +105,7 @@ function setup(parkTicketsPreviewEnabled = false) {
       checkoutEnabled: true,
       singlePageCheckoutEnabled: true,
       parkTicketsPreviewEnabled,
-      payment,
+      payment: checkoutPayment,
     },
   });
   return render(
@@ -207,6 +210,90 @@ test('one submit prepares the reservation then tokenizes and pays without leavin
   assert.ok(view.getByText('SIMULATED-1'));
 });
 
+test('Pix stays on the checkout, has no surcharge and waits for authoritative confirmation', async () => {
+  const calls: string[] = [];
+  const pixPayment = {
+    ...payment,
+    methods: ['card', 'pix'] as Array<'card' | 'pix'>,
+  };
+  checkoutApi.createCheckout = async () => {
+    calls.push('reservation');
+    return {
+      success: true,
+      order,
+      payment: pixPayment,
+      idempotentReplay: false,
+      resume: {
+        reference,
+        token: 'T'.repeat(64),
+        path: `/checkout/${reference}`,
+        expiresAt: order.expiresAt!,
+      },
+    };
+  };
+  checkoutApi.getCieloSopAccessToken = async () => {
+    calls.push('unexpected-tokenization');
+    return null;
+  };
+  checkoutApi.createCheckoutPayment = async (_reference, _credentials, amount, payload) => {
+    calls.push('pix');
+    assert.equal(amount, '3001.00');
+    assert.deepEqual(
+      { paymentMethod: payload.paymentMethod, paymentMethodId: payload.paymentMethodId },
+      { paymentMethod: 'pix', paymentMethodId: 'pix' },
+    );
+    return {
+      kind: 'response',
+      success: true,
+      code: 'payment_pending',
+      message: 'Pix gerado.',
+      replayed: false,
+      payment: null,
+    };
+  };
+  checkoutApi.resumeCheckout = async () => ({
+    kind: 'ready',
+    data: {
+      success: true,
+      order: { ...order, status: 'pagamento_pendente', paymentStatus: 'pending' },
+      confirmation: null,
+      payment: {
+        ...pixPayment,
+        attempt: {
+          status: 'pending',
+          method: 'pix',
+          amount: '3001.00',
+          baseAmount: '3001.00',
+          processingFeeAmount: '0.00',
+          processingFeeRate: '0.00',
+          currency: 'BRL',
+          expiresAt: order.expiresAt,
+          paidAt: null,
+          pix: {
+            copyPaste: '00020101021226890014br.gov.bcb.pix',
+            qrCodeBase64:
+              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          },
+        },
+      },
+    },
+  });
+
+  const view = setup(false, pixPayment);
+  await waitFor(() =>
+    assert.equal(view.getByRole('button', { name: 'Pix, aprovação rápida' }).hasAttribute('disabled'), false),
+  );
+  fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
+  fireEvent.submit(view.container.querySelector('form')!);
+
+  await waitFor(() => assert.ok(view.getByText('Pix gerado · aguardando pagamento')));
+  assert.deepEqual(calls, ['reservation', 'pix']);
+  assert.equal(window.location.pathname, `/checkout/${reference}`);
+  assert.ok(view.getByLabelText('Código Pix copia e cola'));
+  assert.ok(view.getByText(/só será confirmada após a consulta segura do pagamento/i));
+});
+
 test('a changed quote requires fresh consent and never starts Cielo', async () => {
   let tokens = 0;
   checkoutApi.createCheckout = async () => ({
@@ -232,7 +319,7 @@ test('a changed quote requires fresh consent and never starts Cielo', async () =
   );
   assert.equal(tokens, 0);
   assert.equal(window.location.pathname, '/');
-  assert.match(view.getByRole('button', { name: /Confirmar e pagar/ }).textContent!, /3.200/);
+  assert.match(view.getByRole('button', { name: /Confirmar e pagar/ }).textContent!, /3.403,90/);
 });
 
 test('a recovered paid order is displayed without tokenization or another payment', async () => {
@@ -300,7 +387,7 @@ test('park ticket preview updates quantities, dates and totals while blocking al
     true,
   );
   const summary = view.getByRole('complementary', { name: 'Resumo da compra' });
-  assert.match(summary.textContent!, /3\.321,00/);
+  assert.match(summary.textContent!, /3\.512,22/);
   fireEvent.change(view.getByLabelText('Data da visita · Hot Park'), {
     target: { value: '2026-11-12' },
   });
@@ -308,16 +395,16 @@ test('park ticket preview updates quantities, dates and totals while blocking al
   fireEvent.submit(view.container.querySelector('form')!);
   assert.equal(reservations, 0);
   fireEvent.click(view.getByRole('button', { name: 'Remover adulto — Hot Park' }));
-  assert.match(summary.textContent!, /3\.201,00/);
+  assert.match(summary.textContent!, /3\.392,22/);
   fireEvent.click(view.getByRole('button', { name: 'Remover ingressos deste parque' }));
   assert.equal(bump.checked, false);
   assert.equal(view.queryByText('Total da simulação'), null);
-  assert.match(summary.textContent!, /3\.001,00/);
+  assert.match(summary.textContent!, /3\.192,22/);
   fireEvent.click(bump);
-  assert.match(summary.textContent!, /3\.121,00/);
+  assert.match(summary.textContent!, /3\.312,22/);
   fireEvent.click(bump);
   assert.equal(view.queryByText('Total da simulação'), null);
-  assert.match(summary.textContent!, /3\.001,00/);
+  assert.match(summary.textContent!, /3\.192,22/);
   assert.equal(reservations, 0);
   assert.equal(
     view.getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
