@@ -152,9 +152,9 @@ jobs:
             sleep 2
           done
 
-          docker exec "$CONTAINER_NAME" php artisan migrate --force
-          docker exec "$CONTAINER_NAME" supervisorctl status apache queue scheduler | tee /tmp/hospeda-release-supervisor.txt
-          test "$(grep -c RUNNING /tmp/hospeda-release-supervisor.txt)" -eq 3
+          docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
+          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-release-supervisor.txt
+          test "$(grep -c RUNNING /tmp/hospeda-release-supervisor.txt)" -eq 4
 
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
@@ -254,9 +254,9 @@ jobs:
             sleep 2
           done
 
-          docker exec "$CONTAINER_NAME" php artisan migrate --force
-          docker exec "$CONTAINER_NAME" supervisorctl status apache queue scheduler | tee /tmp/hospeda-published-supervisor.txt
-          test "$(grep -c RUNNING /tmp/hospeda-published-supervisor.txt)" -eq 3
+          docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
+          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-published-supervisor.txt
+          test "$(grep -c RUNNING /tmp/hospeda-published-supervisor.txt)" -eq 4
 
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
