@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, QrCode, ShieldCheck } from 'lucide-react';
 import { LogoCRCN } from '../LogoCRCN';
-import {
-  ParkTicketSelector,
-  getPreviewTicketLines,
-  type ParkTicketCart,
-} from './ParkTicketSelector';
 import type { CheckoutModal } from './CheckoutModal';
 import {
   CieloSopCardForm,
@@ -37,7 +32,7 @@ type SinglePageCheckoutProps = Pick<
   'bookingData' | 'guestPrefill' | 'onClose'
 >;
 const fieldClass =
-  'mt-1.5 min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-3 text-base text-neutral-950 outline-none focus-visible:ring-2 focus-visible:ring-orange-700 disabled:bg-neutral-50';
+  'mt-1.5 min-h-12 w-full rounded-xl border border-neutral-400/70 bg-white px-3 text-base text-neutral-950 outline-none focus-visible:border-orange-700 focus-visible:ring-2 focus-visible:ring-orange-700/20 disabled:bg-neutral-100';
 const formatDate = (value: string) =>
   new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
 
@@ -57,7 +52,6 @@ export function SinglePageCheckout({
   const [accepted, setAccepted] = useState(false);
   const [quote, setQuote] = useState(bookingData?.quote ?? null);
   const [prepared, setPrepared] = useState(false);
-  const [ticketCart, setTicketCart] = useState<ParkTicketCart>({});
   const preparedRef = useRef<CieloPaymentContext | null>(null);
   const [attemptFinished, setAttemptFinished] = useState(false);
   const [result, setResult] = useState<CheckoutResumeResponse | null>(null);
@@ -168,18 +162,10 @@ export function SinglePageCheckout({
     !attemptFinished;
   const ready = paymentMethod === 'card' ? cardReady : pixReady;
   const fees = getVisiblePropertyFees(quote.fees || []);
-  const showParkTicketsPreview = readiness?.parkTicketsPreviewEnabled === true;
-  const ticketLines = showParkTicketsPreview ? getPreviewTicketLines(ticketCart) : [];
-  const ticketsTotal = ticketLines.reduce((sum, line) => sum + line.totalCents, 0) / 100;
-  const hasTickets = ticketLines.length > 0;
   const paymentTotal =
     paymentMethod === 'card' && cardPricing ? cardPricing.totalCents / 100 : total;
 
   const preparePayment = async (): Promise<CieloPaymentContext> => {
-    if (hasTickets)
-      throw new Error(
-        'Os ingressos estão em demonstração. Remova-os para testar somente a hospedagem.',
-      );
     if (preparedRef.current) return preparedRef.current;
     if (!ready || !accepted || !terms)
       throw new Error('Confira e aceite as condições da hospedagem antes de pagar.');
@@ -244,10 +230,6 @@ export function SinglePageCheckout({
   };
 
   const startCieloPix = async (): Promise<void> => {
-    if (hasTickets)
-      throw new Error(
-        'Os ingressos estão em demonstração. Remova-os para continuar somente com a hospedagem.',
-      );
     if (!pixReady || !accepted)
       throw new Error('Confira e aceite as condições da hospedagem antes de continuar com o Pix.');
     const context = await preparePayment();
@@ -287,7 +269,7 @@ export function SinglePageCheckout({
             aria-label="Central de Reservas Caldas Novas — início"
             className="shrink-0 rounded-xl focus-visible:outline-2 focus-visible:outline-orange-700"
           >
-            <LogoCRCN size="sm" variant="glass" />
+            <LogoCRCN size="md" variant="glass" responsiveText={true} />
           </a>
           <span className="liquid-glass-pill flex items-center gap-2 rounded-full px-3 py-2.5 text-xs font-semibold text-neutral-700 sm:px-4">
             <LockKeyhole size={15} className="text-orange-700" aria-hidden="true" />{' '}
@@ -323,8 +305,11 @@ export function SinglePageCheckout({
           </div>
         </div>
         <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_300px] lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
-          <div className="checkout-purchase-form liquid-glass-card min-w-0 rounded-[1.75rem] p-5 sm:p-7">
-            <section className="mb-7 border-b border-neutral-200 pb-6" aria-labelledby="trip-title">
+          <div className="checkout-purchase-form liquid-glass-card min-w-0 rounded-3xl p-5 sm:p-7">
+            <section
+              className="mb-7 border-b border-neutral-300/80 pb-6"
+              aria-labelledby="trip-title"
+            >
               <h2 id="trip-title" className="mb-4 flex items-center gap-3 text-lg font-bold">
                 <span aria-hidden="true" className="checkout-section-number">
                   1
@@ -439,7 +424,7 @@ export function SinglePageCheckout({
                 credentials={null}
                 preparePayment={preparePayment}
                 guestPrefill={guest}
-                disabled={!ready || !accepted || hasTickets}
+                disabled={!ready || !accepted}
                 paymentMethod={paymentMethod}
                 onPricingChange={setCardPricing}
                 onAlternativeSubmit={startCieloPix}
@@ -464,38 +449,11 @@ export function SinglePageCheckout({
                   </section>
                 }
                 submitLabel={
-                  hasTickets
-                    ? 'Compra com ingressos em demonstração'
-                    : paymentMethod === 'pix'
-                      ? `Continuar com Pix · ${money(total)}`
-                      : undefined
+                  paymentMethod === 'pix' ? `Continuar com Pix · ${money(total)}` : undefined
                 }
                 onAttemptFinished={() => setAttemptFinished(true)}
-                beforeSubmit={
-                  showParkTicketsPreview ? (
-                    <div className="space-y-3">
-                      <ParkTicketSelector
-                        from={checkIn}
-                        to={checkOut}
-                        value={ticketCart}
-                        disabled={prepared}
-                        onChange={(value) => {
-                          setTicketCart(value);
-                          setAccepted(false);
-                        }}
-                      />
-                      {hasTickets && (
-                        <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">
-                          Esta é uma simulação visual. O pagamento com ingressos está bloqueado até
-                          integrarmos a venda e a emissão. Desmarque a oferta para testar apenas a
-                          hospedagem.
-                        </p>
-                      )}
-                    </div>
-                  ) : undefined
-                }
               >
-                <fieldset disabled={prepared} className="mb-7 border-b border-neutral-200 pb-7">
+                <fieldset disabled={prepared} className="mb-7 border-b border-neutral-300/80 pb-7">
                   <legend className="mb-2 text-lg font-bold">
                     <span aria-hidden="true" className="checkout-section-number mr-3">
                       2
@@ -543,7 +501,7 @@ export function SinglePageCheckout({
                     </label>
                   </div>
                 </fieldset>
-                <fieldset disabled={prepared} className="mb-7 border-b border-neutral-200 pb-7">
+                <fieldset disabled={prepared} className="mb-7 border-b border-neutral-300/80 pb-7">
                   <legend className="mb-3 text-sm font-bold text-neutral-950">
                     Como você prefere pagar?
                   </legend>
@@ -601,14 +559,14 @@ export function SinglePageCheckout({
                   </div>
                 </fieldset>
                 <section
-                  className="mb-7 border-b border-neutral-200 pb-6"
+                  className="mb-7 border-b border-neutral-300/80 pb-6"
                   aria-labelledby="conditions-title"
                 >
                   <h2 id="conditions-title" className="mb-3 text-xl font-bold">
                     Antes de confirmar
                   </h2>
                   {terms && (
-                    <details className="rounded-xl border border-neutral-200 p-4">
+                    <details className="rounded-xl border border-neutral-300/90 bg-white/55 p-4">
                       <summary className="cursor-pointer text-sm font-semibold">
                         Condições da hospedagem e cancelamento
                       </summary>
@@ -629,7 +587,7 @@ export function SinglePageCheckout({
                       type="checkbox"
                       required
                       checked={accepted}
-                      disabled={!ready || prepared || hasTickets}
+                      disabled={!ready || prepared}
                       onChange={(event) => setAccepted(event.target.checked)}
                       className="mt-1 h-4 w-4 accent-orange-800"
                     />
@@ -662,7 +620,7 @@ export function SinglePageCheckout({
             className="order-first md:sticky md:top-8 md:order-last"
             aria-label="Resumo da compra"
           >
-            <div className="checkout-summary-card liquid-glass-card overflow-hidden rounded-[1.75rem] p-5 sm:p-6">
+            <div className="checkout-summary-card liquid-glass-card overflow-hidden rounded-3xl p-5 sm:p-6">
               <div className="checkout-summary-image relative -mx-5 -mt-5 mb-5 sm:-mx-6 sm:-mt-6">
                 <img src={property.images[0]} alt="" className="h-36 w-full object-cover sm:h-44" />
                 <span className="liquid-glass-pill absolute bottom-3 left-4 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-800">
@@ -723,33 +681,7 @@ export function SinglePageCheckout({
                     )}
                   </>
                 )}
-                {hasTickets && (
-                  <>
-                    <div className="flex justify-between gap-3 border-t border-neutral-200 pt-3 font-semibold">
-                      <dt>Subtotal hospedagem</dt>
-                      <dd>{money(total)}</dd>
-                    </div>
-                    {ticketLines.map((line) => (
-                      <div
-                        key={`${line.parkId}-${line.category}`}
-                        className="flex justify-between gap-3"
-                      >
-                        <dt>
-                          <span className="block font-medium">{line.parkName}</span>
-                          <span className="text-xs text-neutral-500">
-                            {line.quantity} × {line.category} · {formatDate(line.date || checkIn)}
-                          </span>
-                        </dt>
-                        <dd className="shrink-0">{money(line.totalCents / 100)}</dd>
-                      </div>
-                    ))}
-                    <div className="flex justify-between gap-3 text-orange-800">
-                      <dt>Ingressos · demonstrativo</dt>
-                      <dd>{money(ticketsTotal)}</dd>
-                    </div>
-                  </>
-                )}
-                {!hasTickets && paymentMethod === 'card' && cardPricing && (
+                {paymentMethod === 'card' && cardPricing && (
                   <div className="flex justify-between gap-3 text-neutral-700">
                     <dt>
                       Acréscimo do cartão · {cardPricing.ratePercent.toLocaleString('pt-BR')}%
@@ -761,15 +693,10 @@ export function SinglePageCheckout({
                   className="checkout-summary-total flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 pt-5 font-bold"
                   aria-live="polite"
                 >
-                  <dt>{hasTickets ? 'Total da simulação' : 'Total (BRL)'}</dt>
-                  <dd>{money(paymentTotal + ticketsTotal)}</dd>
+                  <dt>Total (BRL)</dt>
+                  <dd>{money(paymentTotal)}</dd>
                 </div>
               </dl>
-              {hasTickets && (
-                <p className="mt-3 text-xs leading-5 text-amber-900">
-                  Valores ilustrativos. Nenhuma compra ou emissão de ingresso será realizada.
-                </p>
-              )}
               <p className="mt-4 flex items-center gap-2 rounded-xl bg-white/55 px-3 py-2.5 text-xs text-neutral-600">
                 {paymentMethod === 'pix' ? (
                   <QrCode size={16} aria-hidden="true" />

@@ -435,7 +435,7 @@ export function CieloSopCardForm({
               autoComplete="cc-number"
               required
               inputMode="numeric"
-              className="bp-sop-cardnumber min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+              className="bp-sop-cardnumber min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
           <label className="space-y-1 text-sm font-semibold text-neutral-800">
@@ -445,7 +445,7 @@ export function CieloSopCardForm({
               required
               inputMode="numeric"
               placeholder="MM/AAAA"
-              className="bp-sop-cardexpirationdate min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+              className="bp-sop-cardexpirationdate min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
           <label className="space-y-1 text-sm font-semibold text-neutral-800">
@@ -454,7 +454,7 @@ export function CieloSopCardForm({
               autoComplete="cc-csc"
               required
               inputMode="numeric"
-              className="bp-sop-cardcvv bp-sop-cardcvvc min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+              className="bp-sop-cardcvv bp-sop-cardcvvc min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
           <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
@@ -464,7 +464,7 @@ export function CieloSopCardForm({
               required
               defaultValue={guestPrefill?.fullName}
               autoComplete="cc-name"
-              className="bp-sop-cardholdername min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+              className="bp-sop-cardholdername min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
           <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
@@ -475,7 +475,7 @@ export function CieloSopCardForm({
               defaultValue={guestPrefill?.email}
               type="email"
               autoComplete="email"
-              className="min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+              className="min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
           <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
@@ -487,7 +487,7 @@ export function CieloSopCardForm({
               autoComplete="off"
               inputMode="numeric"
               maxLength={18}
-              className="min-h-11 w-full rounded-lg border border-neutral-300 px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+              className="min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
           <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
@@ -497,7 +497,7 @@ export function CieloSopCardForm({
               required
               value={installments}
               onChange={(event) => setInstallments(Number(event.target.value))}
-              className="min-h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+              className="min-h-11 w-full rounded-xl border border-neutral-400/70 bg-white px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             >
               {installmentOptions.map((option) => (
                 <option key={option.installments} value={option.installments}>
@@ -539,7 +539,7 @@ export function CieloSopCardForm({
       <button
         type="submit"
         disabled={disabled || previewOnly || formState !== 'ready' || isSubmitting}
-        className="checkout-payment-submit inline-flex min-h-12 w-full items-center justify-center rounded-2xl bg-orange-800 px-5 py-4 text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="checkout-payment-submit inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-orange-800 px-5 py-4 text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed"
       >
         {previewOnly
           ? 'Pagamento desativado na prévia'

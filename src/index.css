@@ -1,26 +1,25 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @font-face {
-  font-family: "Plus Jakarta Sans";
+  font-family: 'Plus Jakarta Sans';
   font-style: normal;
   font-weight: 300 800;
   font-display: swap;
-  src: url("/fonts/plus-jakarta-sans-latin.woff2") format("woff2");
+  src: url('/fonts/plus-jakarta-sans-latin.woff2') format('woff2');
   unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-    U+2212, U+2215, U+FEFF, U+FFFD;
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @theme {
   --color-focus-ring: #ea580c;
   --color-page: #f8fafc;
-  --color-glass-border: rgba(255, 255, 255, 0.85);
+  --color-glass-border: rgba(148, 163, 184, 0.3);
   --text-caption: 0.75rem;
   --text-caption--line-height: 1rem;
 }
 
-:is(button, a, input, select, textarea, [role="button"], [role="tab"]):focus-visible {
+:is(button, a, input, select, textarea, [role='button'], [role='tab']):focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 3px;
 }
@@ -215,7 +214,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation: none !important;
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
@@ -237,41 +238,61 @@
 
   /* Liquid Glass Core Utilities with Specular Refraction & Crisp Multi-Layer Blur */
   .liquid-glass {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.76) 0%, rgba(255, 255, 255, 0.58) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.76) 0%,
+      rgba(255, 255, 255, 0.58) 100%
+    );
     backdrop-filter: blur(24px) saturate(190%);
     -webkit-backdrop-filter: blur(24px) saturate(190%);
     border: 1px solid var(--color-glass-border);
-    box-shadow: 0 12px 35px 0 rgba(0, 0, 0, 0.05),
-                inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.95),
-                inset 0 -1px 2px 0 rgba(0, 0, 0, 0.02);
+    box-shadow:
+      0 12px 35px 0 rgba(0, 0, 0, 0.05),
+      inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.95),
+      inset 0 -1px 2px 0 rgba(0, 0, 0, 0.02);
   }
 
   .liquid-glass-card {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.64) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(255, 255, 255, 0.64) 100%
+    );
     backdrop-filter: blur(28px) saturate(190%);
     -webkit-backdrop-filter: blur(28px) saturate(190%);
     border: 1px solid var(--color-glass-border);
-    box-shadow: 0 16px 45px -10px rgba(0, 0, 0, 0.07),
-                inset 0 1.5px 2px 0 rgba(255, 255, 255, 1),
-                inset 0 -1px 1px 0 rgba(255, 255, 255, 0.4);
+    box-shadow:
+      0 16px 45px -10px rgba(0, 0, 0, 0.07),
+      inset 0 1.5px 2px 0 rgba(255, 255, 255, 1),
+      inset 0 -1px 1px 0 rgba(255, 255, 255, 0.4);
   }
 
   .liquid-glass-pill {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.62) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(255, 255, 255, 0.62) 100%
+    );
     backdrop-filter: blur(18px) saturate(180%);
     -webkit-backdrop-filter: blur(18px) saturate(180%);
     border: 1px solid var(--color-glass-border);
-    box-shadow: 0 4px 20px 0 rgba(0, 0, 0, 0.04),
-                inset 0 1px 1.5px 0 rgba(255, 255, 255, 1);
+    box-shadow:
+      0 4px 20px 0 rgba(0, 0, 0, 0.04),
+      inset 0 1px 1.5px 0 rgba(255, 255, 255, 1);
   }
 
   .liquid-glass-button {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.58) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(255, 255, 255, 0.58) 100%
+    );
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
     border: 1px solid var(--color-glass-border);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04),
-                inset 0 1px 1.5px rgba(255, 255, 255, 0.95);
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.04),
+      inset 0 1px 1.5px rgba(255, 255, 255, 0.95);
   }
 
   .liquid-glass-input {
@@ -279,8 +300,9 @@
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
     border: 1px solid var(--color-glass-border);
-    box-shadow: inset 0 1.5px 3px 0 rgba(0, 0, 0, 0.02),
-                0 2px 8px 0 rgba(0, 0, 0, 0.02);
+    box-shadow:
+      inset 0 1.5px 3px 0 rgba(0, 0, 0, 0.02),
+      0 2px 8px 0 rgba(0, 0, 0, 0.02);
   }
 
   .liquid-glass-accent {
@@ -288,29 +310,31 @@
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.45);
-    box-shadow: 0 10px 28px -4px rgba(234, 88, 12, 0.38),
-                inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.6);
+    box-shadow:
+      0 10px 28px -4px rgba(234, 88, 12, 0.38),
+      inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.6);
   }
 
   .liquid-glass-dark {
     background: linear-gradient(135deg, rgba(24, 24, 27, 0.85), rgba(15, 15, 18, 0.92));
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.20);
-    box-shadow: 0 16px 45px 0 rgba(0, 0, 0, 0.35),
-                inset 0 1px 1px 0 rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow:
+      0 16px 45px 0 rgba(0, 0, 0, 0.35),
+      inset 0 1px 1px 0 rgba(255, 255, 255, 0.25);
   }
 }
 
 /* Fluid background mesh with thermal waters & Caldas Novas warmth - radiant liquid glow */
 body {
   background-color: var(--color-page);
-  background-image: 
+  background-image:
     radial-gradient(circle at 10% 8%, rgba(251, 146, 60, 0.22) 0px, transparent 40%),
     radial-gradient(circle at 90% 10%, rgba(56, 189, 248, 0.22) 0px, transparent 40%),
     radial-gradient(circle at 50% 32%, rgba(254, 215, 170, 0.25) 0px, transparent 45%),
     radial-gradient(circle at 85% 70%, rgba(251, 146, 60, 0.18) 0px, transparent 45%),
-    radial-gradient(circle at 15% 80%, rgba(56, 189, 248, 0.20) 0px, transparent 40%),
+    radial-gradient(circle at 15% 80%, rgba(56, 189, 248, 0.2) 0px, transparent 40%),
     radial-gradient(circle at 50% 95%, rgba(254, 240, 138, 0.18) 0px, transparent 50%);
   background-attachment: fixed;
   background-size: cover;
@@ -322,7 +346,7 @@ body {
 
 /* Own-checkout presentation, sharing the site's liquid-glass surfaces. */
 .checkout-purchase {
-  font-family: "Plus Jakarta Sans", sans-serif;
+  font-family: 'Plus Jakarta Sans', sans-serif;
   background-color: var(--color-page);
   background-image:
     radial-gradient(ellipse at 4% 8%, rgba(251, 146, 60, 0.2), transparent 40%),
@@ -333,6 +357,16 @@ body {
 .checkout-purchase-header {
   border-inline: 0;
   border-top: 3px solid rgba(234, 88, 12, 0.7);
+  border-bottom-color: rgba(148, 163, 184, 0.34);
+}
+
+.checkout-purchase-form,
+.checkout-summary-card {
+  border-color: rgba(148, 163, 184, 0.38);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.08),
+    0 24px 60px -38px rgba(15, 23, 42, 0.55),
+    inset 0 1px 1px #fff;
 }
 
 .checkout-purchase :is(h1, h2, h3, legend) {
@@ -356,29 +390,34 @@ body {
 }
 
 .checkout-trip-details {
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.5);
-  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  background: rgba(255, 255, 255, 0.68);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.95);
 }
 
-.checkout-purchase :is(input:not([type="checkbox"]):not([type="hidden"]), select) {
+.checkout-purchase :is(input:not([type='checkbox']):not([type='hidden']), select) {
   min-height: 3rem;
-  border: 1px solid rgba(148, 163, 184, 0.42);
+  border: 1px solid rgba(100, 116, 139, 0.55);
   border-radius: 0.85rem;
   background: rgba(255, 255, 255, 0.83);
   padding-inline: 0.9rem;
   font-size: 1rem;
   color: #17243a;
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.025), 0 2px 4px rgba(15, 23, 42, 0.015);
-  transition: border-color 150ms, box-shadow 150ms;
+  box-shadow:
+    inset 0 1px 2px rgba(15, 23, 42, 0.025),
+    0 2px 4px rgba(15, 23, 42, 0.015);
+  transition:
+    border-color 150ms,
+    box-shadow 150ms;
 }
 
 .checkout-purchase :is(input, select):focus-visible {
   border-color: #c4511b;
   outline-color: #c4511b;
+  box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.12);
 }
 
-.checkout-purchase input[type="checkbox"] {
+.checkout-purchase input[type='checkbox'] {
   accent-color: #b94716;
 }
 
@@ -399,10 +438,12 @@ body {
 .checkout-purchase .checkout-order-bump {
   border: 1px solid rgba(234, 88, 12, 0.28);
   background: linear-gradient(135deg, rgba(255, 247, 236, 0.92), rgba(255, 255, 255, 0.72));
-  box-shadow: inset 0 1px 1px #fff, 0 8px 25px -18px rgba(194, 65, 12, 0.35);
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 8px 25px -18px rgba(194, 65, 12, 0.35);
 }
 
-.checkout-purchase .checkout-order-bump[data-selected="true"] {
+.checkout-purchase .checkout-order-bump[data-selected='true'] {
   border-color: #c4511b;
 }
 
@@ -410,12 +451,24 @@ body {
   min-height: 3.5rem;
   border: 1px solid rgba(255, 255, 255, 0.4);
   background: linear-gradient(135deg, #c64c17, #a9370c);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3), 0 8px 20px -10px rgba(194, 65, 12, 0.55);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.3),
+    0 8px 20px -10px rgba(194, 65, 12, 0.55);
   letter-spacing: -0.01em;
 }
 
+.checkout-purchase .checkout-payment-submit:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.34),
+    0 12px 24px -12px rgba(154, 52, 18, 0.72);
+}
+
 .checkout-purchase .checkout-payment-submit:disabled {
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  border-color: rgba(148, 163, 184, 0.42);
+  background: #d6d9de;
+  color: #697386;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.65);
 }
 
 .checkout-payment-method {
@@ -423,14 +476,19 @@ body {
   min-height: 4.5rem;
   align-items: center;
   gap: 0.75rem;
-  border: 1px solid rgba(148, 163, 184, 0.38);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.62);
+  position: relative;
+  border: 1px solid rgba(100, 116, 139, 0.5);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.78);
   padding: 0.85rem;
   color: #334155;
   text-align: left;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.95);
-  transition: border-color 150ms, background 150ms, box-shadow 150ms, transform 150ms;
+  transition:
+    border-color 150ms,
+    background 150ms,
+    box-shadow 150ms,
+    transform 150ms;
 }
 
 .checkout-payment-method span {
@@ -448,11 +506,29 @@ body {
   font-size: 0.7rem;
 }
 
-.checkout-payment-method[aria-pressed="true"] {
+.checkout-payment-method[aria-pressed='true'] {
   border-color: #c4511b;
   background: linear-gradient(135deg, rgba(255, 247, 237, 0.96), rgba(255, 255, 255, 0.8));
   color: #b94716;
-  box-shadow: inset 0 0 0 1px rgba(196, 81, 27, 0.14), 0 8px 22px -18px rgba(194, 65, 12, 0.6);
+  box-shadow:
+    inset 0 0 0 1px rgba(196, 81, 27, 0.26),
+    0 8px 22px -18px rgba(194, 65, 12, 0.6);
+}
+
+.checkout-payment-method[aria-pressed='true']::after {
+  content: '✓';
+  position: absolute;
+  top: 0.55rem;
+  right: 0.65rem;
+  display: grid;
+  width: 1.15rem;
+  height: 1.15rem;
+  place-items: center;
+  border-radius: 999px;
+  background: #b94716;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 900;
 }
 
 .checkout-payment-method:disabled {
@@ -464,15 +540,20 @@ body {
   transform: scale(0.985);
 }
 
+.checkout-trust-badges {
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 0.9rem;
+  background: rgba(248, 250, 252, 0.66);
+}
+
 .checkout-trust-badges span {
   display: flex;
   min-height: 2.75rem;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  border-radius: 0.85rem;
-  background: rgba(255, 255, 255, 0.46);
+  border-top: 1px solid rgba(148, 163, 184, 0.28);
   padding: 0.55rem 0.7rem;
   color: #475569;
   font-size: 0.68rem;
@@ -481,17 +562,34 @@ body {
   text-align: center;
 }
 
+.checkout-trust-badges span:first-child {
+  border-top: 0;
+}
+
 .checkout-trust-badges svg {
   flex-shrink: 0;
   color: #a43b10;
 }
 
 .checkout-pix-panel > div {
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 10px 25px -20px rgba(5, 150, 105, 0.55);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.9),
+    0 10px 25px -20px rgba(5, 150, 105, 0.55);
 }
 
 @media (min-width: 768px) {
-  .checkout-purchase :is(input:not([type="checkbox"]):not([type="hidden"]), select) {
+  .checkout-purchase :is(input:not([type='checkbox']):not([type='hidden']), select) {
     font-size: 0.875rem;
+  }
+}
+
+@media (min-width: 640px) {
+  .checkout-trust-badges span {
+    border-top: 0;
+    border-left: 1px solid rgba(148, 163, 184, 0.28);
+  }
+
+  .checkout-trust-badges span:first-child {
+    border-left: 0;
   }
 }
