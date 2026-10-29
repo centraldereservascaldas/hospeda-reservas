@@ -24,6 +24,7 @@ class DirectCheckoutPaymentService
         private readonly DirectStaysReservationService $reservations,
         private readonly CieloCheckoutPaymentService $cieloPayments,
         private readonly CieloSilentOrderPostClient $cieloSop,
+        private readonly CieloDirectConfiguration $cieloConfiguration,
     ) {}
 
     /** @return list<string> */
@@ -39,13 +40,14 @@ class DirectCheckoutPaymentService
         }
 
         $paymentProvider = $order?->gateway_provider ?? (string) config('direct-booking.payment_provider', 'mercadopago');
-        if (! in_array($paymentProvider, ['mercadopago', 'cielo_sandbox', 'cielo_checkout'], true)) {
+        if (! in_array($paymentProvider, ['mercadopago', 'cielo_sandbox', 'cielo', 'cielo_checkout'], true)) {
             return [];
         }
-        if ($paymentProvider === 'cielo_sandbox') {
-            if (! $this->cieloPayments->isAvailable()
+        if (CieloDirectConfiguration::isProvider($paymentProvider)) {
+            if ($paymentProvider !== $this->cieloConfiguration->provider()
+                || ! $this->cieloPayments->isAvailable()
                 || ($order !== null && (! is_string($order->gateway_merchant_id)
-                    || ! hash_equals($order->gateway_merchant_id, (string) config('services.cielo.merchant_id'))))) {
+                    || ! hash_equals($order->gateway_merchant_id, (string) $this->cieloConfiguration->value('merchant_id'))))) {
                 return [];
             }
 
@@ -403,7 +405,7 @@ class DirectCheckoutPaymentService
         $provider = $order?->gateway_provider ?? (string) config('direct-booking.payment_provider', 'mercadopago');
 
         return match ($provider) {
-            'mercadopago', 'cielo_sandbox' => $provider,
+            'mercadopago', 'cielo_sandbox', 'cielo' => $provider,
             'cielo_checkout' => 'cielo_hosted',
             default => 'unavailable',
         };
@@ -411,12 +413,17 @@ class DirectCheckoutPaymentService
 
     public function cieloSopAccessToken(DirectBookingOrder $order): string
     {
-        if ($order->gateway_provider !== 'cielo_sandbox'
+        if (! CieloDirectConfiguration::isProvider($order->gateway_provider)
             || ! in_array('card', $this->availableMethods($order), true)) {
             throw new \RuntimeException('Cielo Silent Order Post is not available for this order.');
         }
 
         return $this->cieloSop->createBrowserAccessToken();
+    }
+
+    public function cieloEnvironment(): string
+    {
+        return $this->cieloConfiguration->environment();
     }
 
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
@@ -426,7 +433,7 @@ class DirectCheckoutPaymentService
             return $this->result(null, 'payments_disabled', 'O pagamento no site ainda não está habilitado.', 503);
         }
 
-        if ($order->gateway_provider === 'cielo_sandbox') {
+        if (CieloDirectConfiguration::isProvider($order->gateway_provider)) {
             return $this->cieloPayments->createAttempt($order, $request);
         }
 
@@ -636,7 +643,7 @@ class DirectCheckoutPaymentService
         $persistedAttempt = DirectBookingPaymentAttempt::query()
             ->where('gateway_payment_id', $gatewayPaymentId)
             ->first();
-        if ($persistedAttempt?->gateway_provider === 'cielo_sandbox') {
+        if (CieloDirectConfiguration::isProvider($persistedAttempt?->gateway_provider)) {
             return $this->cieloPayments->reconcilePaymentId($gatewayPaymentId);
         }
         if ($persistedAttempt !== null && $persistedAttempt->gateway_provider !== 'mercadopago') {
@@ -688,7 +695,7 @@ class DirectCheckoutPaymentService
 
     public function reconcileAttempt(DirectBookingPaymentAttempt $attempt): array
     {
-        if ($attempt->gateway_provider === 'cielo_sandbox') {
+        if (CieloDirectConfiguration::isProvider($attempt->gateway_provider)) {
             return $this->cieloPayments->reconcileAttempt($attempt);
         }
 
@@ -756,7 +763,7 @@ class DirectCheckoutPaymentService
         $attention = 0;
         foreach ($attempts as $attempt) {
             try {
-                if ($attempt->gateway_provider === 'cielo_sandbox') {
+                if (CieloDirectConfiguration::isProvider($attempt->gateway_provider)) {
                     $result = $this->cieloPayments->reconcileAttempt($attempt);
                 } elseif ($attempt->gateway_provider !== 'mercadopago') {
                     $attempt->forceFill([
@@ -789,9 +796,9 @@ class DirectCheckoutPaymentService
         }
 
         $recoverableWebhookProviders = [];
-        foreach (['mercadopago', 'cielo_sandbox'] as $provider) {
-            $queueConfig = $provider === 'cielo_sandbox'
-                ? 'services.cielo.webhook_queue_connection'
+        foreach (['mercadopago', $this->cieloConfiguration->provider()] as $provider) {
+            $queueConfig = CieloDirectConfiguration::isProvider($provider)
+                ? ($provider === 'cielo' ? 'services.cielo.production.webhook_queue_connection' : 'services.cielo.webhook_queue_connection')
                 : 'services.mercadopago.webhook_queue_connection';
             $connection = (string) config($queueConfig, 'database');
             if ($connection !== 'sync' && config("queue.connections.{$connection}")) {
@@ -844,7 +851,7 @@ class DirectCheckoutPaymentService
                         continue;
                     }
 
-                    if ($webhook->gateway_provider === 'cielo_sandbox') {
+                    if (CieloDirectConfiguration::isProvider($webhook->gateway_provider)) {
                         ReconcileCieloPaymentWebhook::dispatch($webhook->id)->onConnection($connection);
                     } else {
                         ReconcileMercadoPagoPayment::dispatch($webhook->id)->onConnection($connection);

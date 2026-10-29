@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { checkoutApi } from '../../services/checkoutApi';
 import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
 import { loadCieloSopSdk } from '../../services/cieloSopSdk';
+import type { CieloSopEnvironment } from '../../services/cieloSopSdk';
 import { clearCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
 import { emitFunnelEvent } from '../../utils/measurementEvents';
 
@@ -32,6 +33,7 @@ export function CieloSopCardForm({
   const sopTimeoutRef = useRef<number | null>(null);
   const [formState, setFormState] = useState<FormState>(previewOnly ? 'ready' : 'loading');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [environment, setEnvironment] = useState<CieloSopEnvironment>('sandbox');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,17 +48,18 @@ export function CieloSopCardForm({
     setError(null);
     accessTokenRef.current = null;
 
-    void Promise.all([
-      checkoutApi.getCieloSopAccessToken(reference, credentials),
-      loadCieloSopSdk(),
-    ])
-      .then(([response]) => {
+    void checkoutApi
+      .getCieloSopAccessToken(reference, credentials)
+      .then(async (response) => {
         if (!isCurrent) return;
-        if (!response || response.environment !== 'sandbox') {
+        if (!response || !['sandbox', 'production'].includes(response.environment)) {
           setFormState('error');
           setError('Não foi possível preparar o pagamento com cartão. Tente novamente mais tarde.');
           return;
         }
+        await loadCieloSopSdk(response.environment);
+        if (!isCurrent) return;
+        setEnvironment(response.environment);
         accessTokenRef.current = response.accessToken;
         setFormState('ready');
       })
@@ -184,7 +187,7 @@ export function CieloSopCardForm({
     try {
       window.bpSop_silentOrderPost({
         accessToken: accessTokenRef.current,
-        environment: 'sandbox',
+        environment,
         language: 'pt',
         enableTokenize: false,
         onSuccess: (response) => {
@@ -227,7 +230,10 @@ export function CieloSopCardForm({
       )}
       <div className="rounded-xl bg-neutral-50 p-4 text-sm text-neutral-700">
         <p className="font-bold text-neutral-950">Pagamento seguro com cartão</p>
-        <p className="mt-1">{moneyFormatter.format(Number(amount))} · ambiente de testes Cielo</p>
+        <p className="mt-1">
+          {moneyFormatter.format(Number(amount))} ·{' '}
+          {environment === 'sandbox' ? 'ambiente de testes Cielo' : 'pagamento via Cielo'}
+        </p>
       </div>
       <fieldset disabled={previewOnly} className="grid gap-4 sm:grid-cols-2 disabled:opacity-65">
         <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">

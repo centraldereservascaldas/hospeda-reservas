@@ -11,20 +11,19 @@ use RuntimeException;
 
 class CieloEcommerceClient
 {
-    private const TRANSACTIONAL_BASE_URL = 'https://apisandbox.cieloecommerce.cielo.com.br';
-
-    private const QUERY_BASE_URL = 'https://apiquerysandbox.cieloecommerce.cielo.com.br';
+    public function __construct(private readonly CieloDirectConfiguration $configuration) {}
 
     public function isConfigured(): bool
     {
-        return (bool) config('services.cielo.enabled', false)
+        return $this->configuration->isAllowed()
+            && (bool) $this->configuration->value('enabled')
             && $this->merchantId() !== null
             && $this->merchantKey() !== null;
     }
 
     public function merchantId(): ?string
     {
-        return $this->configuredValue('services.cielo.merchant_id');
+        return $this->configuredValue('merchant_id');
     }
 
     /** @return array<string, mixed> */
@@ -36,6 +35,9 @@ class CieloEcommerceClient
         string $customerName,
         string $customerIdentity,
     ): array {
+        if (! $this->configuration->canCharge()) {
+            throw new RuntimeException('Cielo direct payments are disabled.');
+        }
         if (! preg_match('/^[0-9a-f-]{36}$/iD', $paymentToken)) {
             throw new InvalidArgumentException('A valid one-time Cielo PaymentToken is required.');
         }
@@ -49,7 +51,7 @@ class CieloEcommerceClient
             throw new InvalidArgumentException('Cielo payments require a positive BRL amount.');
         }
 
-        $response = $this->request(self::TRANSACTIONAL_BASE_URL)
+        $response = $this->request($this->configuration->endpoint('transaction'))
             ->post('/1/sales/', [
                 'MerchantOrderId' => $merchantOrderId,
                 'Customer' => [
@@ -62,7 +64,7 @@ class CieloEcommerceClient
                     'Currency' => 'BRL',
                     'Capture' => true,
                     'Installments' => 1,
-                    'Provider' => 'Simulado',
+                    ...($this->configuration->environment() === 'sandbox' ? ['Provider' => 'Simulado'] : []),
                     'CreditCard' => ['PaymentToken' => $paymentToken],
                 ],
             ]);
@@ -77,7 +79,7 @@ class CieloEcommerceClient
             throw new InvalidArgumentException('A valid Cielo PaymentId is required.');
         }
 
-        $response = $this->request(self::QUERY_BASE_URL)->get('/1/sales/'.rawurlencode($paymentId));
+        $response = $this->request($this->configuration->endpoint('query'))->get('/1/sales/'.rawurlencode($paymentId));
         if ($response->notFound()) {
             return null;
         }
@@ -92,7 +94,7 @@ class CieloEcommerceClient
             throw new InvalidArgumentException('A valid Cielo MerchantOrderId is required.');
         }
 
-        $response = $this->request(self::QUERY_BASE_URL)->get('/1/sales', ['merchantOrderId' => $merchantOrderId]);
+        $response = $this->request($this->configuration->endpoint('query'))->get('/1/sales', ['merchantOrderId' => $merchantOrderId]);
         if ($response->notFound()) {
             return null;
         }
@@ -124,12 +126,12 @@ class CieloEcommerceClient
 
     private function merchantKey(): ?string
     {
-        return $this->configuredValue('services.cielo.merchant_key');
+        return $this->configuredValue('merchant_key');
     }
 
     private function configuredValue(string $key): ?string
     {
-        $value = config($key);
+        $value = $this->configuration->value($key);
 
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }
@@ -137,7 +139,7 @@ class CieloEcommerceClient
     private function request(string $baseUrl): PendingRequest
     {
         if (! $this->isConfigured()) {
-            throw new RuntimeException('Cielo sandbox credentials are not enabled.');
+            throw new RuntimeException('Cielo direct credentials are not enabled.');
         }
 
         return Http::baseUrl($baseUrl)

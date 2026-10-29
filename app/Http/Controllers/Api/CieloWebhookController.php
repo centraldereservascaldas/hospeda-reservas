@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Jobs\ReconcileCieloPaymentWebhook;
 use App\Models\DirectBookingPaymentWebhook;
+use App\Services\Payments\CieloDirectConfiguration;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,10 +14,13 @@ use Illuminate\Support\Str;
 
 class CieloWebhookController extends Controller
 {
-    public function __invoke(Request $request): JsonResponse
+    public function __invoke(Request $request, CieloDirectConfiguration $configuration): JsonResponse
     {
-        $headerName = config('services.cielo.webhook_header_name');
-        $headerValue = config('services.cielo.webhook_header_value');
+        if ($configuration->environment() !== 'sandbox' && ! $configuration->isAllowed()) {
+            return response()->json(['success' => false, 'code' => 'cielo_environment_disabled'], 503);
+        }
+        $headerName = $configuration->value('webhook_header_name');
+        $headerValue = $configuration->value('webhook_header_value');
         $headerConfigured = is_string($headerName) && trim($headerName) !== ''
             && is_string($headerValue) && trim($headerValue) !== '';
         $headerConfigurationInvalid = ($headerName !== null || $headerValue !== null) && ! $headerConfigured;
@@ -33,23 +37,23 @@ class CieloWebhookController extends Controller
             return response()->json(['success' => false, 'code' => 'invalid_notification'], 400);
         }
 
-        $queueConnection = (string) config('services.cielo.webhook_queue_connection', 'database');
+        $queueConnection = (string) ($configuration->value('webhook_queue_connection') ?? 'database');
         if ($queueConnection === 'sync' || ! config("queue.connections.{$queueConnection}")) {
             return response()->json(['success' => false, 'code' => 'webhook_queue_unavailable'], 503);
         }
 
         $eventKey = hash('sha256', implode('|', [
-            'cielo_sandbox',
+            $configuration->provider(),
             $paymentId,
             (string) $changeType,
             (string) intdiv(now()->timestamp, 300),
         ]));
 
         try {
-            $webhook = DB::transaction(function () use ($eventKey, $paymentId, $request, $queueConnection): DirectBookingPaymentWebhook {
+            $webhook = DB::transaction(function () use ($eventKey, $paymentId, $request, $queueConnection, $configuration): DirectBookingPaymentWebhook {
                 $webhook = DirectBookingPaymentWebhook::query()->create([
                     'event_key' => $eventKey,
-                    'gateway_provider' => 'cielo_sandbox',
+                    'gateway_provider' => $configuration->provider(),
                     'gateway_payment_id' => $paymentId,
                     'request_id' => $request->header('x-request-id') === null
                         ? null

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\DirectBookingPaymentWebhook;
+use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -33,10 +34,15 @@ class ReconcileCieloPaymentWebhook implements ShouldQueue
     {
         $shouldProcess = DB::transaction(function (): bool {
             $webhook = DirectBookingPaymentWebhook::query()->lockForUpdate()->findOrFail($this->webhookId);
-            if ($webhook->gateway_provider !== 'cielo_sandbox') {
+            if (! CieloDirectConfiguration::isProvider($webhook->gateway_provider)) {
                 return false;
             }
             if (in_array($webhook->status, ['processed', 'processing'], true)) {
+                return false;
+            }
+            if ($webhook->gateway_provider !== app(CieloDirectConfiguration::class)->provider()) {
+                $webhook->forceFill(['status' => 'failed', 'error_code' => 'gateway_environment_mismatch'])->save();
+
                 return false;
             }
             if ($webhook->reconciliation_attempts >= self::MAX_RECONCILIATION_ATTEMPTS) {

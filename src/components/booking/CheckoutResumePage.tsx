@@ -432,7 +432,8 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
     canRetryPixPayment;
   const paymentCapabilities = resumeState.kind === 'ready' ? resumeState.data.payment : null;
   const cardPublicKey = paymentCapabilities?.publicKey ?? null;
-  const isCieloProvider = paymentCapabilities?.provider === 'cielo_sandbox';
+  const isCieloProvider =
+    paymentCapabilities?.provider === 'cielo_sandbox' || paymentCapabilities?.provider === 'cielo';
   const isHostedCieloProvider = paymentCapabilities?.provider === 'cielo_hosted';
   const canStartCardPayment =
     order !== null &&

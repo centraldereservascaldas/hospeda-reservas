@@ -36,6 +36,27 @@ const readResumeWithCapabilities = async (payment: Record<string, unknown>) => {
   }
 };
 
+for (const environment of ['sandbox', 'production', 'invalid']) {
+  test(`SOP token response accepts only supported environments: ${environment}`, async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({ success: true, environment, accessToken: 'browser-token-fixture' }),
+        { status: 200 },
+      );
+    try {
+      const result = await checkoutApi.getCieloSopAccessToken(reference, {
+        type: 'resume-token',
+        resumeToken,
+      });
+      if (environment === 'invalid') assert.equal(result, null);
+      else assert.equal(result?.environment, environment);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+}
+
 test('resume preserves Cielo card capability without a Mercado Pago public key', async () => {
   const result = await readResumeWithCapabilities({
     enabled: true,
@@ -69,6 +90,17 @@ test('resume preserves Mercado Pago card capability and its public key', async (
     assert.equal(result.data.payment.publicKey, 'mp-public-key-sentinel');
     assert.deepEqual(result.data.payment.methods, ['pix', 'card']);
   }
+});
+
+test('resume recognizes the production direct Cielo provider independently from sandbox', async () => {
+  const result = await readResumeWithCapabilities({
+    enabled: true,
+    methods: ['card'],
+    publicKey: null,
+    provider: 'cielo',
+  });
+  assert.equal(result.kind, 'ready');
+  if (result.kind === 'ready') assert.equal(result.data.payment.provider, 'cielo');
 });
 
 test('legacy payment capability without a provider fails closed', async () => {

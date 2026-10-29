@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\DirectBookingOrder;
 use App\Services\DirectSaleTermsRegistry;
+use App\Services\Payments\CieloDirectConfiguration;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -94,7 +95,7 @@ class CheckDirectBookingReadiness extends Command
     private function paymentProviderChecks(): array
     {
         $provider = config('direct-booking.payment_provider', 'mercadopago');
-        $checks = ['DIRECT_BOOKING_PAYMENT_PROVIDER' => in_array($provider, ['mercadopago', 'cielo_sandbox', 'cielo_checkout'], true)];
+        $checks = ['DIRECT_BOOKING_PAYMENT_PROVIDER' => in_array($provider, ['mercadopago', 'cielo_sandbox', 'cielo', 'cielo_checkout'], true)];
 
         if ($provider === 'mercadopago') {
             return $checks + [
@@ -104,7 +105,21 @@ class CheckDirectBookingReadiness extends Command
             ];
         }
 
-        if ($provider === 'cielo_sandbox') {
+        if (CieloDirectConfiguration::isProvider($provider)) {
+            if ($provider === 'cielo') {
+                $configuration = app(CieloDirectConfiguration::class);
+
+                return $checks + [
+                    'CIELO_DIRECT_ENVIRONMENT' => $configuration->environment() === 'production',
+                    'CIELO_DIRECT_PRODUCTION_ENABLED' => $configuration->isAllowed(),
+                    'CIELO_DIRECT_PRODUCTION_MERCHANT_ID' => $this->isConfiguredString($configuration->value('merchant_id')),
+                    'CIELO_DIRECT_PRODUCTION_MERCHANT_KEY' => $this->isConfiguredString($configuration->value('merchant_key')),
+                    'CIELO_DIRECT_PRODUCTION_SOP_CLIENT_ID' => $this->isConfiguredString($configuration->value('sop_client_id')),
+                    'CIELO_DIRECT_PRODUCTION_SOP_CLIENT_SECRET' => $this->isConfiguredString($configuration->value('sop_client_secret')),
+                    'CIELO_DIRECT_PRODUCTION_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady($configuration->value('webhook_queue_connection')),
+                ];
+            }
+
             return $checks + [
                 'CIELO_SANDBOX_MERCHANT_ID' => $this->isConfiguredString(config('services.cielo.merchant_id')),
                 'CIELO_SANDBOX_MERCHANT_KEY' => $this->isConfiguredString(config('services.cielo.merchant_key')),

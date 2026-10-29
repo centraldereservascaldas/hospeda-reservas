@@ -20,13 +20,14 @@ class CieloCheckoutPaymentService
         private readonly CieloEcommerceClient $cielo,
         private readonly CieloSilentOrderPostClient $sop,
         private readonly DirectStaysReservationService $reservations,
+        private readonly CieloDirectConfiguration $configuration,
     ) {}
 
     public function isAvailable(): bool
     {
         return $this->cielo->isConfigured()
             && $this->sop->isConfigured()
-            && app()->environment(['local', 'testing'])
+            && $this->configuration->canCharge()
             && (bool) config('direct-booking.enabled', false)
             && (bool) config('direct-booking.payments_enabled', false)
             && (bool) config('direct-booking.confirmation_enabled', false)
@@ -47,7 +48,7 @@ class CieloCheckoutPaymentService
     public function createAttempt(DirectBookingOrder $order, StoreCheckoutPaymentRequest $request): array
     {
         if (! $this->isAvailable() || ! $this->orderUsesCurrentMerchant($order)) {
-            return $this->result(null, 'payment_configuration_incomplete', 'O pagamento Cielo Sandbox ainda não está habilitado para este pedido.', 503);
+            return $this->result(null, 'payment_configuration_incomplete', 'O pagamento Cielo ainda não está habilitado para este pedido.', 503);
         }
 
         $input = $request->validated();
@@ -103,7 +104,7 @@ class CieloCheckoutPaymentService
                     'direct_booking_order_id' => $lockedOrder->id,
                     'idempotency_key' => $idempotencyKey,
                     'request_fingerprint' => $fingerprint,
-                    'gateway_provider' => 'cielo_sandbox',
+                    'gateway_provider' => $this->configuration->provider(),
                     'gateway_merchant_id' => $lockedOrder->gateway_merchant_id,
                     'merchant_order_id' => str_replace('-', '', (string) Str::uuid()),
                     'payment_method' => 'card',
@@ -118,7 +119,7 @@ class CieloCheckoutPaymentService
                 ]);
 
                 if ($lockedOrder->status !== DirectBookingOrderStatus::PagamentoPendente) {
-                    $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoPendente, ['source' => 'payment_attempt_started', 'gateway' => 'cielo_sandbox']);
+                    $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoPendente, ['source' => 'payment_attempt_started', 'gateway' => $this->configuration->provider()]);
                 }
                 $lockedOrder->payment_status = 'pending';
                 $lockedOrder->payment_amount = $lockedOrder->quote_total;
@@ -182,7 +183,7 @@ class CieloCheckoutPaymentService
         }
 
         $attempt = DirectBookingPaymentAttempt::query()
-            ->where('gateway_provider', 'cielo_sandbox')
+            ->where('gateway_provider', $this->configuration->provider())
             ->where('merchant_order_id', $merchantOrderId)
             ->first();
         if ($attempt === null || ! $this->attemptUsesCurrentMerchant($attempt)) {
@@ -336,7 +337,7 @@ class CieloCheckoutPaymentService
 
     private function orderUsesCurrentMerchant(DirectBookingOrder $order): bool
     {
-        return $order->gateway_provider === 'cielo_sandbox'
+        return $order->gateway_provider === $this->configuration->provider()
             && is_string($order->gateway_merchant_id)
             && hash_equals($order->gateway_merchant_id, (string) $this->cielo->merchantId());
     }
@@ -344,7 +345,7 @@ class CieloCheckoutPaymentService
     private function attemptUsesCurrentMerchant(DirectBookingPaymentAttempt $attempt): bool
     {
         return $this->cielo->isConfigured()
-            && $attempt->gateway_provider === 'cielo_sandbox'
+            && $attempt->gateway_provider === $this->configuration->provider()
             && is_string($attempt->gateway_merchant_id)
             && hash_equals($attempt->gateway_merchant_id, (string) $this->cielo->merchantId())
             && $this->orderUsesCurrentMerchant($attempt->order);

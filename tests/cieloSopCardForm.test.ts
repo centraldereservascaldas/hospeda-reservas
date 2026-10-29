@@ -28,6 +28,49 @@ afterEach(() => {
   delete window.bpSop_silentOrderPost;
 });
 
+test('the card form uses the environment supplied by the backend without hardcoding sandbox', async () => {
+  const originalGetToken = checkoutApi.getCieloSopAccessToken;
+  const captured = { options: null as CieloSopOptions | null };
+  checkoutApi.getCieloSopAccessToken = async () => ({
+    environment: 'production',
+    accessToken: 'production-browser-fixture',
+  });
+  window.bpSop_silentOrderPost = (options) => {
+    captured.options = options;
+  };
+  try {
+    const { container, getByLabelText, getByRole } = render(
+      React.createElement(CieloSopCardForm, {
+        reference: 'P'.repeat(40),
+        amount: '850.00',
+        credentials: { type: 'resume-token', resumeToken: 'T'.repeat(64) },
+        onAttemptFinished: () => {},
+      }),
+    );
+    await waitFor(() =>
+      assert.equal(
+        getByRole('button', { name: 'Pagar com cartão' }).hasAttribute('disabled'),
+        false,
+      ),
+    );
+    fireEvent.change(getByLabelText('Nome no cartão'), { target: { value: 'Sandbox Guest' } });
+    fireEvent.change(getByLabelText('E-mail do titular'), {
+      target: { value: 'guest@example.test' },
+    });
+    fireEvent.change(getByLabelText('CPF ou CNPJ do titular'), {
+      target: { value: '12345678909' },
+    });
+    fireEvent.submit(container.querySelector('form')!);
+    assert.equal(captured.options?.environment, 'production');
+    assert.equal(captured.options?.accessToken, 'production-browser-fixture');
+    assert.equal(captured.options?.enableTokenize, false);
+    assert.equal(container.textContent?.includes('ambiente de testes Cielo'), false);
+    captured.options?.onInvalid([]);
+  } finally {
+    checkoutApi.getCieloSopAccessToken = originalGetToken;
+  }
+});
+
 test('Cielo tokenization sends only the temporary token and cardholder data to the backend', async () => {
   const originalGetToken = checkoutApi.getCieloSopAccessToken;
   const originalCreatePayment = checkoutApi.createCheckoutPayment;

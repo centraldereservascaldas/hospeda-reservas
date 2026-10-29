@@ -141,7 +141,7 @@ class CheckoutPaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'environment' => 'sandbox',
+            'environment' => $payments->cieloEnvironment(),
             'accessToken' => $accessToken,
         ])->header('Cache-Control', 'no-store, private');
     }
