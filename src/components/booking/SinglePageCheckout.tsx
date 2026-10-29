@@ -345,6 +345,29 @@ export function SinglePageCheckout({
                     : `Confirmar e pagar ${money(total)}`
                 }
                 onAttemptFinished={() => setAttemptFinished(true)}
+                beforeSubmit={
+                  showParkTicketsPreview ? (
+                    <div className="space-y-3">
+                      <ParkTicketSelector
+                        from={checkIn}
+                        to={checkOut}
+                        value={ticketCart}
+                        disabled={prepared}
+                        onChange={(value) => {
+                          setTicketCart(value);
+                          setAccepted(false);
+                        }}
+                      />
+                      {hasTickets && (
+                        <p className="rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">
+                          Esta é uma simulação visual. O pagamento com ingressos está bloqueado até
+                          integrarmos a venda e a emissão. Desmarque a oferta para testar apenas a
+                          hospedagem.
+                        </p>
+                      )}
+                    </div>
+                  ) : undefined
+                }
               >
                 <fieldset disabled={prepared} className="mb-7 border-b border-neutral-200 pb-7">
                   <legend className="mb-2 text-xl font-bold">Seus dados</legend>
@@ -389,25 +412,6 @@ export function SinglePageCheckout({
                     </label>
                   </div>
                 </fieldset>
-                {showParkTicketsPreview && (
-                  <ParkTicketSelector
-                    from={checkIn}
-                    to={checkOut}
-                    value={ticketCart}
-                    disabled={prepared}
-                    onChange={(value) => {
-                      setTicketCart(value);
-                      setAccepted(false);
-                    }}
-                  />
-                )}
-                {hasTickets && (
-                  <p className="mb-6 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">
-                    Hospedagem + ingressos: esta é uma simulação visual. O pagamento fica bloqueado
-                    até integrarmos a venda e a emissão dos ingressos. Remova os ingressos para
-                    testar apenas a hospedagem.
-                  </p>
-                )}
                 <section
                   className="mb-7 border-b border-neutral-200 pb-6"
                   aria-labelledby="conditions-title"

@@ -119,8 +119,13 @@ function setup(parkTicketsPreviewEnabled = false) {
 }
 
 async function fill(view: ReturnType<typeof setup>) {
-  await waitFor(() => assert.equal(view.getByRole('checkbox').hasAttribute('disabled'), false));
-  fireEvent.click(view.getByRole('checkbox'));
+  await waitFor(() =>
+    assert.equal(
+      view.getByRole('checkbox', { name: /Li e aceito/ }).hasAttribute('disabled'),
+      false,
+    ),
+  );
+  fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
   for (const [label, value] of [
     ['Número do cartão', '4111111111111111'],
     ['Validade (MM/AAAA)', '12/2030'],
@@ -221,7 +226,10 @@ test('a changed quote requires fresh consent and never starts Cielo', async () =
   await waitFor(() =>
     assert.match(view.getByRole('alert').textContent!, /preço ou a disponibilidade mudou/),
   );
-  assert.equal((view.getByRole('checkbox') as HTMLInputElement).checked, false);
+  assert.equal(
+    (view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement).checked,
+    false,
+  );
   assert.equal(tokens, 0);
   assert.equal(window.location.pathname, '/');
   assert.match(view.getByRole('button', { name: /Confirmar e pagar/ }).textContent!, /3.200/);
@@ -272,12 +280,19 @@ test('park ticket preview updates quantities, dates and totals while blocking al
   };
   const view = setup(true);
   await fill(view);
-  fireEvent.click(view.getByText('Hot Park').closest('summary')!);
-  fireEvent.click(view.getByRole('button', { name: 'Adicionar adulto — Hot Park' }));
+  const bump = view.getByRole('checkbox', {
+    name: /Sim, quero adicionar ingressos/,
+  }) as HTMLInputElement;
+  assert.equal(bump.checked, false);
+  assert.equal(view.queryByText('Total da simulação'), null);
+  fireEvent.click(bump);
   fireEvent.click(view.getByRole('button', { name: 'Adicionar adulto — Hot Park' }));
   fireEvent.click(view.getByRole('button', { name: 'Adicionar infantil — Hot Park' }));
   assert.equal(view.getByLabelText('Adulto — Hot Park').textContent, '2');
-  assert.equal((view.getByRole('checkbox') as HTMLInputElement).checked, false);
+  assert.equal(
+    (view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement).checked,
+    false,
+  );
   assert.equal(
     view
       .getByRole('button', { name: 'Compra com ingressos em demonstração' })
@@ -295,6 +310,12 @@ test('park ticket preview updates quantities, dates and totals while blocking al
   fireEvent.click(view.getByRole('button', { name: 'Remover adulto — Hot Park' }));
   assert.match(summary.textContent!, /3\.201,00/);
   fireEvent.click(view.getByRole('button', { name: 'Remover ingressos deste parque' }));
+  assert.equal(bump.checked, false);
+  assert.equal(view.queryByText('Total da simulação'), null);
+  assert.match(summary.textContent!, /3\.001,00/);
+  fireEvent.click(bump);
+  assert.match(summary.textContent!, /3\.121,00/);
+  fireEvent.click(bump);
   assert.equal(view.queryByText('Total da simulação'), null);
   assert.match(summary.textContent!, /3\.001,00/);
   assert.equal(reservations, 0);
@@ -307,7 +328,7 @@ test('park ticket preview updates quantities, dates and totals while blocking al
 test('park preview is absent by default while own-checkout payment stays available', async () => {
   const view = setup();
   await fill(view);
-  assert.equal(view.queryByRole('heading', { name: 'Complete a viagem' }), null);
+  assert.equal(view.queryByRole('checkbox', { name: /Sim, quero adicionar ingressos/ }), null);
   assert.equal(
     view.getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
     false,
@@ -367,7 +388,7 @@ for (const enabled of [false, undefined, true]) {
         ),
       { timeout: 10000 },
     );
-    assert.equal(view.queryByRole('heading', { name: 'Complete a viagem' }), null);
+    assert.equal(view.queryByRole('checkbox', { name: /Sim, quero adicionar ingressos/ }), null);
     assert.equal(orders, 0);
   });
 }

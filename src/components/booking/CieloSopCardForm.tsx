@@ -14,6 +14,7 @@ interface CieloSopCardFormProps {
   previewOnly?: boolean;
   preparePayment?: () => Promise<CieloPaymentContext>;
   children?: ReactNode;
+  beforeSubmit?: ReactNode;
   guestPrefill?: { fullName: string; email: string };
   submitLabel?: string;
   disabled?: boolean;
@@ -38,6 +39,7 @@ export function CieloSopCardForm({
   previewOnly = false,
   preparePayment,
   children,
+  beforeSubmit,
   guestPrefill,
   submitLabel,
   disabled = false,
@@ -385,6 +387,11 @@ export function CieloSopCardForm({
         <p role="alert" className="text-sm text-rose-800">
           {error}
         </p>
+      )}
+      {beforeSubmit && (
+        <fieldset disabled={isSubmitting} className="min-w-0">
+          {beforeSubmit}
+        </fieldset>
       )}
       <button
         type="submit"
