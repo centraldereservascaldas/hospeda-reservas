@@ -30,7 +30,9 @@ import {
 type SinglePageCheckoutProps = Pick<
   ComponentProps<typeof CheckoutModal>,
   'bookingData' | 'guestPrefill' | 'onClose'
->;
+> & {
+  previewOnly?: boolean;
+};
 const fieldClass =
   'mt-1.5 min-h-12 w-full rounded-xl border border-neutral-400/70 bg-white px-3 text-base text-neutral-950 outline-none focus-visible:border-orange-700 focus-visible:ring-2 focus-visible:ring-orange-700/20 disabled:bg-neutral-100';
 const formatDate = (value: string) =>
@@ -41,6 +43,7 @@ export function SinglePageCheckout({
   bookingData,
   guestPrefill,
   onClose,
+  previewOnly = false,
 }: SinglePageCheckoutProps) {
   const [guest, setGuest] = useState(guestPrefill ?? { fullName: '', email: '', phone: '' });
   const [terms, setTerms] = useState<{ version: string; fields: [string, string][] } | null>(null);
@@ -61,6 +64,30 @@ export function SinglePageCheckout({
 
   useEffect(() => {
     if (!bookingData) return;
+    if (previewOnly) {
+      setTerms({
+        version: 'preview-local',
+        fields: [
+          ['Cancelamento', 'Condições demonstrativas para revisão do layout.'],
+          ['Hospedagem', 'A reserva será confirmada somente após pagamento e confirmação.'],
+        ],
+      });
+      setReadiness({
+        success: true,
+        ready: true,
+        termsAvailable: true,
+        checkoutEnabled: true,
+        singlePageCheckoutEnabled: true,
+        payment: {
+          enabled: true,
+          methods: ['card', 'pix'],
+          publicKey: null,
+          provider: 'cielo_sandbox',
+        },
+      });
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
     setReadiness(null);
@@ -96,7 +123,7 @@ export function SinglePageCheckout({
     return () => {
       active = false;
     };
-  }, [bookingData, retry]);
+  }, [bookingData, previewOnly, retry]);
 
   useEffect(() => {
     if (!attemptFinished || !preparedRef.current) return;
@@ -422,6 +449,7 @@ export function SinglePageCheckout({
                 reference=""
                 amount={total.toFixed(2)}
                 credentials={null}
+                previewOnly={previewOnly}
                 preparePayment={preparePayment}
                 guestPrefill={guest}
                 disabled={!ready || !accepted}

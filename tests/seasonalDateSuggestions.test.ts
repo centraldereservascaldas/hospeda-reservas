@@ -58,8 +58,11 @@ test('shows date suggestions with real quoted totals and applies the selected pe
     }),
   );
 
-  assert.ok(screen.getByRole('heading', { name: 'Escolha uma data e veja os preços' }));
+  assert.ok(screen.getByRole('heading', { name: 'Hospedagens para viajar com seu pet' }));
+  assert.ok(screen.getByRole('heading', { name: 'Caldas Country Festival' }));
+  assert.ok(screen.getByRole('heading', { name: 'Datas comemorativas e feriados' }));
   await waitFor(() => assert.ok(screen.getAllByText('R$ 1.200,00').length > 0));
+  assert.ok(screen.getAllByRole('img').length > 0);
   const firstSuggestion = screen.getAllByRole('button', { name: /a partir de.*1\.200,00/i })[0]!;
   fireEvent.click(firstSuggestion);
 

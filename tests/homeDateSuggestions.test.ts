@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getHomeDateSuggestions } from '../src/utils/homeDateSuggestions.ts';
+import {
+  getHomeDateSuggestions,
+  getHomeDiscoveryCollections,
+} from '../src/utils/homeDateSuggestions.ts';
 
 test('home suggestions combine real weekends with seasonal dates without duplicates', () => {
   const suggestions = getHomeDateSuggestions(new Date(2026, 9, 29, 12), () => 0.25);
@@ -25,4 +28,22 @@ test('weekend suggestions always run from Friday to Sunday', () => {
     assert.equal(new Date(`${weekend.checkIn}T12:00:00`).getDay(), 5);
     assert.equal(new Date(`${weekend.checkOut}T12:00:00`).getDay(), 0);
   }
+});
+
+test('home discovery creates pets, event and holiday collections with five cards', () => {
+  const collections = getHomeDiscoveryCollections(new Date(2026, 9, 29, 12), () => 0.25);
+
+  assert.deepEqual(
+    collections.map((collection) => collection.id),
+    ['pets', 'caldas-country', 'holidays'],
+  );
+  assert.equal(collections.find((collection) => collection.id === 'pets')?.suggestions.length, 5);
+  assert.equal(
+    collections.find((collection) => collection.id === 'caldas-country')?.suggestions.length,
+    5,
+  );
+  assert.equal(
+    collections.find((collection) => collection.id === 'holidays')?.suggestions.length,
+    5,
+  );
 });

@@ -312,6 +312,7 @@ export function MainContentRouter({
                 currency={currency}
                 guests={filters.guests}
                 guestCount={searchGuestCount}
+                fallbackProperties={filteredProperties}
                 onSelect={onSearchInApp}
               />
             )}
