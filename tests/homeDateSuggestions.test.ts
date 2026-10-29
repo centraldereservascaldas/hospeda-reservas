@@ -5,7 +5,7 @@ import { getHomeDateSuggestions } from '../src/utils/homeDateSuggestions.ts';
 test('home suggestions combine real weekends with seasonal dates without duplicates', () => {
   const suggestions = getHomeDateSuggestions(new Date(2026, 9, 29, 12), () => 0.25);
 
-  assert.ok(suggestions.length >= 4);
+  assert.equal(suggestions.length, 5);
   assert.equal(suggestions.filter((suggestion) => suggestion.kind === 'weekend').length, 2);
   assert.equal(
     new Set(suggestions.map((suggestion) => `${suggestion.checkIn}|${suggestion.checkOut}`)).size,

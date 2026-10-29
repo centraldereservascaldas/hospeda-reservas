@@ -58,7 +58,10 @@ export function getHomeDateSuggestions(
     .filter(
       (candidate, index, all) =>
         all.findIndex((item) => item.kind === candidate.kind) === index &&
-        !weekends.some((weekend) => weekend.checkIn === candidate.checkIn),
+        !weekends.some(
+          (weekend) =>
+            weekend.checkIn === candidate.checkIn && weekend.checkOut === candidate.checkOut,
+        ),
     )
     .slice(0, 3)
     .map((candidate): HomeDateSuggestion => ({
