@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Minus, Plus, Ticket, Waves, CalendarDays } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
 
@@ -71,6 +72,7 @@ export function ParkTicketSelector({
   onChange,
   disabled,
 }: ParkTicketSelectorProps) {
+  const bumpId = useId();
   const lines = getPreviewTicketLines(value);
   const totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
   const totalCents = lines.reduce((sum, line) => sum + line.totalCents, 0);
@@ -97,8 +99,10 @@ export function ParkTicketSelector({
       <p className="mt-2 text-sm leading-6 text-neutral-600">
         Adicione ingressos para um parque à sua hospedagem, no mesmo resumo da compra.
       </p>
-      <label className="mt-4 flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-orange-200 bg-white p-3 text-sm leading-6">
+      <div className="mt-4 flex min-h-11 items-start gap-3 rounded-xl border border-orange-200 bg-white p-3 text-sm leading-6">
         <input
+          id={bumpId}
+          aria-describedby={`${bumpId}-description`}
           type="checkbox"
           checked={totalQuantity > 0}
           disabled={disabled}
@@ -116,17 +120,17 @@ export function ParkTicketSelector({
           }
           className="mt-1 h-5 w-5 shrink-0 accent-orange-800"
         />
-        <span>
-          <strong className="block text-neutral-950">
+        <div>
+          <label htmlFor={bumpId} className="block cursor-pointer font-bold text-neutral-950">
             Sim, quero adicionar ingressos à minha reserva
-          </strong>
-          <span className="text-neutral-600">
+          </label>
+          <p id={`${bumpId}-description`} className="text-neutral-600">
             Exemplo: 1 adulto no {suggestedOffer.name} por{' '}
             <strong>{formatCurrency(suggestedOffer.categories[0].priceCents / 100, 'BRL')}</strong>.
             Você pode ajustar o parque, a data e a quantidade.
-          </span>
-        </span>
-      </label>
+          </p>
+        </div>
+      </div>
       <p className="mt-3 text-xs leading-5 text-amber-950">
         Prévia demonstrativa: preços e categorias fictícios. A venda e a emissão dos ingressos
         continuam desativadas.
