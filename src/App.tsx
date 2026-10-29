@@ -529,7 +529,10 @@ export default function App() {
           ? 'cancelamento'
           : null;
 
-  if (import.meta.env.DEV && pathname === '/checkout-preview/cielo') {
+  const checkoutPreviewAllowed =
+    import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+
+  if (checkoutPreviewAllowed && pathname === '/checkout-preview/cielo') {
     return (
       <Suspense
         fallback={

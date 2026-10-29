@@ -23,6 +23,7 @@ import { CondominiumDirectory } from './condominium/CondominiumDirectory';
 import { ActiveSearchFilters } from './search/ActiveSearchFilters';
 import { AvailabilitySearchState as AvailabilitySearchStateView } from './search/AvailabilitySearchState';
 import { StaysSearchWidget } from './search/StaysSearchWidget';
+import { SeasonalDateSuggestions } from './search/SeasonalDateSuggestions';
 import { PropertyCatalogGrid } from './property/PropertyCatalogGrid';
 import { CatalogLoadNotice } from './property/CatalogLoadNotice';
 import { LazyFeatureBoundary } from './LazyFeatureBoundary';
@@ -300,6 +301,21 @@ export function MainContentRouter({
               />
             </div>
           )}
+
+          {!isCondominiumView &&
+            availabilitySearchState === 'idle' &&
+            !filters.checkIn &&
+            !filters.checkOut &&
+            filteredProperties.length > 0 &&
+            !filteredProperties.some((property) => property.simulatedData) && (
+              <SeasonalDateSuggestions
+                currency={currency}
+                guests={filters.guests}
+                guestCount={searchGuestCount}
+                fallbackProperties={filteredProperties}
+                onSelect={onSearchInApp}
+              />
+            )}
 
           <ActiveSearchFilters
             filters={filters}

@@ -142,13 +142,13 @@ export const Header: React.FC<HeaderProps> = ({
   }, [isCurrencyMenuOpen]);
 
   return (
-    <header className="sticky top-0 z-50 liquid-glass border-b border-white/60 shadow-[0_4px_30px_rgba(0,0,0,0.03)] backdrop-blur-2xl">
+    <header className="sticky top-0 z-50 liquid-glass border-b border-neutral-200/80 shadow-[0_8px_30px_-24px_rgba(15,23,42,0.45)] backdrop-blur-2xl">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4 [@media(max-width:639px)_and_(max-height:400px)]:h-14">
           {/* Official Company Logo: Central de Reservas Caldas Novas */}
           <button
             onClick={() => setCurrentView('explore')}
-            className="flex items-center cursor-pointer group focus:outline-none flex-shrink-0"
+            className="group -ml-1 flex flex-shrink-0 cursor-pointer items-center rounded-2xl p-1 focus:outline-none"
             title="Central de Reservas Caldas Novas"
           >
             <LogoCRCN size="md" variant="light" responsiveText={true} />
@@ -159,7 +159,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenSearch}
               aria-label={`Buscar hospedagens: ${searchSummaryText || 'Caldas Novas & Região'}`}
-              className="min-h-11 w-full flex items-center justify-between pl-3 sm:pl-4 pr-1.5 sm:pr-2 py-1.5 sm:py-2 rounded-full liquid-glass-pill hover:bg-white/90 border border-white/85 shadow-[0_4px_20px_rgba(0,0,0,0.06),inset_0_1px_1.5px_rgba(255,255,255,0.9)] hover:shadow-lg transition-all cursor-pointer group min-w-0 max-[360px]:justify-center max-[360px]:px-0"
+              className="min-h-11 w-full flex items-center justify-between pl-3 sm:pl-4 pr-1.5 sm:pr-2 py-1.5 sm:py-2 rounded-full liquid-glass-pill hover:bg-white/90 border border-neutral-200/90 shadow-[0_5px_18px_-12px_rgba(15,23,42,0.4),inset_0_1px_1.5px_rgba(255,255,255,0.9)] hover:shadow-lg transition-all cursor-pointer group min-w-0 max-[360px]:justify-center max-[360px]:px-0"
             >
               <div className="flex items-center divide-x divide-neutral-200 text-xs sm:text-sm font-semibold text-neutral-800 min-w-0 truncate">
                 <span className="pr-2 sm:pr-3 text-neutral-900 font-bold truncate min-w-0 max-[360px]:hidden">
@@ -185,7 +185,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 ref={currencyTriggerRef}
                 onClick={() => setIsCurrencyMenuOpen(!isCurrencyMenuOpen)}
-                className="flex min-h-11 items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-900 liquid-glass-button border border-white/80 rounded-full transition-all cursor-pointer"
+                className="flex min-h-11 items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-900 liquid-glass-button border border-neutral-200/90 rounded-full transition-all cursor-pointer"
                 aria-label={`Moeda de exibição ${currency}. Conversões em USD e EUR são aproximadas.`}
                 aria-haspopup="true"
                 aria-expanded={isCurrencyMenuOpen}

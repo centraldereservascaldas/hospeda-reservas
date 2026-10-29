@@ -30,7 +30,7 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/html/public \
     LOG_CHANNEL=stderr
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl libpq-dev libpq5 libsqlite3-dev libsqlite3-0 unzip \
+    && apt-get install -y --no-install-recommends curl libpq-dev libpq5 libsqlite3-dev libsqlite3-0 supervisor unzip \
     && docker-php-ext-install pdo_pgsql pdo_sqlite \
     && apt-get purge -y --auto-remove libpq-dev libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/* \
@@ -49,6 +49,7 @@ WORKDIR /var/www/html
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 COPY --chown=www-data:www-data . .
 COPY --from=frontend --chown=www-data:www-data /app/dist/ ./public/
+COPY docker/supervisord.conf /etc/supervisor/conf.d/hospeda.conf
 
 RUN mkdir -p \
         database \
@@ -73,6 +74,8 @@ USER root
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl --fail --silent http://127.0.0.1/api/ready || exit 1
+    CMD test -f /tmp/hospeda-migrations-ready \
+        && test "$(supervisorctl status apache migrations queue scheduler 2>/dev/null | grep -c RUNNING)" -eq 4 \
+        && curl --fail --silent http://127.0.0.1/api/ready >/dev/null
 
-CMD ["apache2-foreground"]
+CMD ["/usr/bin/supervisord", "--nodaemon", "--configuration", "/etc/supervisor/supervisord.conf"]

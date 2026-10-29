@@ -281,7 +281,10 @@ test('Pix stays on the checkout, has no surcharge and waits for authoritative co
 
   const view = setup(false, pixPayment);
   await waitFor(() =>
-    assert.equal(view.getByRole('button', { name: 'Pix, aprovação rápida' }).hasAttribute('disabled'), false),
+    assert.equal(
+      view.getByRole('button', { name: 'Pix, aprovação rápida' }).hasAttribute('disabled'),
+      false,
+    ),
   );
   fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
   fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
@@ -359,61 +362,8 @@ test('a recovered paid order is displayed without tokenization or another paymen
   assert.equal(tokens, 0);
 });
 
-test('park ticket preview updates quantities, dates and totals while blocking all checkout writes', async () => {
-  let reservations = 0;
-  checkoutApi.createCheckout = async () => {
-    reservations++;
-    return null;
-  };
+test('park tickets stay absent even if an old preview flag is returned', async () => {
   const view = setup(true);
-  await fill(view);
-  const bump = view.getByRole('checkbox', {
-    name: /Sim, quero adicionar ingressos/,
-  }) as HTMLInputElement;
-  assert.equal(bump.checked, false);
-  assert.equal(view.queryByText('Total da simulação'), null);
-  fireEvent.click(bump);
-  fireEvent.click(view.getByRole('button', { name: 'Adicionar adulto — Hot Park' }));
-  fireEvent.click(view.getByRole('button', { name: 'Adicionar infantil — Hot Park' }));
-  assert.equal(view.getByLabelText('Adulto — Hot Park').textContent, '2');
-  assert.equal(
-    (view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement).checked,
-    false,
-  );
-  assert.equal(
-    view
-      .getByRole('button', { name: 'Compra com ingressos em demonstração' })
-      .hasAttribute('disabled'),
-    true,
-  );
-  const summary = view.getByRole('complementary', { name: 'Resumo da compra' });
-  assert.match(summary.textContent!, /3\.512,22/);
-  fireEvent.change(view.getByLabelText('Data da visita · Hot Park'), {
-    target: { value: '2026-11-12' },
-  });
-  assert.match(summary.textContent!, /12 de nov/);
-  fireEvent.submit(view.container.querySelector('form')!);
-  assert.equal(reservations, 0);
-  fireEvent.click(view.getByRole('button', { name: 'Remover adulto — Hot Park' }));
-  assert.match(summary.textContent!, /3\.392,22/);
-  fireEvent.click(view.getByRole('button', { name: 'Remover ingressos deste parque' }));
-  assert.equal(bump.checked, false);
-  assert.equal(view.queryByText('Total da simulação'), null);
-  assert.match(summary.textContent!, /3\.192,22/);
-  fireEvent.click(bump);
-  assert.match(summary.textContent!, /3\.312,22/);
-  fireEvent.click(bump);
-  assert.equal(view.queryByText('Total da simulação'), null);
-  assert.match(summary.textContent!, /3\.192,22/);
-  assert.equal(reservations, 0);
-  assert.equal(
-    view.getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
-    true,
-  );
-});
-
-test('park preview is absent by default while own-checkout payment stays available', async () => {
-  const view = setup();
   await fill(view);
   assert.equal(view.queryByRole('checkbox', { name: /Sim, quero adicionar ingressos/ }), null);
   assert.equal(

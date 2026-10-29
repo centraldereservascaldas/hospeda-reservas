@@ -9,7 +9,8 @@ export interface SurpriseDateOption {
 const toIsoDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
-const dateAtNoon = (year: number, monthIndex: number, day: number) => new Date(year, monthIndex, day, 12);
+const dateAtNoon = (year: number, monthIndex: number, day: number) =>
+  new Date(year, monthIndex, day, 12);
 
 const addDays = (date: Date, days: number) => {
   const next = new Date(date);
@@ -37,25 +38,46 @@ const easterSunday = (year: number) => {
 
 const holidayWeekendStart = (holiday: Date) => {
   switch (holiday.getDay()) {
-    case 1: return addDays(holiday, -3); // Monday -> Friday
-    case 2: return addDays(holiday, -4); // Tuesday -> Friday
-    case 4: return addDays(holiday, -1); // Thursday -> Wednesday
-    case 5: return addDays(holiday, -1); // Friday -> Thursday
-    case 6: return addDays(holiday, -1); // Saturday -> Friday
-    default: return addDays(holiday, -2); // Sunday -> Friday
+    case 1:
+      return addDays(holiday, -3); // Monday -> Friday
+    case 2:
+      return addDays(holiday, -4); // Tuesday -> Friday
+    case 4:
+      return addDays(holiday, -1); // Thursday -> Wednesday
+    case 5:
+      return addDays(holiday, -1); // Friday -> Thursday
+    case 6:
+      return addDays(holiday, -1); // Saturday -> Friday
+    default:
+      return addDays(holiday, -2); // Sunday -> Friday
   }
 };
 
-export function getSurpriseDateCandidates(now = new Date()): SurpriseDateOption[] {
+export function getSurpriseDateCandidates(
+  now = new Date(),
+  random: () => number = Math.random,
+): SurpriseDateOption[] {
   const today = dateAtNoon(now.getFullYear(), now.getMonth(), now.getDate());
   const earliestCheckIn = addDays(today, 2);
   const horizon = addDays(today, 370);
   const candidates: SurpriseDateOption[] = [];
 
-  const add = (checkIn: Date, nights: number, occasion: string, kind: SurpriseDateOption['kind'], weight: number) => {
+  const add = (
+    checkIn: Date,
+    nights: number,
+    occasion: string,
+    kind: SurpriseDateOption['kind'],
+    weight: number,
+  ) => {
     const checkOut = addDays(checkIn, nights);
     if (checkIn < earliestCheckIn || checkIn > horizon) return;
-    candidates.push({ checkIn: toIsoDate(checkIn), checkOut: toIsoDate(checkOut), occasion, kind, weight });
+    candidates.push({
+      checkIn: toIsoDate(checkIn),
+      checkOut: toIsoDate(checkOut),
+      occasion,
+      kind,
+      weight,
+    });
   };
 
   for (let year = today.getFullYear(); year <= horizon.getFullYear(); year += 1) {
@@ -104,7 +126,7 @@ export function getSurpriseDateCandidates(now = new Date()): SurpriseDateOption[
   const weightedOrder: SurpriseDateOption[] = [];
   while (pool.length) {
     const totalWeight = pool.reduce((sum, candidate) => sum + candidate.weight, 0);
-    let roll = Math.random() * totalWeight;
+    let roll = random() * totalWeight;
     const selectedIndex = pool.findIndex((candidate) => (roll -= candidate.weight) < 0);
     weightedOrder.push(pool.splice(selectedIndex < 0 ? pool.length - 1 : selectedIndex, 1)[0]);
   }
