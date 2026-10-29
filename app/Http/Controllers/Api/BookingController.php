@@ -294,11 +294,20 @@ class BookingController extends Controller
             && $holdMinutes <= 1440;
         $ready = $checkoutReady && $paymentMethods !== [];
 
+        $singlePageCheckoutEnabled = (bool) config('direct-booking.checkout_ui_enabled', false)
+            && $ready
+            && in_array($payments->provider(), ['cielo', 'cielo_sandbox'], true)
+            && in_array('card', $paymentMethods, true);
+
         return response()->json([
             'success' => true,
             'ready' => $ready,
             'termsAvailable' => $approvedListing !== null,
             'checkoutEnabled' => $checkoutReady,
+            'singlePageCheckoutEnabled' => $singlePageCheckoutEnabled,
+            'parkTicketsPreviewEnabled' => $singlePageCheckoutEnabled
+                && app()->environment(['local', 'testing'])
+                && (bool) config('park-tickets.preview_enabled', false),
             'payment' => [
                 'enabled' => $paymentMethods !== [],
                 'methods' => $paymentMethods,

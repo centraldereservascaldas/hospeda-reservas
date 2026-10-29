@@ -54,6 +54,9 @@ class CheckDirectBookingReadiness extends Command
             ? ['VITE_MERCADO_PAGO_PUBLIC_KEY' => $this->isConfiguredString(config('services.mercadopago.public_key'))]
             : [];
         $flags = [
+            'DIRECT_BOOKING_CHECKOUT_UI_ENABLED' => (bool) config('direct-booking.checkout_ui_enabled', false),
+            'PARK_TICKETS_PREVIEW_ENABLED' => app()->environment(['local', 'testing'])
+                && (bool) config('park-tickets.preview_enabled', false),
             'DIRECT_BOOKING_ENABLED' => (bool) config('direct-booking.enabled', false),
             'DIRECT_BOOKING_PAYMENTS_ENABLED' => (bool) config('direct-booking.payments_enabled', false),
             'DIRECT_BOOKING_CONFIRMATION_ENABLED' => (bool) config('direct-booking.confirmation_enabled', false),
@@ -112,6 +115,7 @@ class CheckDirectBookingReadiness extends Command
                 return $checks + [
                     'CIELO_DIRECT_ENVIRONMENT' => $configuration->environment() === 'production',
                     'CIELO_DIRECT_PRODUCTION_ENABLED' => $configuration->isAllowed(),
+                    'CIELO_DIRECT_PRODUCTION_SOP_ENABLED' => (bool) $configuration->value('sop_enabled'),
                     'CIELO_DIRECT_PRODUCTION_MERCHANT_ID' => $this->isConfiguredString($configuration->value('merchant_id')),
                     'CIELO_DIRECT_PRODUCTION_MERCHANT_KEY' => $this->isConfiguredString($configuration->value('merchant_key')),
                     'CIELO_DIRECT_PRODUCTION_SOP_CLIENT_ID' => $this->isConfiguredString($configuration->value('sop_client_id')),

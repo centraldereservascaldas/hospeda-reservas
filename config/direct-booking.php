@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'checkout_ui_enabled' => (bool) env('DIRECT_BOOKING_CHECKOUT_UI_ENABLED', false),
     'enabled' => (bool) env('DIRECT_BOOKING_ENABLED', false),
     'payments_enabled' => (bool) env('DIRECT_BOOKING_PAYMENTS_ENABLED', false),
     'confirmation_enabled' => (bool) env('DIRECT_BOOKING_CONFIRMATION_ENABLED', false),

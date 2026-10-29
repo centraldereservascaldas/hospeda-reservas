@@ -145,12 +145,14 @@ export function SinglePageCheckout({
   const total = quote.total;
   const money = (value: number) => formatCurrency(value, 'BRL');
   const ready =
+    readiness?.singlePageCheckoutEnabled === true &&
     readiness?.ready === true &&
     terms !== null &&
     readiness.payment.methods.includes('card') &&
     ['cielo', 'cielo_sandbox'].includes(readiness.payment.provider);
   const fees = getVisiblePropertyFees(quote.fees || []);
-  const ticketLines = getPreviewTicketLines(ticketCart);
+  const showParkTicketsPreview = readiness?.parkTicketsPreviewEnabled === true;
+  const ticketLines = showParkTicketsPreview ? getPreviewTicketLines(ticketCart) : [];
   const ticketsTotal = ticketLines.reduce((sum, line) => sum + line.totalCents, 0) / 100;
   const hasTickets = ticketLines.length > 0;
 
@@ -387,16 +389,18 @@ export function SinglePageCheckout({
                     </label>
                   </div>
                 </fieldset>
-                <ParkTicketSelector
-                  from={checkIn}
-                  to={checkOut}
-                  value={ticketCart}
-                  disabled={prepared}
-                  onChange={(value) => {
-                    setTicketCart(value);
-                    setAccepted(false);
-                  }}
-                />
+                {showParkTicketsPreview && (
+                  <ParkTicketSelector
+                    from={checkIn}
+                    to={checkOut}
+                    value={ticketCart}
+                    disabled={prepared}
+                    onChange={(value) => {
+                      setTicketCart(value);
+                      setAccepted(false);
+                    }}
+                  />
+                )}
                 {hasTickets && (
                   <p className="mb-6 rounded-xl bg-amber-50 p-3 text-sm leading-6 text-amber-950">
                     Hospedagem + ingressos: esta é uma simulação visual. O pagamento fica bloqueado

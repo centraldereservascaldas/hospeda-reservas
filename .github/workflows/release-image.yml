@@ -335,6 +335,8 @@ jobs:
           upsert_runtime_env STAYS_HOSTED_CHECKOUT_ENABLED true
           upsert_runtime_env STAYS_HOSTED_CHECKOUT_ALLOWED_HOSTS 'www.centraldereservascaldas.com.br,centraldereservascaldas.com.br'
           upsert_runtime_env DIRECT_BOOKING_ENABLED false
+          upsert_runtime_env DIRECT_BOOKING_CHECKOUT_UI_ENABLED false
+          upsert_runtime_env PARK_TICKETS_PREVIEW_ENABLED false
           upsert_runtime_env DIRECT_BOOKING_PAYMENTS_ENABLED false
           upsert_runtime_env DIRECT_BOOKING_CONFIRMATION_ENABLED false
           upsert_runtime_env DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED false

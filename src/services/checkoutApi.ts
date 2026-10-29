@@ -172,6 +172,8 @@ export interface CheckoutReadinessResponse {
   ready: boolean;
   termsAvailable: boolean;
   checkoutEnabled: boolean;
+  singlePageCheckoutEnabled?: boolean;
+  parkTicketsPreviewEnabled?: boolean;
   payment: CheckoutPaymentCapabilities;
 }
 
@@ -247,7 +249,16 @@ const isCheckoutReadinessResponse = (value: unknown): value is CheckoutReadiness
   typeof value.ready === 'boolean' &&
   typeof value.termsAvailable === 'boolean' &&
   typeof value.checkoutEnabled === 'boolean' &&
+  (value.singlePageCheckoutEnabled === undefined ||
+    typeof value.singlePageCheckoutEnabled === 'boolean') &&
+  (value.parkTicketsPreviewEnabled === undefined ||
+    typeof value.parkTicketsPreviewEnabled === 'boolean') &&
   isCheckoutPaymentCapabilities(value.payment) &&
+  (value.singlePageCheckoutEnabled !== true ||
+    (value.ready === true &&
+      ['cielo', 'cielo_sandbox'].includes(value.payment.provider) &&
+      value.payment.methods.includes('card'))) &&
+  (value.parkTicketsPreviewEnabled !== true || value.singlePageCheckoutEnabled === true) &&
   value.ready === (value.checkoutEnabled && value.termsAvailable && value.payment.enabled);
 
 const checkoutPaymentAttemptStatuses: CheckoutPaymentAttemptSummary['status'][] = [
