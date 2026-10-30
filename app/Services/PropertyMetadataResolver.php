@@ -2,8 +2,12 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Str;
+
 class PropertyMetadataResolver
 {
+    public function __construct(private StaysDiscoveryCatalog $catalog) {}
+
     /**
      * @return array{title: string, description: string, canonicalUrl: string, imageUrl: ?string}|null
      */
@@ -11,6 +15,18 @@ class PropertyMetadataResolver
     {
         $listings = config('property_metadata.listings', []);
         $listing = is_array($listings) ? ($listings[$propertyId] ?? null) : null;
+        if ($listing === null) {
+            $content = $this->catalog->listing($propertyId);
+            if ($content === null || ! $content['indexable'] || $content['id'] !== $propertyId) {
+                return null;
+            }
+            $listing = [
+                'approved' => true, 'indexable' => true,
+                'title' => $content['name'].' em '.$content['city'].' | CRCN',
+                'description' => Str::limit(preg_replace('/\s+/u', ' ', $content['description']) ?? '', 160),
+                'imageUrl' => $content['images'][0] ?? null,
+            ];
+        }
         if (! is_array($listing)
             || ($listing['approved'] ?? false) !== true
             || ($listing['indexable'] ?? false) !== true

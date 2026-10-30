@@ -62,7 +62,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
     const touch = event.touches.length === 1 ? event.touches[0] : null;
     const photoBounds = photoCarouselRef.current?.getBoundingClientRect();
     const target = event.target;
-    const isPhotoControl = target instanceof Element &&
+    const isPhotoControl =
+      target instanceof Element &&
       Boolean(target.closest('button:not([data-property-detail-trigger])'));
 
     touchStartRef.current =
@@ -112,9 +113,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   const displayPrice = getPropertyDisplayPrice(property, hasSearchDates, showTotalWithTaxes);
 
   return (
-    <article
-      className="group relative flex flex-col cursor-pointer transition-transform duration-200 p-2 sm:p-2.5 rounded-3xl liquid-glass border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-xl hover:-translate-y-1 transition-all"
-    >
+    <article className="group relative flex flex-col cursor-pointer transition-transform duration-200 p-2 sm:p-2.5 rounded-3xl liquid-glass border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-xl hover:-translate-y-1 transition-all">
       <button
         type="button"
         data-property-detail-trigger={property.id}
@@ -240,7 +239,24 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           {/* Title & Rating */}
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-extrabold text-neutral-950 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-orange-600 transition-colors">
-              {displayTitle}
+              <a
+                href={`/apartamento/${encodeURIComponent(property.staysListingId || property.id)}`}
+                className="pointer-events-auto rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+                onClick={(event) => {
+                  if (
+                    event.button !== 0 ||
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.shiftKey ||
+                    event.altKey
+                  )
+                    return;
+                  event.preventDefault();
+                  onSelectProperty(property);
+                }}
+              >
+                {displayTitle}
+              </a>
             </h3>
             {property.reviewsSynced && property.reviewCount > 0 && (
               <div

@@ -1,0 +1,87 @@
+---
+import '../styles/blog.css';
+import { safeJson } from '../lib/editorial';
+
+interface Props {
+  title: string;
+  description: string;
+  path: string;
+  schema?: Record<string, unknown>;
+}
+const { title, description, path, schema } = Astro.props;
+const canonical = new URL(path, Astro.site).href;
+const organization = {
+  '@type': 'Organization',
+  '@id': new URL('/#organization', Astro.site).href,
+  name: 'Central de Reservas Caldas Novas',
+  url: new URL('/', Astro.site).href,
+};
+const breadcrumb = {
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Início', item: new URL('/', Astro.site).href },
+    { '@type': 'ListItem', position: 2, name: 'Blog', item: new URL('/blog/', Astro.site).href },
+    ...(path !== '/blog/' ? [{ '@type': 'ListItem', position: 3, name: title, item: canonical }] : []),
+  ],
+};
+const graph = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    organization,
+    breadcrumb,
+    ...(schema ? [schema] : [{ '@type': 'CollectionPage', name: title, url: canonical, inLanguage: 'pt-BR' }]),
+  ],
+};
+---
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} | Blog CRCN</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta property="og:site_name" content="Central de Reservas Caldas Novas" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:type" content={schema?.['@type'] === 'BlogPosting' ? 'article' : 'website'} />
+    <meta property="og:locale" content="pt_BR" />
+    <meta name="twitter:card" content="summary" />
+    <link rel="preload" href="/fonts/plus-jakarta-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <script type="application/ld+json" set:html={safeJson(graph)} />
+  </head>
+  <body>
+    <a class="skip" href="#conteudo">Ir para o conteúdo</a>
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="/" aria-label="Central de Reservas Caldas Novas — início">
+          <img src="/brand-crcn.svg" width="46" height="46" alt="" />
+          <span><strong>CENTRAL</strong><small>DE RESERVAS</small><b>CALDAS NOVAS</b></span>
+        </a>
+        <nav aria-label="Navegação principal">
+          <a href="/blog/">Blog e guias</a>
+          <a class="button button-outline" href="/#stays-apartments-catalog">
+            Ver hospedagens <span aria-hidden="true">↗</span>
+          </a>
+        </nav>
+      </div>
+    </header>
+    <main id="conteudo" tabindex="-1"><slot /></main>
+    <footer class="site-footer">
+      <div class="shell">
+        <div>
+          <a class="footer-name" href="/">Central de Reservas Caldas Novas</a>
+          <p>Ideias para planejar. Acomodações para viver a viagem.</p>
+        </div>
+        <nav aria-label="Links do rodapé">
+          <a href="/blog/">Blog</a>
+          <a href="/#stays-apartments-catalog">Hospedagens</a>
+          <a href="mailto:centraldereservascn@gmail.com">Fale com a CRCN ↗</a>
+        </nav>
+        <small>CENTRAL DE RESERVAS CALDAS NOVAS CRCN LTDA · CNPJ 67.314.679/0001-64</small>
+      </div>
+    </footer>
+  </body>
+</html>

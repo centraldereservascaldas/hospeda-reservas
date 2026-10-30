@@ -191,6 +191,14 @@ export const CondominiumDirectory: React.FC<CondominiumDirectoryProps> = ({
                     >
                       {condominium.name}
                     </button>
+                    {condominium.pageUrl && (
+                      <a
+                        href={condominium.pageUrl}
+                        className="mt-2 inline-block text-sm font-semibold text-orange-800 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-orange-600"
+                      >
+                        Conhecer o empreendimento e suas acomodações
+                      </a>
+                    )}
                     <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-neutral-500">
                       <MapPin className="h-3 w-3 text-orange-500" /> Caldas Novas, Goiás
                     </p>

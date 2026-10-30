@@ -1,0 +1,193 @@
+.discovery-page {
+  background-color: var(--crcn-color-page);
+  background-image: var(--crcn-page-background);
+  background-attachment: fixed;
+  background-size: cover;
+  color: #171717;
+}
+.discovery-page .guide-shell {
+  max-width: 1280px;
+}
+.discovery-page .guide-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.58));
+  border-bottom: 1px solid var(--crcn-glass-border);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  box-shadow: 0 8px 30px -24px rgba(15, 23, 42, 0.45);
+}
+.discovery-page .guide-header-inner {
+  min-height: 84px;
+}
+.discovery-page .guide-brand {
+  gap: 0.6rem;
+}
+.discovery-page .guide-header-action {
+  border: 1px solid var(--crcn-glass-border);
+  background: var(--crcn-glass-surface);
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.04),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.95);
+}
+.discovery-page .guide-hero {
+  background: transparent;
+  border: 0;
+  padding-bottom: 1.5rem;
+}
+.discovery-page .guide-hero h1 {
+  font-weight: 800;
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+}
+.discovery-page .guide-eyebrow {
+  color: #c2410c;
+  font-weight: 800;
+}
+.discovery-page .guide-breadcrumb {
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  color: #525252;
+}
+.discovery-page .guide-lead {
+  color: #525252;
+}
+.discovery-page .public-action,
+.discovery-page .discovery-booking .public-action {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  padding: 0.85rem 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ea580c, #c2410c);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.5;
+  text-decoration: none;
+  box-shadow:
+    0 10px 28px -8px rgba(234, 88, 12, 0.32),
+    inset 0 1px 2px rgba(255, 255, 255, 0.4);
+  transition:
+    filter 150ms,
+    box-shadow 150ms;
+}
+.discovery-page .public-action:hover {
+  filter: brightness(1.06);
+  box-shadow: 0 12px 30px -8px rgba(234, 88, 12, 0.4);
+}
+.discovery-page .discovery-cover {
+  border: 4px solid rgba(255, 255, 255, 0.85);
+  box-sizing: border-box;
+  box-shadow: 0 20px 45px -20px rgba(15, 23, 42, 0.32);
+  border-radius: 24px;
+}
+.discovery-page .discovery-card,
+.discovery-page .discovery-booking,
+.discovery-page .discovery-detail-grid > article {
+  background: var(--crcn-glass-surface);
+  border: 1px solid var(--crcn-glass-border);
+  border-radius: 24px;
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  box-shadow:
+    0 16px 45px -10px rgba(0, 0, 0, 0.07),
+    inset 0 1.5px 2px rgba(255, 255, 255, 1);
+}
+.discovery-page .discovery-card {
+  padding: 5px;
+}
+.discovery-page .discovery-card img {
+  border-radius: 19px;
+}
+.discovery-page .discovery-card strong,
+.discovery-page .guide-text-link {
+  color: #c2410c;
+}
+.discovery-page .discovery-card h2,
+.discovery-page .discovery-card h3 {
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.discovery-page .discovery-card h3 a {
+  text-decoration: none;
+  color: #171717;
+}
+.discovery-page .discovery-detail-grid > article {
+  padding: 1.75rem;
+}
+.discovery-page .discovery-detail-grid > article > h2:first-child {
+  margin-top: 0;
+}
+.discovery-page .discovery-detail-grid {
+  gap: 1.5rem;
+}
+.discovery-page .discovery-booking {
+  padding: 1.75rem;
+}
+.discovery-page .discovery-booking h2 {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.discovery-page .discovery-booking p {
+  color: #525252;
+  font-size: 0.9rem;
+}
+.discovery-page .discovery-description {
+  color: #404040;
+  font-size: 0.95rem;
+}
+.discovery-page .discovery-amenities {
+  list-style: none;
+  padding: 0;
+  gap: 0.65rem;
+}
+.discovery-page .discovery-amenities li {
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 0.85rem;
+}
+.discovery-page .discovery-facts {
+  gap: 0.75rem;
+}
+.discovery-page .discovery-facts dd {
+  color: #262626;
+}
+.discovery-page .guide-note {
+  background: rgba(255, 247, 237, 0.8);
+  border: 1px solid rgba(251, 146, 60, 0.25);
+  border-radius: 20px;
+}
+.discovery-page .guide-footer {
+  background: rgba(255, 255, 255, 0.45);
+  border-top: 1px solid var(--crcn-glass-border);
+}
+.discovery-page :is(a, button):focus-visible {
+  outline: 2px solid var(--crcn-accent);
+  outline-offset: 4px;
+}
+@media (max-width: 540px) {
+  .discovery-page .guide-header-inner {
+    min-height: 76px;
+  }
+  .discovery-page .discovery-detail-grid > article,
+  .discovery-page .discovery-booking {
+    padding: 1.25rem;
+  }
+  .discovery-page .discovery-hero-grid {
+    gap: 1.5rem;
+  }
+  .discovery-page .guide-hero h1 {
+    font-size: 2.1rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .discovery-page .public-action {
+    transition: none;
+  }
+}

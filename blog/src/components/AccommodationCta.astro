@@ -1,0 +1,27 @@
+---
+import { accommodationLink, type Post } from '../lib/editorial';
+
+interface Props {
+  intent?: Post['data']['intent'];
+  compact?: boolean;
+}
+const { intent = 'geral', compact = false } = Astro.props;
+const labels = {
+  geral: 'Explorar acomodações',
+  familia: 'Ver opções para famílias',
+  pets: 'Buscar opções que aceitam pets',
+  piscinas: 'Ver opções com piscinas 24 horas',
+  centro: 'Ver opções próximas ao centro',
+};
+---
+<aside class:list={['accommodation-cta', { compact }]} aria-label="Encontre sua hospedagem">
+  <div>
+    <span class="eyebrow">DA IDEIA À SUA ESTADIA</span>
+    <h2>Agora, encontre o seu lugar.</h2>
+    <p>Escolha suas datas e informe os hóspedes para consultar disponibilidade e o total da estadia.</p>
+  </div>
+  <a class="button button-primary" href={accommodationLink(intent)} data-accommodation-cta>
+    {labels[intent]} <span aria-hidden="true">↗</span>
+  </a>
+  <small>Confira no anúncio as regras, os serviços e as condições da unidade escolhida.</small>
+</aside>

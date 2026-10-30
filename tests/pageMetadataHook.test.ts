@@ -154,3 +154,42 @@ test('keeps a property noindex when the API returns a canonical for another prop
     globalThis.fetch = originalFetch;
   }
 });
+
+test('keeps the configured home canonical on aliases and hides home content on private routes', () => {
+  document.head.innerHTML =
+    '<meta name="public-site-origin" content="https://centraldereservascaldas.com"><script id="public-page-schema" type="application/ld+json">{}</script>';
+  const introduction = document.createElement('section');
+  introduction.id = 'public-introduction';
+  document.body.append(introduction);
+  try {
+    renderHook(() => usePageMetadata(window.location.pathname));
+    assert.equal(
+      document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+      'https://centraldereservascaldas.com/',
+    );
+    assert.equal(introduction.hidden, false);
+    act(() => {
+      window.history.pushState(null, '', '/auth/confirm');
+      window.dispatchEvent(new window.Event(PAGE_METADATA_NAVIGATION_EVENT));
+    });
+    assert.equal(introduction.hidden, true);
+    assert.equal(document.getElementById('public-page-schema'), null);
+    assert.equal(document.querySelector('link[rel="canonical"]'), null);
+    assert.equal(
+      document.querySelector('meta[name="robots"]')?.getAttribute('content'),
+      'noindex, nofollow',
+    );
+    act(() => {
+      window.history.pushState(null, '', '/');
+      window.dispatchEvent(new window.Event(PAGE_METADATA_NAVIGATION_EVENT));
+    });
+    assert.equal(introduction.hidden, false);
+    assert.ok(document.getElementById('public-page-schema'));
+    assert.equal(
+      document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+      'https://centraldereservascaldas.com/',
+    );
+  } finally {
+    introduction.remove();
+  }
+});

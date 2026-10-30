@@ -105,3 +105,19 @@ test('directory swipes photos without opening details and preserves vertical scr
   fireEvent.click(detailTrigger);
   assert.deepEqual(selectedCondominiums, [condominium.id]);
 });
+
+test('offers a crawlable condominium page while keeping the details modal available', () => {
+  render(
+    React.createElement(CondominiumDirectory, {
+      condominiums: [{ ...condominium, pageUrl: '/condominios/property-1' }],
+      onSelectCondominium: () => {},
+    }),
+  );
+  assert.equal(
+    screen
+      .getByRole('link', { name: 'Conhecer o empreendimento e suas acomodações' })
+      .getAttribute('href'),
+    '/condominios/property-1',
+  );
+  assert.ok(screen.getByRole('button', { name: 'Ver detalhes do condomínio' }));
+});

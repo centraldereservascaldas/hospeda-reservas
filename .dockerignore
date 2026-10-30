@@ -18,3 +18,9 @@ public/hot
 .env*
 *.log
 wave*.png
+
+blog/.astro
+public/blog
+
+!blog/tests/
+!blog/tests/**
