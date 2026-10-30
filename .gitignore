@@ -20,3 +20,7 @@ graphify-out/
 .phpunit.result.cache
 /.playwright-mcp/
 /wave*.png
+
+# Generated Astro blog
+/blog/.astro/
+/public/blog/

@@ -1,0 +1,19 @@
+---
+import { render } from 'astro:content';
+import BlogLayout from '../layouts/BlogLayout.astro';
+import AccommodationCta from '../components/AccommodationCta.astro';
+import PostCard from '../components/PostCard.astro';
+import { categories, publishedPosts, displayDate, readingMinutes, type Post } from '../lib/editorial';
+export async function getStaticPaths() { return (await publishedPosts()).map((post) => ({ params: { slug: post.id }, props: { post } })); }
+interface Props { post: Post; }
+const { post } = Astro.props;
+const { Content, headings } = await render(post);
+const related = (await publishedPosts()).filter((entry) => entry.id !== post.id).sort((a, b) => Number(b.data.category === post.data.category) - Number(a.data.category === post.data.category)).slice(0, 3);
+const canonical = new URL(`/blog/${post.id}/`, Astro.site).href;
+const schema = { '@type': 'BlogPosting', '@id': canonical + '#article', headline: post.data.title, description: post.data.description, datePublished: post.data.publishedAt.toISOString(), ...(post.data.updatedAt ? { dateModified: post.data.updatedAt.toISOString() } : {}), author: { '@type': 'Organization', name: 'Equipe CRCN', url: new URL('/', Astro.site).href }, publisher: { '@id': new URL('/#organization', Astro.site).href }, mainEntityOfPage: canonical, inLanguage: 'pt-BR', articleSection: categories[post.data.category].label };
+---
+<BlogLayout title={post.data.title} description={post.data.description} path={`/blog/${post.id}/`} schema={schema}>
+  <section class="article-hero"><div class="shell"><nav class="breadcrumb" aria-label="Caminho da página"><a href="/">Início</a><span>/</span><a href="/blog/">Blog</a><span>/</span><a href={`/blog/categoria/${post.data.category}/`}>{categories[post.data.category].label}</a></nav><span class="eyebrow">{categories[post.data.category].label}</span><h1>{post.data.title}</h1><p>{post.data.description}</p><div class="byline"><span class="author-icon" aria-hidden="true">C</span><span>Por <strong>Equipe CRCN</strong></span><span>·</span><time datetime={post.data.publishedAt.toISOString()}>{displayDate(post.data.publishedAt)}</time><span>· {readingMinutes(post)} min de leitura</span></div>{post.data.updatedAt && <p class="updated">Revisado em {displayDate(post.data.updatedAt)}</p>}</div></section>
+  <div class="shell article-grid"><aside class="article-index"><nav aria-label="Neste artigo"><span class="eyebrow">NESTE GUIA</span>{headings.filter((heading) => heading.depth === 2).map((heading) => <a href={`#${heading.slug}`}>{heading.text}</a>)}</nav><AccommodationCta intent={post.data.intent} compact /></aside><article class="article-body"><div class="takeaway"><span class="eyebrow">PARA GUARDAR</span><p>{post.data.takeaway}</p></div><div class="prose"><Content /></div><AccommodationCta intent={post.data.intent} /></article></div>
+  <section class="shell related"><div class="section-heading"><div><span class="eyebrow">CONTINUE PLANEJANDO</span><h2>Mais ideias para os seus dias por aqui</h2></div><a href="/blog/">Todos os guias ↗</a></div><div class="post-grid">{related.map((entry) => <PostCard post={entry} />)}</div></section>
+</BlogLayout>

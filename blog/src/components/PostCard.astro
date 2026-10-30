@@ -1,0 +1,30 @@
+---
+import { categories, readingMinutes, type Post } from '../lib/editorial';
+
+interface Props {
+  post: Post;
+  featured?: boolean;
+}
+const { post, featured = false } = Astro.props;
+const artworkCaption = {
+  familia: 'Bons momentos, juntos.',
+  experiencias: 'Um tempo para você.',
+  planejamento: 'A viagem começa aqui.',
+};
+---
+<article class:list={['post-card', `tone-${post.data.category}`, { featured }]}>
+  <a class="post-card-link" href={`/blog/${post.id}/`}>
+    <div class="card-art" aria-hidden="true">
+      <div class="art-sun"></div><div class="art-hill"></div><div class="art-water"></div>
+      <span>{artworkCaption[post.data.category]}</span>
+    </div>
+    <div class="card-copy">
+      <span class="eyebrow">
+        {categories[post.data.category].label} <span aria-hidden="true">·</span> {readingMinutes(post)} min de leitura
+      </span>
+      <h2>{post.data.title}</h2>
+      <p>{post.data.description}</p>
+      <span class="card-read">Ler o guia <span aria-hidden="true">↗</span></span>
+    </div>
+  </a>
+</article>

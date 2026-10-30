@@ -1,0 +1,14 @@
+---
+import PostListing from '../../components/PostListing.astro';
+import { publishedPosts, PAGE_SIZE, type Post } from '../../lib/editorial';
+export async function getStaticPaths() {
+  const posts = await publishedPosts();
+  return Array.from({ length: Math.max(0, Math.ceil(posts.length / PAGE_SIZE) - 1) }, (_, index) => {
+    const page = index + 2;
+    return { params: { page: String(page) }, props: { page, posts: posts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), totalPages: Math.ceil(posts.length / PAGE_SIZE) } };
+  });
+}
+interface Props { page: number; posts: Post[]; totalPages: number; }
+const { page, posts, totalPages } = Astro.props;
+---
+<PostListing posts={posts} title={`Guias de viagem — página ${page}`} description="Continue explorando dicas para planejar sua viagem a Caldas Novas e escolher uma hospedagem que combine com seus planos." path={`/blog/pagina/${page}/`} pageNumber={page} totalPages={totalPages} />

@@ -1,0 +1,11 @@
+---
+import PostListing from '../../components/PostListing.astro';
+import { categories, publishedPosts, PAGE_SIZE, type Post } from '../../lib/editorial';
+export async function getStaticPaths() {
+  const posts = await publishedPosts();
+  return Object.entries(categories).filter(([category]) => posts.some((post) => post.data.category === category)).map(([category, definition]) => ({ params: { category }, props: { category, definition, posts: posts.filter((post) => post.data.category === category) } }));
+}
+interface Props { category: keyof typeof categories; definition: { label: string; description: string }; posts: Post[]; }
+const { category, definition, posts } = Astro.props;
+---
+<PostListing posts={posts.slice(0, PAGE_SIZE)} totalPages={Math.max(1, Math.ceil(posts.length / PAGE_SIZE))} title={definition.label} description={definition.description} activeCategory={category} path={`/blog/categoria/${category}/`} />

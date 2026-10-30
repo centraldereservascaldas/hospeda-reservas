@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\StaysDiscoveryCatalog;
 use App\Services\StaysExternalApiClient;
 use App\Services\StaysSimulator;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -31,7 +32,7 @@ class AccommodationController extends Controller
 
     private bool $staysPropertyCatalogLoaded = false;
 
-    public function __construct(private readonly StaysExternalApiClient $stays) {}
+    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysDiscoveryCatalog $discovery) {}
 
     public function resorts(): JsonResponse
     {
@@ -625,11 +626,16 @@ class AccommodationController extends Controller
         ])->filter(fn ($amenity): bool => is_string($amenity) && trim($amenity) !== '')
             ->unique()->values()->all();
 
+        $complex = $this->discovery->snapshot()['properties'][(string) ($listing['_idproperty'] ?? '')] ?? null;
+
         $mappedProperty = array_replace_recursive($existing, [
             'id' => $id, 'staysListingId' => (string) ($listing['id'] ?? $listing['code'] ?? $id), 'staysListingObjectId' => (string) ($listing['_id'] ?? ''), 'staysPropertyId' => (string) ($listing['_idproperty'] ?? ''), 'staysSynced' => true,
             'title' => $this->localized($listing['_mstitle'] ?? null) ?: ($listing['internalName'] ?? 'Apartamento Central de Reservas'),
             'subtitle' => $this->localized($listing['_t_typeMeta']['_mstitle'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['subtitle'] ?? '') : ''),
             'description' => strip_tags($this->localized($listing['_msdesc'] ?? $listing['description'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['description'] ?? '') : '')),
+            'complexName' => $complex['name'] ?? ($hasMatchingCatalogEntry ? ($existing['complexName'] ?? '') : ''),
+            'complexDescription' => $complex['description'] ?? ($hasMatchingCatalogEntry ? ($existing['complexDescription'] ?? '') : ''),
+            'complexImages' => $complex['images'] ?? ($hasMatchingCatalogEntry ? ($existing['complexImages'] ?? []) : []),
             'category' => (string) (collect($listing['listingCategories'] ?? [])->first() ?? 'accommodation'),
             'propertyType' => $propertyType,
             'location' => [

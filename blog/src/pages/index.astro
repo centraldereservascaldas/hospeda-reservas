@@ -1,0 +1,6 @@
+---
+import PostListing from '../components/PostListing.astro';
+import { publishedPosts, PAGE_SIZE } from '../lib/editorial';
+const posts = await publishedPosts();
+---
+<PostListing posts={posts.slice(0, PAGE_SIZE)} title="Inspiração para viajar. Clareza para escolher." description="Guias de Caldas Novas e região para planejar seus dias de descanso, comparar hospedagens e encontrar um lugar que combine com a sua viagem." path="/blog/" totalPages={Math.max(1, Math.ceil(posts.length / PAGE_SIZE))} />

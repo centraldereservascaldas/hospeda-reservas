@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Services\LegalPageRegistry;
 use App\Services\PropertyMetadataResolver;
+use App\Services\PublicPageRegistry;
+use App\Services\StaysDiscoveryCatalog;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -16,6 +18,8 @@ class SpaController extends Controller
     public function __construct(
         private PropertyMetadataResolver $metadataResolver,
         private LegalPageRegistry $legalPages,
+        private PublicPageRegistry $publicPages,
+        private StaysDiscoveryCatalog $discoveryCatalog,
     ) {}
 
     public function __invoke(?string $path = null): Response
@@ -37,6 +41,8 @@ class SpaController extends Controller
             return response('Aplicação indisponível.', 503)->header('X-Robots-Tag', 'noindex, nofollow');
         }
 
+        $html = Str::replaceFirst('</head>', '<meta name="public-site-origin" content="'.e($this->publicPages->origin()).'" />'."\n</head>", $html);
+
         if ($legalPage !== null) {
             return $this->legalPageResponse($legalPage, $html);
         }
@@ -50,7 +56,34 @@ class SpaController extends Controller
             return $this->noindexResponse($html);
         }
 
-        return response()->file($indexPath);
+        if (trim((string) $path, '/') === '') {
+            return $this->homeResponse($html);
+        }
+
+        if (preg_match('~^(?:[a-z]{2}(?:/search)?|search|auth/confirm|checkout-preview/cielo)$~D', trim((string) $path, '/')) === 1) {
+            return $this->noindexResponse($html);
+        }
+
+        return response('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Página não encontrada | CRCN</title></head><body><main><h1>Página não encontrada</h1><a href="/">Voltar à busca de hospedagens</a></main></body></html>', 404)
+            ->header('Content-Type', 'text/html; charset=utf-8')
+            ->header('X-Robots-Tag', 'noindex, nofollow');
+    }
+
+    private function homeResponse(string $html): Response
+    {
+        $origin = $this->publicPages->origin();
+        $canonical = e($origin.'/');
+        $graph = $this->publicPages->schemaJson('/', 'Hospedagens em Caldas Novas e região');
+        $head = '<link rel="canonical" href="'.$canonical.'" />'."\n".
+            '<meta property="og:url" content="'.$canonical.'" />'."\n".
+            '<meta property="og:locale" content="pt_BR" />'."\n".
+            '<link rel="stylesheet" href="/seo.css" />'."\n".
+            '<script id="public-page-schema" type="application/ld+json">'.$graph.'</script>';
+        $html = Str::replaceFirst('</head>', $head."\n</head>", $html);
+        $content = view('seo.introduction', ['pages' => $this->publicPages->all()])->render();
+        $html = Str::replaceFirst('</body>', $content."\n</body>", $html);
+
+        return response($html)->header('Content-Type', 'text/html; charset=utf-8');
     }
 
     /**
@@ -87,6 +120,35 @@ HTML;
         if ($metadata === null) {
             return $this->noindexResponse($html);
         }
+
+        $content = $this->discoveryCatalog->listing($propertyId);
+        $snapshot = $this->discoveryCatalog->snapshot();
+        $condominium = $snapshot['properties'][$content['propertyId'] ?? ''] ?? null;
+        $condominiumPath = $condominium && $condominium['listingIds'] !== [] ? $this->discoveryCatalog->propertyPath($condominium) : null;
+        $summary = view('seo.property-summary', [
+            'metadata' => $metadata, 'content' => $content, 'condominium' => $condominium,
+            'condominiumPath' => $condominiumPath,
+        ])->render();
+        $html = Str::replaceFirst('<div id="root"></div>', '<div id="root">'.$summary.'</div>', $html);
+        $entities = [];
+        if ($content !== null) {
+            $entity = [
+                '@type' => 'Accommodation', '@id' => $metadata['canonicalUrl'].'#accommodation',
+                'name' => $content['name'], 'description' => $content['description'],
+                'url' => $metadata['canonicalUrl'], 'image' => $content['images'],
+                'address' => ['@type' => 'PostalAddress', 'addressLocality' => $content['city'], 'addressRegion' => $content['state']],
+                'amenityFeature' => array_map(fn (string $name): array => ['@type' => 'LocationFeatureSpecification', 'name' => $name, 'value' => true], $content['amenities']),
+            ];
+            if ($content['maxGuests'] !== null) {
+                $entity['occupancy'] = ['@type' => 'QuantitativeValue', 'maxValue' => $content['maxGuests']];
+            }
+            if ($condominiumPath !== null) {
+                $entity['containedInPlace'] = ['@type' => 'Place', 'name' => $condominium['name'], 'url' => $this->publicPages->origin().$condominiumPath];
+            }
+            $entities[] = $entity;
+        }
+        $schema = $this->publicPages->schemaJson('/apartamento/'.$propertyId, $metadata['title'], $entities);
+        $html = Str::replaceFirst('</head>', '<link rel="stylesheet" href="/seo.css" />'."\n".'<script id="public-property-schema" data-property-id="'.e($propertyId).'" type="application/ld+json">'.$schema.'</script>'."\n</head>", $html);
 
         $title = e($metadata['title']);
         $description = e($metadata['description']);

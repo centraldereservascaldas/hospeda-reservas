@@ -3,7 +3,7 @@ import { getAccommodationIdFromPath } from '../utils/searchUrlState';
 
 const GENERIC_TITLE = 'Central de Reservas Caldas Novas - Hospedagens e Parques Termais';
 const GENERIC_DESCRIPTION =
-  'Central de Reservas Caldas Novas oficial. Encontre os melhores resorts, flats, condomínios com águas termais 24h e ingressos para parques aquáticos em Caldas Novas e Rio Quente.';
+  'Consulte hospedagens em Caldas Novas e região. Compare localização, capacidade e regras e selecione datas e hóspedes para verificar preços e disponibilidade.';
 const CHECKOUT_TITLE = 'Acompanhe seu pedido | CRCN';
 const CLIENT_NAVIGATION_EVENT = 'crcn:navigation';
 
@@ -65,9 +65,7 @@ function applyMetadata({
 }
 
 function isNoindexPath(pathname: string): boolean {
-  return Boolean(
-    getAccommodationIdFromPath(pathname) || /^\/(?:checkout|reservar)(?:\/|$)/i.test(pathname),
-  );
+  return Boolean(getAccommodationIdFromPath(pathname) || pathname !== '/');
 }
 
 function isApprovedPropertyMetadata(
@@ -111,10 +109,18 @@ function isSafeUrl(value: unknown, protocols: string[]): value is string {
   }
 }
 
+function getHomeCanonical(): string {
+  const origin = document.querySelector('meta[name="public-site-origin"]')?.getAttribute('content');
+  return `${origin && isSafeUrl(origin, ['http:', 'https:']) ? new URL(origin).origin : window.location.origin}/`;
+}
+
 export function usePageMetadata(initialPathname: string): void {
   const [pathname, setPathname] = useState(initialPathname);
   const initialMetadataPathRef = useRef<string | null>(initialPathname);
   const requestSequenceRef = useRef(0);
+  const homeSchemaRef = useRef(
+    document.getElementById('public-page-schema')?.cloneNode(true) ?? null,
+  );
 
   useEffect(() => {
     const updatePathname = () => {
@@ -133,6 +139,17 @@ export function usePageMetadata(initialPathname: string): void {
 
   useEffect(() => {
     const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
+    const propertySchema = document.getElementById('public-property-schema');
+    if (propertySchema?.dataset.propertyId !== getAccommodationIdFromPath(pathname)) {
+      propertySchema?.remove();
+    }
+    const introduction = document.getElementById('public-introduction');
+    if (introduction) introduction.hidden = normalizedPathname !== '/';
+    if (normalizedPathname !== '/') {
+      document.getElementById('public-page-schema')?.remove();
+    } else if (!document.getElementById('public-page-schema') && homeSchemaRef.current) {
+      document.head.append(homeSchemaRef.current.cloneNode(true));
+    }
     if (
       normalizedPathname === '/privacidade' ||
       normalizedPathname === '/termos' ||
@@ -206,7 +223,7 @@ export function usePageMetadata(initialPathname: string): void {
     applyMetadata({
       title: pathname.startsWith('/checkout/') ? CHECKOUT_TITLE : GENERIC_TITLE,
       description: GENERIC_DESCRIPTION,
-      canonicalUrl: null,
+      canonicalUrl: normalizedPathname === '/' ? getHomeCanonical() : null,
       imageUrl: null,
       noindex,
     });

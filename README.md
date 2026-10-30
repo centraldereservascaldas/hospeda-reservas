@@ -6,7 +6,7 @@ Aplicação de reservas com frontend React 19, TypeScript, Vite 6 e Tailwind CSS
 
 - PHP 8.3+ com extensões PDO SQLite, OpenSSL, Mbstring e Ctype
 - Composer 2+
-- Node.js 20+
+- Node.js 22.23.4+ (Node 24 usado no CI e no container)
 
 ## Organização do frontend
 
@@ -15,6 +15,27 @@ Aplicação de reservas com frontend React 19, TypeScript, Vite 6 e Tailwind CSS
 - Reservas/viagens, conta, proprietário e Sofia ficam em `src/components/booking/`, `account/`, `owner/` e `assistant/`.
 - O diretório `src/components/` fica para elementos de layout realmente compartilhados, como cabeçalho, rodapé, navegação mobile e o hook de foco de diálogos.
 - Imports apontam para os arquivos do domínio; não criar arquivos barrel apenas para reexportar componentes.
+
+## Blog de viagens
+
+O blog Astro fica em `blog/` e é servido em `/blog/` no mesmo domínio do catálogo. Os artigos Markdown ficam em `blog/src/content/posts/`; a coleção valida título, descrição, categoria, intenção de busca e datas. Artigos sem `draft: false` e publicações futuras não entram nas páginas, sitemap ou manifesto. Revise conteúdo e condições antes de publicar; não invente preços, disponibilidade, avaliações ou serviços incluídos.
+
+Cada artigo direciona para uma busca de acomodações pelo campo `intent` (`geral`, `familia`, `pets`, `piscinas` ou `centro`), sem pré-preencher datas nem presumir ocupação. A busca real e as condições da unidade continuam autoritativas. Categorias, paginação e recomendações são geradas a partir dos artigos publicados.
+
+- `npm run blog:dev`: Astro na porta 4321; com Vite e Laravel ativos, acesse `/blog/` pela porta 3000.
+- `npm run blog:build`: gera HTML estático em `public/blog/` (ignorado pelo Git).
+- `npm run blog:test`: verifica o artefato gerado, os links e a exclusão de rascunhos e publicações futuras.
+- `npm run build`: constrói e verifica o blog, depois compila React/Vite, incluindo o blog em `dist/blog/` para a mesma imagem Docker. Não precisa de processo Node no runtime.
+
+`BLOG_SITE_URL` define a origem canônica no build e deve corresponder ao domínio público do `APP_URL` Laravel. O padrão é `https://centraldereservascaldas.com`. O sitemap Laravel incorpora as rotas do manifesto gerado, e o blog também entrega `/blog/sitemap.xml`. Após editar um artigo, é necessário reconstruir e publicar a imagem pelo fluxo de PR/release existente; salvar Markdown não publica produção. A identidade visual e o fluxo de reservas permanecem compartilhados, e o blog não carrega tags de analytics sem consentimento.
+
+## Descoberta de acomodações e empreendimentos
+
+As páginas `/condominios` e `/condominios/{id}/{nome}` usam um snapshot público da Stays, atualizado por `php artisan stays:sync-discovery`. O scheduler já agenda a atualização por hora; mantenha-o ativo e execute a primeira sincronização após publicar. A operação faz apenas GETs na Stays e grava apenas o cache local da aplicação. Não altera anúncios nem cadastros remotos.
+
+O sincronizador pagina o inventário, lê detalhes e vocabulários e associa as unidades ao empreendimento por `_idproperty`. Publica apenas campos de conteúdo permitidos, sem proprietário, códigos de acesso, dados de hóspedes ou campos personalizados. Status ativos e categoria `vacationRental` determinam as unidades exibidas. Nome público, descrição com ao menos 150 caracteres, foto HTTPS, cidade e capacidade válida determinam indexação automática; empreendimentos também precisam de unidade associada. Conteúdo incompleto pode ser consultado com `noindex`, fora do sitemap. Essas regras verificam completude, sem prometer posição no Google ou revisar a exatidão editorial do cadastro.
+
+Metadados e HTML dos apartamentos em `/apartamento/{id}` também aproveitam o snapshot. Configurações explícitas em `config/property_metadata.php` têm precedência, inclusive bloqueios editoriais. URLs de empreendimento usam ID estável e redirecionam nomes antigos para o atual. Falhas ou páginas incompletas da API preservam integralmente o último snapshot válido, por até 24 horas desde sua criação; após esse prazo, a descoberta responde 503 até uma sincronização válida. As páginas e o sitemap não disparam consultas à Stays por visita. Preços, disponibilidade e condições da reserva continuam sendo consultados pelo fluxo existente.
 
 ## Configuração local
 

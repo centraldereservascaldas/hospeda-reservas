@@ -323,3 +323,27 @@ test('does not reuse a dated quote as a general price after search dates are cle
   assert.equal(screen.queryByText(/total com taxas/), null);
   assert.equal(screen.queryByText(/Tarifa de referência/), null);
 });
+
+test('exposes a crawlable property link and preserves modified-click navigation', () => {
+  const property = STAYS_NET_APARTMENTS[0]!;
+  let selected = 0;
+  render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [property],
+      onSelectProperty: () => {
+        selected += 1;
+      },
+    }),
+  );
+  const link = screen.getByRole('link', { name: 'Lacqua DiRoma IV' });
+  assert.equal(
+    link.getAttribute('href'),
+    `/apartamento/${encodeURIComponent(property.staysListingId || property.id)}`,
+  );
+  assert.equal(fireEvent.click(link, { ctrlKey: true }), true);
+  assert.equal(selected, 0);
+  assert.equal(fireEvent.click(link), false);
+  assert.equal(selected, 1);
+});

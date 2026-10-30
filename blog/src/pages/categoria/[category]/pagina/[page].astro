@@ -1,0 +1,18 @@
+---
+import PostListing from '../../../../components/PostListing.astro';
+import { categories, publishedPosts, PAGE_SIZE, type Post } from '../../../../lib/editorial';
+export async function getStaticPaths() {
+  const posts = await publishedPosts();
+  return Object.entries(categories).flatMap(([category, definition]) => {
+    const matching = posts.filter((post) => post.data.category === category);
+    const totalPages = Math.ceil(matching.length / PAGE_SIZE);
+    return Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) => {
+      const page = index + 2;
+      return { params: { category, page: String(page) }, props: { category, definition, page, totalPages, posts: matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) } };
+    });
+  });
+}
+interface Props { category: keyof typeof categories; definition: { label: string; description: string }; page: number; totalPages: number; posts: Post[]; }
+const { category, definition, page, totalPages, posts } = Astro.props;
+---
+<PostListing posts={posts} title={`${definition.label} — página ${page}`} description={definition.description} activeCategory={category} path={`/blog/categoria/${category}/pagina/${page}/`} pageNumber={page} totalPages={totalPages} />

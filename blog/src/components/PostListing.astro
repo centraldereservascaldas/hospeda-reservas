@@ -1,0 +1,21 @@
+---
+import BlogLayout from '../layouts/BlogLayout.astro';
+import PostCard from './PostCard.astro';
+import AccommodationCta from './AccommodationCta.astro';
+import { categories, type Post } from '../lib/editorial';
+interface Props { posts: Post[]; title: string; description: string; path: string; pageNumber?: number; totalPages?: number; activeCategory?: keyof typeof categories; }
+const { posts, title, description, path, pageNumber = 1, totalPages = 1, activeCategory } = Astro.props;
+const featured = !activeCategory && pageNumber === 1 ? posts.find((post) => post.data.featured) : undefined;
+---
+<BlogLayout title={title} description={description} path={path}>
+  <section class="blog-hero"><div class="shell"><nav class="breadcrumb" aria-label="Caminho da página"><a href="/">Início</a><span>/</span><a href="/blog/">Blog</a>{activeCategory && <><span>/</span><span>{categories[activeCategory].label}</span></>}</nav><span class="eyebrow">O SEU PRÓXIMO DESCANSO COMEÇA AQUI</span><h1>{title}</h1><p>{description}</p><a class="text-link" href="/#stays-apartments-catalog">Já tem as datas? Encontre uma hospedagem <span aria-hidden="true">↗</span></a></div></section>
+  <div class="shell listing"><nav class="category-nav" aria-label="Categorias do blog"><a href="/blog/" aria-current={!activeCategory ? 'page' : undefined}>Todos os guias</a>{Object.entries(categories).map(([slug, category]) => <a href={`/blog/categoria/${slug}/`} aria-current={activeCategory === slug ? 'page' : undefined}>{category.label}</a>)}</nav>
+  {featured && <div class="featured-wrap"><span class="eyebrow">PARA COMEÇAR BEM</span><PostCard post={featured} featured /></div>}
+  <div class="section-heading"><h2>{activeCategory ? 'Guias para a sua viagem' : 'Escolhas melhores. Viagens mais leves.'}</h2><span>Página {pageNumber} de {totalPages}</span></div>
+  {posts.length === 0 && <p class="empty-list">Novos guias estão em preparação. Enquanto isso, explore as acomodações e escolha os seus próximos dias de descanso.</p>}
+  <div class="post-grid">{posts.filter((post) => post.id !== featured?.id).map((post) => <PostCard post={post} />)}</div>
+  {totalPages > 1 && <nav class="pagination" aria-label="Páginas do blog">{Array.from({length: totalPages}, (_, index) => index + 1).map((number) => <a aria-current={number === pageNumber ? 'page' : undefined} href={activeCategory ? (number === 1 ? `/blog/categoria/${activeCategory}/` : `/blog/categoria/${activeCategory}/pagina/${number}/`) : (number === 1 ? '/blog/' : `/blog/pagina/${number}/`)}>{number}</a>)}</nav>}
+  <p class="destination-link">Conheça também nosso <a href="/destinos/caldas-novas">guia de hospedagem em Caldas Novas</a> e compare a localização com os seus planos.</p>
+  <AccommodationCta />
+  </div>
+</BlogLayout>

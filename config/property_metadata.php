@@ -2,8 +2,8 @@
 
 return [
     /*
-    | Approved public metadata keyed by the Stays listing ID.
-    | Entries stay empty until editorial content and indexation are explicitly approved.
+    | Editorial overrides keyed by the Stays listing ID.
+    | Absent entries use the validated public Stays snapshot; explicit false values veto indexation.
     */
     'listings' => [
         // 'JQ08G' => [

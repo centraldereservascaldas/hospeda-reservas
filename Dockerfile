@@ -1,6 +1,9 @@
 # Build the Vite application with the current Node.js LTS release.
 FROM node:24.22.1-bookworm-slim AS frontend
 
+ARG BLOG_SITE_URL=https://centraldereservascaldas.com
+ENV BLOG_SITE_URL=${BLOG_SITE_URL}
+
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_GTM_ID

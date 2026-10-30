@@ -56,8 +56,40 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
           </div>
 
           <div>
-            <h4 className="font-bold text-neutral-900 mb-3">Destinos e parques</h4>
+            <h4 className="font-bold text-neutral-900 mb-3">Destinos e guias</h4>
             <ul className="space-y-2">
+              <li>
+                <a
+                  href="/blog/"
+                  className="inline-flex min-h-11 items-center underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-orange-700"
+                >
+                  Blog: ideias para a sua viagem
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/destinos/caldas-novas"
+                  className="underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-orange-700"
+                >
+                  Hospedagem em Caldas Novas
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/destinos/rio-quente"
+                  className="underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-orange-700"
+                >
+                  Planeje sua viagem a Rio Quente
+                </a>
+              </li>
+              <li>
+                <a
+                  href="/guias/como-escolher-hospedagem"
+                  className="underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-orange-700"
+                >
+                  O que conferir antes de reservar
+                </a>
+              </li>
               <li>diRoma Acqua Park</li>
               <li>Hot Park &amp; Praia do Cerrado</li>
               <li>L’acqua diRoma 24h</li>
