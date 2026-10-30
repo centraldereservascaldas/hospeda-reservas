@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -42,6 +43,7 @@ class SearchDiscoveryTest extends TestCase
             'DRAFT' => ['approved' => true, 'indexable' => false, 'title' => 'Rascunho', 'description' => 'Descrição'],
             'INVALID/path' => ['approved' => true, 'indexable' => true, 'title' => 'Inválido', 'description' => 'Descrição'],
         ]]);
+        Blade::compile(resource_path('views/seo/sitemap.blade.php'));
         $response = $this->get('/sitemap.xml?from=2026-12-01', ['Host' => 'untrusted.example']);
         $response->assertOk()->assertHeader('Content-Type', 'application/xml; charset=utf-8')
             ->assertSee('https://centraldereservascaldas.com/destinos/caldas-novas', false)
