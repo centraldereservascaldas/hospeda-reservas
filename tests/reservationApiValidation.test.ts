@@ -291,7 +291,7 @@ test('shows an explicit fallback when an owner summary has no property count', a
 
   const originalGetRequests = crcnBackendApi.getOwnerAccessRequests;
   const originalSearchStaysOwners = crcnBackendApi.searchStaysOwners;
-  let cleanup: (() => void) | undefined;
+  let cleanup: (() => Promise<void>) | undefined;
   crcnBackendApi.getOwnerAccessRequests = async () => [
     {
       userId: 'user-1',
@@ -306,7 +306,11 @@ test('shows an explicit fallback when an owner summary has no property count', a
     const React = (await import('react')).default;
     const testingLibrary = await import('@testing-library/react');
     const { render, screen, waitFor, fireEvent } = testingLibrary;
-    cleanup = testingLibrary.cleanup;
+    cleanup = async () => {
+      await testingLibrary.act(async () => {
+        testingLibrary.cleanup();
+      });
+    };
     const { OwnerAccessAdminView } =
       await import('../src/components/owner/OwnerAccessAdminView.tsx');
     render(React.createElement(OwnerAccessAdminView, { accessToken: 'test-token' }));
@@ -318,7 +322,7 @@ test('shows an explicit fallback when an owner summary has no property count', a
       /Quantidade de imóveis indisponível/,
     );
   } finally {
-    cleanup?.();
+    await cleanup?.();
     crcnBackendApi.getOwnerAccessRequests = originalGetRequests;
     crcnBackendApi.searchStaysOwners = originalSearchStaysOwners;
     Object.assign(globalThis, originalGlobals);
