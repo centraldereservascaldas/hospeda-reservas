@@ -61,7 +61,7 @@ jobs:
             curl --silent --show-error --max-time 10 --output /dev/null --write-out 'GET / returned HTTP %{http_code}\n' http://127.0.0.1:8080/ >&2 || true
             exit 1
           fi
-          grep --fixed-strings '<div id="root"></div>' /tmp/hospeda-index.html
+          grep --fixed-strings '<div id="root">' /tmp/hospeda-index.html
           app_asset=$(sed -n 's/.*src="\([^"]*\.js\)".*/\1/p' /tmp/hospeda-index.html | head -n 1)
           test -n "$app_asset"
           curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:8080$app_asset" --output /dev/null

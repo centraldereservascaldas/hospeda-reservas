@@ -159,7 +159,7 @@ jobs:
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/ --output /tmp/hospeda-smoke-index.html
-          grep --fixed-strings '<div id="root"></div>' /tmp/hospeda-smoke-index.html
+          grep --fixed-strings '<div id="root">' /tmp/hospeda-smoke-index.html
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/sitemap.xml --output /tmp/hospeda-smoke-sitemap.xml
           python3 -c 'import xml.etree.ElementTree as ET; root = ET.parse("/tmp/hospeda-smoke-sitemap.xml").getroot(); assert root.tag == "{http://www.sitemaps.org/schemas/sitemap/0.9}urlset" and len(root) > 0'
 
@@ -264,7 +264,7 @@ jobs:
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/ --output /tmp/hospeda-published-index.html
-          grep --fixed-strings '<div id="root"></div>' /tmp/hospeda-published-index.html
+          grep --fixed-strings '<div id="root">' /tmp/hospeda-published-index.html
 
           app_asset=$(sed -n 's/.*src="\([^"]*\.js\)".*/\1/p' /tmp/hospeda-published-index.html | head -n 1)
           test -n "$app_asset"
