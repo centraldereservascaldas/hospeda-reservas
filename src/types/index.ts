@@ -20,6 +20,7 @@ export interface Review {
 export interface Property {
   id: string;
   staysPropertyId?: string;
+  publicPagePath?: string;
   complexName?: string;
   complexPageUrl?: string;
   complexDescription?: string;

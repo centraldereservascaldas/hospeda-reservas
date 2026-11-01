@@ -5,6 +5,7 @@ import { crcnBackendApi } from '../services/crcnBackendApi';
 import { getAccommodationIdFromPath, parseSearchFilters } from '../utils/searchUrlState';
 import { emitFunnelEvent } from '../utils/measurementEvents';
 import { PAGE_METADATA_NAVIGATION_EVENT } from './usePageMetadata';
+import { accommodationPagePath } from '../utils/accommodationPageUrl';
 
 interface UseAccommodationRoutingOptions {
   properties: Property[];
@@ -206,7 +207,9 @@ export function useAccommodationRouting({
     setSelectedProperty(property);
     refreshSelectedProperty(property);
     const slug = property.staysListingId || property.id;
-    const detailPath = getPropertyDetailPath(window.location.pathname, slug);
+    const detailPath = getLocalePrefix(window.location.pathname)
+      ? getPropertyDetailPath(window.location.pathname, slug)
+      : accommodationPagePath(property);
     const nextPath = `${detailPath}${window.location.search}${window.location.hash}`;
     if (getAccommodationIdFromPath(window.location.pathname)) {
       if (window.location.pathname !== detailPath) {

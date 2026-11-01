@@ -4,6 +4,7 @@ import { Property, Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { getPropertyDisplayPrice } from '../../utils/propertyDisplayPrice';
+import { accommodationPagePath } from '../../utils/accommodationPageUrl';
 
 interface PropertyCardProps {
   property: Property;
@@ -240,7 +241,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           <div className="flex items-start justify-between gap-2">
             <h3 className="font-extrabold text-neutral-950 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-orange-600 transition-colors">
               <a
-                href={`/apartamento/${encodeURIComponent(property.staysListingId || property.id)}`}
+                href={accommodationPagePath(property)}
                 className="pointer-events-auto rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
                 onClick={(event) => {
                   if (

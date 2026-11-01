@@ -80,7 +80,7 @@ class StaysDiscoveryTest extends TestCase
         $this->get('/condominios')->assertOk()->assertSee('Jardim das Águas')->assertSee('/condominios/jardim-das-aguas', false);
         $response = $this->get('/condominios/jardim-das-aguas', ['Host' => 'evil.test']);
         $response->assertOk()->assertSee('Piscina compartilhada')->assertSee('Até 4 hóspedes')
-            ->assertSee('/apartamento/APT01', false)->assertSee('propertyId=property-1', false)
+            ->assertSee('/apartamento/APT01/apartamento-com-varanda', false)->assertSee('propertyId=property-1', false)
             ->assertSee('https://centraldereservascaldas.com/condominios/jardim-das-aguas', false)
             ->assertDontSee('private-owner')->assertDontSee('private-access')->assertDontSee('private-unit')->assertDontSee('evil.test');
         preg_match('~<script type="application/ld\+json">(.*?)</script>~s', $response->getContent(), $matches);
@@ -88,9 +88,9 @@ class StaysDiscoveryTest extends TestCase
         $this->assertSame('https://schema.org', $schema['@context']);
         $this->assertSame('Place', $schema['@graph'][4]['@type']);
         $this->getJson('/api/public/property-metadata/APT01')->assertOk()->assertJsonPath('approved', true)
-            ->assertJsonPath('canonicalUrl', 'https://centraldereservascaldas.com/apartamento/APT01');
+            ->assertJsonPath('canonicalUrl', 'https://centraldereservascaldas.com/apartamento/APT01/apartamento-com-varanda');
         $this->get('/sitemap.xml')->assertOk()->assertSee('/condominios/jardim-das-aguas', false)
-            ->assertSee('/apartamento/APT01', false)->assertDontSee('HIDDEN', false);
+            ->assertSee('/apartamento/APT01/apartamento-com-varanda', false)->assertDontSee('HIDDEN', false);
         $this->get('/condominios/property-1/nome-antigo')->assertStatus(301)
             ->assertRedirect('https://centraldereservascaldas.com/condominios/jardim-das-aguas');
         $this->get('/condominios/P1')->assertStatus(301)
@@ -163,9 +163,16 @@ class StaysDiscoveryTest extends TestCase
         $original = is_file(public_path('index.html')) ? file_get_contents(public_path('index.html')) : null;
         file_put_contents(public_path('index.html'), '<!doctype html><html><head><title>CRCN</title></head><body><div id="root"></div></body></html>');
         try {
-            $response = $this->get('/apartamento/APT01');
+            $this->get('/apartamento/APT01?from=2026-12-01&to=2026-12-05')->assertStatus(301)
+                ->assertRedirect('https://centraldereservascaldas.com/apartamento/APT01/apartamento-com-varanda?from=2026-12-01&to=2026-12-05');
+            $this->get('/apartamento/APT01?amenity=piscina&amenity=wifi&adults=2&children=1')->assertStatus(301)
+                ->assertRedirect('https://centraldereservascaldas.com/apartamento/APT01/apartamento-com-varanda?amenity=piscina&amenity=wifi&adults=2&children=1');
+            $this->get('/apartamento/APT01/nome-antigo')->assertStatus(301)
+                ->assertRedirect('https://centraldereservascaldas.com/apartamento/APT01/apartamento-com-varanda');
+            $response = $this->get('/apartamento/APT01/apartamento-com-varanda');
             $response->assertOk()->assertSee('Até 4 hóspedes')->assertSee('Comodidades da unidade')
                 ->assertSee('/condominios/jardim-das-aguas', false)->assertSee('"@type":"Accommodation"', false)
+                ->assertSee('https://centraldereservascaldas.com/apartamento/APT01/apartamento-com-varanda', false)
                 ->assertDontSee('private-owner')->assertDontSee('private-access');
             $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.complexName', 'Jardim das Águas')
                 ->assertJsonPath('data.0.complexImages.0', 'https://images.example.test/condominio.jpg')

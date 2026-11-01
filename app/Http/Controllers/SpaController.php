@@ -49,6 +49,18 @@ class SpaController extends Controller
 
         $propertyId = $this->propertyIdFromPath($path);
         if ($propertyId !== null) {
+            $metadata = $this->metadataResolver->resolve($propertyId);
+            $listing = $this->discoveryCatalog->listing($propertyId);
+            if ($metadata !== null && $listing !== null && $listing['id'] === $propertyId && str_starts_with((string) $path, 'apartamento/')) {
+                $canonicalPath = $this->discoveryCatalog->listingPath($listing);
+                if ('/'.trim((string) $path, '/') !== $canonicalPath) {
+                    $query = request()->server('QUERY_STRING', '');
+                    abort_if(! is_string($query) || preg_match('/[\r\n]/', $query) === 1, 400);
+
+                    return redirect($metadata['canonicalUrl'].($query !== '' ? '?'.$query : ''), 301);
+                }
+            }
+
             return $this->propertyResponse($propertyId, $html);
         }
 
@@ -147,7 +159,7 @@ HTML;
             }
             $entities[] = $entity;
         }
-        $schema = $this->publicPages->schemaJson('/apartamento/'.$propertyId, $metadata['title'], $entities);
+        $schema = $this->publicPages->schemaJson(parse_url($metadata['canonicalUrl'], PHP_URL_PATH) ?: '/apartamento/'.$propertyId, $metadata['title'], $entities);
         $html = Str::replaceFirst('</head>', '<link rel="stylesheet" href="/seo.css" />'."\n".'<script id="public-property-schema" data-property-id="'.e($propertyId).'" type="application/ld+json">'.$schema.'</script>'."\n</head>", $html);
 
         $title = e($metadata['title']);

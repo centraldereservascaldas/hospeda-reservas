@@ -174,6 +174,12 @@ class StaysDiscoveryCatalog
         return null;
     }
 
+    /** @param array<string, mixed> $listing */
+    public function listingPath(array $listing): string
+    {
+        return '/apartamento/'.rawurlencode($listing['id']).'/'.rawurlencode($listing['slug']);
+    }
+
     /** @param array<string, mixed> $property */
     public function propertyPath(array $property): string
     {

@@ -322,6 +322,7 @@ export const isProperty = (value: unknown): value is Property => {
     typeof value.id === 'string' &&
     value.id.trim() !== '' &&
     (value.staysPropertyId === undefined || typeof value.staysPropertyId === 'string') &&
+    (value.publicPagePath === undefined || typeof value.publicPagePath === 'string') &&
     (value.complexName === undefined || typeof value.complexName === 'string') &&
     (value.complexPageUrl === undefined || typeof value.complexPageUrl === 'string') &&
     (value.complexDescription === undefined || typeof value.complexDescription === 'string') &&

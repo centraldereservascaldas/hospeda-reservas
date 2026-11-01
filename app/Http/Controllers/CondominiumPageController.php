@@ -56,6 +56,7 @@ class CondominiumPageController extends Controller
 
         return $this->render('seo.condominium', $property['name'].' em '.$property['city'].' | Acomodações CRCN', Str::limit(preg_replace('/\s+/u', ' ', $property['description']) ?? '', 160), $path, $property['indexable'], [
             'property' => $property, 'listings' => $listings,
+            'catalog' => $this->catalog,
             'searchUrl' => '/?'.http_build_query(['propertyId' => $property['id'], 'destination' => $property['name']]).'#stays-apartments-catalog',
         ]);
     }

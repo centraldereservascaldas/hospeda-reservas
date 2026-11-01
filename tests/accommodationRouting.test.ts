@@ -57,6 +57,50 @@ function renderRouting(
   });
 }
 
+test('opening an accommodation uses its readable URL and preserves search parameters', () => {
+  const base = STAYS_NET_APARTMENTS[0]!;
+  const property = {
+    ...base,
+    publicPagePath: `/apartamento/${base.staysListingId}/apartamento-com-varanda`,
+  };
+  const original = crcnBackendApi.getAccommodationById;
+  crcnBackendApi.getAccommodationById = async () => property;
+  window.history.replaceState(null, '', '/?from=2026-12-01&to=2026-12-05');
+  try {
+    const { result } = renderRouting([property]);
+    act(() => result.current.handleSelectProperty(property));
+    assert.equal(window.location.pathname, property.publicPagePath);
+    assert.equal(window.location.search, '?from=2026-12-01&to=2026-12-05');
+  } finally {
+    crcnBackendApi.getAccommodationById = original;
+  }
+});
+
+test('readable apartment links restore dates and guest counts', async () => {
+  const property = STAYS_NET_APARTMENTS[0]!;
+  const original = crcnBackendApi.getAccommodationById;
+  crcnBackendApi.getAccommodationById = async () => property;
+  window.history.replaceState(
+    null,
+    '',
+    `/apartamento/${property.staysListingId}/apartamento-com-varanda?from=2026-12-01&to=2026-12-05&adults=2&children=1&infants=1&pets=1`,
+  );
+  try {
+    const { result } = renderRouting([property]);
+    await waitFor(() => assert.equal(result.current.selectedProperty?.id, property.id));
+    assert.equal(result.current.filters.checkIn, '2026-12-01');
+    assert.equal(result.current.filters.checkOut, '2026-12-05');
+    assert.deepEqual(result.current.filters.guests, {
+      adults: 2,
+      children: 1,
+      infants: 1,
+      pets: 1,
+    });
+  } finally {
+    crcnBackendApi.getAccommodationById = original;
+  }
+});
+
 test('deep link selects by Stays ID and selection/close preserve query and hash', async () => {
   const property = STAYS_NET_APARTMENTS[0]!;
   const restored: SearchFilters[] = [];

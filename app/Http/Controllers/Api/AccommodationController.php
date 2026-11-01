@@ -626,10 +626,13 @@ class AccommodationController extends Controller
         ])->filter(fn ($amenity): bool => is_string($amenity) && trim($amenity) !== '')
             ->unique()->values()->all();
 
-        $complex = $this->discovery->snapshot()['properties'][(string) ($listing['_idproperty'] ?? '')] ?? null;
+        $snapshot = $this->discovery->snapshot();
+        $complex = $snapshot['properties'][(string) ($listing['_idproperty'] ?? '')] ?? null;
+        $publicListing = $snapshot['listings'][(string) ($listing['id'] ?? $id)] ?? null;
 
         $mappedProperty = array_replace_recursive($existing, [
             'id' => $id, 'staysListingId' => (string) ($listing['id'] ?? $listing['code'] ?? $id), 'staysListingObjectId' => (string) ($listing['_id'] ?? ''), 'staysPropertyId' => (string) ($listing['_idproperty'] ?? ''), 'staysSynced' => true,
+            'publicPagePath' => $publicListing !== null ? $this->discovery->listingPath($publicListing) : '',
             'title' => $this->localized($listing['_mstitle'] ?? null) ?: ($listing['internalName'] ?? 'Apartamento Central de Reservas'),
             'subtitle' => $this->localized($listing['_t_typeMeta']['_mstitle'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['subtitle'] ?? '') : ''),
             'description' => strip_tags($this->localized($listing['_msdesc'] ?? $listing['description'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['description'] ?? '') : '')),
