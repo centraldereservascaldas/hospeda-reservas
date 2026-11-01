@@ -73,6 +73,23 @@ class SearchDiscoveryTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_home_fallback_stays_inside_the_react_root_for_default_and_filtered_catalogs(): void
+    {
+        Http::preventStrayRequests();
+        foreach (['/', '/?category=condominiums', '/?category=pools_24h'] as $path) {
+            $response = $this->get($path)->assertOk()
+                ->assertSee('Hospedagens em Caldas Novas e região')
+                ->assertSee('href="https://centraldereservascaldas.com/"', false);
+            $document = new \DOMDocument;
+            $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+            $xpath = new \DOMXPath($document);
+            $this->assertSame(1, $xpath->query('//*[@id="public-introduction"]')->length);
+            $this->assertSame(1, $xpath->query('//*[@id="root"]//*[@id="public-introduction"]')->length,
+                'The initial public content must be replaced by React instead of remaining after the app footer.');
+        }
+        Http::assertNothingSent();
+    }
+
     public function test_home_contains_public_content_and_canonical_in_initial_html(): void
     {
         $this->get('/?destination=Caldas+Novas', ['Host' => 'untrusted.example'])->assertOk()
