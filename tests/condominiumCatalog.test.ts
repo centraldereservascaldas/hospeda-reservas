@@ -60,3 +60,15 @@ test('uses Stays property IDs to separate homonyms and keep renamed units togeth
   assert.equal(catalog.find(({ id }) => id === 'property-1')?.pageUrl, '/condominios/property-1');
   assert.equal(catalog.find(({ id }) => id === 'property-2')?.pageUrl, '/condominios/property-2');
 });
+
+test('uses the canonical condominium path and rejects external URLs', () => {
+  const catalog = buildCondominiumCatalog([
+    listing({ staysPropertyId: 'property-1', complexPageUrl: '/condominios/jardim-das-aguas' }),
+    listing({ id: 'b', staysPropertyId: 'property-2', complexPageUrl: 'https://example.com/' }),
+  ]);
+  assert.equal(
+    catalog.find(({ id }) => id === 'property-1')?.pageUrl,
+    '/condominios/jardim-das-aguas',
+  );
+  assert.equal(catalog.find(({ id }) => id === 'property-2')?.pageUrl, '/condominios/property-2');
+});

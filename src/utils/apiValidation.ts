@@ -323,6 +323,7 @@ export const isProperty = (value: unknown): value is Property => {
     value.id.trim() !== '' &&
     (value.staysPropertyId === undefined || typeof value.staysPropertyId === 'string') &&
     (value.complexName === undefined || typeof value.complexName === 'string') &&
+    (value.complexPageUrl === undefined || typeof value.complexPageUrl === 'string') &&
     (value.complexDescription === undefined || typeof value.complexDescription === 'string') &&
     typeof value.title === 'string' &&
     value.title.trim() !== '' &&

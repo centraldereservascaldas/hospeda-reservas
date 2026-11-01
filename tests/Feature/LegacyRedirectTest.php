@@ -19,13 +19,13 @@ class LegacyRedirectTest extends TestCase
         $catalog = app(StaysDiscoveryCatalog::class);
         $properties = [];
         foreach (config('legacy_redirects.condominiums') as $id) {
-            $properties[$id] = ['id' => $id, 'slug' => 'nome-atual', 'listingIds' => ['listing-1']];
+            $properties[$id] = ['id' => $id, 'slug' => 'nome-atual-'.$id, 'listingIds' => ['listing-1']];
         }
         Cache::put($catalog->key(), ['properties' => $properties, 'listings' => []], 300);
 
         foreach (config('legacy_redirects.condominiums') as $slug => $id) {
             $this->get('/'.$slug, ['Host' => 'untrusted.example'])->assertStatus(301)
-                ->assertRedirect('https://centraldereservascaldas.com/condominios/'.$id.'/nome-atual');
+                ->assertRedirect('https://centraldereservascaldas.com/condominios/nome-atual-'.$id);
         }
     }
 

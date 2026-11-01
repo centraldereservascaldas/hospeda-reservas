@@ -634,6 +634,7 @@ class AccommodationController extends Controller
             'subtitle' => $this->localized($listing['_t_typeMeta']['_mstitle'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['subtitle'] ?? '') : ''),
             'description' => strip_tags($this->localized($listing['_msdesc'] ?? $listing['description'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['description'] ?? '') : '')),
             'complexName' => $complex['name'] ?? ($hasMatchingCatalogEntry ? ($existing['complexName'] ?? '') : ''),
+            'complexPageUrl' => $complex !== null && ($complex['listingIds'] ?? []) !== [] ? $this->discovery->propertyPath($complex) : '',
             'complexDescription' => $complex['description'] ?? ($hasMatchingCatalogEntry ? ($existing['complexDescription'] ?? '') : ''),
             'complexImages' => $complex['images'] ?? ($hasMatchingCatalogEntry ? ($existing['complexImages'] ?? []) : []),
             'category' => (string) (collect($listing['listingCategories'] ?? [])->first() ?? 'accommodation'),

@@ -114,10 +114,8 @@ test('offers a crawlable condominium page while keeping the details modal availa
     }),
   );
   assert.equal(
-    screen
-      .getByRole('link', { name: 'Conhecer o empreendimento e suas acomodações' })
-      .getAttribute('href'),
+    screen.getByRole('link', { name: 'Ver condomínio e acomodações' }).getAttribute('href'),
     '/condominios/property-1',
   );
-  assert.ok(screen.getByRole('button', { name: 'Ver detalhes do condomínio' }));
+  assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Residencial Lago Azul' }));
 });

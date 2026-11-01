@@ -191,14 +191,6 @@ export const CondominiumDirectory: React.FC<CondominiumDirectoryProps> = ({
                     >
                       {condominium.name}
                     </button>
-                    {condominium.pageUrl && (
-                      <a
-                        href={condominium.pageUrl}
-                        className="mt-2 inline-block text-sm font-semibold text-orange-800 underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-orange-600"
-                      >
-                        Conhecer o empreendimento e suas acomodações
-                      </a>
-                    )}
                     <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-neutral-500">
                       <MapPin className="h-3 w-3 text-orange-500" /> Caldas Novas, Goiás
                     </p>
@@ -211,13 +203,22 @@ export const CondominiumDirectory: React.FC<CondominiumDirectoryProps> = ({
                 <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-neutral-700">
                   {shownDescription}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => onSelectCondominium(condominium)}
-                  className="mt-3 min-h-11 w-full rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-bold text-orange-800 transition hover:border-orange-300 hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
-                >
-                  Ver detalhes do condomínio
-                </button>
+                {condominium.pageUrl ? (
+                  <a
+                    href={condominium.pageUrl}
+                    className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-center text-sm font-bold text-orange-800 transition hover:border-orange-300 hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                  >
+                    Ver condomínio e acomodações
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onSelectCondominium(condominium)}
+                    className="mt-3 min-h-11 w-full rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-bold text-orange-800 transition hover:border-orange-300 hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+                  >
+                    Ver detalhes do condomínio
+                  </button>
+                )}
               </div>
             </article>
           );
