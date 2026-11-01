@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\CondominiumPageController;
+use App\Http\Controllers\LegacyRedirectController;
 use App\Http\Controllers\SearchDiscoveryController;
 use App\Http\Controllers\SpaController;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +28,9 @@ Route::get('/{section}/{slug}', [SearchDiscoveryController::class, 'show'])
     ->whereIn('section', ['destinos', 'guias'])->where('slug', '[a-z0-9-]+')->name('seo.page');
 
 Route::get('/blog/{path?}', fn () => abort(404))->where('path', '.*');
+
+Route::get('/{legacySlug}', LegacyRedirectController::class)
+    ->whereIn('legacySlug', array_keys(config('legacy_redirects.condominiums')));
 
 Route::get('/{path?}', SpaController::class)
     ->where('path', '^(?!api(?:/|$)|external(?:/|$)).*');
