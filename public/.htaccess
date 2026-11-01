@@ -13,6 +13,11 @@
     RewriteCond %{HTTP:x-xsrf-token} .
     RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
 
+    # Keep condominium redirects on the public HTTPS origin behind the proxy.
+    RewriteCond %{HTTP_HOST} ^(www\.)?centraldereservascaldas\.com(?::443)?$ [NC]
+    RewriteCond %{REQUEST_URI} ^(/condominios/[A-Za-z0-9_-]{1,80}(/[a-z0-9-]+)?)/$
+    RewriteRule ^ https://centraldereservascaldas.com%1 [L,R=301]
+
     # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_URI} (.+)/$
