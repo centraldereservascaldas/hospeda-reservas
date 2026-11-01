@@ -47,9 +47,11 @@ export function buildCondominiumCatalog(properties: Property[]): CondominiumSumm
       return {
         id,
         name,
-        pageUrl: /^[a-zA-Z0-9_-]{1,80}$/.test(listings[0].staysPropertyId || '')
-          ? `/condominios/${encodeURIComponent(listings[0].staysPropertyId!)}`
-          : undefined,
+        pageUrl: /^\/condominios\/[a-z0-9-]+$/.test(listings[0].complexPageUrl || '')
+          ? listings[0].complexPageUrl
+          : /^[a-zA-Z0-9_-]{1,80}$/.test(listings[0].staysPropertyId || '')
+            ? `/condominios/${encodeURIComponent(listings[0].staysPropertyId!)}`
+            : undefined,
         description,
         images: officialImages.slice(0, 12),
         accommodationCount: listings.length,

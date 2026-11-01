@@ -29,9 +29,27 @@ class CondominiumPageController extends Controller
         $snapshot = $this->catalog->snapshot();
         abort_if($snapshot === null, 503, 'Estamos atualizando os empreendimentos. Tente novamente em instantes.');
         $property = $snapshot['properties'][$id] ?? null;
+        if ($property === null) {
+            foreach ($snapshot['properties'] as $candidate) {
+                if ($this->catalog->propertyPath($candidate) === '/condominios/'.$id || in_array($id, $candidate['aliases'] ?? [], true)) {
+                    $property = $candidate;
+                    break;
+                }
+            }
+        }
+        if ($property === null) {
+            $matches = array_values(array_filter($snapshot['properties'], fn (array $candidate): bool => ($candidate['shortId'] ?? '') !== '' && strcasecmp($candidate['shortId'], $id) === 0));
+            $property = count($matches) === 1 ? $matches[0] : null;
+            foreach ($snapshot['properties'] as $candidate) {
+                if ($property !== null && $candidate['id'] !== $property['id'] && strcasecmp($candidate['canonicalSlug'] ?? $candidate['slug'], $id) === 0) {
+                    $property = null;
+                    break;
+                }
+            }
+        }
         abort_if($property === null || $property['listingIds'] === [], 404);
         $path = $this->catalog->propertyPath($property);
-        if ($slug !== $property['slug']) {
+        if ($slug !== null || '/condominios/'.$id !== $path) {
             return redirect($this->pages->origin().$path, 301);
         }
         $listings = array_values(array_intersect_key($snapshot['listings'], array_flip($property['listingIds'])));

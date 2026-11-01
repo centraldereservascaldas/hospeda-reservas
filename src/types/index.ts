@@ -21,6 +21,7 @@ export interface Property {
   id: string;
   staysPropertyId?: string;
   complexName?: string;
+  complexPageUrl?: string;
   complexDescription?: string;
   complexImages?: string[];
   title: string;

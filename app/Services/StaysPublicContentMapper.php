@@ -82,6 +82,7 @@ class StaysPublicContentMapper
         return [
             'id' => $id,
             'objectId' => $this->identifier($raw['_id'] ?? null),
+            'shortId' => $listing ? '' : $this->identifier($raw['id'] ?? null),
             'propertyId' => $listing ? $this->identifier($raw['_idproperty'] ?? null) : null,
             'name' => $title,
             'slug' => Str::slug($title) ?: $id,

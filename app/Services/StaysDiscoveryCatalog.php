@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Sleep;
 use RuntimeException;
 
@@ -80,6 +81,7 @@ class StaysDiscoveryCatalog
             unset($property);
             ksort($properties);
             ksort($listings);
+            $properties = $this->assignPropertySlugs($properties);
             $snapshot = ['syncedAt' => now()->toIso8601String(), 'properties' => $properties, 'listings' => $listings];
             Cache::put($this->key(), $snapshot, 86400);
 
@@ -175,6 +177,54 @@ class StaysDiscoveryCatalog
     /** @param array<string, mixed> $property */
     public function propertyPath(array $property): string
     {
-        return route('condominiums.show', ['id' => $property['id'], 'slug' => $property['slug']], absolute: false);
+        return route('condominiums.show', ['id' => $property['canonicalSlug'] ?? $property['slug']], absolute: false);
+    }
+
+    /** @param array<string, array<string, mixed>> $properties
+     * @return array<string, array<string, mixed>>
+     */
+    private function assignPropertySlugs(array $properties): array
+    {
+        $account = hash('sha256', (string) config('services.stays.base_url').'|'.(string) config('services.stays.client_id'));
+
+        return DB::transaction(function () use ($properties, $account): array {
+            $rows = DB::table('condominium_slug_registry')->where('account_key', $account)->get();
+            $used = [];
+            $byProperty = [];
+            foreach ($rows as $row) {
+                $used[$row->slug] = $row->property_id;
+                $byProperty[$row->property_id][] = $row;
+            }
+            $codes = [];
+            foreach ($properties as $property) {
+                $codes[strtolower($property['id'])] = $property['id'];
+                if (($property['shortId'] ?? '') !== '') {
+                    $codes[strtolower($property['shortId'])] = $property['id'];
+                }
+            }
+            foreach ($properties as &$property) {
+                $aliases = $byProperty[$property['id']] ?? [];
+                $canonical = collect($aliases)->first(fn ($row): bool => (bool) $row->canonical);
+                if ($canonical === null) {
+                    $slug = substr($property['slug'], 0, 100);
+                    if ((isset($used[$slug]) && $used[$slug] !== $property['id']) || (isset($codes[$slug]) && $codes[$slug] !== $property['id'])) {
+                        $slug .= '-'.strtolower(($property['shortId'] ?? '') ?: $property['id']);
+                    }
+                    if (isset($used[$slug]) && $used[$slug] !== $property['id']) {
+                        $slug .= '-'.strtolower($property['id']);
+                    }
+                    DB::table('condominium_slug_registry')->insert(['account_key' => $account, 'property_id' => $property['id'], 'slug' => $slug, 'canonical' => true, 'created_at' => now(), 'updated_at' => now()]);
+                    $used[$slug] = $property['id'];
+                    $property['canonicalSlug'] = $slug;
+                    $property['aliases'] = [];
+                } else {
+                    $property['canonicalSlug'] = $canonical->slug;
+                    $property['aliases'] = array_values(array_map(fn ($row): string => $row->slug, $aliases));
+                }
+            }
+            unset($property);
+
+            return $properties;
+        });
     }
 }
