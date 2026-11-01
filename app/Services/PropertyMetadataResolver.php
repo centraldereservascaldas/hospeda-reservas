@@ -92,6 +92,11 @@ class PropertyMetadataResolver
             $origin .= ':'.$parts['port'];
         }
 
+        $content = $this->catalog->listing($propertyId);
+        if ($content !== null && $content['id'] === $propertyId && ! empty($content['slug'])) {
+            return $origin.$this->catalog->listingPath($content);
+        }
+
         return $origin.'/apartamento/'.$propertyId;
     }
 }

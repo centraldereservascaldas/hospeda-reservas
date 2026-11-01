@@ -68,6 +68,31 @@ test('preserves approved SSR metadata until the matching API response arrives', 
   }
 });
 
+test('accepts the canonical URL with the listing code and readable slug', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    jsonResponse({
+      approved: true,
+      title: 'Apartamento com varanda',
+      description: 'Apartamento em Caldas Novas.',
+      canonicalUrl: 'https://example.test/apartamento/JQ08G/apartamento-com-varanda',
+      imageUrl: null,
+    });
+  window.history.replaceState(null, '', '/apartamento/JQ08G/apartamento-com-varanda');
+  try {
+    await act(async () => {
+      renderHook(() => usePageMetadata(window.location.pathname));
+    });
+    assert.equal(
+      document.querySelector('link[rel="canonical"]')?.getAttribute('href'),
+      'https://example.test/apartamento/JQ08G/apartamento-com-varanda',
+    );
+    assert.equal(document.querySelector('meta[name="robots"]'), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('clears old property tags and ignores metadata responses after navigation', async () => {
   const originalFetch = globalThis.fetch;
   const pendingResponses = new Map<string, (response: Response) => void>();

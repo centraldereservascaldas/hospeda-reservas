@@ -68,6 +68,14 @@ function isNoindexPath(pathname: string): boolean {
   return Boolean(getAccommodationIdFromPath(pathname) || pathname !== '/');
 }
 
+function isCanonicalPropertyPath(path: string, propertyId: string): boolean {
+  const prefix = `/apartamento/${propertyId}`;
+  return (
+    path === prefix ||
+    (path.startsWith(`${prefix}/`) && /^[a-z0-9-]+$/.test(path.slice(prefix.length + 1)))
+  );
+}
+
 function isApprovedPropertyMetadata(
   value: unknown,
   propertyId: string,
@@ -82,7 +90,7 @@ function isApprovedPropertyMetadata(
     metadata.title.trim() !== '' &&
     typeof metadata.description === 'string' &&
     metadata.description.trim() !== '' &&
-    canonicalPath === `/apartamento/${propertyId}` &&
+    isCanonicalPropertyPath(canonicalPath, propertyId) &&
     (typeof metadata.imageUrl === 'string' || metadata.imageUrl === null) &&
     (metadata.imageUrl === null || isSafeUrl(metadata.imageUrl, ['https:']))
   );
@@ -93,7 +101,8 @@ function hasServerCanonicalForProperty(propertyId: string): boolean {
   if (!canonical) return false;
 
   try {
-    return new URL(canonical.href, window.location.href).pathname === `/apartamento/${propertyId}`;
+    const pathname = new URL(canonical.href, window.location.href).pathname;
+    return isCanonicalPropertyPath(pathname, propertyId);
   } catch {
     return false;
   }

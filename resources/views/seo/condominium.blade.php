@@ -24,8 +24,8 @@
     <div class="discovery-grid">
         @foreach ($listings as $listing)
         <article class="discovery-card">
-            @if ($listing['images'])<a href="/apartamento/{{ $listing['id'] }}"><img src="{{ $listing['images'][0] }}" alt="{{ $listing['name'] }} — acomodação" width="720" height="450" loading="lazy" decoding="async"></a>@endif
-            <div><h3><a href="/apartamento/{{ $listing['id'] }}">{{ $listing['name'] }}</a></h3>@include('seo.accommodation-facts')<a class="guide-text-link" href="/apartamento/{{ $listing['id'] }}">Conhecer esta acomodação ↗</a></div>
+            @if ($listing['images'])<a href="{{ $catalog->listingPath($listing) }}"><img src="{{ $listing['images'][0] }}" alt="{{ $listing['name'] }} — acomodação" width="720" height="450" loading="lazy" decoding="async"></a>@endif
+            <div><h3><a href="{{ $catalog->listingPath($listing) }}">{{ $listing['name'] }}</a></h3>@include('seo.accommodation-facts')<a class="guide-text-link" href="{{ $catalog->listingPath($listing) }}">Conhecer esta acomodação ↗</a></div>
         </article>
         @endforeach
     </div>
