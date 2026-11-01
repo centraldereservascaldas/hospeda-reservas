@@ -67,7 +67,8 @@ test('owner dashboard exposes the selected section and announces loading', () =>
   }
 });
 
-test('calendar reduces mobile cell height and exposes reservation status to assistive technology', async () => {
+test('calendar reduces mobile cell height and exposes reservation status to assistive technology', async (context) => {
+  context.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-15T12:00:00Z') });
   const originalGetOwnerDashboard = crcnBackendApi.getOwnerDashboard;
   crcnBackendApi.getOwnerDashboard = async () => ({
     period: { from: '2026-10-01', to: '2026-10-31' },
