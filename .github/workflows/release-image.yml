@@ -341,13 +341,7 @@ jobs:
 
           upsert_runtime_env STAYS_HOSTED_CHECKOUT_ENABLED true
           upsert_runtime_env STAYS_HOSTED_CHECKOUT_ALLOWED_HOSTS 'www.centraldereservascaldas.com.br,centraldereservascaldas.com.br'
-          upsert_runtime_env DIRECT_BOOKING_ENABLED false
-          upsert_runtime_env DIRECT_BOOKING_CHECKOUT_UI_ENABLED false
           upsert_runtime_env PARK_TICKETS_PREVIEW_ENABLED false
-          upsert_runtime_env DIRECT_BOOKING_PAYMENTS_ENABLED false
-          upsert_runtime_env DIRECT_BOOKING_CONFIRMATION_ENABLED false
-          upsert_runtime_env DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED false
-          upsert_runtime_env CIELO_DIRECT_PRODUCTION_PIX_ENABLED false
 
           curl --fail-with-body --silent --show-error \
             --request PATCH \
@@ -408,7 +402,7 @@ jobs:
             exit 1
           fi
 
-      - name: Verify the public Stays checkout deployment
+      - name: Verify the public checkout deployment
         run: |
           set -euo pipefail
 
@@ -418,12 +412,12 @@ jobs:
             health=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/health" || true)
             stays=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/stays/status" || true)
             checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/stays-checkout/readiness" || true)
-            direct_checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/checkout/readiness/LI17J" || true)
+            direct_checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/checkout/readiness/LG02J" || true)
 
             if jq --exit-status '.success == true' <<< "$health" >/dev/null 2>&1 \
               && jq --exit-status '.connected == true and .hasCredentials == true and .environment == "production"' <<< "$stays" >/dev/null 2>&1 \
               && jq --exit-status '.ready == true and .code == null' <<< "$checkout" >/dev/null 2>&1 \
-              && jq --exit-status '.checkoutEnabled == false and .payment.enabled == false' <<< "$direct_checkout" >/dev/null 2>&1; then
+              && jq --exit-status '.ready == true and .checkoutEnabled == true and .singlePageCheckoutEnabled == true and .payment.enabled == true and (.payment.methods | index("card")) != null and (.payment.methods | index("pix")) != null' <<< "$direct_checkout" >/dev/null 2>&1; then
               curl --fail --silent --show-error --max-time 15 \
                 --dump-header /tmp/hospeda-public-headers.txt \
                 --output /dev/null \
@@ -435,12 +429,12 @@ jobs:
                 echo 'The public response still exposes X-Powered-By.' >&2
                 exit 1
               fi
-              echo 'Public domain and hosted Stays checkout are ready.'
+              echo 'Public domain, direct checkout, and hosted Stays fallback are ready.'
               exit 0
             fi
 
             sleep 10
           done
 
-          echo 'The public domain did not become ready for hosted Stays checkout.' >&2
+          echo 'The public domain did not become ready for the direct checkout.' >&2
           exit 1
