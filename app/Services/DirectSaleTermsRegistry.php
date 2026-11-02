@@ -4,6 +4,8 @@ namespace App\Services;
 
 class DirectSaleTermsRegistry
 {
+    public function __construct(private readonly DirectBookingCatalog $liveCatalog) {}
+
     private const MAXIMUM_TERMS_FIELDS = 12;
 
     private const MAXIMUM_FIELD_LENGTH = 3_000;
@@ -22,7 +24,17 @@ class DirectSaleTermsRegistry
     public function findApprovedListing(string $listingId): ?array
     {
         $catalog = $this->catalog();
-        $property = collect($catalog)->first(fn (array $item): bool => in_array($listingId, [$item['id'] ?? '', $item['staysListingId'] ?? ''], true));
+        $property = collect($catalog)->first(fn (array $item): bool => in_array($listingId, [$item['id'] ?? '', $item['staysListingId'] ?? '', $item['staysListingObjectId'] ?? ''], true));
+        if ($property !== null && config('direct-booking.catalog_source', 'local') === 'stays') {
+            $property = $this->liveCatalog->withTerms($property);
+        }
+        $rolloutMode = config('direct-booking.rollout_mode', 'pilot');
+        if ($rolloutMode === 'all_approved') {
+            return $property !== null && $this->hasDisplayableTermsSnapshot($property) ? $property : null;
+        }
+        if ($rolloutMode !== 'pilot') {
+            return null;
+        }
         $pilotListingIds = config('direct-booking.pilot_listing_ids', []);
         if (! is_array($pilotListingIds)) {
             return null;
@@ -48,9 +60,26 @@ class DirectSaleTermsRegistry
         return $property;
     }
 
+    public function allListingsHaveApprovedTerms(): bool
+    {
+        $catalog = $this->catalog();
+
+        return $catalog !== [] && collect($catalog)->every(function (array $property): bool {
+            if (config('direct-booking.catalog_source', 'local') === 'stays') {
+                $property = $this->liveCatalog->withTerms($property);
+            }
+
+            return $this->hasDisplayableTermsSnapshot($property);
+        });
+    }
+
     /** @return list<array<string, mixed>> */
     protected function catalog(): array
     {
+        if (config('direct-booking.catalog_source', 'local') === 'stays') {
+            return $this->liveCatalog->listings();
+        }
+
         return json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
     }
 

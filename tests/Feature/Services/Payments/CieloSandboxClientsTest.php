@@ -13,6 +13,13 @@ use Tests\TestCase;
 
 class CieloSandboxClientsTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['services.cielo.direct_environment' => 'sandbox']);
+    }
+
     #[DataProvider('blockedProductionCases')]
     public function test_production_requests_are_blocked_without_all_explicit_gates(array $overrides, string $runtime): void
     {
@@ -248,5 +255,21 @@ class CieloSandboxClientsTest extends TestCase
         $this->expectExceptionMessage('Cielo Silent Order Post is not enabled for this environment.');
 
         app(CieloSilentOrderPostClient::class)->createBrowserAccessToken();
+    }
+
+    public function test_fixed_sandbox_sop_client_rejects_unrelated_merchant_before_network_call(): void
+    {
+        Http::preventStrayRequests();
+        config([
+            'services.cielo.enabled' => true,
+            'services.cielo.sop_enabled' => true,
+            'services.cielo.merchant_id' => 'another-sandbox-merchant',
+            'services.cielo.merchant_key' => 'sandbox-key-fixture',
+            'services.cielo.sop_client_id' => '6631016d-72e6-4db1-a2d2-9cbe61464925',
+            'services.cielo.sop_client_secret' => 'sop-secret-fixture',
+        ]);
+
+        $this->assertFalse(app(CieloSilentOrderPostClient::class)->isConfigured());
+        Http::assertNothingSent();
     }
 }

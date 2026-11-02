@@ -13,6 +13,7 @@ class CieloSilentOrderPostClient
     {
         return (bool) $this->configuration->value('sop_enabled')
             && $this->ecommerce->isConfigured()
+            && $this->configuration->sandboxSopMerchantIsCompatible()
             && $this->configuredValue('sop_client_id') !== null
             && $this->configuredValue('sop_client_secret') !== null;
     }

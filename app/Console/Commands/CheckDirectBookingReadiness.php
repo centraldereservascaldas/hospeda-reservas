@@ -11,7 +11,7 @@ use Illuminate\Console\Command;
 use Throwable;
 
 #[Signature('direct-booking:check-readiness {--json : Exibe o resultado em JSON}')]
-#[Description('Verifica a presença de pré-requisitos configurados para venda direta sem iniciar integrações.')]
+#[Description('Verifica pré-requisitos da venda direta; a fonte Stays consulta catálogo e políticas somente para leitura.')]
 class CheckDirectBookingReadiness extends Command
 {
     private const SUPPORTED_QUEUE_DRIVERS = [
@@ -25,7 +25,15 @@ class CheckDirectBookingReadiness extends Command
     public function handle(DirectSaleTermsRegistry $termsRegistry): int
     {
         $pilotListingIds = config('direct-booking.pilot_listing_ids');
-        $pilotTermsAreConfigured = $this->pilotTermsAreConfigured($pilotListingIds, $termsRegistry);
+        $rolloutMode = config('direct-booking.rollout_mode', 'pilot');
+        $pilotTermsAreConfigured = $rolloutMode === 'pilot' && $this->pilotTermsAreConfigured($pilotListingIds, $termsRegistry);
+        try {
+            $termsCheck = $rolloutMode === 'all_approved'
+                ? ['DIRECT_BOOKING_APPROVED_LISTINGS' => $termsRegistry->allListingsHaveApprovedTerms()]
+                : ['DIRECT_BOOKING_PILOT_LISTING_IDS' => $rolloutMode === 'pilot' && $pilotTermsAreConfigured];
+        } catch (Throwable) {
+            $termsCheck = ['DIRECT_BOOKING_APPROVED_LISTINGS' => false];
+        }
         $holdMinutes = filter_var(config('direct-booking.reservation_hold_minutes'), FILTER_VALIDATE_INT);
         $minimumPixMinutes = filter_var(config('direct-booking.pix_minimum_remaining_minutes', 30), FILTER_VALIDATE_INT);
         $safetyMarginMinutes = filter_var(config('direct-booking.payment_safety_margin_minutes', 5), FILTER_VALIDATE_INT);
@@ -33,7 +41,12 @@ class CheckDirectBookingReadiness extends Command
             ...$this->paymentProviderChecks(),
             'DIRECT_BOOKING_NOTIFICATION_QUEUE_CONNECTION' => $this->isQueueReady(config('direct-booking.notification_queue_connection')),
             'QUEUE_CONNECTION' => $this->isQueueReady(config('queue.default')),
-            'DIRECT_BOOKING_PILOT_LISTING_IDS' => $pilotTermsAreConfigured,
+            'DIRECT_BOOKING_ROLLOUT_MODE' => in_array($rolloutMode, ['pilot', 'all_approved'], true),
+            ...($rolloutMode === 'all_approved' ? [
+                'DIRECT_BOOKING_CATALOG_SOURCE' => config('direct-booking.catalog_source') === 'stays',
+                'DIRECT_BOOKING_STAYS_TERMS_ENABLED' => config('direct-booking.stays_terms_enabled') === true,
+            ] : []),
+            ...$termsCheck,
             'STAYS_CLIENT_ID' => $this->isConfiguredString(config('services.stays.client_id')),
             'STAYS_CLIENT_SECRET' => $this->isConfiguredString(config('services.stays.client_secret')),
             'STAYS_BASE_URL' => $this->isValidUrl(config('services.stays.base_url')),
@@ -48,7 +61,10 @@ class CheckDirectBookingReadiness extends Command
                 && $safetyMarginMinutes >= 0
                 && $holdMinutes > $minimumPixMinutes + $safetyMarginMinutes,
             'DIRECT_BOOKING_RESUME_TOKEN_TTL_DAYS' => DirectBookingOrder::resumeTokenTtlDays() !== null,
-            'MAIL_MAILER' => $this->hasExternalMailTransport(),
+            ...((bool) config('direct-booking.send_confirmation_email', false) ? [
+                'MAIL_MAILER' => $this->hasExternalMailTransport(),
+                'MAIL_FROM_ADDRESS' => $this->hasValidMailSender(),
+            ] : []),
         ];
         $optionalChecks = config('direct-booking.payment_provider', 'mercadopago') === 'mercadopago'
             ? ['VITE_MERCADO_PAGO_PUBLIC_KEY' => $this->isConfiguredString(config('services.mercadopago.public_key'))]
@@ -61,6 +77,7 @@ class CheckDirectBookingReadiness extends Command
             'DIRECT_BOOKING_PAYMENTS_ENABLED' => (bool) config('direct-booking.payments_enabled', false),
             'DIRECT_BOOKING_CONFIRMATION_ENABLED' => (bool) config('direct-booking.confirmation_enabled', false),
             'DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED' => (bool) config('direct-booking.live_payments_enabled', false),
+            'DIRECT_BOOKING_SEND_CONFIRMATION_EMAIL' => (bool) config('direct-booking.send_confirmation_email', false),
             'CIELO_SANDBOX_ENABLED' => (bool) config('services.cielo.enabled', false),
             'CIELO_SANDBOX_SOP_ENABLED' => (bool) config('services.cielo.sop_enabled', false),
         ];
@@ -72,7 +89,7 @@ class CheckDirectBookingReadiness extends Command
                 'checks' => array_map(static fn (bool $configured): array => ['configured' => $configured], $checks),
                 'optional_checks' => array_map(static fn (bool $configured): array => ['configured' => $configured], $optionalChecks),
                 'flags' => array_map(static fn (bool $enabled): array => ['enabled' => $enabled], $flags),
-                'scope' => 'Presença e formato de configuração apenas; credenciais, sandbox, conectividade e operação não foram validados. Este resultado não declara prontidão para lançamento.',
+                'scope' => 'Presença e formato de configuração; com fonte Stays, consulta catálogo e políticas somente para leitura. Não valida autenticação Cielo, cobranças ou operação. Este resultado não declara prontidão para lançamento.',
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         } else {
             foreach ($checks as $name => $configured) {
@@ -111,20 +128,29 @@ class CheckDirectBookingReadiness extends Command
         if (CieloDirectConfiguration::isProvider($provider)) {
             if ($provider === 'cielo') {
                 $configuration = app(CieloDirectConfiguration::class);
+                $notificationMode = config('services.cielo.production.notification_mode', 'webhook');
+                $pollingInterval = filter_var(config('direct-booking.payment_reconciliation_interval_seconds'), FILTER_VALIDATE_INT);
 
                 return $checks + [
                     'CIELO_DIRECT_ENVIRONMENT' => $configuration->environment() === 'production',
                     'CIELO_DIRECT_PRODUCTION_ENABLED' => $configuration->isAllowed(),
-                    'CIELO_DIRECT_PRODUCTION_SOP_ENABLED' => (bool) $configuration->value('sop_enabled'),
-                    'CIELO_DIRECT_PRODUCTION_PIX_ENABLED' => (bool) $configuration->value('pix_enabled'),
-                    'CIELO_DIRECT_PRODUCTION_PIX_EXPIRATION_SECONDS' => $this->isValidPixExpiration($configuration->value('pix_qr_expiration_seconds')),
-                    'CIELO_DIRECT_PRODUCTION_MERCHANT_ID' => $this->isConfiguredString($configuration->value('merchant_id')),
-                    'CIELO_DIRECT_PRODUCTION_MERCHANT_KEY' => $this->isConfiguredString($configuration->value('merchant_key')),
-                    'CIELO_DIRECT_PRODUCTION_SOP_CLIENT_ID' => $this->isConfiguredString($configuration->value('sop_client_id')),
-                    'CIELO_DIRECT_PRODUCTION_SOP_CLIENT_SECRET' => $this->isConfiguredString($configuration->value('sop_client_secret')),
-                    'CIELO_DIRECT_PRODUCTION_WEBHOOK_HEADER_NAME' => $this->isConfiguredString($configuration->value('webhook_header_name')),
-                    'CIELO_DIRECT_PRODUCTION_WEBHOOK_HEADER_VALUE' => $this->isConfiguredString($configuration->value('webhook_header_value')),
-                    'CIELO_DIRECT_PRODUCTION_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady($configuration->value('webhook_queue_connection')),
+                    'CIELO_DIRECT_PRODUCTION_SOP_ENABLED' => (bool) config('services.cielo.production.sop_enabled'),
+                    'CIELO_DIRECT_PRODUCTION_PIX_ENABLED' => (bool) config('services.cielo.production.pix_enabled'),
+                    'CIELO_DIRECT_PRODUCTION_PIX_EXPIRATION_SECONDS' => $this->isValidPixExpiration(config('services.cielo.production.pix_qr_expiration_seconds')),
+                    'CIELO_DIRECT_PRODUCTION_MERCHANT_ID' => $this->isConfiguredString(config('services.cielo.production.merchant_id')),
+                    'CIELO_DIRECT_PRODUCTION_MERCHANT_KEY' => $this->isConfiguredString(config('services.cielo.production.merchant_key')),
+                    'CIELO_DIRECT_PRODUCTION_SOP_CLIENT_ID' => $this->isConfiguredString(config('services.cielo.production.sop_client_id')),
+                    'CIELO_DIRECT_PRODUCTION_SOP_CLIENT_SECRET' => $this->isConfiguredString(config('services.cielo.production.sop_client_secret')),
+                    'CIELO_DIRECT_PRODUCTION_NOTIFICATION_MODE' => in_array($notificationMode, ['webhook', 'polling'], true),
+                    ...($notificationMode === 'polling' ? [
+                        'DIRECT_BOOKING_PAYMENT_RECONCILIATION_INTERVAL_SECONDS' => $pollingInterval !== false
+                            && $pollingInterval >= 60
+                            && $pollingInterval <= 300,
+                    ] : [
+                        'CIELO_DIRECT_PRODUCTION_WEBHOOK_HEADER_NAME' => $this->isConfiguredString(config('services.cielo.production.webhook_header_name')),
+                        'CIELO_DIRECT_PRODUCTION_WEBHOOK_HEADER_VALUE' => $this->isConfiguredString(config('services.cielo.production.webhook_header_value')),
+                        'CIELO_DIRECT_PRODUCTION_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady(config('services.cielo.production.webhook_queue_connection')),
+                    ]),
                 ];
             }
 
@@ -133,6 +159,7 @@ class CheckDirectBookingReadiness extends Command
                 'CIELO_SANDBOX_MERCHANT_KEY' => $this->isConfiguredString(config('services.cielo.merchant_key')),
                 'CIELO_SANDBOX_SOP_CLIENT_ID' => $this->isConfiguredString(config('services.cielo.sop_client_id')),
                 'CIELO_SANDBOX_SOP_CLIENT_SECRET' => $this->isConfiguredString(config('services.cielo.sop_client_secret')),
+                'CIELO_SANDBOX_SOP_MERCHANT_COMPATIBLE' => app(CieloDirectConfiguration::class)->sandboxSopMerchantIsCompatible(),
                 'CIELO_SANDBOX_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady(config('services.cielo.webhook_queue_connection')),
             ];
         }
@@ -219,7 +246,30 @@ class CheckDirectBookingReadiness extends Command
             return true;
         }
 
+        if ($transport === 'smtp') {
+            $url = $mailer['url'] ?? null;
+            if ($this->isConfiguredString($url)) {
+                return in_array(parse_url($url, PHP_URL_SCHEME), ['smtp', 'smtps'], true)
+                    && $this->isConfiguredString(parse_url($url, PHP_URL_HOST));
+            }
+
+            $host = $mailer['host'] ?? null;
+
+            return $this->isConfiguredString($host)
+                && ! in_array(strtolower(trim($host)), ['localhost', '127.0.0.1', '::1'], true)
+                && filter_var($mailer['port'] ?? null, FILTER_VALIDATE_INT) !== false;
+        }
+
         return in_array($transport, self::SUPPORTED_MAIL_TRANSPORTS, true);
+    }
+
+    private function hasValidMailSender(): bool
+    {
+        $address = config('mail.from.address');
+
+        return is_string($address)
+            && filter_var($address, FILTER_VALIDATE_EMAIL) !== false
+            && ! str_ends_with(strtolower($address), '@example.com');
     }
 
     private function pilotTermsAreConfigured(mixed $pilotListingIds, DirectSaleTermsRegistry $termsRegistry): bool

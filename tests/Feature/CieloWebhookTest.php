@@ -70,7 +70,7 @@ class CieloWebhookTest extends TestCase
             'services.cielo.production.webhook_header_value' => 'production-header-fixture',
             'services.cielo.production.webhook_queue_connection' => 'database',
         ]);
-        $this->postJson('/api/webhooks/cielo', $this->notification(), ['X-Cielo-Production-Secret' => 'production-header-fixture'])->assertAccepted();
+        $this->postJson('/api/webhooks/cielo', $this->notification(), ['X-Cielo-Production-Secret' => 'production-header-fixture'])->assertOk();
         $this->assertDatabaseHas('direct_booking_payment_webhooks', ['gateway_provider' => 'cielo']);
         Queue::assertPushed(ReconcileCieloPaymentWebhook::class, 1);
         Http::assertNothingSent();
@@ -141,7 +141,7 @@ class CieloWebhookTest extends TestCase
         Queue::fake([ReconcileCieloPaymentWebhook::class]);
 
         $this->postJson('/api/webhooks/cielo', $this->notification())
-            ->assertAccepted()->assertJsonPath('queued', true);
+            ->assertOk()->assertJsonPath('queued', true);
 
         $this->assertDatabaseHas('direct_booking_payment_webhooks', [
             'gateway_provider' => 'cielo_sandbox',
@@ -209,7 +209,7 @@ class CieloWebhookTest extends TestCase
         $first = $this->postJson('/api/webhooks/cielo', $this->notification(), ['X-Cielo-Secret' => 'synthetic-cielo-webhook-secret', 'X-Request-Id' => 'cielo-request-sentinel']);
         $duplicate = $this->postJson('/api/webhooks/cielo', $this->notification(), ['X-Cielo-Secret' => 'synthetic-cielo-webhook-secret', 'X-Request-Id' => 'cielo-request-sentinel']);
 
-        $first->assertAccepted()->assertJsonPath('queued', true);
+        $first->assertOk()->assertJsonPath('queued', true);
         $duplicate->assertOk()->assertJsonPath('duplicate', true);
         $this->assertDatabaseCount('direct_booking_payment_webhooks', 2);
         $this->assertDatabaseHas('direct_booking_payment_webhooks', [

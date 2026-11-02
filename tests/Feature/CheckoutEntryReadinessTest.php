@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\DirectBookingCatalog;
 use App\Services\DirectSaleTermsRegistry;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -48,7 +49,7 @@ class CheckoutEntryReadinessTest extends TestCase
             'park-tickets.preview_enabled' => true,
             ...$overrides,
         ]);
-        $this->app->instance(DirectSaleTermsRegistry::class, new class extends DirectSaleTermsRegistry
+        $this->app->instance(DirectSaleTermsRegistry::class, new class(app(DirectBookingCatalog::class)) extends DirectSaleTermsRegistry
         {
             protected function catalog(): array
             {

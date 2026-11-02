@@ -75,6 +75,6 @@ class CieloWebhookController extends Controller
             return response()->json(['success' => true, 'duplicate' => true], 200);
         }
 
-        return response()->json(['success' => true, 'queued' => true, 'id' => $webhook->id], 202);
+        return response()->json(['success' => true, 'queued' => true, 'id' => $webhook->id], 200);
     }
 }
