@@ -4,6 +4,7 @@ import { LogoCRCN } from '../LogoCRCN';
 import type { CheckoutModal } from './CheckoutModal';
 import {
   CieloSopCardForm,
+  formatCieloCardPayment,
   type CieloCardPricing,
   type CieloPaymentContext,
 } from './CieloSopCardForm';
@@ -191,6 +192,7 @@ export function SinglePageCheckout({
   const fees = getVisiblePropertyFees(quote.fees || []);
   const paymentTotal =
     paymentMethod === 'card' && cardPricing ? cardPricing.totalCents / 100 : total;
+  const cardPaymentLabel = cardPricing ? formatCieloCardPayment(cardPricing) : money(paymentTotal);
 
   const preparePayment = async (): Promise<CieloPaymentContext> => {
     if (preparedRef.current) return preparedRef.current;
@@ -286,6 +288,8 @@ export function SinglePageCheckout({
     result.order.paymentStatus === 'approved';
   const rejected =
     result?.payment.attempt?.status === 'rejected' || result?.order.status === 'pagamento_recusado';
+  const pendingPix =
+    result?.payment.attempt?.method === 'pix' && result.payment.attempt.status === 'pending';
 
   return (
     <main className="checkout-purchase min-h-screen pb-24 text-neutral-950">
@@ -378,14 +382,18 @@ export function SinglePageCheckout({
                       ? 'Reserva confirmada!'
                       : rejected
                         ? 'Pagamento não aprovado'
-                        : 'Acompanhando sua confirmação'}
+                        : pendingPix
+                          ? 'Pague com Pix nesta página'
+                          : 'Acompanhando sua confirmação'}
                 </h2>
                 <p className="text-sm leading-6 text-neutral-600">
                   {confirmed
                     ? 'Tudo certo com a sua hospedagem. Guarde o código da reserva e confira os detalhes no comprovante.'
                     : rejected
                       ? 'O pagamento foi recusado e a hospedagem não está confirmada. Consulte os detalhes do pedido para ver os próximos passos.'
-                      : 'A reserva só estará confirmada após a verificação do pagamento e da hospedagem. Acompanhe aqui, sem repetir a compra.'}
+                      : pendingPix
+                        ? 'Escaneie o QR Code ou copie o código abaixo. A confirmação aparecerá aqui após a aprovação do pagamento.'
+                        : 'A reserva só estará confirmada após a verificação do pagamento e da hospedagem. Acompanhe aqui, sem repetir a compra.'}
                 </p>
                 {confirmed && result?.confirmation?.reservationCode && (
                   <p className="font-mono text-lg font-bold">
@@ -469,16 +477,13 @@ export function SinglePageCheckout({
                       <div>
                         <p className="font-bold">Pix seguro e rápido</p>
                         <p className="mt-1 text-sm leading-6">
-                          Na próxima etapa, você verá o QR Code e o código copia e cola para
-                          concluir o pagamento da hospedagem.
+                          Gere o QR Code e pague aqui mesmo, sem sair desta página.
                         </p>
                       </div>
                     </div>
                   </section>
                 }
-                submitLabel={
-                  paymentMethod === 'pix' ? `Continuar com Pix · ${money(total)}` : undefined
-                }
+                submitLabel={paymentMethod === 'pix' ? 'Gerar Pix para pagar aqui' : undefined}
                 onAttemptFinished={() => setAttemptFinished(true)}
               >
                 <fieldset disabled={prepared} className="mb-7 border-b border-neutral-300/80 pb-7">
@@ -721,9 +726,15 @@ export function SinglePageCheckout({
                   className="checkout-summary-total flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 pt-5 font-bold"
                   aria-live="polite"
                 >
-                  <dt>Total (BRL)</dt>
-                  <dd>{money(paymentTotal)}</dd>
+                  <dt>{paymentMethod === 'pix' ? 'Pague no Pix' : 'Pague no cartão'}</dt>
+                  <dd>{paymentMethod === 'card' ? cardPaymentLabel : money(paymentTotal)}</dd>
                 </div>
+                {paymentMethod === 'card' && cardPricing && cardPricing.installments > 1 && (
+                  <div className="flex justify-between gap-3 text-xs text-neutral-600">
+                    <dt>Total da compra</dt>
+                    <dd>{money(paymentTotal)}</dd>
+                  </div>
+                )}
               </dl>
               <p className="mt-4 flex items-center gap-2 rounded-xl bg-white/55 px-3 py-2.5 text-xs text-neutral-600">
                 {paymentMethod === 'pix' ? (

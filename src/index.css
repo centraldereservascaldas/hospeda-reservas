@@ -421,8 +421,8 @@ body {
 }
 
 .checkout-summary-total dd {
-  font-size: 1.5rem;
-  letter-spacing: -0.055em;
+  font-size: 1.125rem;
+  letter-spacing: -0.025em;
   color: #17243a;
 }
 
