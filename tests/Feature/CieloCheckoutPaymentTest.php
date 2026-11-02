@@ -18,6 +18,31 @@ class CieloCheckoutPaymentTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_stays_managed_email_allows_cielo_without_smtp(): void
+    {
+        $this->configureCielo();
+        config([
+            'direct-booking.payment_provider' => 'cielo_sandbox',
+            'direct-booking.send_confirmation_email' => false,
+            'services.cielo.pix_enabled' => true,
+            'mail.default' => 'log',
+        ]);
+
+        $this->assertSame(['card', 'pix'], app(DirectCheckoutPaymentService::class)->availableMethods());
+    }
+
+    public function test_own_confirmation_email_requires_external_mail_transport(): void
+    {
+        $this->configureCielo();
+        config([
+            'direct-booking.payment_provider' => 'cielo_sandbox',
+            'direct-booking.send_confirmation_email' => true,
+            'mail.default' => 'log',
+        ]);
+
+        $this->assertSame([], app(DirectCheckoutPaymentService::class)->availableMethods());
+    }
+
     public function test_existing_order_keeps_its_provider_when_global_provider_changes(): void
     {
         $this->configureCielo();

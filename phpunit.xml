@@ -29,6 +29,11 @@
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
         <env name="STAYS_SIMULATOR_ENABLED" value="false"/>
+        <env name="DIRECT_BOOKING_ROLLOUT_MODE" value="pilot" force="true"/>
+        <env name="DIRECT_BOOKING_CATALOG_SOURCE" value="local" force="true"/>
+        <env name="DIRECT_BOOKING_STAYS_TERMS_ENABLED" value="false" force="true"/>
+        <env name="DIRECT_BOOKING_PAYMENT_PROVIDER" value="mercadopago" force="true"/>
+        <env name="DIRECT_BOOKING_CHECKOUT_UI_ENABLED" value="false" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

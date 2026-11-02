@@ -7,6 +7,10 @@ return [
     'confirmation_enabled' => (bool) env('DIRECT_BOOKING_CONFIRMATION_ENABLED', false),
     'payment_provider' => env('DIRECT_BOOKING_PAYMENT_PROVIDER', 'mercadopago'),
     'live_payments_enabled' => (bool) env('DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED', false),
+    'rollout_mode' => env('DIRECT_BOOKING_ROLLOUT_MODE', 'pilot'),
+    'catalog_source' => env('DIRECT_BOOKING_CATALOG_SOURCE', 'local'),
+    'stays_terms_enabled' => (bool) env('DIRECT_BOOKING_STAYS_TERMS_ENABLED', false),
+    'support_email' => env('DIRECT_BOOKING_SUPPORT_EMAIL'),
     'pilot_listing_ids' => array_values(array_unique(array_filter(
         array_map('trim', explode(',', (string) env('DIRECT_BOOKING_PILOT_LISTING_IDS', ''))),
         static fn (string $listingId): bool => $listingId !== '',

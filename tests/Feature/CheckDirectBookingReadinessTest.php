@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\DirectBookingCatalog;
 use App\Services\DirectSaleTermsRegistry;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
@@ -40,6 +41,44 @@ class CheckDirectBookingReadinessTest extends TestCase
 
         $this->assertSame(0, $exitCode);
         $this->assertFalse($result['optional_checks']['VITE_MERCADO_PAGO_PUBLIC_KEY']['configured']);
+        Http::assertNothingSent();
+    }
+
+    public function test_mail_defaults_do_not_pass_transactional_email_readiness(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        config([
+            'mail.mailers.smtp.host' => '127.0.0.1',
+            'mail.from.address' => 'hello@example.com',
+        ]);
+        $this->app->instance(DirectSaleTermsRegistry::class, $this->registry(['pilot-one', 'pilot-two']));
+
+        $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertFalse($result['checks']['MAIL_MAILER']['configured']);
+        $this->assertFalse($result['checks']['MAIL_FROM_ADDRESS']['configured']);
+        Http::assertNothingSent();
+    }
+
+    public function test_stays_managed_email_does_not_require_own_mail_transport(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        config([
+            'direct-booking.send_confirmation_email' => false,
+            'mail.default' => 'log',
+            'mail.from.address' => 'hello@example.com',
+        ]);
+        $this->app->instance(DirectSaleTermsRegistry::class, $this->registry(['pilot-one', 'pilot-two']));
+
+        $this->assertSame(0, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertArrayNotHasKey('MAIL_MAILER', $result['checks']);
+        $this->assertArrayNotHasKey('MAIL_FROM_ADDRESS', $result['checks']);
+        $this->assertFalse($result['flags']['DIRECT_BOOKING_SEND_CONFIRMATION_EMAIL']['enabled']);
         Http::assertNothingSent();
     }
 
@@ -180,10 +219,133 @@ class CheckDirectBookingReadinessTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_production_credentials_are_not_reported_as_configured_from_sandbox_values(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        config([
+            'direct-booking.payment_provider' => 'cielo',
+            'services.cielo.direct_environment' => 'sandbox',
+            'services.cielo.merchant_id' => 'sentinel-sandbox-merchant',
+            'services.cielo.merchant_key' => 'sentinel-sandbox-key',
+            'services.cielo.sop_client_id' => 'sentinel-sandbox-client',
+            'services.cielo.sop_client_secret' => 'sentinel-sandbox-secret',
+            'services.cielo.production.merchant_id' => null,
+            'services.cielo.production.merchant_key' => null,
+            'services.cielo.production.sop_client_id' => null,
+            'services.cielo.production.sop_client_secret' => null,
+        ]);
+
+        $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $output = Artisan::output();
+        $result = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
+
+        foreach (['MERCHANT_ID', 'MERCHANT_KEY', 'SOP_CLIENT_ID', 'SOP_CLIENT_SECRET'] as $key) {
+            $this->assertFalse($result['checks']['CIELO_DIRECT_PRODUCTION_'.$key]['configured']);
+        }
+        $this->assertStringNotContainsString('sentinel-', $output);
+        Http::assertNothingSent();
+    }
+
+    public function test_production_polling_mode_does_not_require_replacing_existing_cielo_webhook(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        $this->app->instance('env', 'production');
+        $this->app->instance(DirectSaleTermsRegistry::class, $this->registry(['pilot-one', 'pilot-two']));
+        config([
+            'direct-booking.payment_provider' => 'cielo',
+            'services.cielo.direct_environment' => 'production',
+            'services.cielo.production.enabled' => true,
+            'services.cielo.production.sop_enabled' => true,
+            'services.cielo.production.pix_enabled' => true,
+            'services.cielo.production.pix_qr_expiration_seconds' => 1800,
+            'services.cielo.production.merchant_id' => 'sentinel-merchant',
+            'services.cielo.production.merchant_key' => 'sentinel-key',
+            'services.cielo.production.sop_client_id' => 'sentinel-client',
+            'services.cielo.production.sop_client_secret' => 'sentinel-secret',
+            'services.cielo.production.notification_mode' => 'polling',
+            'services.cielo.production.webhook_header_name' => null,
+            'services.cielo.production.webhook_header_value' => null,
+            'direct-booking.payment_reconciliation_interval_seconds' => 300,
+        ]);
+
+        $this->assertSame(0, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertTrue($result['checks']['CIELO_DIRECT_PRODUCTION_NOTIFICATION_MODE']['configured']);
+        $this->assertTrue($result['checks']['DIRECT_BOOKING_PAYMENT_RECONCILIATION_INTERVAL_SECONDS']['configured']);
+        $this->assertArrayNotHasKey('CIELO_DIRECT_PRODUCTION_WEBHOOK_HEADER_VALUE', $result['checks']);
+        Http::assertNothingSent();
+
+        config(['direct-booking.payment_reconciliation_interval_seconds' => 900]);
+        $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertFalse($result['checks']['DIRECT_BOOKING_PAYMENT_RECONCILIATION_INTERVAL_SECONDS']['configured']);
+    }
+
+    public function test_general_rollout_reports_catalog_terms_without_requiring_pilot_ids(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        config([
+            'direct-booking.rollout_mode' => 'all_approved',
+            'direct-booking.pilot_listing_ids' => [],
+            'direct-booking.catalog_source' => 'stays',
+            'direct-booking.stays_terms_enabled' => true,
+        ]);
+        $this->app->instance(DirectSaleTermsRegistry::class, $this->registry(['approved-listing']));
+
+        $this->assertSame(0, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertTrue($result['checks']['DIRECT_BOOKING_APPROVED_LISTINGS']['configured']);
+        $this->assertArrayNotHasKey('DIRECT_BOOKING_PILOT_LISTING_IDS', $result['checks']);
+        $this->assertFalse($result['flags']['DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED']['enabled']);
+        Http::assertNothingSent();
+    }
+
+    public function test_general_rollout_rejects_static_catalog_and_terms(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        config(['direct-booking.rollout_mode' => 'all_approved', 'direct-booking.pilot_listing_ids' => []]);
+        $this->app->instance(DirectSaleTermsRegistry::class, $this->registry(['approved-listing']));
+
+        $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertTrue($result['checks']['DIRECT_BOOKING_APPROVED_LISTINGS']['configured']);
+        $this->assertFalse($result['checks']['DIRECT_BOOKING_CATALOG_SOURCE']['configured']);
+        $this->assertFalse($result['checks']['DIRECT_BOOKING_STAYS_TERMS_ENABLED']['configured']);
+        Http::assertNothingSent();
+    }
+
+    public function test_unavailable_live_catalog_is_reported_as_pending_without_exposing_external_errors(): void
+    {
+        $this->configureCompleteReadiness();
+        config([
+            'direct-booking.rollout_mode' => 'all_approved',
+            'direct-booking.catalog_source' => 'stays',
+            'cache.default' => 'array',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['https://stays.example.test/external/v1/content/listings*' => Http::response(['error' => 'sentinel-upstream-error'], 503)]);
+
+        $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $output = Artisan::output();
+        $result = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
+
+        $this->assertFalse($result['checks']['DIRECT_BOOKING_APPROVED_LISTINGS']['configured']);
+        $this->assertStringNotContainsString('sentinel-upstream-error', $output);
+        Http::assertSentCount(1);
+    }
+
     private function configureCompleteReadiness(): void
     {
         config([
             'direct-booking.payment_provider' => 'mercadopago',
+            'direct-booking.checkout_ui_enabled' => false,
             'services.mercadopago.access_token' => 'sentinel-access-token',
             'services.mercadopago.webhook_secret' => 'sentinel-webhook-secret',
             'services.mercadopago.public_key' => 'sentinel-public-key',
@@ -200,10 +362,12 @@ class CheckDirectBookingReadinessTest extends TestCase
             'direct-booking.payments_enabled' => false,
             'direct-booking.confirmation_enabled' => false,
             'direct-booking.live_payments_enabled' => false,
+            'direct-booking.send_confirmation_email' => true,
             'queue.default' => 'database',
             'queue.connections.database' => ['driver' => 'database'],
             'mail.default' => 'smtp',
-            'mail.mailers.smtp' => ['transport' => 'smtp'],
+            'mail.mailers.smtp' => ['transport' => 'smtp', 'host' => 'smtp.example.test', 'port' => 587],
+            'mail.from.address' => 'reservas@caldas.example.test',
         ]);
     }
 
@@ -226,7 +390,18 @@ class CheckDirectBookingReadinessTest extends TestCase
         return new class($listings) extends DirectSaleTermsRegistry
         {
             /** @param list<array<string, mixed>> $listings */
-            public function __construct(private readonly array $listings) {}
+            public function __construct(private readonly array $listings)
+            {
+                parent::__construct(new class extends DirectBookingCatalog
+                {
+                    public function __construct() {}
+
+                    public function withTerms(array $listing): array
+                    {
+                        return $listing;
+                    }
+                });
+            }
 
             protected function catalog(): array
             {

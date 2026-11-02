@@ -32,7 +32,7 @@ class CieloCheckoutPaymentService
             && (bool) config('direct-booking.payments_enabled', false)
             && (bool) config('direct-booking.confirmation_enabled', false)
             && (int) config('direct-booking.resume_token_ttl_days', 0) > 0
-            && $this->hasExternalMailTransport()
+            && (! config('direct-booking.send_confirmation_email', false) || $this->hasExternalMailTransport())
             && in_array(config('direct-booking.stays_payment_type'), ['credit', 'debit'], true)
             && is_string(config('direct-booking.stays_payment_provider_id'))
             && trim((string) config('direct-booking.stays_payment_provider_id')) !== ''

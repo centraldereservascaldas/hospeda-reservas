@@ -23,6 +23,30 @@ class DirectSaleTermsRegistryTest extends TestCase
         $this->assertSame('second', $registry->findApprovedListing('second')['id']);
     }
 
+    public function test_general_rollout_accepts_approved_listing_without_pilot_ids_and_rejects_incomplete_terms(): void
+    {
+        config(['direct-booking.rollout_mode' => 'all_approved', 'direct-booking.pilot_listing_ids' => []]);
+        $approved = $this->listing('approved');
+        $approved['staysListingId'] = 'stays-approved';
+        $incomplete = $this->listing('incomplete');
+        unset($incomplete['directSaleTermsSnapshot']['Cancelamento e reembolso']);
+        $registry = $this->registry([$approved, $incomplete]);
+
+        $this->assertSame($approved, $registry->findApprovedListing('stays-approved'));
+        $this->assertNull($registry->findApprovedListing('incomplete'));
+        $this->assertNull($registry->findApprovedListing('unknown'));
+        $this->assertFalse($registry->allListingsHaveApprovedTerms());
+        $this->assertTrue($this->registry([$approved])->allListingsHaveApprovedTerms());
+        $this->assertFalse($this->registry([])->allListingsHaveApprovedTerms());
+    }
+
+    public function test_invalid_rollout_mode_does_not_release_an_approved_listing(): void
+    {
+        config(['direct-booking.rollout_mode' => 'invalid', 'direct-booking.pilot_listing_ids' => ['first', 'second']]);
+
+        $this->assertNull($this->registry([$this->listing('first'), $this->listing('second')])->findApprovedListing('first'));
+    }
+
     /** @return array<string, mixed> */
     private function listing(string $id): array
     {
