@@ -139,6 +139,19 @@ async function fill(view: ReturnType<typeof setup>) {
   }
 }
 
+test('parcelamento destaca a parcela e mantém o total final para conferência', async () => {
+  const view = setup();
+  await waitFor(() => assert.ok(view.getByLabelText(/^Parcelamento/)));
+  fireEvent.change(view.getByLabelText(/^Parcelamento/), { target: { value: '6' } });
+
+  assert.match(
+    view.getByRole('button', { name: /Confirmar e pagar/ }).textContent!,
+    /6x de até R\$\s*[\d.,]+/,
+  );
+  assert.ok(view.getByText('Total da compra'));
+  assert.match(view.getByLabelText('Resumo da compra').textContent!, /6x de até R\$/);
+});
+
 test('one submit prepares the reservation then tokenizes and pays without leaving the page or duplicating submission', async () => {
   const calls: string[] = [];
   let options: CieloSopOptions | undefined;

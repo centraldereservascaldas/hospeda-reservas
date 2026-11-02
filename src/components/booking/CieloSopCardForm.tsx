@@ -52,6 +52,15 @@ export interface CieloCardPricing {
   totalCents: number;
 }
 
+export function formatCieloCardPayment(pricing: CieloCardPricing): string {
+  if (pricing.installments === 1) {
+    return moneyFormatter.format(pricing.totalCents / 100);
+  }
+
+  const maximumInstallmentCents = Math.ceil(pricing.totalCents / pricing.installments);
+  return `${pricing.installments}x de até ${moneyFormatter.format(maximumInstallmentCents / 100)}`;
+}
+
 export function getCieloCardPricing(amount: string, installments: number): CieloCardPricing {
   const totalCents = Math.round(Number(amount) * 100);
   if (
@@ -87,19 +96,13 @@ function getInstallmentOptions(amount: string): Array<CieloCardPricing & { label
 
   return pricing
     .filter(({ installments, totalCents }) => Math.floor(totalCents / installments) >= 500)
-    .map((option) => {
-      const baseCents = Math.floor(option.totalCents / option.installments);
-      const remainderCents = option.totalCents % option.installments;
-      const regularInstallment = moneyFormatter.format(baseCents / 100);
-      const finalInstallment = moneyFormatter.format((baseCents + remainderCents) / 100);
-      const split = remainderCents
-        ? `${option.installments - 1}x de ${regularInstallment} + 1x de ${finalInstallment}`
-        : `${option.installments}x de ${regularInstallment}`;
-      return {
-        ...option,
-        label: `${split} · total ${moneyFormatter.format(option.totalCents / 100)}`,
-      };
-    });
+    .map((option) => ({
+      ...option,
+      label:
+        option.installments === 1
+          ? `1x de ${formatCieloCardPayment(option)}`
+          : formatCieloCardPayment(option),
+    }));
 }
 
 export function CieloSopCardForm({
@@ -403,8 +406,8 @@ export function CieloSopCardForm({
           className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm font-semibold text-amber-950"
           role="status"
         >
-          Prévia visual: não insira dados reais. Este formulário está desativado e não envia
-          informações nem realiza cobranças.
+          Prévia visual: escolha as parcelas para conferir os valores. Os campos do cartão e o
+          pagamento estão desativados; não insira dados reais.
         </p>
       )}
       {!usesPreparation && paymentMethod === 'card' && (
@@ -417,10 +420,7 @@ export function CieloSopCardForm({
         </div>
       )}
       {paymentMethod === 'card' ? (
-        <fieldset
-          disabled={previewOnly || isSubmitting}
-          className="grid gap-4 sm:grid-cols-2 disabled:opacity-65"
-        >
+        <fieldset disabled={isSubmitting} className="grid gap-4 sm:grid-cols-2 disabled:opacity-65">
           <legend className="mb-4 text-lg font-bold text-neutral-950">
             {usesPreparation && (
               <span aria-hidden="true" className="checkout-section-number mr-3">
@@ -432,6 +432,7 @@ export function CieloSopCardForm({
           <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
             Número do cartão
             <input
+              disabled={previewOnly}
               autoComplete="cc-number"
               required
               inputMode="numeric"
@@ -441,6 +442,7 @@ export function CieloSopCardForm({
           <label className="space-y-1 text-sm font-semibold text-neutral-800">
             Validade (MM/AAAA)
             <input
+              disabled={previewOnly}
               autoComplete="cc-exp"
               required
               inputMode="numeric"
@@ -451,6 +453,7 @@ export function CieloSopCardForm({
           <label className="space-y-1 text-sm font-semibold text-neutral-800">
             Código de segurança
             <input
+              disabled={previewOnly}
               autoComplete="cc-csc"
               required
               inputMode="numeric"
@@ -460,6 +463,7 @@ export function CieloSopCardForm({
           <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
             Nome no cartão
             <input
+              disabled={previewOnly}
               name="cardholderName"
               required
               defaultValue={guestPrefill?.fullName}
@@ -470,6 +474,7 @@ export function CieloSopCardForm({
           <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
             E-mail do titular
             <input
+              disabled={previewOnly}
               name="cardholderEmail"
               required
               defaultValue={guestPrefill?.email}
@@ -481,6 +486,7 @@ export function CieloSopCardForm({
           <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
             CPF ou CNPJ do titular
             <input
+              disabled={previewOnly}
               name="payerDocument"
               required
               minLength={11}
@@ -549,12 +555,12 @@ export function CieloSopCardForm({
               : 'Enviando pagamento…'
             : (submitLabel ??
               (paymentMethod === 'card' && selectedPricing
-                ? `Confirmar e pagar ${moneyFormatter.format(selectedPricing.totalCents / 100)}`
+                ? `Confirmar e pagar ${formatCieloCardPayment(selectedPricing)}`
                 : 'Pagar com cartão'))}
       </button>
       <p className="text-xs leading-5 text-neutral-600">
         {paymentMethod === 'pix'
-          ? 'O QR Code e o código copia e cola serão apresentados na próxima etapa segura.'
+          ? 'O QR Code e o código copia e cola aparecerão aqui, sem sair desta página.'
           : 'Os dados do cartão são enviados diretamente à Cielo para gerar um token temporário de pagamento.'}
       </p>
     </form>
