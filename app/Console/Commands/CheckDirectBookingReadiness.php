@@ -159,6 +159,7 @@ class CheckDirectBookingReadiness extends Command
                 'CIELO_SANDBOX_MERCHANT_KEY' => $this->isConfiguredString(config('services.cielo.merchant_key')),
                 'CIELO_SANDBOX_SOP_CLIENT_ID' => $this->isConfiguredString(config('services.cielo.sop_client_id')),
                 'CIELO_SANDBOX_SOP_CLIENT_SECRET' => $this->isConfiguredString(config('services.cielo.sop_client_secret')),
+                'CIELO_SANDBOX_SOP_MERCHANT_COMPATIBLE' => app(CieloDirectConfiguration::class)->sandboxSopMerchantIsCompatible(),
                 'CIELO_SANDBOX_WEBHOOK_QUEUE_CONNECTION' => $this->isQueueReady(config('services.cielo.webhook_queue_connection')),
             ];
         }

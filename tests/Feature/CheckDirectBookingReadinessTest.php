@@ -173,6 +173,29 @@ class CheckDirectBookingReadinessTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_documented_sandbox_sop_credentials_require_their_matching_merchant(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCompleteReadiness();
+        config([
+            'direct-booking.payment_provider' => 'cielo_sandbox',
+            'services.cielo.direct_environment' => 'sandbox',
+            'services.cielo.merchant_id' => 'another-sandbox-merchant',
+            'services.cielo.merchant_key' => 'sandbox-key-fixture',
+            'services.cielo.sop_client_id' => '6631016d-72e6-4db1-a2d2-9cbe61464925',
+            'services.cielo.sop_client_secret' => 'sop-secret-fixture',
+        ]);
+        $this->app->instance(DirectSaleTermsRegistry::class, $this->registry(['pilot-one', 'pilot-two']));
+
+        $this->assertSame(1, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        $result = json_decode(Artisan::output(), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertFalse($result['checks']['CIELO_SANDBOX_SOP_MERCHANT_COMPATIBLE']['configured']);
+
+        config(['services.cielo.merchant_id' => '832ce400-9c97-4fe7-9d4f-0928675e36cd']);
+        $this->assertSame(0, Artisan::call('direct-booking:check-readiness', ['--json' => true]));
+        Http::assertNothingSent();
+    }
+
     public function test_unknown_provider_fails_without_falling_back_to_mercado_pago(): void
     {
         Http::preventStrayRequests();

@@ -34,6 +34,7 @@
         <env name="DIRECT_BOOKING_STAYS_TERMS_ENABLED" value="false" force="true"/>
         <env name="DIRECT_BOOKING_PAYMENT_PROVIDER" value="mercadopago" force="true"/>
         <env name="DIRECT_BOOKING_CHECKOUT_UI_ENABLED" value="false" force="true"/>
+        <env name="CIELO_DIRECT_ENVIRONMENT" value="sandbox" force="true"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

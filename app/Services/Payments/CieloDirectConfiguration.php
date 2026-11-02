@@ -4,6 +4,10 @@ namespace App\Services\Payments;
 
 class CieloDirectConfiguration
 {
+    private const DOCUMENTED_SANDBOX_SOP_CLIENT_ID = '6631016d-72e6-4db1-a2d2-9cbe61464925';
+
+    private const DOCUMENTED_SANDBOX_SOP_MERCHANT_ID = '832ce400-9c97-4fe7-9d4f-0928675e36cd';
+
     public static function isProvider(mixed $provider): bool
     {
         return in_array($provider, ['cielo_sandbox', 'cielo'], true);
@@ -45,6 +49,22 @@ class CieloDirectConfiguration
         $prefix = $this->environment() === 'production' ? 'services.cielo.production.' : 'services.cielo.';
 
         return config($prefix.$key);
+    }
+
+    public function sandboxSopMerchantIsCompatible(): bool
+    {
+        if ($this->environment() !== 'sandbox') {
+            return true;
+        }
+
+        $clientId = $this->value('sop_client_id');
+        if (! is_string($clientId) || ! hash_equals(self::DOCUMENTED_SANDBOX_SOP_CLIENT_ID, $clientId)) {
+            return true;
+        }
+
+        $merchantId = $this->value('merchant_id');
+
+        return is_string($merchantId) && hash_equals(self::DOCUMENTED_SANDBOX_SOP_MERCHANT_ID, $merchantId);
     }
 
     public function endpoint(string $purpose): string
