@@ -11,6 +11,10 @@ import {
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { getConfirmedPropertyQuote } from '../../utils/propertyDisplayPrice';
 import { isRecord } from '../../utils/apiValidation';
+import {
+  getPropertyCardImageSources,
+  COLLECTION_IMAGE_SIZES,
+} from '../../utils/propertyImageSources';
 import { isSafeMediaUrl } from '../../utils/propertyMedia';
 import { matchesPropertyCategory } from '../../utils/propertyCategories';
 
@@ -391,7 +395,7 @@ export function SeasonalDateSuggestions({
 
   return (
     <div aria-label="Coleções de hospedagens" className="mb-8 space-y-8 sm:mb-11 sm:space-y-10">
-      {collections.map((collection) => (
+      {collections.map((collection, collectionIndex) => (
         <section key={collection.id} aria-labelledby={`${collection.id}-title`}>
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
@@ -412,7 +416,7 @@ export function SeasonalDateSuggestions({
           </div>
 
           <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-5">
-            {collection.suggestions.map((suggestion) => {
+            {collection.suggestions.map((suggestion, suggestionIndex) => {
               const quote =
                 quotes[suggestion.id]?.guests === guestCount
                   ? quotes[suggestion.id]!
@@ -451,10 +455,17 @@ export function SeasonalDateSuggestions({
                   <span className="relative block aspect-[4/3] overflow-hidden rounded-2xl border border-white/90 bg-neutral-100 shadow-[0_10px_28px_-18px_rgba(15,23,42,0.7)]">
                     {quote.propertyImage ? (
                       <img
-                        src={quote.propertyImage}
+                        {...getPropertyCardImageSources(
+                          quote.propertyImage,
+                          COLLECTION_IMAGE_SIZES,
+                        )}
+                        decoding="async"
                         alt={quote.status === 'ready' ? quote.propertyTitle : suggestion.label}
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                        loading="lazy"
+                        loading={collectionIndex === 0 && suggestionIndex === 0 ? 'eager' : 'lazy'}
+                        fetchPriority={
+                          collectionIndex === 0 && suggestionIndex === 0 ? 'high' : 'auto'
+                        }
                       />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-50 via-white to-sky-100 text-neutral-500">
@@ -563,7 +574,11 @@ export function SeasonalDateSuggestions({
                   >
                     <span className="relative block aspect-[4/3] overflow-hidden rounded-2xl border border-white/90 bg-neutral-100 shadow-[0_10px_28px_-18px_rgba(15,23,42,0.7)]">
                       <img
-                        src={property.images[0]}
+                        {...getPropertyCardImageSources(
+                          property.images[0] || '',
+                          COLLECTION_IMAGE_SIZES,
+                        )}
+                        decoding="async"
                         alt={getPublicPropertyTitle(property.title)}
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                         loading="lazy"

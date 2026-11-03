@@ -49,6 +49,7 @@ jobs:
           done
 
           docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
+          docker exec "$CONTAINER_NAME" sh docker/check-static-assets.sh
           docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-supervisor.txt
           test "$(grep -c RUNNING /tmp/hospeda-supervisor.txt)" -eq 4
 

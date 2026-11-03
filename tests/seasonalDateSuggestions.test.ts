@@ -220,3 +220,41 @@ test('does not restore an expired price as a confirmed offer on the next visit',
     Date.now = now;
   }
 });
+
+test('prioritizes only the first collection cover and supplies responsive image variants', async () => {
+  crcnBackendApi.searchAccommodations = async (params) => ({
+    total: 1,
+    data: [
+      {
+        ...STAYS_NET_APARTMENTS[0]!,
+        images: ['https://crcn.stays.net/image/6a356fe93db977efbea5a948'],
+        calculatedPrice: {
+          nights:
+            params.from && params.to
+              ? Math.round((Date.parse(params.to) - Date.parse(params.from)) / 86400000)
+              : 2,
+          dailyRate: 250,
+          basePrice: 500,
+          cleaningFee: 0,
+          serviceFee: 0,
+          totalAmount: 500,
+          currency: 'BRL',
+        },
+      },
+    ],
+  });
+  render(
+    React.createElement(SeasonalDateSuggestions, {
+      currency: 'BRL',
+      guestCount: 2,
+      guests: { adults: 2, children: 0, infants: 0, pets: 0 },
+      onSelect: () => {},
+    }),
+  );
+  await waitFor(() => assert.ok(document.querySelector('img[fetchpriority="high"]')));
+  const primary = document.querySelector('img[fetchpriority="high"]')!;
+  assert.equal(primary.getAttribute('loading'), 'eager');
+  assert.match(primary.getAttribute('srcset') || '', /640w/);
+  assert.equal(document.querySelectorAll('img[fetchpriority="high"]').length, 1);
+  assert.ok(document.querySelectorAll('img[loading="lazy"]').length > 0);
+});

@@ -153,6 +153,7 @@ jobs:
           done
 
           docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
+          docker exec "$CONTAINER_NAME" sh docker/check-static-assets.sh
           docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-release-supervisor.txt
           test "$(grep -c RUNNING /tmp/hospeda-release-supervisor.txt)" -eq 4
 
@@ -220,6 +221,36 @@ jobs:
           [[ "$VITE_SUPABASE_URL" =~ ^https://[a-z0-9-]+\.supabase\.co/?$ ]]
           test -n "$VITE_SUPABASE_ANON_KEY"
 
+      - name: Resolve previous application image for asset retention
+        id: previous-assets
+        env:
+          COOLIFY_APPLICATION_UUID: ${{ vars.COOLIFY_APPLICATION_UUID }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$COOLIFY_APPLICATION_UUID" ]; then
+            echo 'image=frontend' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test -n "$COOLIFY_TOKEN"
+          case "$COOLIFY_APPLICATION_UUID" in *[!A-Za-z0-9-]*) exit 1 ;; esac
+          application=$(curl --fail --silent --show-error --max-time 30 \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            "https://cy.caldasindica.com/api/v1/applications/$COOLIFY_APPLICATION_UUID")
+          image_name=$(jq --raw-output --exit-status '.docker_registry_image_name' <<< "$application")
+          image_tag=$(jq --raw-output --exit-status '.docker_registry_image_tag' <<< "$application")
+          expected_image="ghcr.io/$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          test "$image_name" = "$expected_image"
+          case "$image_tag" in
+            sha-*) revision=${image_tag#sha-} ;;
+            *) revision=$image_tag ;;
+          esac
+          test "${#revision}" -eq 40
+          case "$revision" in *[!0-9a-f]*) exit 1 ;; esac
+          digest=$(docker buildx imagetools inspect "$image_name:$image_tag" --format '{{json .Manifest}}' \
+            | jq --raw-output --exit-status '.digest | select(test("^sha256:[0-9a-f]{64}$"))')
+          echo "image=$image_name@$digest" >> "$GITHUB_OUTPUT"
+
       - name: Build and publish image
         id: image
         uses: docker/build-push-action@v6
@@ -228,6 +259,7 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
           build-args: |
+            PREVIOUS_ASSETS_IMAGE=${{ steps.previous-assets.outputs.image }}
             VITE_SUPABASE_URL=${{ vars.VITE_SUPABASE_URL }}
             VITE_SUPABASE_ANON_KEY=${{ vars.VITE_SUPABASE_ANON_KEY }}
             VITE_GTM_ID=${{ vars.VITE_GTM_ID }}
@@ -268,6 +300,7 @@ jobs:
           done
 
           docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
+          docker exec "$CONTAINER_NAME" sh docker/check-static-assets.sh
           docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-published-supervisor.txt
           test "$(grep -c RUNNING /tmp/hospeda-published-supervisor.txt)" -eq 4
 

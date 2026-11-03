@@ -351,6 +351,7 @@ export function MainContentRouter({
                 (isCompletedSearch && filteredProperties.length > 0)) &&
               (viewMode === 'grid' ? (
                 <PropertyCatalogGrid
+                  prioritizeFirstImage={Boolean(filters.checkIn && filters.checkOut)}
                   status={visibleCatalogStatus}
                   properties={filteredProperties}
                   currency={currency}
