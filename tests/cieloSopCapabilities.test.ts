@@ -35,7 +35,7 @@ for (const [label, fields, expected] of [
         { status: 200 },
       );
     try {
-      const result = await checkoutApi.getCheckoutReadiness(`JQ08G-${label.replaceAll(' ', '-')}`);
+      const result = await checkoutApi.getCheckoutReadiness(`JQ08G-${label.replace(/\s+/g, '-')}`);
       assert.equal(result.kind, expected);
       if (label === 'old backend' && result.kind === 'ready')
         assert.notEqual(result.data.singlePageCheckoutEnabled, true);
