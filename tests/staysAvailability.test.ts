@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   getStaysCalendarDisplayRate,
+  validateCalendarRange,
+  getCalendarRangeMessage,
   isCalendarRangeAvailable,
 } from '../src/utils/staysAvailability.ts';
 
@@ -101,4 +103,31 @@ test('calendar display rate ignores invalid BRL values and returns null without 
   });
 
   assert.equal(rate, null);
+});
+
+test('range validation distinguishes incomplete data, occupied nights and stay restrictions', () => {
+  assert.deepEqual(validateCalendarRange([], '2026-11-19', '2026-11-21'), {
+    available: false,
+    reason: 'unknown',
+  });
+  assert.deepEqual(validateCalendarRange(days(['2026-11-20']), '2026-11-19', '2026-11-21'), {
+    available: false,
+    reason: 'occupied',
+    date: '2026-11-20',
+  });
+  assert.deepEqual(validateCalendarRange(days(), '2026-11-19', '2026-11-20'), {
+    available: false,
+    reason: 'minimum-stay',
+    minimumNights: 2,
+  });
+  const closed = days();
+  closed[2].closedToDeparture = true;
+  assert.deepEqual(validateCalendarRange(closed, '2026-11-19', '2026-11-21'), {
+    available: false,
+    reason: 'departure-closed',
+  });
+  assert.match(
+    getCalendarRangeMessage({ available: false, reason: 'minimum-stay', minimumNights: 3 }),
+    /3 noites/,
+  );
 });

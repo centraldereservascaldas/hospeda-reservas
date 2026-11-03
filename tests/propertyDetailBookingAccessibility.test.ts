@@ -185,6 +185,46 @@ test('date picker announces invalid selection feedback inside its modal', () => 
   assert.equal(feedback.getAttribute('aria-live'), 'polite');
 });
 
+test('a valid selected stay highlights its nights even when minimum stay prevents checkout on them', () => {
+  render(
+    React.createElement(PropertyDatePickerDialog, {
+      isOpen: true,
+      activeDateField: 'checkOut',
+      checkIn: '2026-11-17',
+      checkOut: '2026-11-19',
+      displayedMonth: new Date(2026, 10, 1),
+      today: new Date(2026, 10, 3),
+      todayIso: '2026-11-03',
+      calendarDays: [17, 18, 19].map((day) => ({
+        date: `2026-11-${day}`,
+        avail: 1,
+        prices: [{ minStay: 2 }],
+      })),
+      isExtendingCalendar: false,
+      calendarExtensionMessage: '',
+      calendarAvailable: true,
+      isLoadingCalendar: false,
+      availabilityMessage: '',
+      interactionMessage: '',
+      onRetryCalendar: () => {},
+      onRetryCalendarExtension: () => {},
+      onActiveDateFieldChange: () => {},
+      onDisplayedMonthChange: () => {},
+      onChooseDate: () => {},
+      onChooseDateRange: () => {},
+      onClose: () => {},
+    }),
+  );
+  const night = document.querySelector<HTMLButtonElement>(
+    '[data-calendar-date="2026-11-18"] button',
+  );
+  assert.ok(night);
+  assert.equal(night.disabled, true);
+  assert.match(night.getAttribute('aria-label') || '', /noite incluída no período selecionado/);
+  assert.match(night.className, /bg-orange-100/);
+  assert.equal(night.querySelector('[aria-hidden="true"]'), null);
+});
+
 test('calendar retry actions keep a 44px minimum touch height', () => {
   const props = {
     isOpen: true,
@@ -265,8 +305,9 @@ test('calendar day buttons keep a 44px minimum touch height', () => {
   assert.ok(dayButtons.length > 0);
   const calendarDialog = getByRole('dialog', { name: 'Escolha as datas' });
   assert.match(calendarDialog.className, /p-0/);
-  assert.match(calendarDialog.querySelector('.max-w-sm')?.className || '', /p-3/);
-  assert.match(calendarDialog.querySelector('[role="grid"]')?.className || '', /-mx-3/);
+  assert.match(calendarDialog.querySelector('.sm\\:max-w-3xl')?.className || '', /p-3/);
+  assert.match(calendarDialog.querySelector('[role="grid"]')?.className || '', /w-full/);
+  assert.match(calendarDialog.querySelector('.overflow-y-auto')?.className || '', /-mx-3/);
   for (const button of dayButtons) {
     assert.match(button.className, /h-11/);
   }
@@ -510,6 +551,7 @@ test('shares the current stay dates and guest count while preserving tracking pa
     assert.ok(checkOutDate);
     await waitFor(() => assert.equal(checkOutDate.disabled, false));
     fireEvent.click(checkOutDate);
+    fireEvent.click(getByRole('button', { name: 'Aplicar datas' }));
 
     const guestTrigger = container.querySelector<HTMLButtonElement>(
       'button[aria-controls="property-guest-selector-dialog"]',
@@ -1105,11 +1147,17 @@ test('simulated quote is visible but cannot start a reservation', async () => {
 test('booking calendar names full dates and exposes the active date field', async () => {
   const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
   const originalCalculatePrice = crcnBackendApi.calculatePrice;
-  crcnBackendApi.getAccommodationCalendar = async () =>
-    Array.from({ length: 30 }, (_, index) => ({
-      date: `2026-11-${String(index + 1).padStart(2, '0')}`,
-      avail: 1,
-    }));
+  crcnBackendApi.getAccommodationCalendar = async (_id, from, to) => {
+    const days = [];
+    for (
+      let date = Date.parse(`${from}T00:00:00Z`);
+      date <= Date.parse(`${to}T00:00:00Z`);
+      date += 86400000
+    ) {
+      days.push({ date: new Date(date).toISOString().slice(0, 10), avail: 1 });
+    }
+    return days;
+  };
   crcnBackendApi.calculatePrice = async () => null;
   try {
     const { container, getByRole, queryByRole } = render(
@@ -1156,7 +1204,7 @@ test('booking calendar names full dates and exposes the active date field', asyn
     assert.equal(document.body.style.overflow, 'hidden');
     assert.match(
       getByRole('button', { name: 'Fechar calendário' }).parentElement?.className || '',
-      /sticky top-4/,
+      /sticky top-0/,
     );
     const dateGrid = calendar.querySelector<HTMLElement>('[role="grid"]');
     assert.ok(dateGrid);
@@ -1190,6 +1238,7 @@ test('booking calendar names full dates and exposes the active date field', asyn
     assert.ok(dateEleven);
     assert.ok(dateTwelve);
     assert.ok(dateNineteen);
+    await waitFor(() => assert.equal(dateEleven.disabled, false));
     assert.equal(dateEleven.style.touchAction, 'pan-y pinch-zoom');
     const calendarDates = Array.from(dateGrid.querySelectorAll<HTMLButtonElement>('button'));
     assert.equal(calendarDates.filter((button) => button.tabIndex === 0).length, 1);
@@ -1213,6 +1262,8 @@ test('booking calendar names full dates and exposes the active date field', asyn
     );
     assert.ok(checkoutDate);
     fireEvent.click(checkoutDate);
+    assert.ok(queryByRole('dialog', { name: 'Escolha as datas' }));
+    fireEvent.click(getByRole('button', { name: 'Aplicar datas' }));
     assert.equal(queryByRole('dialog', { name: 'Escolha as datas' }), null);
     assert.equal(document.activeElement, checkIn);
     assert.equal(document.body.style.overflow, 'auto');
@@ -1386,7 +1437,10 @@ test('booking calendar marks an unavailable arrival date when it is a valid chec
       /indisponível para check-in; checkout permitido/,
     );
     assert.ok(unavailableCheckout.querySelector('[aria-hidden="true"]'));
-    assert.match(calendar.textContent || '', /Sem disponibilidade para check-in/);
+    assert.match(
+      calendar.textContent || '',
+      /Algumas datas ainda não têm disponibilidade confirmada/,
+    );
   } finally {
     crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
     crcnBackendApi.calculatePrice = originalCalculatePrice;
@@ -1711,4 +1765,101 @@ test('checkout resume retry remains touch-sized when the order service is unavai
     checkoutApi.resumeCheckout = originalResumeCheckout;
     clearCheckoutResumeToken(reference);
   }
+});
+
+test('date dialog requires a valid range before applying and exposes explicit cancel and clear', () => {
+  let applied = 0;
+  let cleared = 0;
+  let cancelled = 0;
+  const props = {
+    isOpen: true,
+    activeDateField: 'checkOut' as const,
+    checkIn: '2026-11-11',
+    checkOut: '',
+    displayedMonth: new Date(2026, 10, 1),
+    today: new Date(2026, 10, 1),
+    todayIso: '2026-11-01',
+    calendarDays: [
+      { date: '2026-11-11', avail: 1 },
+      { date: '2026-11-12', avail: 1 },
+    ],
+    isExtendingCalendar: false,
+    calendarExtensionMessage: '',
+    calendarAvailable: true,
+    isLoadingCalendar: false,
+    availabilityMessage: '',
+    interactionMessage: '',
+    onRetryCalendar: () => {},
+    onRetryCalendarExtension: () => {},
+    onActiveDateFieldChange: () => {},
+    onDisplayedMonthChange: () => {},
+    onChooseDate: () => {},
+    onChooseDateRange: () => {},
+    onApply: () => {
+      applied += 1;
+    },
+    onClear: () => {
+      cleared += 1;
+    },
+    onClose: () => {
+      cancelled += 1;
+    },
+  };
+  const { getByRole, rerender } = render(React.createElement(PropertyDatePickerDialog, props));
+  const apply = getByRole('button', { name: 'Aplicar datas' }) as HTMLButtonElement;
+  assert.equal(apply.disabled, true);
+  fireEvent.click(apply);
+  assert.equal(applied, 0);
+  rerender(React.createElement(PropertyDatePickerDialog, { ...props, checkOut: '2026-11-12' }));
+  fireEvent.click(apply);
+  fireEvent.click(getByRole('button', { name: 'Limpar' }));
+  fireEvent.click(getByRole('button', { name: 'Cancelar' }));
+  assert.equal(applied, 1);
+  assert.equal(cleared, 1);
+  assert.equal(cancelled, 1);
+});
+
+test('calendar supports week boundaries and month keys without overflowing short months', () => {
+  let nextMonth: Date | undefined;
+  const calendarDays = Array.from({ length: 100 }, (_, index) => {
+    const date = new Date(Date.UTC(2026, 0, 1 + index));
+    return { date: date.toISOString().slice(0, 10), avail: 1 };
+  });
+  const { getByRole } = render(
+    React.createElement(PropertyDatePickerDialog, {
+      isOpen: true,
+      activeDateField: 'checkIn',
+      checkIn: '',
+      checkOut: '',
+      displayedMonth: new Date(2026, 0, 1),
+      today: new Date(2026, 0, 1),
+      todayIso: '2026-01-01',
+      calendarDays,
+      isExtendingCalendar: false,
+      calendarExtensionMessage: '',
+      calendarAvailable: true,
+      isLoadingCalendar: false,
+      availabilityMessage: '',
+      interactionMessage: '',
+      onRetryCalendar: () => {},
+      onRetryCalendarExtension: () => {},
+      onActiveDateFieldChange: () => {},
+      onDisplayedMonthChange: (date: Date) => {
+        nextMonth = date;
+      },
+      onChooseDate: () => {},
+      onChooseDateRange: () => {},
+      onClose: () => {},
+    }),
+  );
+  const day = getByRole('button', { name: /31 de janeiro de 2026/ });
+  fireEvent.keyDown(day, { key: 'Home' });
+  assert.match(document.activeElement?.getAttribute('aria-label') || '', /26 de janeiro/);
+  fireEvent.keyDown(day, { key: 'End' });
+  assert.match(document.activeElement?.getAttribute('aria-label') || '', /1 de fevereiro/);
+  fireEvent.keyDown(day, { key: 'PageDown' });
+  assert.equal(nextMonth?.getMonth(), 1);
+  const februaryEnd = getByRole('button', { name: /28 de fevereiro de 2026/ });
+  fireEvent.keyDown(februaryEnd, { key: 'PageUp' });
+  assert.equal(nextMonth?.getMonth(), 0);
 });

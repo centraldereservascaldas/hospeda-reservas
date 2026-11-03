@@ -42,29 +42,71 @@ export function getStaysCalendarDisplayRate(
 
 const DAY_MS = 86_400_000;
 
-export function isCalendarRangeAvailable(
+export function validateCalendarRange(
   calendar: StaysCalendarDay[],
   from: string,
   to: string,
-): boolean {
+): CalendarRangeValidation {
   const start = Date.parse(`${from}T00:00:00Z`);
   const end = Date.parse(`${to}T00:00:00Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return false;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)
+    return { available: false, reason: 'invalid-range' };
 
   const byDate = new Map(calendar.map((day) => [day.date, day]));
   const checkIn = byDate.get(from);
   const checkOut = byDate.get(to);
-  if (!checkIn || !checkOut || checkIn.closedToArrival || checkOut.closedToDeparture) return false;
+  if (!checkIn || !checkOut) return { available: false, reason: 'unknown' };
+  if (checkIn.closedToArrival) return { available: false, reason: 'arrival-closed' };
+  if (checkOut.closedToDeparture) return { available: false, reason: 'departure-closed' };
 
   for (let timestamp = start; timestamp < end; timestamp += DAY_MS) {
     const date = new Date(timestamp).toISOString().slice(0, 10);
     const day = byDate.get(date);
-    if (!day || !Number.isFinite(Number(day.avail)) || Number(day.avail) < 1) return false;
+    if (!day) return { available: false, reason: 'unknown' };
+    if (!Number.isFinite(Number(day.avail)) || Number(day.avail) < 1)
+      return { available: false, reason: 'occupied', date };
   }
 
   const minimumStayOptions = (checkIn.prices ?? [])
     .map((price) => Number(price.minStay ?? 0))
     .filter((minStay) => Number.isFinite(minStay) && minStay >= 0);
   const minStay = minimumStayOptions.length ? Math.min(...minimumStayOptions) : 0;
-  return !minStay || (end - start) / DAY_MS >= minStay;
+  if (minStay && (end - start) / DAY_MS < minStay)
+    return { available: false, reason: 'minimum-stay', minimumNights: minStay };
+  return { available: true };
+}
+
+export type CalendarRangeValidation =
+  | { available: true }
+  | {
+      available: false;
+      reason: 'invalid-range' | 'unknown' | 'arrival-closed' | 'departure-closed';
+    }
+  | { available: false; reason: 'occupied'; date: string }
+  | { available: false; reason: 'minimum-stay'; minimumNights: number };
+
+export function isCalendarRangeAvailable(
+  calendar: StaysCalendarDay[],
+  from: string,
+  to: string,
+): boolean {
+  return validateCalendarRange(calendar, from, to).available;
+}
+
+export function getCalendarRangeMessage(result: CalendarRangeValidation): string {
+  if (result.available) return 'Período disponível';
+  switch (result.reason) {
+    case 'invalid-range':
+      return 'Escolha uma saída posterior à entrada.';
+    case 'unknown':
+      return 'A disponibilidade deste período ainda não foi confirmada.';
+    case 'arrival-closed':
+      return 'Esta data não permite check-in.';
+    case 'departure-closed':
+      return 'Esta data não permite check-out.';
+    case 'occupied':
+      return `O período inclui uma noite indisponível em ${result.date.split('-').reverse().join('/')}.`;
+    case 'minimum-stay':
+      return `Esta entrada exige pelo menos ${result.minimumNights} noites.`;
+  }
 }
