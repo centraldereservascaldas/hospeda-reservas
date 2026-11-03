@@ -442,7 +442,7 @@ jobs:
 
             if jq --exit-status '.success == true' <<< "$health" >/dev/null 2>&1 \
               && jq --exit-status '.connected == true and .hasCredentials == true and .environment == "production"' <<< "$stays" >/dev/null 2>&1 \
-              && jq --exit-status '.ready == true and .code == null' <<< "$checkout" >/dev/null 2>&1 \
+              && jq --exit-status '.ready == false and .code == "checkout_disabled"' <<< "$checkout" >/dev/null 2>&1 \
               && [ "$direct_checkout_matches_expected" = true ]; then
               curl --fail --silent --show-error --max-time 15 \
                 --dump-header /tmp/hospeda-public-headers.txt \

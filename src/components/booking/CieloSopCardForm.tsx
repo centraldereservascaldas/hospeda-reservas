@@ -30,6 +30,7 @@ interface CieloSopCardFormProps {
   alternativeContent?: ReactNode;
   onAlternativeSubmit?: () => Promise<void>;
   onPricingChange?: (pricing: CieloCardPricing) => void;
+  failureContent?: ReactNode;
 }
 
 export interface CieloPaymentContext {
@@ -121,6 +122,7 @@ export function CieloSopCardForm({
   alternativeContent,
   onAlternativeSubmit,
   onPricingChange,
+  failureContent,
 }: CieloSopCardFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const accessTokenRef = useRef<string | null>(null);
@@ -533,9 +535,12 @@ export function CieloSopCardForm({
         </p>
       )}
       {error && (
-        <p role="alert" className="text-sm text-rose-800">
-          {error}
-        </p>
+        <div>
+          <p role="alert" className="text-sm text-rose-800">
+            {error}
+          </p>
+          {failureContent}
+        </div>
       )}
       {beforeSubmit && (
         <fieldset disabled={isSubmitting} className="min-w-0">

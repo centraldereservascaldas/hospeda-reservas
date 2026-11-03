@@ -17,6 +17,7 @@ import type {
 } from '../../services/checkoutApi';
 import { MercadoPagoCardForm } from './MercadoPagoCardForm';
 import { CieloSopCardForm } from './CieloSopCardForm';
+import { CheckoutSupportLink } from './CheckoutSupportLink';
 import { CieloCheckoutIframe } from './CieloCheckoutIframe';
 import {
   clearCheckoutResumeToken,
@@ -403,6 +404,19 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
   const order = resumeState.kind === 'ready' ? resumeState.data.order : null;
   const paymentAttempt =
     resumeState.kind === 'ready' ? (resumeState.data.payment.attempt ?? null) : null;
+  const supportLink = (
+    <CheckoutSupportLink
+      details={{
+        reference,
+        listingId: order?.listingId,
+        from: order?.from,
+        to: order?.to,
+        paymentMethod: paymentAttempt?.method ?? selectedPaymentMethod,
+        baseTotal: order ? Number(order.quoteTotal) : undefined,
+        total: paymentAttempt ? Number(paymentAttempt.amount) : undefined,
+      }}
+    />
+  );
   const reservationExpiresAt = order?.expiresAt ? Date.parse(order.expiresAt) : Number.NaN;
   const reservationIsActive =
     Number.isFinite(reservationExpiresAt) && reservationExpiresAt > currentTime;
@@ -532,6 +546,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
               {resumeState.kind === 'unavailable' && (
                 <div className="space-y-3" role="alert">
                   <h2 className="text-lg font-extrabold">Não foi possível consultar agora</h2>
+                  {supportLink}
                   <p className="text-sm leading-6 text-neutral-600">
                     O pedido não foi alterado. Tente novamente; a referência e o código de acesso
                     continuam protegidos nesta sessão.
@@ -549,6 +564,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
               {resumeState.kind === 'not-found' && (
                 <div className="space-y-3" role="alert">
                   <h2 className="text-lg font-extrabold">Não foi possível acessar o pedido</h2>
+                  {supportLink}
                   <p className="text-sm leading-6 text-neutral-600">
                     A referência ou o código de acesso não conferem. Por segurança, não informamos
                     se existe um pedido para esta referência.
@@ -586,6 +602,11 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                       Fale com nosso atendimento antes de tentar outra compra.
                     </p>
                   )}
+                  {(status.tone === 'attention' ||
+                    paymentAttempt?.status === 'rejected' ||
+                    paymentAttempt?.status === 'attention_required' ||
+                    paymentAttempt?.status === 'unknown') &&
+                    supportLink}
                   {order.status === 'pagamento_recusado' && !reservationIsActive && (
                     <p
                       className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
@@ -813,9 +834,12 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                               </p>
                             </div>
                             {paymentStartError && (
-                              <p className="text-sm text-rose-800" role="alert">
-                                {paymentStartError}
-                              </p>
+                              <div>
+                                <p className="text-sm text-rose-800" role="alert">
+                                  {paymentStartError}
+                                </p>
+                                {supportLink}
+                              </div>
                             )}
                             <button
                               type="button"
@@ -834,6 +858,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
 
                         {showCardPaymentForm && isCieloProvider && (
                           <CieloSopCardForm
+                            failureContent={supportLink}
                             reference={reference}
                             amount={order.quoteTotal}
                             credentials={
