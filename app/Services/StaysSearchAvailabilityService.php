@@ -35,21 +35,37 @@ class StaysSearchAvailabilityService
                 return $cached;
             }
 
+            if ($this->coolingDown()) {
+                return null;
+            }
+
             return $this->cache()->lock($key.':lock', max(30, (int) config('services.stays.timeout', 10) + 15))->block(3, function () use ($key, $context): ?array {
                 $cached = $this->cache()->get($key);
                 if (is_array($cached)) {
                     return $cached;
                 }
+                if ($this->coolingDown()) {
+                    return null;
+                }
                 $fetchedAt = now();
                 $expiresAt = $fetchedAt->copy()->addSeconds(max(1, min(60, (int) config('services.stays.search_cache_ttl', 45))));
-                $live = $this->stays->post('/booking/search-listings', array_filter([
+                $response = $this->stays->request('POST', '/booking/search-listings', payload: array_filter([
                     ...$context, 'isBookable' => true,
                 ], static fn (mixed $value): bool => $value !== null));
+                if ($response?->status() === 429) {
+                    $this->pauseAfterRateLimit($response->header('Retry-After'));
+
+                    return null;
+                }
+                $live = $response?->successful() ? $response->json() : null;
                 if (! is_array($live) || ! array_is_list($live) || array_filter($live, 'is_array') !== $live || count($live) > $context['limit']) {
                     return null;
                 }
                 $resolved = $this->quotes->resolve($live, $context['from'], $context['to'], $context['guests']);
-                $result = [...$resolved, 'receivedCount' => count($live), 'meta' => [
+                if (isset($resolved['rateLimit'])) {
+                    $this->pauseAfterRateLimit($resolved['rateLimit']['retryAfter']);
+                }
+                $result = ['items' => $resolved['items'], 'unquotedCount' => $resolved['unquotedCount'], 'receivedCount' => count($live), 'meta' => [
                     'fetchedAt' => $fetchedAt->toIso8601String(), 'expiresAt' => $expiresAt->toIso8601String(),
                 ]];
                 if ($resolved['unquotedCount'] === 0 && $expiresAt->isFuture()) {
@@ -74,6 +90,25 @@ class StaysSearchAvailabilityService
         } catch (QueryException $exception) {
             report(new RuntimeException('The shared search cache could not be invalidated.'));
         }
+    }
+
+    private function pauseAfterRateLimit(?string $retryAfter): void
+    {
+        $until = is_string($retryAfter) ? strtotime($retryAfter) : false;
+        $seconds = is_string($retryAfter) && ctype_digit($retryAfter)
+            ? (int) $retryAfter
+            : ($until === false ? 15 : $until - now()->timestamp);
+        $this->cache()->put($this->cooldownKey(), true, max(1, min(86400, $seconds)));
+    }
+
+    private function coolingDown(): bool
+    {
+        return $this->cache()->get($this->cooldownKey()) === true;
+    }
+
+    private function cooldownKey(): string
+    {
+        return 'stays.search.cooldown:'.hash('sha256', json_encode($this->account(), JSON_THROW_ON_ERROR));
     }
 
     private function cache(): Repository

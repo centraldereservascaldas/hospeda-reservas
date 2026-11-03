@@ -42,3 +42,17 @@ Falha SQL do cache retorna 503 na busca sem consulta externa desprotegida. A inv
 Validação: suíte backend de 353 testes passou antes do último ajuste de sanitização dos relatórios; o teste específico é repetido após esse ajuste. Schedule listado localmente com `CACHE_STORE=array` (o SQLite padrão local não está provisionado), sem executar tarefas. Concurrency/limpeza/calendário/reserva foram exercitados em testes. Nenhum comando de limpeza foi executado em produção.
 
 Pendências atualizadas: resultado do gate PostgreSQL, preparação/aquecimento de vitrines e orçamento de consultas externas, descrição resiliente, E6 e verificação integrada E7. A limpeza e a comprovação local de concorrência citadas anteriormente estão implementadas; não considerar a etapa completa com base apenas em SQLite.
+
+## Gate PostgreSQL e preparação para catálogo
+
+No commit `cbe51bc`, todos os checks do PR #43 passaram, incluindo o job PostgreSQL da [run 41741804662](https://github.com/centraldereservascaldas/hospeda-reservas/actions/runs/41741804662). O passo `Verify PostgreSQL search cache locking and pruning` executou os arquivos de concorrência entre processos e limpeza com sucesso. Essa evidência cobre aquele SHA; novos commits devem repetir os gates.
+
+No commit `7e48c6a`, o mapeamento de acomodações saiu do controller para `StaysAccommodationMapper`, preparando a reutilização por atualização de catálogo em segundo plano. Os 353 testes backend passaram após a extração, incluindo 48 cenários direcionados. A mudança não implementa ainda os jobs ou a retenção do último catálogo válido.
+
+## Pausa compartilhada após HTTP 429
+
+As consultas de busca e cálculo de preço agora propagam o sinal de rate limit ao coordenador de buscas. Uma chave por conta/base pausa novos cache misses durante `Retry-After` (segundos ou data HTTP); sem valor válido, a pausa é de 15 segundos. Há limites de segurança de 1 segundo a 24 horas. Não há repetição imediata de POST nem espera ocupando worker HTTP durante essa pausa. Snapshots ainda válidos continuam disponíveis, e outras contas permanecem isoladas.
+
+Resultados de preço parciais continuam sendo retornados com aviso e não são gravados como snapshot completo. O sinal interno de rate limit não é exposto como payload do catálogo. A pausa usa o mesmo banco compartilhado, e a chave expirada participa da limpeza existente.
+
+356 testes backend passaram na suíte completa após a implementação. Os três casos adicionais de limites/fallback passaram na execução direcionada do arquivo, com 11 testes no total. Pint e diff sem erros. Permanecem pendentes o CI dos novos commits, catálogo resiliente/preparado, jobs isolados, aquecimento e E6/E7. A E5 segue sem publicação.
