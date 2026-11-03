@@ -858,6 +858,12 @@ class DirectCheckoutPaymentService
                                     ->where('updated_at', '<=', $staleBefore);
                             });
                         });
+                })->orWhere(function ($query) use ($staleBefore): void {
+                    $query->where('status', 'attention_required')
+                        ->where('payment_method', 'card')
+                        ->where('error_code', 'gateway_fraud_analysis_requires_review')
+                        ->whereNotNull('gateway_payment_id')
+                        ->where('updated_at', '<=', $staleBefore);
                 })->orWhere(function ($query) use ($settledPaymentStaleBefore): void {
                     $query->whereIn('status', ['approved', 'attention_required'])
                         ->whereIn('gateway_status', ['approved', 'refunded', 'charged_back', 'captured', 'authorized'])

@@ -6,6 +6,7 @@ use App\Enums\DirectBookingOrderStatus;
 use App\Http\Requests\StoreCheckoutPaymentRequest;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
+use App\Models\DirectBookingPaymentWebhook;
 use App\Services\DirectStaysReservationService;
 use App\Services\MoneyAmount;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -452,6 +453,15 @@ class CieloCheckoutPaymentService
             'cancelled' => 'cancelled',
             default => 'attention_required',
         };
+        $fraudAnalysisRequired = $expectedPaymentType === 'CreditCard'
+            && ($attempt->fraud_analysis_required
+                || array_key_exists('FraudAnalysis', $payment)
+                || DirectBookingPaymentWebhook::query()->where('gateway_payment_id', $paymentId)->where('gateway_provider', $attempt->gateway_provider)->where('change_type', 3)->exists());
+        $fraudReviewRequired = $fraudAnalysisRequired && $status === 'captured'
+            && ! $this->hasAcceptedFraudAnalysis($payment['FraudAnalysis'] ?? null);
+        if ($fraudReviewRequired) {
+            $attemptStatus = 'attention_required';
+        }
         $paidAt = $status === 'captured' ? ($this->parseDate($payment['CapturedDate'] ?? null) ?? now()) : null;
         $gatewayExpiration = $this->parseDate($payment['ExpirationDate'] ?? null);
         if ($expectedPaymentType === 'Pix' && $this->configuration->usesLegacyPix()) {
@@ -471,7 +481,7 @@ class CieloCheckoutPaymentService
             $attemptStatus = 'expired';
         }
 
-        $paymentIdConflict = DB::transaction(function () use ($order, $attempt, $paymentId, $status, $attemptStatus, $payment, $paidAt, $expiresAt, $pixCopyPaste, $pixQrCode): bool {
+        $paymentIdConflict = DB::transaction(function () use ($order, $attempt, $paymentId, $status, $attemptStatus, $payment, $paidAt, $expiresAt, $pixCopyPaste, $pixQrCode, $fraudReviewRequired, $fraudAnalysisRequired): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
             if ($status === 'expired' && ($lockedAttempt->status === 'approved' || $lockedOrder->payment_status === 'approved')) {
@@ -487,6 +497,7 @@ class CieloCheckoutPaymentService
             $gatewayStatusDetail = $payment['ReturnMessage'] ?? $payment['ReasonMessage'] ?? null;
             $lockedAttempt->forceFill([
                 'gateway_payment_id' => $paymentId,
+                'fraud_analysis_required' => $lockedAttempt->fraud_analysis_required || $fraudAnalysisRequired,
                 'status' => $attemptStatus,
                 'gateway_status' => $status,
                 'gateway_status_detail' => is_string($gatewayStatusDetail) ? mb_substr($gatewayStatusDetail, 0, 100) : null,
@@ -500,18 +511,23 @@ class CieloCheckoutPaymentService
                 'pix_qr_code_base64' => $attemptStatus === 'pending'
                     ? ($pixQrCode ?? $lockedAttempt->pix_qr_code_base64)
                     : null,
-                'error_code' => $status === 'refunded' ? 'gateway_refund_reported' : null,
+                'error_code' => $fraudReviewRequired ? 'gateway_fraud_analysis_requires_review' : ($status === 'refunded' ? 'gateway_refund_reported' : null),
             ])->save();
 
             $lockedOrder->gateway_payment_id = $paymentId;
-            $lockedOrder->payment_status = $status === 'captured' ? 'approved' : $status;
+            $lockedOrder->payment_status = $fraudReviewRequired ? 'attention_required' : ($status === 'captured' ? 'approved' : $status);
             $lockedOrder->payment_amount = $lockedAttempt->amount;
             $lockedOrder->payment_currency = $lockedAttempt->currency;
             $lockedOrder->payment_method = $lockedAttempt->payment_method;
             $lockedOrder->payment_detail = $lockedAttempt->payment_method === 'pix' ? 'Pix' : 'CreditCard';
             $lockedOrder->payment_status_detail = is_string($gatewayStatusDetail) ? mb_substr($gatewayStatusDetail, 0, 100) : null;
             $lockedOrder->payment_expires_at = $expiresAt;
-            if ($status === 'captured') {
+            if ($fraudReviewRequired) {
+                $lockedOrder->paid_at = $paidAt;
+                if (! in_array($lockedOrder->status, [DirectBookingOrderStatus::AtencaoOperacional, DirectBookingOrderStatus::CancelamentoSolicitado, DirectBookingOrderStatus::ReembolsoPendente, DirectBookingOrderStatus::Reembolsado, DirectBookingOrderStatus::Contestado, DirectBookingOrderStatus::Concluido], true)) {
+                    $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'cielo_fraud_analysis_requires_review']);
+                }
+            } elseif ($status === 'captured') {
                 $lockedOrder->paid_at = $paidAt;
                 $reservationIsStillValid = $lockedOrder->reservation_status === 'reserved'
                     && $lockedOrder->expires_at !== null
@@ -542,12 +558,28 @@ class CieloCheckoutPaymentService
             return $this->result($attempt, 'gateway_payment_id_conflict', 'A tentativa recebeu mais de um identificador de pagamento. A conferência foi interrompida.', 503);
         }
 
+        if ($fraudReviewRequired) {
+            return [
+                ...$this->result($attempt, 'gateway_fraud_analysis_requires_review', 'O cartão foi processado e exige conferência de segurança. Não realize outro pagamento; acompanhe este pedido ou fale com o atendimento.', 200),
+                'gatewayStatus' => $status,
+            ];
+        }
+
         $httpStatus = in_array($attempt->status, ['pending', 'approved', 'rejected', 'cancelled', 'expired'], true) ? 201 : 503;
 
         return [
             ...$this->result($attempt, $attempt->status, $this->paymentMessage($attempt->status), $httpStatus),
             'gatewayStatus' => $status,
         ];
+    }
+
+    private function hasAcceptedFraudAnalysis(mixed $analysis): bool
+    {
+        // Documented ClearSale response: Status=1 and StatusDescription=Accept.
+        // Unknown or contradictory response formats require operational review.
+        return is_array($analysis)
+            && ($analysis['Status'] ?? null) === 1
+            && ($analysis['StatusDescription'] ?? null) === 'Accept';
     }
 
     private function orderUsesCurrentMerchant(DirectBookingOrder $order): bool

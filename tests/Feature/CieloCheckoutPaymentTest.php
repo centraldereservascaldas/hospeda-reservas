@@ -22,6 +22,38 @@ class CieloCheckoutPaymentTest extends TestCase
 {
     use RefreshDatabase;
 
+    #[DataProvider('rawCardFields')]
+    public function test_raw_card_data_is_rejected_before_reservation_or_payment_calls(string $field, mixed $value): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)->shouldNotReceive('validateReservedOrderForPayment');
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            ...$this->cardPayload(), $field => $value,
+        ], ['Idempotency-Key' => 'cielo-no-raw-card-data-001', 'X-Checkout-Resume-Token' => 'synthetic-resume-token'])
+            ->assertUnprocessable()->assertJsonValidationErrors($field);
+
+        $this->assertSame(DirectBookingOrderStatus::PreReservado, $order->refresh()->status);
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+        Http::assertNothingSent();
+    }
+
+    public static function rawCardFields(): array
+    {
+        return [
+            'number' => ['cardNumber', 'SYNTHETIC-CARD-NUMBER'],
+            'pan' => ['pan', 'SYNTHETIC-PAN'],
+            'expiry' => ['cardExpirationDate', 'SYNTHETIC-EXPIRY'],
+            'form cvv' => ['cardSecurityCode', 'SYNTHETIC-CVV'],
+            'security code' => ['securityCode', 'SYNTHETIC-CVV'],
+            'cvv' => ['cvv', 'SYNTHETIC-CVV'],
+            'nested card' => ['creditCard', ['cardNumber' => 'SYNTHETIC-PAN']],
+            'gateway card' => ['CreditCard', ['CardNumber' => 'SYNTHETIC-PAN']],
+        ];
+    }
+
     public function test_production_pix_requires_payer_document_before_any_gateway_request(): void
     {
         Http::preventStrayRequests();

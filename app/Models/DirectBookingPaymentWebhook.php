@@ -13,6 +13,7 @@ class DirectBookingPaymentWebhook extends Model
         'event_key',
         'gateway_payment_id',
         'gateway_provider',
+        'change_type',
         'request_id',
         'status',
         'error_code',
@@ -26,6 +27,7 @@ class DirectBookingPaymentWebhook extends Model
             'received_at' => 'immutable_datetime',
             'processed_at' => 'immutable_datetime',
             'reconciliation_attempts' => 'integer',
+            'change_type' => 'integer',
         ];
     }
 }

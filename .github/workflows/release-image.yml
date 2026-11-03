@@ -13,6 +13,78 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  checkout-production-preflight:
+    if: github.event_name == 'pull_request' && github.head_ref == 'codex/plano-cartao-antifraude' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect the checkout target and existing backup metadata
+        env:
+          COOLIFY_APPLICATION_UUID: ${{ vars.COOLIFY_APPLICATION_UUID }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, urllib.request, urllib.error
+          from urllib.parse import urlparse
+
+          base = 'https://cy.caldasindica.com/api/v1'
+          target = os.environ['COOLIFY_APPLICATION_UUID']
+          if target != '7pgw9mcr2vjt5red5pswmvi6':
+              raise SystemExit('Unexpected application target; no production changes performed.')
+
+          def get(path):
+              request = urllib.request.Request(base + path, headers={
+                  'Authorization': 'Bearer ' + os.environ['COOLIFY_TOKEN'],
+                  'Accept': 'application/json',
+              })
+              try:
+                  with urllib.request.urlopen(request, timeout=25) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as error:
+                  raise SystemExit('Coolify inspection HTTP status: ' + str(error.code))
+
+          def rows(value):
+              if isinstance(value, list):
+                  return value
+              if isinstance(value, dict):
+                  for key in ('data', 'backups', 'executions'):
+                      if isinstance(value.get(key), list):
+                          return value[key]
+              raise SystemExit('Unrecognized metadata format; no production changes performed.')
+
+          app = get('/applications/' + target)
+          print(json.dumps({'application_uuid': target, 'status': app.get('status'),
+                            'image': app.get('docker_registry_image_name'),
+                            'image_tag': app.get('docker_registry_image_tag')}))
+          envs = {item['key']: item.get('value', '') for item in rows(get('/applications/' + target + '/envs'))
+                  if not item.get('is_preview')}
+          host = str(envs.get('DB_HOST', '')).strip().strip('"\'')
+          if not host and envs.get('DB_URL'):
+              host = urlparse(envs['DB_URL']).hostname or ''
+          if not host or '{{' in host:
+              raise SystemExit('Database identity could not be resolved safely.')
+          databases = rows(get('/databases'))
+          matches = [item for item in databases if host in (item.get('uuid'), item.get('name'),
+                     urlparse(item.get('internal_db_url') or '').hostname)]
+          if len(matches) != 1:
+              raise SystemExit('The application database could not be matched uniquely; no changes performed.')
+          database = matches[0]
+          database_id = database['uuid']
+          if not re.fullmatch(r'[A-Za-z0-9_-]+', database_id):
+              raise SystemExit('Invalid database identity.')
+          print(json.dumps({'database_uuid': database_id, 'database_status': database.get('status')}))
+          schedules = rows(get('/databases/' + database_id + '/backups'))
+          print(json.dumps({'backup_schedules': len(schedules)}))
+          for schedule in schedules:
+              backup_id = schedule.get('uuid')
+              if not isinstance(backup_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', backup_id):
+                  raise SystemExit('Backup schedule UUID unavailable; no changes performed.')
+              executions = rows(get('/databases/' + database_id + '/backups/' + backup_id + '/executions'))
+              print(json.dumps({'backup_schedule_uuid': backup_id, 'recent_executions': [
+                  {key: entry.get(key) for key in ('uuid', 'status', 'size', 'file_size', 'created_at', 'updated_at')}
+                  for entry in executions[:3]]}))
+          PY
+
   frontend:
     runs-on: ubuntu-latest
     steps:

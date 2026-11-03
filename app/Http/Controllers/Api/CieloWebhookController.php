@@ -36,7 +36,7 @@ class CieloWebhookController extends Controller
         $changeType = filter_var($request->input('ChangeType'), FILTER_VALIDATE_INT);
         if (! is_string($paymentId)
             || ! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iD', $paymentId)
-            || ! in_array($changeType, [1, 5, 25], true)) {
+            || ! in_array($changeType, [1, 3, 5, 25], true)) {
             return response()->json(['success' => false, 'code' => 'invalid_notification'], 400);
         }
 
@@ -53,11 +53,12 @@ class CieloWebhookController extends Controller
         ]));
 
         try {
-            $webhook = DB::transaction(function () use ($eventKey, $paymentId, $request, $queueConnection, $configuration): DirectBookingPaymentWebhook {
+            $webhook = DB::transaction(function () use ($eventKey, $paymentId, $changeType, $request, $queueConnection, $configuration): DirectBookingPaymentWebhook {
                 $webhook = DirectBookingPaymentWebhook::query()->create([
                     'event_key' => $eventKey,
                     'gateway_provider' => $configuration->provider(),
                     'gateway_payment_id' => $paymentId,
+                    'change_type' => $changeType,
                     'request_id' => $request->header('x-request-id') === null
                         ? null
                         : Str::limit((string) $request->header('x-request-id'), 150, ''),

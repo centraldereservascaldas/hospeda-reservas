@@ -288,6 +288,123 @@ class CieloWebhookTest extends TestCase
         $this->assertSame('retrying', $webhook->refresh()->status);
     }
 
+    public function test_antifraud_event_requires_authentication_and_never_trusts_the_posted_risk_result(): void
+    {
+        $this->freezeTime();
+        $this->configureWebhook();
+        Http::preventStrayRequests();
+        Queue::fake([ReconcileCieloPaymentWebhook::class]);
+        $order = $this->createCieloOrder();
+        $attempt = $this->createCieloAttempt($order);
+        $payload = [...$this->notification(), 'ChangeType' => 3, 'FraudAnalysis' => ['Status' => 1, 'StatusDescription' => 'Accept']];
+
+        $this->postJson('/api/webhooks/cielo', $payload)->assertUnauthorized();
+        $this->assertDatabaseCount('direct_booking_payment_webhooks', 0);
+        $this->postJson('/api/webhooks/cielo', $payload, ['X-Cielo-Secret' => 'synthetic-cielo-webhook-secret'])
+            ->assertOk()->assertJsonPath('queued', true);
+        $this->assertDatabaseHas('direct_booking_payment_webhooks', ['change_type' => 3, 'status' => 'received']);
+        Queue::assertPushed(ReconcileCieloPaymentWebhook::class, 1);
+        Http::assertNothingSent();
+
+        Http::fake(['https://apiquerysandbox.cieloecommerce.cielo.com.br/1/sales/'.$payload['PaymentId'] => Http::response([
+            'MerchantOrderId' => $attempt->merchant_order_id,
+            'Payment' => ['PaymentId' => $payload['PaymentId'], 'Type' => 'CreditCard', 'Status' => 2, 'Amount' => 125050, 'Currency' => 'BRL'],
+        ])]);
+        $this->mock(DirectStaysPaymentService::class)->shouldNotReceive('confirmPaidReservation');
+        $webhook = DirectBookingPaymentWebhook::query()->sole();
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class), app(DirectStaysPaymentService::class));
+
+        $this->assertSame('attention_required', $attempt->refresh()->status);
+        $this->assertTrue($attempt->fraud_analysis_required);
+        $this->assertSame('captured', $attempt->gateway_status);
+        $this->assertSame('gateway_fraud_analysis_requires_review', $attempt->error_code);
+        $this->assertSame('attention_required', $order->refresh()->payment_status);
+        $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->status);
+        $this->assertSame('processed', $webhook->refresh()->status);
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request): bool => $request->method() === 'GET');
+    }
+
+    #[DataProvider('capturedFraudResults')]
+    public function test_captured_card_requires_a_consistent_authoritative_fraud_acceptance(mixed $analysis, bool $approved): void
+    {
+        $this->freezeTime();
+        $this->configureWebhook();
+        Http::preventStrayRequests();
+        $order = $this->createCieloOrder();
+        $attempt = $this->createCieloAttempt($order);
+        $paymentId = '123e4567-e89b-12d3-a456-426614174040';
+        Http::fake(['https://apiquerysandbox.cieloecommerce.cielo.com.br/1/sales/'.$paymentId => Http::response([
+            'MerchantOrderId' => $attempt->merchant_order_id,
+            'Payment' => ['PaymentId' => $paymentId, 'Type' => 'CreditCard', 'Status' => 2, 'Amount' => 125050, 'Currency' => 'BRL', 'FraudAnalysis' => $analysis],
+        ])]);
+
+        app(DirectCheckoutPaymentService::class)->reconcileCieloPaymentId($paymentId);
+
+        $this->assertSame($approved ? 'approved' : 'attention_required', $attempt->refresh()->status);
+        $this->assertSame('captured', $attempt->gateway_status);
+        $this->assertTrue($attempt->fraud_analysis_required);
+        $this->assertNotNull($attempt->paid_at);
+        $this->assertSame($approved ? 'approved' : 'attention_required', $order->refresh()->payment_status);
+        $this->assertSame($approved ? DirectBookingOrderStatus::PagoEmConfirmacao : DirectBookingOrderStatus::AtencaoOperacional, $order->status);
+        $this->assertSame('reserved', $order->reservation_status);
+        $this->assertDatabaseCount('direct_booking_stays_actions', 0);
+        Http::assertSentCount(1);
+    }
+
+    public static function capturedFraudResults(): array
+    {
+        return [
+            'documented acceptance' => [['Status' => 1, 'StatusDescription' => 'Accept'], true],
+            'manual review' => [['Status' => 999, 'StatusDescription' => 'Review'], false],
+            'rejected' => [['Status' => 999, 'StatusDescription' => 'Reject'], false],
+            'provider error' => [['Status' => 999, 'StatusDescription' => 'ProviderError'], false],
+            'contradictory description' => [['Status' => 1, 'StatusDescription' => 'Reject'], false],
+            'contradictory status' => [['Status' => 999, 'StatusDescription' => 'Accept'], false],
+            'unknown status representation' => [['Status' => 'Accept'], false],
+            'numeric string status' => [['Status' => '1', 'StatusDescription' => 'Accept'], false],
+            'missing status' => [['StatusDescription' => 'Accept'], false],
+            'empty result' => [[], false],
+            'null result' => [null, false],
+        ];
+    }
+
+    public function test_fraud_review_is_not_forgotten_when_a_later_lookup_omits_it_and_recovery_waits_for_acceptance(): void
+    {
+        $this->freezeTime();
+        $this->configureWebhook();
+        config(['direct-booking.payment_reconciliation_interval_seconds' => 60]);
+        Http::preventStrayRequests();
+        $order = $this->createCieloOrder();
+        $attempt = $this->createCieloAttempt($order);
+        $paymentId = '123e4567-e89b-12d3-a456-426614174040';
+        $response = ['MerchantOrderId' => $attempt->merchant_order_id, 'Payment' => [
+            'PaymentId' => $paymentId, 'Type' => 'CreditCard', 'Status' => 2, 'Amount' => 125050, 'Currency' => 'BRL',
+        ]];
+        $review = $response;
+        $review['Payment']['FraudAnalysis'] = ['Status' => 999, 'StatusDescription' => 'Review'];
+        $accepted = $response;
+        $accepted['Payment']['FraudAnalysis'] = ['Status' => 1, 'StatusDescription' => 'Accept'];
+        Http::fake(['https://apiquerysandbox.cieloecommerce.cielo.com.br/1/sales/'.$paymentId => Http::sequence()
+            ->push($review)->push($response)->push($accepted)]);
+        $payments = app(DirectCheckoutPaymentService::class);
+
+        $payments->reconcileCieloPaymentId($paymentId);
+        $this->assertSame('attention_required', $attempt->refresh()->status);
+        $this->travel(61)->seconds();
+        $this->assertSame(1, $payments->recoverPendingPayments()['processed']);
+        $this->assertSame('attention_required', $attempt->refresh()->status);
+        $this->assertTrue($attempt->fraud_analysis_required);
+        $this->assertNotSame('approved', $order->refresh()->payment_status);
+        $this->travel(61)->seconds();
+        $this->assertSame(1, $payments->recoverPendingPayments()['processed']);
+        $this->assertSame('approved', $attempt->refresh()->status);
+        $this->assertSame(DirectBookingOrderStatus::PagoEmConfirmacao, $order->refresh()->status);
+        $this->assertDatabaseCount('direct_booking_stays_actions', 0);
+        Http::assertSentCount(3);
+        Http::assertNotSent(fn ($request): bool => $request->method() !== 'GET');
+    }
+
     private function configureWebhook(): void
     {
         config([
