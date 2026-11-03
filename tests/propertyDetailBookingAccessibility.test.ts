@@ -382,11 +382,17 @@ test('touch drag ignores a delayed synthetic click and accepts the next delibera
   assert.equal(selectedRanges[0]?.[0].toISOString().slice(0, 10), '2026-11-12');
   assert.equal(selectedRanges[0]?.[1].toISOString().slice(0, 10), '2026-11-15');
   assert.equal(clickSelections, 0);
+  fireEvent.pointerDown(checkInCell, { pointerId: 9, pointerType: 'touch' });
+  fireEvent.pointerEnter(checkOutCell, { pointerId: 9, pointerType: 'touch' });
+  fireEvent.pointerUp(checkOutCell, { pointerId: 9, pointerType: 'touch' });
+  fireEvent.keyDown(checkInButton, { key: 'Enter' });
+  fireEvent.click(checkInButton);
+  assert.equal(clickSelections, 1);
   fireEvent.pointerDown(checkInCell, { pointerId: 8, pointerType: 'touch' });
   document.elementFromPoint = () => checkInCell;
   fireEvent.pointerUp(checkInCell, { pointerId: 8, pointerType: 'touch' });
   fireEvent.click(checkInButton);
-  assert.equal(clickSelections, 1);
+  assert.equal(clickSelections, 2);
   if (originalElementFromPoint) {
     document.elementFromPoint = originalElementFromPoint;
   } else {

@@ -138,6 +138,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
   }, [displayedMonth, isOpen, keyboardFocusDate]);
 
   const handleDateKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, dateValue: string) => {
+    suppressClickDatesRef.current = [];
     const startingDate = new Date(`${dateValue}T12:00:00`);
     if (['Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
       event.preventDefault();
