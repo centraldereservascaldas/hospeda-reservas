@@ -89,3 +89,100 @@ test('rejects pagination that would reuse a consumed offset', async () => {
     response([property], { pagination: { receivedCount: 1, nextSkip: 0, hasMore: true } });
   await assert.rejects(crcnBackendApi.searchAccommodations(params), /paginação/);
 });
+
+test('a page performs one request and returns the raw continuation without filling quote gaps', async () => {
+  const requests: unknown[] = [];
+  globalThis.fetch = async (_input, init) => {
+    requests.push(JSON.parse(String(init?.body)));
+    return response([property], {
+      total: 999,
+      unquotedCount: 2,
+      pagination: { receivedCount: 12, nextSkip: 36, hasMore: true },
+    });
+  };
+  const result = await crcnBackendApi.searchAccommodationsPage({ ...params, skip: 24 });
+  assert.deepEqual(requests, [{ ...params, skip: 24, limit: 12 }]);
+  assert.equal(result.total, 1);
+  assert.equal(result.unquotedCount, 2);
+  assert.deepEqual(result.pagination, { receivedCount: 12, nextSkip: 36, hasMore: true });
+});
+
+test('an unquoted page remains distinguishable from no availability and can continue', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return response([], {
+      unquotedCount: 12,
+      pagination: { receivedCount: 12, nextSkip: 12, hasMore: true },
+    });
+  };
+  const result = await crcnBackendApi.searchAccommodationsPage(params);
+  assert.equal(calls, 1);
+  assert.deepEqual(result.data, []);
+  assert.equal(result.unquotedCount, 12);
+  assert.equal(result.pagination.hasMore, true);
+});
+
+test('legacy responses continue by raw consumed records even if the client rejects a quote', async () => {
+  globalThis.fetch = async () =>
+    response([
+      { ...property, calculatedPrice: { ...property.calculatedPrice, nights: 1 } },
+      property,
+      property,
+    ]);
+  const result = await crcnBackendApi.searchAccommodationsPage({ ...params, limit: 3, skip: 6 });
+  assert.equal(result.total, 1);
+  assert.equal(result.unquotedCount, 1);
+  assert.deepEqual(result.pagination, { receivedCount: 3, nextSkip: 9, hasMore: true });
+});
+
+test('rejects invalid page bounds before issuing a request', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return response([]);
+  };
+  for (const bounds of [{ limit: 0 }, { limit: 21 }, { limit: NaN }, { skip: -1 }, { skip: 0.5 }]) {
+    await assert.rejects(
+      crcnBackendApi.searchAccommodationsPage({ ...params, ...bounds }),
+      /paginação/,
+    );
+  }
+  assert.equal(calls, 0);
+});
+
+test('a cancelled page never issues a request or falls back to cached inventory', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return response([]);
+  };
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(crcnBackendApi.searchAccommodationsPage({}, { signal: controller.signal }), {
+    name: 'AbortError',
+  });
+  assert.equal(calls, 0);
+});
+
+test('cancels an in-flight page and permits an independent retry', async () => {
+  let requestSignal: AbortSignal | null = null;
+  globalThis.fetch = (_input, init) =>
+    new Promise((_resolve, reject) => {
+      requestSignal = init?.signal as AbortSignal;
+      requestSignal.addEventListener('abort', () => reject(requestSignal?.reason), { once: true });
+    });
+  const controller = new AbortController();
+  const pending = crcnBackendApi.searchAccommodationsPage(params, { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal((requestSignal as AbortSignal | null)?.aborted, true);
+  globalThis.fetch = async () => response([property]);
+  assert.equal((await crcnBackendApi.searchAccommodationsPage(params)).data.length, 1);
+});
+
+test('single-page HTTP failures propagate without a static availability fallback', async () => {
+  globalThis.fetch = async () => new Response('unavailable', { status: 503 });
+  await assert.rejects(crcnBackendApi.searchAccommodationsPage(params), /HTTP 503/);
+  await assert.rejects(crcnBackendApi.searchAccommodationsPage({}), /HTTP 503/);
+});

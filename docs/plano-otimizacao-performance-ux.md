@@ -50,7 +50,7 @@ Total estimado: **10,5–20 dias de trabalho**, sem somar itens opcionais abaixo
 | ------ | ------- | ---------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | S0     | E0      | 0,5–1 dia        | Artefato identificado, amostras e instrumentos reproduzíveis        | Baseline de laboratório concluído; observabilidade real pendente |
 | S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 locais validadas; container E2 pendente                                   |
-| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | Planejada                                                        |
+| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | Em andamento: operação de página única pronta; interface pendente |
 | S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Planejada                                                        |
 | S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Planejada                                                        |
 
@@ -99,6 +99,8 @@ Registro local: [entrega e validação da E1](estudos/sprint-1-e1-2026-11-03.md)
 - Não colocar HTML, APIs pessoais ou respostas com sessão em cache público por regra genérica.
 
 ## E3 — Primeira página completa e próximas sob demanda
+
+Progresso local em 03/11/2026: serviço de página única com limite inicial de 12, continuação pelo consumo bruto, validação de metadados e cancelamento implementado. O agregador existente reutiliza essa validação e preserva seu contrato. A interface ainda usa o agregador; a etapa não está concluída e não há ganho de carregamento atribuído a essa preparação. Ver [registro da E3](estudos/sprint-2-e3-2026-11-03.md).
 
 **Trabalho:** substituir busca ilimitada por página inicial pequena. Começar avaliando 12 resultados, ajustando por medição. Entregar a página sem esperar o catálogo inteiro. Adicionar metadados de continuação sem quebrar consumidores existentes. Renderizar próximas páginas com “Carregar mais” e antecipação opcional.
 
