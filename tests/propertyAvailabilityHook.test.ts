@@ -404,6 +404,74 @@ test('calendar expiration blocks old availability and refreshes an open consumer
   }
 });
 
+test('an expired server cache boundary recovers automatically without exposing expired dates', async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  let state!: ReturnType<typeof usePropertyAvailability>;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(
+      JSON.stringify({
+        data: [{ date: '2026-12-09', avail: 1 }],
+        meta: { expiresAt: new Date(Date.now() + (requests === 1 ? -1 : 40_000)).toISOString() },
+      }),
+    );
+  };
+  function Probe() {
+    state = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn: '',
+      checkOut: '',
+      guests: 1,
+      todayIso: '2026-12-09',
+    });
+    return null;
+  }
+  try {
+    render(React.createElement(Probe));
+    await waitFor(() => assert.equal(requests, 1));
+    assert.equal(state.calendarAvailable, false);
+    await waitFor(() => assert.equal(state.calendarAvailable, true), { timeout: 3000 });
+    assert.equal(requests, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('persistently expired calendars stay blocked and do not cause an unlimited retry loop', async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  let state!: ReturnType<typeof usePropertyAvailability>;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(
+      JSON.stringify({
+        data: [{ date: '2026-12-10', avail: 1 }],
+        meta: { expiresAt: new Date(Date.now() - 1).toISOString() },
+      }),
+    );
+  };
+  function Probe() {
+    state = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn: '',
+      checkOut: '',
+      guests: 1,
+      todayIso: '2026-12-10',
+    });
+    return null;
+  }
+  try {
+    render(React.createElement(Probe));
+    await waitFor(() => assert.equal(state.isLoadingCalendar, false), { timeout: 3000 });
+    assert.equal(state.calendarAvailable, false);
+    assert.equal(requests, 2);
+    assert.match(state.calendarMessage, /Não foi possível confirmar/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('retry after navigating beyond an incomplete initial window repairs that initial window', async () => {
   const original = crcnBackendApi.getAccommodationCalendar;
   const starts: Array<string | undefined> = [];

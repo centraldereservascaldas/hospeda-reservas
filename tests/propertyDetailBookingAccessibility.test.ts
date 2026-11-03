@@ -323,7 +323,7 @@ test('calendar day buttons keep a 44px minimum touch height', () => {
   assert.match(getByRole('button', { name: 'Próximo mês' }).className, /h-11/);
 });
 
-test('touch drag previews and commits an available check-in to check-out range once', () => {
+test('touch drag ignores a delayed synthetic click and accepts the next deliberate tap', async () => {
   const originalElementFromPoint = document.elementFromPoint;
   const selectedRanges: Array<[Date, Date]> = [];
   let clickSelections = 0;
@@ -375,12 +375,24 @@ test('touch drag previews and commits an available check-in to check-out range o
   fireEvent.pointerEnter(checkOutCell, { pointerId: 7, pointerType: 'touch' });
   assert.match(checkOutButton.className, /bg-calendar-range/);
   fireEvent.pointerUp(checkOutCell, { pointerId: 7, pointerType: 'touch' });
+  await new Promise((resolve) => setTimeout(resolve, 20));
   fireEvent.click(checkInButton);
 
   assert.equal(selectedRanges.length, 1);
   assert.equal(selectedRanges[0]?.[0].toISOString().slice(0, 10), '2026-11-12');
   assert.equal(selectedRanges[0]?.[1].toISOString().slice(0, 10), '2026-11-15');
   assert.equal(clickSelections, 0);
+  fireEvent.pointerDown(checkInCell, { pointerId: 9, pointerType: 'touch' });
+  fireEvent.pointerEnter(checkOutCell, { pointerId: 9, pointerType: 'touch' });
+  fireEvent.pointerUp(checkOutCell, { pointerId: 9, pointerType: 'touch' });
+  fireEvent.keyDown(checkInButton, { key: 'Enter' });
+  fireEvent.click(checkInButton);
+  assert.equal(clickSelections, 1);
+  fireEvent.pointerDown(checkInCell, { pointerId: 8, pointerType: 'touch' });
+  document.elementFromPoint = () => checkInCell;
+  fireEvent.pointerUp(checkInCell, { pointerId: 8, pointerType: 'touch' });
+  fireEvent.click(checkInButton);
+  assert.equal(clickSelections, 2);
   if (originalElementFromPoint) {
     document.elementFromPoint = originalElementFromPoint;
   } else {
