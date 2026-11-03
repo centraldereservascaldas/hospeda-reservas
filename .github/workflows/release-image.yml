@@ -16,7 +16,7 @@ jobs:
   checkout-production-preflight:
     if: github.event_name == 'pull_request' && github.head_ref == 'codex/plano-cartao-antifraude' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Inspect the checkout target and existing backup metadata
         env:
@@ -24,7 +24,7 @@ jobs:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           python3 - <<'PY'
-          import json, os, re, urllib.request, urllib.error
+          import base64, datetime, json, os, re, time, urllib.request, urllib.error
           from urllib.parse import urlparse
 
           base = 'https://cy.caldasindica.com/api/v1'
@@ -58,6 +58,35 @@ jobs:
                             'image_tag': app.get('docker_registry_image_tag')}))
           envs = {item['key']: item.get('value', '') for item in rows(get('/applications/' + target + '/envs'))
                   if not item.get('is_preview')}
+
+          def configured(primary, fallback):
+              return str(envs.get(primary) or envs.get(fallback) or '').strip().strip('"\'')
+
+          def cielo_token(url, headers, body):
+              request = urllib.request.Request(url, data=body, method='POST', headers=headers)
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      return response.status, json.load(response)
+              except urllib.error.HTTPError as error:
+                  return error.code, {}
+
+          merchant = configured('CIELO_DIRECT_PRODUCTION_MERCHANT_ID', 'CIELO_MERCHANT_ID')
+          if merchant != 'ffd85334-ad77-453e-960d-802f827bcb33':
+              raise SystemExit('Unexpected Cielo merchant; no token request performed.')
+          client_id = configured('CIELO_DIRECT_PRODUCTION_SOP_CLIENT_ID', 'CIELO_SOP_CLIENT_ID')
+          client_secret = configured('CIELO_DIRECT_PRODUCTION_SOP_CLIENT_SECRET', 'CIELO_SOP_CLIENT_SECRET')
+          authorization = base64.b64encode((client_id + ':' + client_secret).encode()).decode()
+          oauth_status, oauth = cielo_token('https://auth.braspag.com.br/oauth2/token', {
+              'Authorization': 'Basic ' + authorization, 'Content-Type': 'application/x-www-form-urlencoded',
+              'Accept': 'application/json'}, b'grant_type=client_credentials')
+          sop_status, sop = (0, {})
+          if oauth_status == 200 and oauth.get('access_token'):
+              sop_status, sop = cielo_token('https://transaction.pagador.com.br/post/api/public/v2/accesstoken', {
+                  'Authorization': 'Bearer ' + oauth['access_token'], 'MerchantId': merchant,
+                  'Accept': 'application/json'}, b'')
+          print(json.dumps({'cielo_nonfinancial_probe': True, 'oauth_http_status': oauth_status,
+                            'sop_http_status': sop_status, 'sop_browser_token_created': bool(sop.get('AccessToken'))}))
+
           host = str(envs.get('DB_HOST', '')).strip().strip('"\'')
           if not host and envs.get('DB_URL'):
               host = urlparse(envs['DB_URL']).hostname or ''
@@ -83,6 +112,37 @@ jobs:
               print(json.dumps({'backup_schedule_uuid': backup_id, 'recent_executions': [
                   {key: entry.get(key) for key in ('uuid', 'status', 'size', 'file_size', 'created_at', 'updated_at')}
                   for entry in executions[:3]]}))
+              if database_id != '9bn7a32xssdvsi56wa3om1vv' or backup_id != '0mmydvt7kunmavk5xntmefwi':
+                  raise SystemExit('Backup target differs from the verified checkout database; no backup requested.')
+              previous_ids = {entry.get('uuid') for entry in executions}
+              request = urllib.request.Request(base + '/databases/' + database_id + '/backups/' + backup_id,
+                  data=b'{"backup_now":true}', method='PATCH', headers={
+                      'Authorization': 'Bearer ' + os.environ['COOLIFY_TOKEN'],
+                      'Content-Type': 'application/json', 'Accept': 'application/json'})
+              try:
+                  with urllib.request.urlopen(request, timeout=25) as response:
+                      response.read()
+              except urllib.error.HTTPError as error:
+                  raise SystemExit('Backup request HTTP status: ' + str(error.code))
+              print(json.dumps({'checkout_backup_requested': True}))
+              deadline = time.monotonic() + 240
+              backup_verified = False
+              while time.monotonic() < deadline:
+                  fresh = [entry for entry in rows(get('/databases/' + database_id + '/backups/' + backup_id + '/executions'))
+                           if entry.get('uuid') not in previous_ids]
+                  for entry in fresh:
+                      if entry.get('status') == 'success' and int(entry.get('size') or entry.get('file_size') or 0) > 0:
+                          print(json.dumps({'fresh_checkout_backup': {key: entry.get(key) for key in
+                              ('uuid', 'status', 'size', 'file_size', 'created_at')}}))
+                          backup_verified = True
+                          break
+                      if entry.get('status') in ('failed', 'error'):
+                          raise SystemExit('The checkout backup failed; deploy remains blocked.')
+                  if backup_verified:
+                      break
+                  time.sleep(10)
+              if not backup_verified:
+                  raise SystemExit('Fresh checkout backup was not verified before the deadline.')
           PY
 
   frontend:
