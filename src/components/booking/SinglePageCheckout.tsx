@@ -173,7 +173,7 @@ export function SinglePageCheckout({
           !terminal.includes(response.data.order.status) &&
           response.data.payment.attempt?.status !== 'rejected'
         ) {
-          timer = window.setTimeout(() => void refresh(), 15_000);
+          timer = window.setTimeout(() => void refresh(), 10_000);
         }
       } catch {
         if (active) setStatusUnavailable(true);

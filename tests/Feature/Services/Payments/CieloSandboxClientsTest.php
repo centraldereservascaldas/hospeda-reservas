@@ -150,6 +150,7 @@ class CieloSandboxClientsTest extends TestCase
         config([
             'services.cielo.direct_environment' => 'production',
             'services.cielo.production.enabled' => true,
+            'services.cielo.production.pix_provider' => 'Cielo2',
             'services.cielo.production.sop_enabled' => true,
             'services.cielo.production.merchant_id' => 'production-merchant-fixture',
             'services.cielo.production.merchant_key' => 'production-key-fixture',

@@ -224,7 +224,6 @@ class DirectStaysPaymentService
         }
 
         $this->stays->request('PATCH', $endpoint.'/'.rawurlencode($paymentId), payload: [
-            'status' => 'completed',
             'paymentDate' => $payload['paymentDate'],
             'name' => $payload['name'],
         ]);

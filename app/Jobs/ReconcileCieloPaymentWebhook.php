@@ -2,7 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Enums\DirectBookingOrderStatus;
+use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
+use App\Services\DirectStaysPaymentService;
 use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Bus\Queueable;
@@ -20,6 +23,8 @@ class ReconcileCieloPaymentWebhook implements ShouldQueue
 
     public int $tries = 5;
 
+    public int $timeout = 80;
+
     public const MAX_RECONCILIATION_ATTEMPTS = 10;
 
     public function __construct(public readonly string $webhookId) {}
@@ -30,7 +35,7 @@ class ReconcileCieloPaymentWebhook implements ShouldQueue
         return [10, 30, 90, 180];
     }
 
-    public function handle(DirectCheckoutPaymentService $payments): void
+    public function handle(DirectCheckoutPaymentService $payments, DirectStaysPaymentService $reservations): void
     {
         $shouldProcess = DB::transaction(function (): bool {
             $webhook = DirectBookingPaymentWebhook::query()->lockForUpdate()->findOrFail($this->webhookId);
@@ -69,6 +74,17 @@ class ReconcileCieloPaymentWebhook implements ShouldQueue
             $result = $payments->reconcileCieloPaymentId($webhook->gateway_payment_id);
             if ($result['status'] >= 500) {
                 throw new \RuntimeException('Cielo payment reconciliation requires another attempt.');
+            }
+
+            $attempt = $result['attempt'] ?? null;
+            if ($attempt instanceof DirectBookingPaymentAttempt && $attempt->status === 'approved') {
+                $order = $attempt->order->fresh();
+                if (in_array($order->status, [DirectBookingOrderStatus::PagoEmConfirmacao, DirectBookingOrderStatus::AtencaoOperacional], true)) {
+                    $confirmation = $reservations->confirmPaidReservation($order);
+                    if (! $confirmation['ready']) {
+                        throw new \RuntimeException('Stays confirmation requires reconciliation.');
+                    }
+                }
             }
 
             $webhook->forceFill(['status' => 'processed', 'error_code' => null, 'processed_at' => now()])->save();

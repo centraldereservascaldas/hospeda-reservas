@@ -12,6 +12,7 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
 use App\Services\DirectSaleTermsRegistry;
+use App\Services\DirectStaysPaymentService;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
@@ -279,8 +280,9 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->postJson('/api/webhooks/cielo', $notification, $webhookHeaders)
             ->assertOk()->assertJsonPath('duplicate', true);
         $webhook = DirectBookingPaymentWebhook::query()->sole();
-        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
-        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class), app(DirectStaysPaymentService::class));
+        $this->assertSame(DirectBookingOrderStatus::Confirmado, DirectBookingOrder::query()->sole()->status);
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class), app(DirectStaysPaymentService::class));
         $this->artisan('direct-booking:recover-reservations')->assertSuccessful();
         $this->artisan('direct-booking:recover-reservations')->assertSuccessful();
 

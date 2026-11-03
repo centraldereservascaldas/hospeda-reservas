@@ -81,9 +81,9 @@ class DirectStaysPendingPaymentConfirmationTest extends TestCase
             }
             if ($request->method() === 'PATCH' && str_ends_with($path, '/payments/payment-fixture')) {
                 $paymentPatches++;
-                $this->assertSame(['status' => 'completed', 'paymentDate' => now()->toDateString(), 'name' => 'CRCN Cielo'], $request->data());
+                $this->assertSame(['paymentDate' => now()->toDateString(), 'name' => 'CRCN Cielo'], $request->data());
                 if ($mode !== 'ignored') {
-                    $payment = [...$payment, ...$request->data()];
+                    $payment = [...$payment, ...$request->data(), 'status' => 'completed'];
                 }
                 if ($mode === 'auto_booked') {
                     $reservation['type'] = 'booked';
