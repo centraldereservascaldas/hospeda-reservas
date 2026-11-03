@@ -1,0 +1,161 @@
+{
+  "release": "2a57035af27b2e8601647e66d566f9aebff476d1",
+  "asset": "/assets/index-kgNU18fA.js",
+  "previousAsset": "/assets/index-BBdL3cTh.js",
+  "checks": [
+    {
+      "resource": "/api/health",
+      "status": 200,
+      "cacheControl": "no-cache, private"
+    },
+    {
+      "resource": "/api/ready",
+      "status": 200,
+      "cacheControl": "no-cache, private"
+    },
+    {
+      "resource": "/assets/index-kgNU18fA.js",
+      "status": 200,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "resource": "/assets/index-BBdL3cTh.js?verify=2a57035af27b2e8601647e66d566f9aebff476d1",
+      "status": 200,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "resource": "/assets/missing-00000000.js?verify=2a57035af27b2e8601647e66d566f9aebff476d1",
+      "status": 404,
+      "cacheControl": "max-age=14400"
+    }
+  ],
+  "search": {
+    "status": 200,
+    "requests": 1,
+    "receivedCount": 12,
+    "nextSkip": 12,
+    "hasMore": true,
+    "cards": 12,
+    "unquotedCount": 0,
+    "invalidQuotes": 0,
+    "overflow": false,
+    "jsErrors": []
+  },
+  "verifiedAtUtc": "2026-11-03T23:29:25.293447+00:00",
+  "imageDigest": "sha256:b7580dcdc543b39bbac7737ed3a349c49cbc9fc932f94f22855de8df56ab5804",
+  "container": "2818d8803108",
+  "containerHealth": "healthy",
+  "ciImageDigestMatchesRuntime": true,
+  "assetSha256": "de97c15dc3a514befdd0a4a5558bfd93620abd643966ad46da676e5be79c0753",
+  "publicAssetSha256MatchesContainer": true,
+  "home": {
+    "initialGeometry": [
+      {
+        "key": "pet-weekend-1",
+        "top": 344,
+        "bottom": 625
+      },
+      {
+        "key": "pet-weekend-2",
+        "top": 344,
+        "bottom": 625
+      },
+      {
+        "key": "pet-weekend-3",
+        "top": 344,
+        "bottom": 625
+      },
+      {
+        "key": "pet-weekend-4",
+        "top": 344,
+        "bottom": 625
+      },
+      {
+        "key": "pet-weekend-5",
+        "top": 344,
+        "bottom": 625
+      },
+      {
+        "key": "caldas-country-1",
+        "top": 777,
+        "bottom": 1053
+      },
+      {
+        "key": "caldas-country-2",
+        "top": 777,
+        "bottom": 1053
+      },
+      {
+        "key": "caldas-country-3",
+        "top": 777,
+        "bottom": 1053
+      },
+      {
+        "key": "caldas-country-4",
+        "top": 777,
+        "bottom": 1053
+      },
+      {
+        "key": "caldas-country-5",
+        "top": 777,
+        "bottom": 1053
+      },
+      {
+        "key": "holiday-1",
+        "top": 1205,
+        "bottom": 1481
+      },
+      {
+        "key": "holiday-2",
+        "top": 1205,
+        "bottom": 1481
+      },
+      {
+        "key": "holiday-3",
+        "top": 1205,
+        "bottom": 1481
+      },
+      {
+        "key": "holiday-4",
+        "top": 1205,
+        "bottom": 1481
+      },
+      {
+        "key": "holiday-5",
+        "top": 1205,
+        "bottom": 1481
+      },
+      {
+        "key": "catalog",
+        "top": 1521,
+        "bottom": 2841
+      }
+    ],
+    "initialSearches": 2,
+    "afterRevealSearches": 4,
+    "pageLimits": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "overflow": false,
+    "jsErrors": []
+  },
+  "backup": {
+    "name": "pre-visibility-20261103T230034Z.dump",
+    "bytes": 90895,
+    "sha256": "b0a8989b0a070ba5a612089afc7bb846b27a39314603b6cc2aee3d4914d4992f",
+    "isolatedRestorePassed": true,
+    "restoredTables": 17,
+    "restoredMigrations": 22
+  },
+  "rollback": {
+    "commit": "b191f77e08d67f43a1399086a015f9f72816a082",
+    "digest": "sha256:cfa27132bd226733fb75b67359c74ce0fa46809787c2c1f405041b01f812bdc1"
+  },
+  "pr": "https://github.com/centraldereservascaldas/hospeda-reservas/pull/41",
+  "releaseRun": "https://github.com/centraldereservascaldas/hospeda-reservas/actions/runs/41738157966",
+  "transientAsset404Observed": true,
+  "negativeCacheFollowupRequired": true
+}

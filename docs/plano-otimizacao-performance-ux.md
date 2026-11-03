@@ -1,6 +1,6 @@
 # Plano de otimização de performance e experiência
 
-Data: 03/11/2026. Status: E0 com baseline registrado; E1–E3 e a base da fila E4 publicadas no commit `84155ab`. O complemento de visibilidade E4 está validado localmente e aguarda publicação; E5–E7 e a observabilidade real permanecem pendentes. [Registro da primeira publicação](estudos/publicacao-performance-2026-11-03.md).
+Data: 03/11/2026. Status: E0 com baseline registrado; E1–E3 e a base da fila E4 publicadas no commit `84155ab`. O complemento de visibilidade E4 foi publicado em `2a57035` e validado no domínio público ([evidências](estudos/publicacao-visibilidade-2026-11-03.md)); E5–E7 e a observabilidade real permanecem pendentes. [Registro da primeira publicação](estudos/publicacao-performance-2026-11-03.md).
 
 Registro da Sprint 0: [versão publicada, método e resultados da E0](estudos/baseline-performance-e0-2026-11-03.md). Telemetria de backend e p75 real permanecem pendentes, explicitados no registro.
 
@@ -176,7 +176,7 @@ Progresso: fila publicada; gate por IntersectionObserver/fallback, páginas limi
 - Melhorar mediana do tempo até primeiro resultado útil e LCP contra E0, sem regressão relevante nos demais cenários; registrar valores absolutos e variação, não apenas percentual.
 - Definir em E0 o limiar de regressão conforme a variabilidade; não aprovar com uma única execução favorável.
 - Metas de acompanhamento real: LCP ≤ 2,5 s, INP ≤ 200 ms e CLS ≤ 0,1 no p75, separados por dispositivo. Não declarar cumprimento sem amostra suficiente; laboratório é comparação controlada.
-- Rever cache negativo de assets ausentes (404 público com `max-age=14400` no primeiro lote) e a remoção de assets expirados em builds com cache reutilizado.
+- Rever antes da próxima publicação funcional o cache negativo de assets ausentes (404 público com `max-age=14400` e divergência transitória de entrega observada no lote E4) e a remoção de assets expirados em builds com cache reutilizado.
 - Registro por etapa contém versão, cenários, medidas antes/depois, testes e pendências. Dados de teste distinguem cache frio, quente e falha do provedor.
 
 Publicação futura depende de solicitação explícita, conferência de CI/workflows e checklist Coolify. Rollback deve reverter o artefato ou a funcionalidade, preservando banco, pedidos e pagamentos. Não restaurar banco nem reverter migrations automaticamente para desfazer otimização.
