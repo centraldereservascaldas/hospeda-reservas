@@ -1,0 +1,78 @@
+{
+  "release": "84155ab61278af5c400c6e507ec7a3c22e975a38",
+  "asset": "/assets/index-CdriZiHo.js",
+  "previousAsset": "/assets/index-CA52iMh1.js",
+  "checks": [
+    {
+      "resource": "/api/health",
+      "status": 200,
+      "cacheControl": "no-cache, private"
+    },
+    {
+      "resource": "/api/ready",
+      "status": 200,
+      "cacheControl": "no-cache, private"
+    },
+    {
+      "resource": "/assets/index-CdriZiHo.js",
+      "status": 200,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "resource": "/assets/index-CA52iMh1.js?verify=84155ab61278af5c400c6e507ec7a3c22e975a38",
+      "status": 200,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "resource": "/assets/missing-00000000.js?verify=84155ab61278af5c400c6e507ec7a3c22e975a38",
+      "status": 404,
+      "cacheControl": "max-age=14400"
+    }
+  ],
+  "search": {
+    "status": 200,
+    "requests": 1,
+    "receivedCount": 12,
+    "nextSkip": 12,
+    "hasMore": true,
+    "cards": 12,
+    "unquotedCount": 0,
+    "invalidQuotes": 0,
+    "overflow": false,
+    "jsErrors": []
+  },
+  "assetSha256": "bddc59e98df611c84afe6ef246e045255ff611169fc186e1690840f8ae4bfd54",
+  "assetBytes": 471633,
+  "verifiedAtUtc": "2026-11-03T22:35:56Z",
+  "imageDigest": "sha256:d0a41c2c9f5843b6f33d626c9ef30fa68d6c57a8d468bf013b72619b47abd876",
+  "container": "bf33ca9717d9",
+  "containerHealth": "healthy",
+  "ciImageDigestMatchesRuntime": true,
+  "publicAssetSha256MatchesContainer": true,
+  "assetRetention": {
+    "current": 31,
+    "retained": 28,
+    "oldEntryPresentInContainer": true
+  },
+  "backup": {
+    "name": "pre-performance-20261103T221948Z.dump",
+    "bytes": 93607,
+    "mode": "600",
+    "sha256": "a067e1a5e6ddbf1e0580d42a007b4166243bf4c0359de2e34d3cd8432454208a",
+    "isolatedRestorePassed": true,
+    "restoredTables": 17,
+    "restoredMigrations": 22
+  },
+  "rollback": {
+    "commit": "388f91f948a2238a47c8584d82d656b67fde17d2",
+    "digest": "sha256:f7a7d8068def6e73bbd5fe5275eabcbec656d610699e456e94d329675f3e2d69"
+  },
+  "operationalAlert": {
+    "command": "direct-booking:recover-reservations",
+    "attentionStateMatchesPredeployBackup": true,
+    "underlyingCodeUnchangedByPerformanceDiff": true,
+    "commercialCorrectionPerformed": false
+  },
+  "pr": "https://github.com/centraldereservascaldas/hospeda-reservas/pull/39",
+  "releaseRun": "https://github.com/centraldereservascaldas/hospeda-reservas/actions/runs/41730311480"
+}

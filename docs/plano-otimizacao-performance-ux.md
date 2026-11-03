@@ -1,6 +1,6 @@
 # Plano de otimização de performance e experiência
 
-Data: 03/11/2026. Status: E0 com versão identificada e baseline de laboratório registrado; E1 implementada e validada localmente na branch `codex/performance-sprints`; E2/E3 implementadas e validadas localmente; validação do container E2 pendente; E4 em andamento: fila integrada e visibilidade pendente.
+Data: 03/11/2026. Status: E0 com baseline registrado; E1–E3 e a base da fila E4 publicadas no commit `84155ab`. A visibilidade E4, E5–E7 e a observabilidade real permanecem pendentes. [Registro da primeira publicação](estudos/publicacao-performance-2026-11-03.md).
 
 Registro da Sprint 0: [versão publicada, método e resultados da E0](estudos/baseline-performance-e0-2026-11-03.md). Telemetria de backend e p75 real permanecem pendentes, explicitados no registro.
 
@@ -49,8 +49,8 @@ Total estimado: **10,5–20 dias de trabalho**, sem somar itens opcionais abaixo
 | Sprint | Escopo  | Esforço estimado | Saída verificável                                                   | Estado                                                           |
 | ------ | ------- | ---------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | S0     | E0      | 0,5–1 dia        | Artefato identificado, amostras e instrumentos reproduzíveis        | Baseline de laboratório concluído; observabilidade real pendente |
-| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 locais validadas; container E2 pendente                                   |
-| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3 validada; E4 com fila integrada, visibilidade pendente |
+| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 publicadas; CI Docker e smoke público passaram                                   |
+| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3 e fila E4 publicadas; visibilidade E4 pendente |
 | S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Planejada                                                        |
 | S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Planejada                                                        |
 
