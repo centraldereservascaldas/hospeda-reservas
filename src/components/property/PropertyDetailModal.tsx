@@ -32,6 +32,7 @@ import {
   parseSearchFilters,
 } from '../../utils/searchUrlState';
 import { countOccupancyGuests } from '../../utils/guestCounts';
+import { checkoutApi } from '../../services/checkoutApi';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -132,6 +133,13 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     guests: countOccupancyGuests({ adults, children, infants }),
     todayIso,
   });
+
+  useEffect(() => {
+    if (!propertyId || !isConfirmedPropertyQuote(staysPrice) || !checkIn || !checkOut) return;
+    void checkoutApi.getCheckoutReadiness(propertyId);
+    void import('../booking/CheckoutEntry');
+    void import('../booking/SinglePageCheckout');
+  }, [propertyId, staysPrice, checkIn, checkOut]);
 
   useEffect(() => {
     if (!isDatePickerOpen || !calendarCoverageEnd) return;

@@ -183,6 +183,12 @@ export interface CheckoutReadinessResponse {
 export type CheckoutReadinessResult =
   { kind: 'ready'; data: CheckoutReadinessResponse } | { kind: 'unavailable' };
 
+const checkoutReadinessRequests = new Map<
+  string,
+  { expiresAt: number; request: Promise<CheckoutReadinessResult> }
+>();
+const CHECKOUT_READINESS_CACHE_MS = 15_000;
+
 export interface CheckoutResumeResponse {
   success: true;
   order: DirectBookingOrderSummary;
@@ -726,23 +732,40 @@ export const checkoutApi = {
     }
   },
 
-  async getCheckoutReadiness(listingId: string): Promise<CheckoutReadinessResult> {
-    if (!listingId.trim() || listingId.length > 100) return { kind: 'unavailable' };
+  getCheckoutReadiness(listingId: string): Promise<CheckoutReadinessResult> {
+    if (!listingId.trim() || listingId.length > 100)
+      return Promise.resolve({ kind: 'unavailable' });
+    const cached = checkoutReadinessRequests.get(listingId);
+    if (cached && cached.expiresAt > Date.now()) return cached.request;
 
-    try {
-      const res = await apiFetch(`/api/checkout/readiness/${encodeURIComponent(listingId)}`, {
-        cache: 'no-store',
-      });
-      if (!res.ok) return { kind: 'unavailable' };
-      const json: unknown = await res.json();
+    const request = (async (): Promise<CheckoutReadinessResult> => {
+      try {
+        const res = await apiFetch(`/api/checkout/readiness/${encodeURIComponent(listingId)}`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) return { kind: 'unavailable' };
+        const json: unknown = await res.json();
 
-      return isCheckoutReadinessResponse(json)
-        ? { kind: 'ready', data: json }
-        : { kind: 'unavailable' };
-    } catch (err) {
-      console.warn('Error loading direct checkout readiness:', err);
-      return { kind: 'unavailable' };
-    }
+        return isCheckoutReadinessResponse(json)
+          ? { kind: 'ready', data: json }
+          : { kind: 'unavailable' };
+      } catch (err) {
+        console.warn('Error loading direct checkout readiness:', err);
+        return { kind: 'unavailable' };
+      }
+    })();
+    checkoutReadinessRequests.set(listingId, {
+      expiresAt: Date.now() + CHECKOUT_READINESS_CACHE_MS,
+      request,
+    });
+    void request.then((result) => {
+      if (result.kind !== 'ready' || !result.data.singlePageCheckoutEnabled) {
+        if (checkoutReadinessRequests.get(listingId)?.request === request) {
+          checkoutReadinessRequests.delete(listingId);
+        }
+      }
+    });
+    return request;
   },
 
   async resumeCheckout(
