@@ -11,13 +11,17 @@ class DirectStaysReservationMatcher
     {
         $reservationId = (string) ($reservation['_id'] ?? $reservation['id'] ?? '');
         $guests = is_array($order->guests) ? $order->guests : [];
+        $quotedListingId = is_array($order->quote_snapshot)
+            ? ($order->quote_snapshot['_idlisting'] ?? null)
+            : null;
+        $listingIds = array_filter([$order->stays_listing_id, $quotedListingId], 'is_string');
         $checkIn = $order->check_in?->toDateString();
         $checkOut = $order->check_out?->toDateString();
 
         return $reservationId !== ''
             && ($order->stays_reservation_id === null || $reservationId === $order->stays_reservation_id)
             && $order->stays_client_id !== null
-            && (string) ($reservation['_idlisting'] ?? '') === (string) $order->stays_listing_id
+            && in_array((string) ($reservation['_idlisting'] ?? ''), $listingIds, true)
             && (string) ($reservation['_idclient'] ?? '') === (string) $order->stays_client_id
             && $checkIn !== null
             && (string) ($reservation['checkInDate'] ?? '') === $checkIn

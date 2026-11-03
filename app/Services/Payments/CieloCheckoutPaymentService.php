@@ -278,7 +278,7 @@ class CieloCheckoutPaymentService
             ? $this->safePixCopyPaste($payment['QrCodeString'] ?? null)
             : null;
         $pixQrCode = $attempt->payment_method === 'pix'
-            ? $this->safePixQrCode($payment['QrCodeBase64Image'] ?? null)
+            ? $this->safePixQrCode($payment['QrCodeBase64Image'] ?? $payment['QrcodeBase64Image'] ?? null)
             : null;
         $initialPixResponseMissingInstructions = $attempt->payment_method === 'pix'
             && $attempt->gateway_payment_id === null

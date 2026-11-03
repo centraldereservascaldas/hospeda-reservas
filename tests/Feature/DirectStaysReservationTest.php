@@ -17,6 +17,34 @@ class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_stays_object_listing_id_matches_quote_but_booked_before_payment_stays_blocked(): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        $order->quote_snapshot = ['_idlisting' => '6a32d23cbf733c817978a433'];
+        $order->save();
+        $reservation = [
+            '_id' => 'reservation-prematurely-booked',
+            '_idlisting' => '6a32d23cbf733c817978a433',
+            '_idclient' => $order->stays_client_id,
+            'type' => 'booked',
+            'checkInDate' => $order->check_in->toDateString(),
+            'checkOutDate' => $order->check_out->toDateString(),
+            'internalNote' => 'CRCN_DIRECT_ORDER:'.$order->id,
+            'guests' => 2,
+            'price' => ['currency' => 'BRL', '_f_expected' => 3001, '_f_total' => 3600],
+        ];
+
+        $this->assertTrue(app(\App\Services\DirectStaysReservationMatcher::class)->matchesIdentity($reservation, $order));
+        $result = (fn () => $this->adoptReservation($order, 'reservation-prematurely-booked', 60, null, $reservation))
+            ->call(app(DirectStaysReservationService::class));
+
+        $this->assertFalse($result['ready']);
+        $this->assertSame('stays_reservation_not_reserved', $result['code']);
+        $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->refresh()->status);
+        $this->assertNull($order->stays_reservation_id);
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+    }
+
     public function test_late_reserved_response_does_not_reopen_closed_order(): void
     {
         foreach ([DirectBookingOrderStatus::Expirado, DirectBookingOrderStatus::Reembolsado, DirectBookingOrderStatus::Contestado, DirectBookingOrderStatus::Concluido] as $status) {

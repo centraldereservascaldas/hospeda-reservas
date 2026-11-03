@@ -516,7 +516,6 @@ class DirectStaysReservationService
             'to' => $order->check_in->toDateString(),
             'dateType' => 'arrival',
             'listingId' => $order->stays_listing_id,
-            'type' => 'reserved',
             'limit' => 100,
             'skip' => 0,
         ]);
