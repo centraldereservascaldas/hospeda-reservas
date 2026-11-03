@@ -299,7 +299,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
       ) {
         refreshTimeout = window.setTimeout(() => {
           void refresh(false);
-        }, 30_000);
+        }, 10_000);
       }
     };
 

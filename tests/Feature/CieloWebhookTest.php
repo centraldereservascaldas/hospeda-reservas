@@ -7,6 +7,7 @@ use App\Jobs\ReconcileCieloPaymentWebhook;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
+use App\Services\DirectStaysPaymentService;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -39,7 +40,7 @@ class CieloWebhookTest extends TestCase
             'gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174040',
             'status' => 'queued', 'received_at' => now(),
         ]);
-        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class), app(DirectStaysPaymentService::class));
         $this->assertSame('failed', $webhook->refresh()->status);
         $this->assertSame('gateway_environment_mismatch', $webhook->error_code);
         Http::assertNothingSent();
@@ -52,7 +53,7 @@ class CieloWebhookTest extends TestCase
             'event_key' => 'processed-production-event-fixture', 'gateway_provider' => 'cielo',
             'gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174040', 'status' => 'processed', 'received_at' => now(),
         ]);
-        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class), app(DirectStaysPaymentService::class));
         $this->assertSame('processed', $webhook->refresh()->status);
         Http::assertNothingSent();
     }
@@ -247,7 +248,7 @@ class CieloWebhookTest extends TestCase
             ]),
         ]);
 
-        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class), app(DirectStaysPaymentService::class));
 
         $this->assertSame('pending', $attempt->refresh()->status);
         $this->assertSame('authorized', $attempt->gateway_status);
@@ -276,7 +277,7 @@ class CieloWebhookTest extends TestCase
         ]);
 
         try {
-            (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class));
+            (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class), app(DirectStaysPaymentService::class));
             $this->fail('An unknown Cielo payment should remain unassociated.');
         } catch (\RuntimeException $exception) {
             $this->assertSame('payment_reconciliation_failed', $exception->getMessage());
