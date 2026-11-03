@@ -109,6 +109,14 @@ class CieloEcommerceClient
             throw new InvalidArgumentException('Cielo Pix expiration must be between 60 seconds and 24 hours.');
         }
 
+        $provider = $this->configuration->value('pix_provider') ?? 'Cielo2';
+        if ($this->configuration->environment() === 'production' && ! in_array($provider, ['Cielo', 'Cielo2'], true)) {
+            throw new InvalidArgumentException('Unsupported Cielo Pix provider.');
+        }
+        if ($this->configuration->usesLegacyPix() && $expirationSeconds < 7200) {
+            throw new InvalidArgumentException('Legacy Cielo Pix requires a two-hour payment window.');
+        }
+
         $payment = [
             'Type' => 'Pix',
             'Amount' => $amountCents,
@@ -116,7 +124,10 @@ class CieloEcommerceClient
             'QrCode' => ['Expiration' => $expirationSeconds],
         ];
         if ($this->configuration->environment() === 'production') {
-            $payment['Provider'] = 'Cielo2';
+            $payment['Provider'] = $provider;
+            if ($this->configuration->usesLegacyPix()) {
+                unset($payment['QrCode']);
+            }
         }
 
         $response = $this->request($this->configuration->endpoint('transaction'))

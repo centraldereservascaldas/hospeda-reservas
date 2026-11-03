@@ -117,6 +117,33 @@ class CieloSandboxClientsTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_legacy_pix_uses_the_explicit_provider_without_sending_unsupported_expiration(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureProductionFixtures();
+        config(['services.cielo.production.pix_enabled' => true, 'services.cielo.production.pix_provider' => 'Cielo']);
+        Http::fake(['https://api.cieloecommerce.cielo.com.br/1/sales/' => Http::response(['Payment' => ['Status' => 12]], 201)]);
+
+        app(CieloEcommerceClient::class)->createPixPayment('legacyorder123', '260.00', 'BRL', 'Guest', 7200, '12345678901', 'CPF');
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request): bool => $request['Payment']['Provider'] === 'Cielo'
+            && $request['Payment']['Amount'] === 26000 && ! isset($request['Payment']['QrCode']));
+    }
+
+    public function test_legacy_pix_rejects_a_window_shorter_than_its_fixed_expiration(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureProductionFixtures();
+        config(['services.cielo.production.pix_enabled' => true, 'services.cielo.production.pix_provider' => 'Cielo']);
+        try {
+            app(CieloEcommerceClient::class)->createPixPayment('legacyorder123', '260.00', 'BRL', 'Guest', 1800, '12345678901', 'CPF');
+            $this->fail('A legacy QR cannot expire before its actual two-hour window.');
+        } catch (InvalidArgumentException) {
+            Http::assertNothingSent();
+        }
+    }
+
     private function configureProductionFixtures(): void
     {
         $this->app->detectEnvironment(fn () => 'production');

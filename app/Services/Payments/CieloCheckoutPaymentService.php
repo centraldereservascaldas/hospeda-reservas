@@ -146,6 +146,11 @@ class CieloCheckoutPaymentService
             return $this->replay($existingAttempt, $order, $fingerprint);
         }
 
+        if ($paymentMethod === 'pix' && $this->configuration->usesLegacyPix()
+            && ($order->expires_at === null || $order->expires_at->lessThanOrEqualTo(now()->addSeconds(7200 + max(60, (int) config('direct-booking.payment_safety_margin_minutes', 5) * 60))))) {
+            return $this->result(null, 'reservation_expires_too_soon', 'O prazo da pré-reserva é insuficiente para gerar este Pix com segurança. Nenhuma cobrança foi iniciada.', 409);
+        }
+
         $reservationMatches = $this->reservations->validateReservedOrderForPayment($order);
         if ($reservationMatches === null) {
             $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
@@ -272,6 +277,9 @@ class CieloCheckoutPaymentService
                 );
             } else {
                 $configuredExpiration = max(60, min(86_400, (int) $this->configuration->value('pix_qr_expiration_seconds')));
+                if ($this->configuration->usesLegacyPix()) {
+                    $configuredExpiration = 7200;
+                }
                 $remainingSeconds = max(60, min(86_400, (int) floor(now()->diffInSeconds($order->expires_at, false))));
                 $gatewayPayment = $this->cielo->createPixPayment(
                     (string) $attempt->merchant_order_id,
@@ -446,13 +454,29 @@ class CieloCheckoutPaymentService
         };
         $paidAt = $status === 'captured' ? ($this->parseDate($payment['CapturedDate'] ?? null) ?? now()) : null;
         $gatewayExpiration = $this->parseDate($payment['ExpirationDate'] ?? null);
+        if ($expectedPaymentType === 'Pix' && $this->configuration->usesLegacyPix()) {
+            $legacyExpiration = $attempt->created_at->copy()->addHours(2);
+            if ($gatewayExpiration === null || $legacyExpiration->lessThan($gatewayExpiration)) {
+                $gatewayExpiration = $legacyExpiration;
+            }
+        }
         $expiresAt = $gatewayExpiration !== null && $order->expires_at !== null && $gatewayExpiration->lessThan($order->expires_at)
             ? $gatewayExpiration
             : $order->expires_at;
 
+        if ($expectedPaymentType === 'Pix' && $paymentStatus === 12 && $this->configuration->usesLegacyPix()
+            && $attempt->gateway_payment_id !== null && $expiresAt !== null
+            && $expiresAt->copy()->addMinutes(max(1, (int) config('direct-booking.payment_safety_margin_minutes', 5)))->isPast()) {
+            $status = 'expired';
+            $attemptStatus = 'expired';
+        }
+
         $paymentIdConflict = DB::transaction(function () use ($order, $attempt, $paymentId, $status, $attemptStatus, $payment, $paidAt, $expiresAt, $pixCopyPaste, $pixQrCode): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
+            if ($status === 'expired' && ($lockedAttempt->status === 'approved' || $lockedOrder->payment_status === 'approved')) {
+                return false;
+            }
             if ($lockedAttempt->gateway_payment_id !== null && $lockedAttempt->gateway_payment_id !== $paymentId) {
                 $lockedAttempt->forceFill(['status' => 'attention_required', 'error_code' => 'gateway_payment_id_conflict'])->save();
                 $this->markOrderForAttention($lockedOrder, 'gateway_payment_id_conflict');
@@ -499,6 +523,9 @@ class CieloCheckoutPaymentService
                 }
             } elseif ($status === 'rejected' && $lockedOrder->status === DirectBookingOrderStatus::PagamentoPendente) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoRecusado, ['source' => 'cielo_authoritative_lookup', 'payment_id' => $paymentId]);
+            } elseif ($status === 'expired' && in_array($lockedOrder->status, [DirectBookingOrderStatus::PagamentoPendente, DirectBookingOrderStatus::AtencaoOperacional], true)) {
+                $lockedOrder->expires_at = now();
+                $lockedOrder->transitionTo(DirectBookingOrderStatus::LiberacaoPendente, ['source' => 'cielo_unpaid_pix_expired', 'payment_id' => $paymentId]);
             } elseif ($attemptStatus === 'attention_required') {
                 if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'cielo_authoritative_lookup', 'payment_id' => $paymentId]);
@@ -515,7 +542,7 @@ class CieloCheckoutPaymentService
             return $this->result($attempt, 'gateway_payment_id_conflict', 'A tentativa recebeu mais de um identificador de pagamento. A conferência foi interrompida.', 503);
         }
 
-        $httpStatus = in_array($attempt->status, ['pending', 'approved', 'rejected', 'cancelled'], true) ? 201 : 503;
+        $httpStatus = in_array($attempt->status, ['pending', 'approved', 'rejected', 'cancelled', 'expired'], true) ? 201 : 503;
 
         return [
             ...$this->result($attempt, $attempt->status, $this->paymentMessage($attempt->status), $httpStatus),
@@ -636,6 +663,7 @@ class CieloCheckoutPaymentService
             'pending' => 'Pagamento em processamento. A reserva ainda não está confirmada.',
             'rejected' => 'Pagamento não aprovado. O pedido pode aceitar uma nova tentativa enquanto a pré-reserva estiver válida.',
             'cancelled' => 'A tentativa de pagamento foi cancelada.',
+            'expired' => 'O Pix venceu sem pagamento. A liberação da pré-reserva será conferida automaticamente.',
             'unknown' => 'O estado do pagamento precisa de reconciliação antes de qualquer nova tentativa.',
             'attention_required' => 'A tentativa exige conferência operacional.',
             default => 'Tentativa de pagamento registrada.',

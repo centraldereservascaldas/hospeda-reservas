@@ -6,11 +6,13 @@ use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingStaysAction;
 use App\Services\DirectSaleTermsRegistry;
+use App\Services\DirectStaysReservationMatcher;
 use App\Services\DirectStaysReservationService;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class DirectStaysReservationTest extends TestCase
@@ -33,7 +35,7 @@ class DirectStaysReservationTest extends TestCase
                 'hostingDetails' => ['_f_total' => 2900]],
         ];
 
-        $matcher = app(\App\Services\DirectStaysReservationMatcher::class);
+        $matcher = app(DirectStaysReservationMatcher::class);
         $this->assertTrue($matcher->matchesCommercialDetails($reservation, $order));
         $reservation['price']['_f_total'] = 3600;
         $this->assertFalse($matcher->matchesCommercialDetails($reservation, $order));
@@ -58,7 +60,7 @@ class DirectStaysReservationTest extends TestCase
             'price' => ['currency' => 'BRL', '_f_expected' => 3001, '_f_total' => 3600],
         ];
 
-        $this->assertTrue(app(\App\Services\DirectStaysReservationMatcher::class)->matchesIdentity($reservation, $order));
+        $this->assertTrue(app(DirectStaysReservationMatcher::class)->matchesIdentity($reservation, $order));
         $result = (fn () => $this->adoptReservation($order, 'reservation-prematurely-booked', 60, null, $reservation))
             ->call(app(DirectStaysReservationService::class));
 
@@ -270,9 +272,10 @@ class DirectStaysReservationTest extends TestCase
         $this->assertSame(1, $reservationPosts);
     }
 
-    public function test_expired_reservation_is_canceled_and_verified_before_order_expires(): void
+    #[DataProvider('releasableExpiredStates')]
+    public function test_expired_reservation_is_canceled_and_verified_before_order_expires(DirectBookingOrderStatus $initialStatus): void
     {
-        $order = $this->order(DirectBookingOrderStatus::PreReservado, 'reservation-expiring');
+        $order = $this->order($initialStatus, 'reservation-expiring');
         $order->expires_at = now()->subMinute();
         $order->reservation_status = 'reserved';
         $order->save();
@@ -299,6 +302,11 @@ class DirectStaysReservationTest extends TestCase
         $this->assertSame(DirectBookingOrderStatus::Expirado, $order->status);
         $this->assertSame('canceled', $order->reservation_status);
         $this->assertSame('succeeded', DirectBookingStaysAction::query()->where('action_type', 'cancel_reservation')->value('status'));
+    }
+
+    public static function releasableExpiredStates(): array
+    {
+        return ['no payment' => [DirectBookingOrderStatus::PreReservado], 'expired unpaid Pix' => [DirectBookingOrderStatus::LiberacaoPendente]];
     }
 
     private function approvedTerms(): void
