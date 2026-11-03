@@ -90,6 +90,7 @@ class SpaController extends Controller
             '<meta property="og:url" content="'.$canonical.'" />'."\n".
             '<meta property="og:locale" content="pt_BR" />'."\n".
             '<link rel="stylesheet" href="/seo.css" />'."\n".
+            '<link rel="stylesheet" href="/home-loading-20261103.css" />'."\n".
             '<script id="public-page-schema" type="application/ld+json">'.$graph.'</script>';
         $html = Str::replaceFirst('</head>', $head."\n</head>", $html);
         $content = view('seo.introduction', ['pages' => $this->publicPages->all()])->render();

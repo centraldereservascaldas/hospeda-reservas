@@ -73,13 +73,14 @@ class SearchDiscoveryTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_home_shows_loading_shell_with_seo_fallback_outside_react_root(): void
+    public function test_home_shows_simple_loading_state_with_seo_fallback_outside_react_root(): void
     {
         Http::preventStrayRequests();
         foreach (['/', '/?category=condominiums', '/?category=pools_24h'] as $path) {
             $response = $this->get($path)->assertOk()
                 ->assertSee('Hospedagens em Caldas Novas e região')
                 ->assertSee('Carregando hospedagens', false)
+                ->assertSee('href="/home-loading-20261103.css"', false)
                 ->assertSee('href="https://centraldereservascaldas.com/"', false);
             $document = new \DOMDocument;
             $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
@@ -90,7 +91,9 @@ class SearchDiscoveryTest extends TestCase
             $this->assertSame(1, $xpath->query('//noscript//*[@id="public-introduction"]')->length,
                 'The SEO fallback must remain available when JavaScript is disabled.');
             $this->assertSame(1, $xpath->query('//*[@id="root"]//*[@class="home-loading"]')->length,
-                'The React root must show a branded loading shell before the application mounts.');
+                'The React root must show a simple loading state before the application mounts.');
+            $this->assertSame(1, $xpath->query('//*[@id="root"]//*[@class="home-loading__spinner"]')->length,
+                'The loading state must use a small spinner instead of a logo or search placeholder.');
         }
         Http::assertNothingSent();
     }

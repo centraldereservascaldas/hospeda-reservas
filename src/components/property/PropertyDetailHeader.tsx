@@ -24,7 +24,7 @@ export function PropertyDetailHeader({
         ref={titleRef}
         id="property-detail-title"
         tabIndex={-1}
-        className="w-fit max-w-full rounded-sm text-2xl font-extrabold tracking-tight text-neutral-900 focus:outline-2 focus:outline-offset-2 focus:outline-orange-600 sm:text-3xl"
+        className="w-fit max-w-full rounded-sm text-2xl font-extrabold tracking-tight text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 sm:text-3xl"
       >
         {displayTitle}
       </h1>
