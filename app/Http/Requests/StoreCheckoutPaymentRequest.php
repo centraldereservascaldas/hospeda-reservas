@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 class StoreCheckoutPaymentRequest extends FormRequest
@@ -25,7 +26,7 @@ class StoreCheckoutPaymentRequest extends FormRequest
             'cardholderName' => ['nullable', 'string', 'max:150', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
             'cardholderEmail' => ['nullable', 'email:rfc', 'max:255', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
             'issuerId' => ['nullable', 'integer', 'min:1', 'prohibited_if:paymentMethod,pix'],
-            'payerIdentification' => ['nullable', 'array:type,number', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
+            'payerIdentification' => ['nullable', 'array:type,number', 'required_if:paymentMethod,card', Rule::requiredIf(fn (): bool => $this->input('paymentMethod') === 'pix' && config('services.cielo.direct_environment') === 'production')],
             'payerIdentification.type' => ['required_with:payerIdentification', 'string', 'in:CPF,CNPJ'],
             'payerIdentification.number' => ['required_with:payerIdentification', 'string', 'max:20', 'regex:/^[0-9]+$/'],
         ];
@@ -42,6 +43,14 @@ class StoreCheckoutPaymentRequest extends FormRequest
             $paymentMethodId = $this->string('paymentMethodId')->toString();
             if (($paymentMethod === 'pix') !== ($paymentMethodId === 'pix')) {
                 $validator->errors()->add('paymentMethodId', 'O meio de pagamento não corresponde ao tipo selecionado.');
+            }
+            if (! $validator->errors()->hasAny(['payerIdentification', 'payerIdentification.type', 'payerIdentification.number'])
+                && is_array($this->input('payerIdentification'))) {
+                $type = $this->input('payerIdentification.type');
+                $number = $this->input('payerIdentification.number');
+                if (strlen((string) $number) !== ($type === 'CPF' ? 11 : 14)) {
+                    $validator->errors()->add('payerIdentification.number', 'Informe um CPF com 11 dígitos ou CNPJ com 14 dígitos.');
+                }
             }
         }];
     }

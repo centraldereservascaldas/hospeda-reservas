@@ -88,9 +88,10 @@ class CieloSandboxClientsTest extends TestCase
             'https://api.cieloecommerce.cielo.com.br/1/sales/' => Http::response(['Payment' => ['Status' => 12]], 201),
         ]);
 
-        app(CieloEcommerceClient::class)->createPixPayment('pixorder123', '3001.00', 'BRL', 'Guest', 1800);
+        app(CieloEcommerceClient::class)->createPixPayment('pixorder123', '3001.00', 'BRL', 'Guest', 1800, '12345678901', 'CPF');
 
         Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request): bool => $request->data()['Customer'] === ['Name' => 'Guest', 'Identity' => '12345678901', 'IdentityType' => 'CPF']);
         Http::assertSent(fn (ClientRequest $request): bool => $request->data()['Payment'] === [
             'Type' => 'Pix',
             'Amount' => 300100,
@@ -98,6 +99,22 @@ class CieloSandboxClientsTest extends TestCase
             'QrCode' => ['Expiration' => 1800],
             'Provider' => 'Cielo2',
         ]);
+    }
+
+    public function test_cielo2_rejects_oversized_order_ids_and_missing_payer_identity_before_sending(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureProductionFixtures();
+        config(['services.cielo.production.pix_enabled' => true]);
+        foreach ([[str_repeat('A', 26), '12345678901', 'CPF'], ['order123', null, null]] as [$orderId, $document, $type]) {
+            try {
+                app(CieloEcommerceClient::class)->createPixPayment($orderId, '995.00', 'BRL', 'Guest', 1800, $document, $type);
+                $this->fail('Invalid Cielo2 Pix input must not reach the gateway.');
+            } catch (InvalidArgumentException $exception) {
+                $this->assertStringContainsString('Cielo2 Pix requires', $exception->getMessage());
+            }
+        }
+        Http::assertNothingSent();
     }
 
     private function configureProductionFixtures(): void
