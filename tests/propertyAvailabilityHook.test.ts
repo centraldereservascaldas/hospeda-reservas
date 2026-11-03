@@ -522,3 +522,72 @@ test('a partial extension does not automatically retry after its merged days rer
     crcnBackendApi.getAccommodationCalendar = original;
   }
 });
+
+test('unpriced and unconfirmed days retain their states through cached windows and extensions', async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  const statuses = ['available', 'unavailable', 'unpriced', 'unconfirmed'] as const;
+  globalThis.fetch = async (input) => {
+    requests += 1;
+    const url = new URL(String(input), 'http://localhost');
+    const from = url.searchParams.get('from')!;
+    const to = url.searchParams.get('to')!;
+    const days: import('../src/utils/staysAvailability.ts').StaysCalendarDay[] = [];
+    for (
+      const date = new Date(`${from}T00:00:00Z`);
+      date.toISOString().slice(0, 10) <= to;
+      date.setUTCDate(date.getUTCDate() + 1)
+    ) {
+      const availabilityStatus = statuses[days.length % statuses.length]!;
+      days.push({
+        date: date.toISOString().slice(0, 10),
+        avail: availabilityStatus === 'available' ? 1 : 0,
+        availabilityStatus,
+      });
+    }
+    return new Response(
+      JSON.stringify({
+        data: days,
+        meta: { expiresAt: new Date(Date.now() + 40_000).toISOString() },
+      }),
+      { status: 200 },
+    );
+  };
+  let state!: ReturnType<typeof usePropertyAvailability>;
+  function Probe() {
+    state = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn: '',
+      checkOut: '',
+      guests: 2,
+      todayIso: '2026-12-07',
+    });
+    return null;
+  }
+  try {
+    render(React.createElement(Probe));
+    await waitFor(() => assert.equal(state.calendarAvailable, true));
+    assert.equal(state.calendarExtensionMessage, '');
+    assert.deepEqual(
+      state.calendarDays.slice(0, 4).map((day) => day.availabilityStatus),
+      statuses,
+    );
+    await act(async () => {
+      await state.loadCalendarThrough('2027-04-01');
+    });
+    const extendedDays = state.calendarDays;
+    assert.ok(extendedDays.length > 91);
+    assert.equal(state.calendarExtensionMessage, '');
+    await act(async () => {
+      state.revalidateCalendar();
+    });
+    await waitFor(() => assert.equal(state.calendarAvailable, true));
+    await act(async () => {
+      await state.loadCalendarThrough('2027-04-01');
+    });
+    assert.deepEqual(state.calendarDays, extendedDays);
+    assert.equal(requests, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

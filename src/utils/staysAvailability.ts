@@ -1,6 +1,7 @@
 export type StaysCalendarDay = {
   date: string;
   avail: number;
+  availabilityStatus?: 'available' | 'unavailable' | 'unpriced' | 'unconfirmed';
   closedToArrival?: boolean;
   closedToDeparture?: boolean;
   prices?: Array<{ minStay?: number; _mcval?: Record<string, number> }>;
@@ -16,6 +17,8 @@ export function getStaysCalendarDisplayRate(
   day: StaysCalendarDay,
   stayNights?: number,
 ): StaysCalendarDisplayRate | null {
+  if (day.availabilityStatus === 'unpriced' || day.availabilityStatus === 'unconfirmed')
+    return null;
   const rates = (day.prices ?? []).flatMap((price) => {
     const amount = price._mcval?.BRL;
     if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return [];
@@ -63,11 +66,25 @@ export function validateCalendarRange(
     const date = new Date(timestamp).toISOString().slice(0, 10);
     const day = byDate.get(date);
     if (!day) return { available: false, reason: 'unknown' };
-    if (!Number.isFinite(Number(day.avail)) || Number(day.avail) < 1)
+    if (day.availabilityStatus === 'unpriced') return { available: false, reason: 'unpriced' };
+    if (day.availabilityStatus === 'unconfirmed')
+      return { available: false, reason: 'unconfirmed' };
+    if (
+      day.availabilityStatus === 'unavailable' ||
+      !Number.isFinite(Number(day.avail)) ||
+      Number(day.avail) < 1
+    )
       return { available: false, reason: 'occupied', date };
   }
 
   const minimumStayOptions = (checkIn.prices ?? [])
+    .filter(
+      (price) =>
+        checkIn.availabilityStatus === undefined ||
+        (typeof price._mcval?.BRL === 'number' &&
+          Number.isFinite(price._mcval.BRL) &&
+          price._mcval.BRL > 0),
+    )
     .map((price) => Number(price.minStay ?? 0))
     .filter((minStay) => Number.isFinite(minStay) && minStay >= 0);
   const minStay = minimumStayOptions.length ? Math.min(...minimumStayOptions) : 0;
@@ -80,7 +97,13 @@ export type CalendarRangeValidation =
   | { available: true }
   | {
       available: false;
-      reason: 'invalid-range' | 'unknown' | 'arrival-closed' | 'departure-closed';
+      reason:
+        | 'invalid-range'
+        | 'unknown'
+        | 'arrival-closed'
+        | 'departure-closed'
+        | 'unpriced'
+        | 'unconfirmed';
     }
   | { available: false; reason: 'occupied'; date: string }
   | { available: false; reason: 'minimum-stay'; minimumNights: number };
@@ -96,6 +119,10 @@ export function isCalendarRangeAvailable(
 export function getCalendarRangeMessage(result: CalendarRangeValidation): string {
   if (result.available) return 'Período disponível';
   switch (result.reason) {
+    case 'unpriced':
+      return 'Tarifa não disponível para esta data';
+    case 'unconfirmed':
+      return 'Data não disponível para reserva; motivo não confirmado';
     case 'invalid-range':
       return 'Escolha uma saída posterior à entrada.';
     case 'unknown':
@@ -109,4 +136,20 @@ export function getCalendarRangeMessage(result: CalendarRangeValidation): string
     case 'minimum-stay':
       return `Esta entrada exige pelo menos ${result.minimumNights} noites.`;
   }
+}
+
+export function isCalendarArrivalAvailable(day: StaysCalendarDay): boolean {
+  return (
+    Number(day.avail) > 0 &&
+    !day.closedToArrival &&
+    (day.availabilityStatus === undefined || day.availabilityStatus === 'available')
+  );
+}
+
+export function getCalendarDayRestriction(day: StaysCalendarDay): string | null {
+  if (day.availabilityStatus === 'unpriced')
+    return getCalendarRangeMessage({ available: false, reason: 'unpriced' });
+  if (day.availabilityStatus === 'unconfirmed')
+    return getCalendarRangeMessage({ available: false, reason: 'unconfirmed' });
+  return null;
 }

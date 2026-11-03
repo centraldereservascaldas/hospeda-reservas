@@ -131,3 +131,50 @@ test('range validation distinguishes incomplete data, occupied nights and stay r
     /3 noites/,
   );
 });
+
+test('unpriced and unconfirmed nights cannot be reserved even with contradictory inventory', () => {
+  for (const availabilityStatus of ['unpriced', 'unconfirmed'] as const) {
+    const calendar = days().map((day, index) => ({
+      ...day,
+      availabilityStatus: index === 1 ? availabilityStatus : ('available' as const),
+    }));
+    assert.equal(isCalendarRangeAvailable(calendar, '2026-11-19', '2026-11-21'), false);
+    assert.deepEqual(validateCalendarRange(calendar, '2026-11-19', '2026-11-21'), {
+      available: false,
+      reason: availabilityStatus,
+    });
+    calendar[0].availabilityStatus = availabilityStatus;
+    assert.equal(isCalendarRangeAvailable(calendar, '2026-11-19', '2026-11-20'), false);
+  }
+});
+
+test('unpriced, unconfirmed and unavailable checkout days do not require a nightly tariff', () => {
+  for (const availabilityStatus of ['unpriced', 'unconfirmed', 'unavailable'] as const) {
+    const calendar = days().map((day, index) => ({
+      ...day,
+      ...(index === 2 ? { availabilityStatus, avail: 0, prices: [] } : {}),
+    }));
+    assert.equal(isCalendarRangeAvailable(calendar, '2026-11-19', '2026-11-21'), true);
+    calendar[2].closedToDeparture = true;
+    assert.equal(isCalendarRangeAvailable(calendar, '2026-11-19', '2026-11-21'), false);
+  }
+});
+
+test('priced availability only uses valid BRL tariffs to determine minimum stay', () => {
+  const calendar = ['2026-11-19', '2026-11-20', '2026-11-21', '2026-11-22'].map((date) => ({
+    date,
+    avail: 1,
+    availabilityStatus: 'available' as const,
+    prices: [
+      { minStay: 3, _mcval: { BRL: 120 } },
+      { minStay: 0 },
+      { minStay: 0, _mcval: { BRL: 0 } },
+    ],
+  }));
+  assert.deepEqual(validateCalendarRange(calendar, '2026-11-19', '2026-11-21'), {
+    available: false,
+    reason: 'minimum-stay',
+    minimumNights: 3,
+  });
+  assert.equal(isCalendarRangeAvailable(calendar, '2026-11-19', '2026-11-22'), true);
+});

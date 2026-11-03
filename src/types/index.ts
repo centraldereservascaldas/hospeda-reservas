@@ -68,6 +68,7 @@ export interface Property {
   calendar?: {
     date: string;
     avail: number;
+    availabilityStatus?: 'available' | 'unavailable' | 'unpriced' | 'unconfirmed';
     price?: number;
     minStay?: number;
     closedToArrival?: boolean;

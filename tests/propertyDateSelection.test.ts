@@ -74,3 +74,19 @@ test('accepts a dragged date range only when arrival and every night are availab
     /não atende à estadia mínima/,
   );
 });
+
+test('selection rejects missing-tariff arrivals but accepts departure on that same day', () => {
+  for (const availabilityStatus of ['unpriced', 'unconfirmed'] as const) {
+    const calendar = [
+      { date: '2026-11-19', avail: 1 },
+      { date: '2026-11-20', avail: 1, availabilityStatus },
+    ];
+    const arrival = selectAvailabilityDay(calendar, '', '', calendar[1]);
+    assert.equal(arrival.checkIn, '');
+    assert.ok(arrival.message);
+    const departure = selectAvailabilityDay(calendar, '2026-11-19', '', calendar[1]);
+    assert.equal(departure.checkOut, '2026-11-20');
+    assert.equal(departure.message, '');
+    assert.ok(selectAvailabilityRange(calendar, '2026-11-20', '2026-11-21').message);
+  }
+});

@@ -5,6 +5,8 @@ import { useDialogFocus } from '../useDialogFocus';
 import type { StaysCalendarDay } from '../../utils/staysAvailability';
 import {
   isCalendarRangeAvailable,
+  isCalendarArrivalAvailable,
+  getCalendarDayRestriction,
   validateCalendarRange,
   getCalendarRangeMessage,
 } from '../../utils/staysAvailability';
@@ -34,6 +36,7 @@ interface PropertyDatePickerDialogProps {
   onChooseDateRange: (checkIn: Date, checkOut: Date) => void;
   onClear?: () => void;
   onApply?: () => void;
+  onExplainDate?: (message: string) => void;
   onClose: () => void;
 }
 
@@ -60,6 +63,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
   onChooseDateRange,
   onClear,
   onApply,
+  onExplainDate,
   onClose,
 }) => {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -107,7 +111,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
     const day = calendarByDate.get(dateValue);
     if (dateValue < todayIso || !calendarAvailable || isLoadingCalendar || !day) return false;
     return activeDateField === 'checkIn'
-      ? day.avail > 0 && !day.closedToArrival
+      ? isCalendarArrivalAvailable(day)
       : Boolean(checkIn && isCalendarRangeAvailable(calendarDays, checkIn, dateValue));
   };
   const selectedActiveDate = activeDateField === 'checkIn' ? checkIn : checkOut;
@@ -237,6 +241,10 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
           year: 'numeric',
         })
       : 'Selecionar';
+
+  const selectedNights = Math.round(
+    (Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86400000,
+  );
 
   if (!isOpen) return null;
 
@@ -372,11 +380,12 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                           }
                           const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
                           const calendarDay = calendarByDate.get(dateValue);
+                          const dayRestriction = calendarDay
+                            ? getCalendarDayRestriction(calendarDay)
+                            : null;
                           const isPast = dateValue < todayIso;
                           const isAvailableCheckIn = Boolean(
-                            calendarDay &&
-                            Number(calendarDay.avail) > 0 &&
-                            !calendarDay.closedToArrival,
+                            calendarDay && isCalendarArrivalAvailable(calendarDay),
                           );
                           const isAvailableCheckOut = Boolean(
                             checkIn &&
@@ -384,8 +393,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                             isCalendarRangeAvailable(calendarDays, checkIn, dateValue),
                           );
                           const isUnavailableForArrival = Boolean(
-                            calendarDay &&
-                            (Number(calendarDay.avail) < 1 || calendarDay.closedToArrival),
+                            calendarDay && !isCalendarArrivalAvailable(calendarDay),
                           );
                           const isAvailableForActiveField =
                             activeDateField === 'checkIn'
@@ -428,22 +436,27 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                               ? 'disponibilidade sendo atualizada'
                               : !calendarAvailable || !calendarDay
                                 ? 'disponibilidade não confirmada'
-                                : isSelectedForAnotherField
-                                  ? `selecionada como ${activeDateField === 'checkIn' ? 'check-out' : 'check-in'}`
-                                  : isUnavailableForArrival &&
-                                      isSelectedCheckOut &&
-                                      isAvailableCheckOut
-                                    ? 'indisponível para check-in; checkout permitido'
-                                    : isInRange
-                                      ? 'noite incluída no período selecionado'
-                                      : isBlocked
-                                        ? `indisponível para esta seleção; ${activeDateField === 'checkOut' ? getCalendarRangeMessage(validateCalendarRange(calendarDays, checkIn, dateValue)) : calendarDay?.closedToArrival ? 'entrada não permitida' : 'noite indisponível'}`
-                                        : isUnavailableForArrival
-                                          ? 'indisponível para check-in'
-                                          : 'disponível';
+                                : dayRestriction
+                                  ? `${dayRestriction}${isAvailableCheckOut && activeDateField === 'checkOut' ? '; checkout permitido' : ''}`
+                                  : isSelectedForAnotherField
+                                    ? `selecionada como ${activeDateField === 'checkIn' ? 'check-out' : 'check-in'}`
+                                    : isUnavailableForArrival &&
+                                        isSelectedCheckOut &&
+                                        isAvailableCheckOut
+                                      ? 'indisponível para check-in; checkout permitido'
+                                      : isInRange
+                                        ? 'noite incluída no período selecionado'
+                                        : isBlocked
+                                          ? `indisponível para esta seleção; ${activeDateField === 'checkOut' ? getCalendarRangeMessage(validateCalendarRange(calendarDays, checkIn, dateValue)) : calendarDay?.closedToArrival ? 'entrada não permitida' : 'noite indisponível'}`
+                                          : isUnavailableForArrival
+                                            ? 'indisponível para check-in'
+                                            : 'disponível';
                           const shouldShowUnavailableMark =
-                            (isBlocked && !isInRange) ||
-                            (isSelectedCheckOut && isUnavailableForArrival && isAvailableCheckOut);
+                            !dayRestriction &&
+                            ((isBlocked && !isInRange) ||
+                              (isSelectedCheckOut &&
+                                isUnavailableForArrival &&
+                                isAvailableCheckOut));
                           const isTouchPreviewDate = Boolean(
                             touchRangePreview &&
                             dateValue >= touchRangePreview.checkIn &&
@@ -492,7 +505,16 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                                   }
                                 }}
                                 type="button"
-                                disabled={isDisabled}
+                                disabled={
+                                  isDisabled &&
+                                  !(
+                                    dayRestriction &&
+                                    !isPast &&
+                                    !isLoadingCalendar &&
+                                    calendarAvailable
+                                  )
+                                }
+                                aria-disabled={isDisabled || undefined}
                                 style={{ touchAction: 'pan-y pinch-zoom' }}
                                 onKeyDown={(event) => handleDateKeyDown(event, dateValue)}
                                 aria-label={`${date.toLocaleDateString('pt-BR', {
@@ -504,6 +526,10 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                                 aria-pressed={isSelected}
                                 tabIndex={dateValue === focusableCalendarDate ? 0 : -1}
                                 onClick={() => {
+                                  if (isDisabled) {
+                                    if (dayRestriction) onExplainDate?.(dayRestriction);
+                                    return;
+                                  }
                                   if (suppressClickDatesRef.current.includes(dateValue)) {
                                     suppressClickDatesRef.current = [];
                                     return;
@@ -516,15 +542,17 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                                     ? isTouchPreviewValid
                                       ? 'bg-orange-100 text-orange-900 ring-1 ring-orange-300'
                                       : 'bg-rose-100 text-rose-900 ring-1 ring-rose-300'
-                                    : isBlocked && !isInRange
-                                      ? 'relative cursor-not-allowed bg-rose-50 text-rose-700'
-                                      : isSelected
-                                        ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
-                                        : isInRange
-                                          ? 'bg-orange-100 text-orange-900'
-                                          : isDisabled
-                                            ? 'cursor-not-allowed bg-neutral-100/70 text-neutral-600'
-                                            : 'text-neutral-700 hover:bg-orange-50 hover:text-orange-800'
+                                    : dayRestriction && !isSelected && !isInRange
+                                      ? `bg-neutral-100/70 text-neutral-600 ${isDisabled ? 'cursor-not-allowed' : 'hover:bg-orange-50'}`
+                                      : isBlocked && !isInRange
+                                        ? 'relative cursor-not-allowed bg-rose-50 text-rose-700'
+                                        : isSelected
+                                          ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                                          : isInRange
+                                            ? 'bg-orange-100 text-orange-900'
+                                            : isDisabled
+                                              ? 'cursor-not-allowed bg-neutral-100/70 text-neutral-600'
+                                              : 'text-neutral-700 hover:bg-orange-50 hover:text-orange-800'
                                 } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-orange-600 disabled:hover:bg-inherit`}
                                 title={availabilityLabel}
                               >
@@ -547,11 +575,6 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
             })}
           </div>
           <div className="mt-4 space-y-3 border-t border-neutral-100 px-3 pt-3 sm:px-0">
-            {interactionMessage && (
-              <p className="text-center text-xs text-amber-800" role="status" aria-live="polite">
-                {interactionMessage}
-              </p>
-            )}
             {isLoadingCalendar ? (
               <p className="text-center text-caption text-neutral-500" role="status">
                 Atualizando disponibilidade. As datas ficam bloqueadas até a confirmação.
@@ -605,6 +628,25 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                         ? 'Entrada indisponível'
                         : 'Saída indisponível para este período'}
                     </span>
+                    {(['unpriced', 'unconfirmed'] as const).map(
+                      (status) =>
+                        calendarDays.some(
+                          (day) =>
+                            day.availabilityStatus === status &&
+                            (day.date.startsWith(displayedMonthPrefix) ||
+                              day.date.startsWith(
+                                `${new Date(calendarYear, calendarMonth + 1, 1).getFullYear()}-${String(new Date(calendarYear, calendarMonth + 1, 1).getMonth() + 1).padStart(2, '0')}-`,
+                              )) &&
+                            (activeDateField === 'checkIn' || !checkIn || day.date > checkIn),
+                        ) && (
+                          <span key={status} className="inline-flex items-center gap-1.5">
+                            <span className="h-2.5 w-2.5 rounded-full bg-neutral-200" />
+                            {status === 'unpriced'
+                              ? 'Tarifa não disponível'
+                              : 'Motivo não confirmado'}
+                          </span>
+                        ),
+                    )}
                   </div>
                 )}
               </>
@@ -617,14 +659,16 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
           </div>
         </div>
         <p
-          className="shrink-0 py-2 text-center text-sm [@media(max-height:500px)]:py-1"
+          className={`shrink-0 py-2 text-center [@media(max-height:500px)]:py-1 ${interactionMessage ? 'text-xs text-amber-800' : 'text-sm'}`}
+          role={interactionMessage ? 'status' : undefined}
           aria-live="polite"
         >
-          {checkIn && checkOut && isCalendarRangeAvailable(calendarDays, checkIn, checkOut)
-            ? `${formatDateLabel(checkIn)} — ${formatDateLabel(checkOut)} · ${Math.round((Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86400000)} noites`
-            : activeDateField === 'checkIn'
-              ? 'Escolha a entrada'
-              : 'Agora escolha a saída'}
+          {interactionMessage ||
+            (checkIn && checkOut && isCalendarRangeAvailable(calendarDays, checkIn, checkOut)
+              ? `${formatDateLabel(checkIn)} — ${formatDateLabel(checkOut)} · ${selectedNights} ${selectedNights === 1 ? 'noite' : 'noites'}`
+              : activeDateField === 'checkIn'
+                ? 'Escolha a entrada'
+                : 'Agora escolha a saída')}
         </p>
         <div className="flex shrink-0 items-center justify-between gap-1 border-t pt-3 pb-[env(safe-area-inset-bottom)] [@media(max-height:500px)]:pt-1">
           <button

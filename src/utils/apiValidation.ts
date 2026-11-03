@@ -316,6 +316,11 @@ export const isProperty = (value: unknown): value is Property => {
           isRecord(day) &&
           isIsoDate(day.date) &&
           isNonNegativeNumber(day.avail) &&
+          (day.availabilityStatus === undefined ||
+            (typeof day.availabilityStatus === 'string' &&
+              ['available', 'unavailable', 'unpriced', 'unconfirmed'].includes(
+                day.availabilityStatus,
+              ))) &&
           (day.price === undefined || isNonNegativeNumber(day.price)) &&
           (day.minStay === undefined ||
             (isFiniteNumber(day.minStay) && Number.isInteger(day.minStay) && day.minStay >= 0)) &&
@@ -411,6 +416,11 @@ export const isStaysCalendarDay = (value: unknown): value is StaysCalendarDay =>
   isRecord(value) &&
   isIsoDate(value.date) &&
   isNonNegativeNumber(value.avail) &&
+  (value.availabilityStatus === undefined ||
+    (typeof value.availabilityStatus === 'string' &&
+      ['available', 'unavailable', 'unpriced', 'unconfirmed'].includes(
+        value.availabilityStatus,
+      ))) &&
   (value.closedToArrival === undefined || typeof value.closedToArrival === 'boolean') &&
   (value.closedToDeparture === undefined || typeof value.closedToDeparture === 'boolean') &&
   (value.prices === undefined ||

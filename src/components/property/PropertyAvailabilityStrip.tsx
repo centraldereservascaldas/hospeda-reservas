@@ -3,6 +3,8 @@ import { formatCurrency } from '../../utils/formatters';
 import {
   getStaysCalendarDisplayRate,
   isCalendarRangeAvailable,
+  isCalendarArrivalAvailable,
+  getCalendarDayRestriction,
 } from '../../utils/staysAvailability';
 import type { StaysCalendarDay } from '../../utils/staysAvailability';
 
@@ -13,6 +15,7 @@ interface PropertyAvailabilityStripProps {
   calendarMessage: string;
   checkIn: string;
   checkOut: string;
+  onExplainDate?: (message: string) => void;
   onRetryCalendar: () => void;
   onSelectDay: (day: StaysCalendarDay) => void;
 }
@@ -24,6 +27,7 @@ export function PropertyAvailabilityStrip({
   calendarMessage,
   checkIn,
   checkOut,
+  onExplainDate,
   onRetryCalendar,
   onSelectDay,
 }: PropertyAvailabilityStripProps) {
@@ -66,12 +70,11 @@ export function PropertyAvailabilityStrip({
       >
         <div className="grid grid-cols-3 gap-1.5 text-center text-xs min-[480px]:grid-cols-5 sm:grid-cols-7">
           {calendarDays.slice(0, 14).map((day) => {
-            const isSelectedIn = day.date === checkIn;
-            const isSelectedOut = day.date === checkOut;
+            const isSelectedIn = day.date === checkIn && isCalendarArrivalAvailable(day);
+            const isSelectedOut = day.date === checkOut && isSelectedRangeAvailable;
             const isSelected = isSelectedIn || isSelectedOut;
             const isInRange = isSelectedRangeAvailable && day.date > checkIn && day.date < checkOut;
-            const isAvailable =
-              isCalendarConfirmed && Number(day.avail) > 0 && !day.closedToArrival;
+            const isAvailable = isCalendarConfirmed && isCalendarArrivalAvailable(day);
             const isCheckoutCandidate = Boolean(checkIn && !checkOut && day.date > checkIn);
             const canSelectAsCheckOut = Boolean(
               isCalendarConfirmed &&
@@ -86,17 +89,20 @@ export function PropertyAvailabilityStrip({
             const accessiblePrice = displayRate
               ? `${displayRate.hasAlternatives ? 'tarifa a partir de ' : 'tarifa de '}${formatCurrency(displayRate.amount, 'BRL')} por noite${displayRate.minStay ? ` para estadias de pelo menos ${displayRate.minStay} ${displayRate.minStay === 1 ? 'noite' : 'noites'}` : ''}; o total da estadia depende do período selecionado`
               : 'preço não confirmado';
+            const dayRestriction = getCalendarDayRestriction(day);
             const availabilityLabel = isLoading
               ? 'disponibilidade sendo atualizada'
               : !calendarAvailable
                 ? 'disponibilidade não confirmada'
-                : canSelectAsCheckOut
-                  ? 'disponível para check-out'
-                  : isCheckoutCandidate
-                    ? 'não atende à disponibilidade ou estadia mínima'
-                    : isAvailable
-                      ? 'disponível para check-in'
-                      : 'indisponível para check-in';
+                : dayRestriction
+                  ? `${dayRestriction}${canSelectAsCheckOut ? '; disponível para check-out' : ''}`
+                  : canSelectAsCheckOut
+                    ? 'disponível para check-out'
+                    : isCheckoutCandidate
+                      ? 'não atende à disponibilidade ou estadia mínima'
+                      : isAvailable
+                        ? 'disponível para check-in'
+                        : 'indisponível para check-in';
 
             return (
               <button
@@ -104,8 +110,15 @@ export function PropertyAvailabilityStrip({
                 type="button"
                 aria-label={`Selecionar ${accessibleDate}; ${availabilityLabel}; ${accessiblePrice}`}
                 aria-pressed={isSelected}
-                onClick={() => onSelectDay(day)}
-                disabled={!canSelect}
+                onClick={() => {
+                  if (!canSelect) {
+                    if (dayRestriction) onExplainDate?.(dayRestriction);
+                    return;
+                  }
+                  onSelectDay(day);
+                }}
+                disabled={!canSelect && !(dayRestriction && isCalendarConfirmed)}
+                aria-disabled={!canSelect || undefined}
                 className={`p-1 rounded-xl transition-all flex flex-col items-center justify-center ${
                   isSelected
                     ? 'bg-orange-700 text-white font-black shadow-md scale-105'
@@ -113,7 +126,7 @@ export function PropertyAvailabilityStrip({
                       ? 'bg-orange-100 text-orange-950 font-bold'
                       : canSelect
                         ? 'bg-white hover:bg-orange-50 border border-neutral-200/80 text-neutral-800 cursor-pointer'
-                        : isLoading || !calendarAvailable
+                        : isLoading || !calendarAvailable || dayRestriction
                           ? 'bg-neutral-100/70 text-neutral-600 cursor-not-allowed'
                           : 'bg-neutral-100/50 text-neutral-600 line-through cursor-not-allowed'
                 } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:hover:bg-inherit`}
@@ -146,7 +159,11 @@ export function PropertyAvailabilityStrip({
                   <span
                     className={`text-caption font-bold ${isSelected ? 'text-white' : 'text-orange-700'}`}
                   >
-                    Consultar
+                    {day.availabilityStatus === 'unpriced'
+                      ? 'Sem tarifa'
+                      : day.availabilityStatus === 'unconfirmed'
+                        ? 'Não confirmada'
+                        : 'Consultar'}
                   </span>
                 )}
               </button>
