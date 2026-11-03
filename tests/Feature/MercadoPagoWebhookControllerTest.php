@@ -6,8 +6,10 @@ use App\Jobs\ReconcileMercadoPagoPayment;
 use App\Models\DirectBookingPaymentWebhook;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
+use Mockery;
 use Tests\TestCase;
 
 class MercadoPagoWebhookControllerTest extends TestCase
@@ -22,6 +24,7 @@ class MercadoPagoWebhookControllerTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['https://api.mercadopago.com/*' => Http::response([], 200)]);
         Queue::fake([ReconcileMercadoPagoPayment::class]);
+        Log::spy();
 
         $response = $this->postJson('/api/webhooks/mercadopago?type=payment&data.id=987654', [
             'action' => 'payment.updated',
@@ -35,6 +38,13 @@ class MercadoPagoWebhookControllerTest extends TestCase
         $this->assertDatabaseCount('direct_booking_payment_webhooks', 0);
         Queue::assertNothingPushed();
         Http::assertNothingSent();
+        Log::shouldHaveReceived('warning')->once()->with('checkout.webhook.rejected', Mockery::on(
+            static fn (array $context): bool => $context === [
+                'event' => 'checkout.webhook.rejected',
+                'gateway' => 'mercadopago',
+                'reason' => 'invalid_signature',
+            ],
+        ));
     }
 
     public function test_persists_and_dispatches_reconciliation_for_a_valid_signature(): void
