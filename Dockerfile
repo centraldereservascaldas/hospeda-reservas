@@ -1,4 +1,5 @@
 # Build the Vite application with the current Node.js LTS release.
+ARG PREVIOUS_ASSETS_IMAGE=frontend
 FROM node:24.22.1-bookworm-slim AS frontend
 
 ARG BLOG_SITE_URL=https://centraldereservascaldas.com
@@ -22,7 +23,18 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN npm run build \
+    && mkdir -p /var/www/html/public/assets \
+    && cp -a dist/assets/. /var/www/html/public/assets/
+
+FROM ${PREVIOUS_ASSETS_IMAGE} AS previous_assets
+
+FROM node:24.22.1-bookworm-slim AS retained_assets
+WORKDIR /assets
+COPY --from=previous_assets /var/www/html/public/assets/ ./previous/
+COPY --from=frontend /app/dist/assets/ ./current/
+COPY docker/merge-static-assets.mjs ./merge-static-assets.mjs
+RUN node merge-static-assets.mjs previous current merged
 
 # Serve Laravel and the compiled SPA from one PHP/Apache container.
 FROM php:8.5.12-apache-bookworm AS runtime
@@ -52,6 +64,7 @@ WORKDIR /var/www/html
 COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 COPY --chown=www-data:www-data . .
 COPY --from=frontend --chown=www-data:www-data /app/dist/ ./public/
+COPY --from=retained_assets --chown=www-data:www-data /assets/merged/ ./public/assets/
 COPY docker/supervisord.conf /etc/supervisor/conf.d/hospeda.conf
 
 RUN mkdir -p \

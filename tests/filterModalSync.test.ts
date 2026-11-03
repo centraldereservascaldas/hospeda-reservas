@@ -275,3 +275,28 @@ test('filter dialog keeps keyboard focus inside and returns it to the opener', (
   assert.equal(screen.queryByRole('dialog', { name: 'Filtros' }), null);
   assert.equal(document.activeElement, opener);
 });
+
+test('does not present a partial page count as the global filter result', () => {
+  let applied = false;
+  render(
+    React.createElement(FilterModal, {
+      isOpen: true,
+      onClose: () => {},
+      filters: createDefaultSearchFilters(),
+      properties: [],
+      hasMoreSearchResults: true,
+      onApplyFilters: () => {
+        applied = true;
+      },
+      onResetFilters: () => {},
+      currency: 'BRL',
+    }),
+  );
+  assert.match(
+    screen.getByRole('note').textContent || '',
+    /0 acomodações entre as opções carregadas/,
+  );
+  assert.equal(screen.queryByRole('button', { name: 'Mostrar 0 acomodações' }), null);
+  fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }));
+  assert.equal(applied, true);
+});

@@ -105,3 +105,23 @@ test('condominium directory contains only groups with listings matching active f
     ['Condomínio com piscina'],
   );
 });
+
+test('keeps category choices available while later search pages remain unchecked', () => {
+  const options = {
+    properties: [],
+    filters: createDefaultSearchFilters(),
+    savedPropertyIds: [],
+    catalogLoading: false,
+    catalogLoadError: false,
+    hasMoreSearchResults: true,
+  };
+  const { result } = renderHook(() => useExploreCatalogViewModel(options));
+  assert.equal(
+    result.current.availableCategories.some((category) => category.id === 'pet_friendly'),
+    true,
+  );
+  assert.equal(
+    result.current.availableCategories.some((category) => category.id === 'hot_tub'),
+    true,
+  );
+});

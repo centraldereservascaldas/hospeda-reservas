@@ -25,18 +25,30 @@ import type {
 import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
 import { matchesPropertyDestination } from '../utils/propertySearchFilters';
 import { apiFetch } from './apiFetch';
+import { getConfirmedPropertyQuote } from '../utils/propertyDisplayPrice';
+
+import { scheduleAccommodationSearch } from './accommodationSearchQueue';
+import type { ScheduledRequestOptions } from './requestScheduler';
 
 const API_REQUEST_TIMEOUT_MS = 20_000;
 const STAYS_SEARCH_PAGE_SIZE = 20;
 
-async function withApiRequestTimeout<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+async function withApiRequestTimeout<T>(
+  request: (signal: AbortSignal) => Promise<T>,
+  externalSignal?: AbortSignal,
+): Promise<T> {
   const controller = new AbortController();
+  const abort = () => controller.abort(externalSignal?.reason);
+  if (externalSignal?.aborted) abort();
+  else externalSignal?.addEventListener('abort', abort, { once: true });
   const timeoutId = globalThis.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
 
   try {
+    controller.signal.throwIfAborted();
     return await request(controller.signal);
   } finally {
     globalThis.clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', abort);
   }
 }
 
@@ -49,6 +61,18 @@ export interface SearchAccommodationsParams {
   cities?: string[];
   limit?: number;
   skip?: number;
+}
+
+export interface AccommodationSearchPage {
+  /** Number of usable results in this page, never a global result count. */
+  total: number;
+  data: Property[];
+  unquotedCount: number;
+  pagination: {
+    receivedCount: number;
+    nextSkip: number;
+    hasMore: boolean;
+  };
 }
 
 export interface CalculatedPriceResponse {
@@ -400,10 +424,125 @@ class CrcnBackendApiService {
     }
   }
 
+  /** Fetch one raw page without filling gaps or requesting subsequent pages. */
+  public async searchAccommodationsPage(
+    params: SearchAccommodationsParams,
+    options: ScheduledRequestOptions = {},
+  ): Promise<AccommodationSearchPage> {
+    const limit = params.limit ?? 12;
+    const skip = params.skip ?? 0;
+    if (
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > STAYS_SEARCH_PAGE_SIZE ||
+      !Number.isSafeInteger(skip) ||
+      skip < 0
+    ) {
+      throw new Error('A paginação solicitada é inválida.');
+    }
+    return scheduleAccommodationSearch(
+      { ...params, limit, skip },
+      (signal) => this.fetchAccommodationSearchPage({ ...params, limit, skip }, signal),
+      options,
+    );
+  }
+
+  private async fetchAccommodationSearchPage(
+    params: SearchAccommodationsParams & { limit: number; skip: number },
+    requestSignal: AbortSignal,
+  ): Promise<AccommodationSearchPage> {
+    const { limit, skip } = params;
+    const json: unknown = await withApiRequestTimeout(async (signal) => {
+      const res = await apiFetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...params, limit, skip }),
+        signal,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }, requestSignal);
+    if (
+      !isRecord(json) ||
+      !isFiniteNumber(json.total) ||
+      !Number.isInteger(json.total) ||
+      json.total < 0 ||
+      !Array.isArray(json.data) ||
+      json.data.length > limit ||
+      !json.data.every(isProperty) ||
+      (params.from &&
+        params.to &&
+        ((json.source !== 'stays-live' && json.source !== 'stays-simulated') ||
+          json.from !== params.from ||
+          json.to !== params.to ||
+          json.guests !== (params.guests ?? 1)))
+    ) {
+      throw new Error('A pesquisa retornou uma resposta inválida.');
+    }
+    const pageUnquoted = json.unquotedCount ?? 0;
+    if (!Number.isSafeInteger(pageUnquoted) || !isFiniteNumber(pageUnquoted) || pageUnquoted < 0) {
+      throw new Error('A pesquisa retornou uma contagem de cotações inválida.');
+    }
+    const pagination = json.pagination;
+    if (
+      pagination !== undefined &&
+      (!isRecord(pagination) ||
+        !isFiniteNumber(pagination.receivedCount) ||
+        !Number.isSafeInteger(pagination.receivedCount) ||
+        pagination.receivedCount < json.data.length ||
+        pagination.receivedCount > limit ||
+        !Number.isSafeInteger(pagination.nextSkip) ||
+        pagination.nextSkip !== skip + pagination.receivedCount ||
+        typeof pagination.hasMore !== 'boolean' ||
+        (pagination.hasMore && pagination.receivedCount === 0))
+    ) {
+      throw new Error('A paginação da pesquisa retornou dados inválidos.');
+    }
+    const requestedNights =
+      params.from && params.to
+        ? Math.round(
+            (Date.parse(`${params.to}T00:00:00Z`) - Date.parse(`${params.from}T00:00:00Z`)) /
+              86_400_000,
+          )
+        : null;
+    let unquotedCount = pageUnquoted;
+    const properties = new Map<string, Property>();
+    for (const item of json.data) {
+      const property = sanitizePropertyMedia(item);
+      const quote = getConfirmedPropertyQuote(property);
+      if (requestedNights !== null && (!quote || quote.nights !== requestedNights)) {
+        unquotedCount += 1;
+        continue;
+      }
+      properties.set(property.id, property);
+    }
+    const data = [...properties.values()];
+    return {
+      total: data.length,
+      data,
+      unquotedCount,
+      pagination: isRecord(pagination)
+        ? {
+            receivedCount: Number(pagination.receivedCount),
+            nextSkip: Number(pagination.nextSkip),
+            hasMore: Boolean(pagination.hasMore),
+          }
+        : {
+            receivedCount: json.data.length,
+            nextSkip: skip + json.data.length,
+            hasMore: json.data.length === limit,
+          },
+    };
+  }
+
   // 3. POST /api/search
-  public async searchAccommodations(params: SearchAccommodationsParams): Promise<{
+  public async searchAccommodations(
+    params: SearchAccommodationsParams,
+    options: ScheduledRequestOptions = {},
+  ): Promise<{
     total: number;
     data: Property[];
+    unquotedCount?: number;
   }> {
     try {
       const initialSkip = Math.max(0, Math.trunc(params.skip ?? 0));
@@ -411,76 +550,46 @@ class CrcnBackendApiService {
         params.limit === undefined
           ? Number.POSITIVE_INFINITY
           : Math.max(0, Math.trunc(params.limit));
-      const requestedNights =
-        params.from && params.to
-          ? Math.round(
-              (Date.parse(`${params.to}T00:00:00Z`) - Date.parse(`${params.from}T00:00:00Z`)) /
-                86_400_000,
-            )
-          : null;
       const propertiesById = new Map<string, Property>();
       let pageOffset = initialSkip;
+      let unquotedCount = 0;
 
       while (propertiesById.size < requestedResultCount) {
         const pageLimit = Math.min(
           STAYS_SEARCH_PAGE_SIZE,
           requestedResultCount - propertiesById.size,
         );
-        const pageParams = { ...params, limit: pageLimit, skip: pageOffset };
-        const json: unknown = await withApiRequestTimeout(async (signal) => {
-          const res = await apiFetch('/api/search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(pageParams),
-            signal,
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          return res.json();
-        });
-
-        if (
-          !isRecord(json) ||
-          !isFiniteNumber(json.total) ||
-          !Number.isInteger(json.total) ||
-          json.total < 0 ||
-          !Array.isArray(json.data) ||
-          json.data.length > pageLimit ||
-          !json.data.every(isProperty) ||
-          (params.from &&
-            params.to &&
-            ((json.source !== 'stays-live' && json.source !== 'stays-simulated') ||
-              json.from !== params.from ||
-              json.to !== params.to ||
-              json.guests !== (params.guests ?? 1)))
-        ) {
-          throw new Error('A pesquisa retornou uma resposta inválida.');
-        }
-
+        options.signal?.throwIfAborted();
+        const page = await this.searchAccommodationsPage(
+          {
+            ...params,
+            limit: pageLimit,
+            skip: pageOffset,
+          },
+          { ...options, priority: options.priority ?? 'visible' },
+        );
+        unquotedCount += page.unquotedCount;
         let addedProperties = 0;
-        for (const item of json.data) {
-          const property = sanitizePropertyMedia(item);
-          const normalizedProperty =
-            requestedNights !== null &&
-            property.calculatedPrice &&
-            property.calculatedPrice.nights !== requestedNights
-              ? { ...property, calculatedPrice: undefined }
-              : property;
-          if (!propertiesById.has(normalizedProperty.id)) {
-            propertiesById.set(normalizedProperty.id, normalizedProperty);
+        for (const property of page.data) {
+          if (!propertiesById.has(property.id)) {
+            propertiesById.set(property.id, property);
             addedProperties += 1;
           }
         }
-
-        pageOffset += json.data.length;
-        if (json.data.length < pageLimit) break;
-        if (addedProperties === 0) {
+        pageOffset = page.pagination.nextSkip;
+        if (!page.pagination.hasMore) break;
+        if (page.data.length > 0 && addedProperties === 0 && page.unquotedCount === 0) {
           throw new Error('A paginação da pesquisa retornou anúncios repetidos.');
         }
       }
 
       const data = [...propertiesById.values()];
-      return { total: data.length, data };
+      if (params.from && params.to && data.length === 0 && unquotedCount > 0) {
+        throw new Error('Não foi possível confirmar os preços para esse período.');
+      }
+      return { total: data.length, data, ...(unquotedCount > 0 ? { unquotedCount } : {}) };
     } catch (err) {
+      if (options.signal?.aborted) throw err;
       console.warn('Accommodation search failed:', err);
       if (params.from && params.to) {
         // A static catalog cannot confirm availability or provide a date-specific quote.

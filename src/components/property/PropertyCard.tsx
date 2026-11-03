@@ -4,6 +4,7 @@ import { Property, Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { getPropertyDisplayPrice } from '../../utils/propertyDisplayPrice';
+import { getPropertyCardImageSources, CATALOG_IMAGE_SIZES } from '../../utils/propertyImageSources';
 import { accommodationPagePath } from '../../utils/accommodationPageUrl';
 
 interface PropertyCardProps {
@@ -138,7 +139,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         >
           {/* Images */}
           <img
-            src={currentImage}
+            {...getPropertyCardImageSources(currentImage, CATALOG_IMAGE_SIZES)}
+            decoding="async"
             alt=""
             className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
             loading={prioritizeImage ? 'eager' : 'lazy'}

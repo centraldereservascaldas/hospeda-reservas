@@ -77,7 +77,20 @@ test('accepts simulated catalog and dated search responses without treating them
           from: '2026-11-02',
           to: '2026-11-04',
           guests: 2,
-          data: [simulatedListing],
+          data: [
+            {
+              ...simulatedListing,
+              calculatedPrice: {
+                nights: 2,
+                dailyRate: 250,
+                basePrice: 500,
+                cleaningFee: 0,
+                serviceFee: 0,
+                totalAmount: 500,
+                currency: 'BRL',
+              },
+            },
+          ],
         }
       : { success: true, source: 'stays-simulated', total: 1, data: [simulatedListing] };
     return new Response(JSON.stringify(payload), {

@@ -226,6 +226,18 @@ function MarketplaceApp() {
   });
 
   const {
+    handleStaysWidgetSearch,
+    retryLastSearch,
+    availabilitySearchState,
+    searchPagination,
+    loadMoreSearchResults,
+  } = useAccommodationSearch({
+    setProperties,
+    setFilters,
+    restoreSearchFromUrlRef,
+  });
+
+  const {
     filteredProperties,
     availableCategories,
     condominiums,
@@ -239,14 +251,8 @@ function MarketplaceApp() {
     savedPropertyIds,
     catalogLoading,
     catalogLoadError,
+    hasMoreSearchResults: searchPagination.hasMore,
   });
-
-  const { handleStaysWidgetSearch, retryLastSearch, availabilitySearchState } =
-    useAccommodationSearch({
-      setProperties,
-      setFilters,
-      restoreSearchFromUrlRef,
-    });
 
   const handleRemoveDestinationFilter = () => {
     void handleStaysWidgetSearch({
@@ -399,6 +405,8 @@ function MarketplaceApp() {
         catalogStatus={catalogStatus}
         catalogLoading={catalogLoading}
         onRetryCatalog={retryCatalog}
+        searchPagination={searchPagination}
+        onLoadMoreSearchResults={loadMoreSearchResults}
         availabilitySearchState={availabilitySearchState}
         hasAvailableSearchResults={properties.length > 0}
         onRetryAvailabilitySearch={retryLastSearch}
@@ -490,6 +498,7 @@ function MarketplaceApp() {
         accountModalMode={accountModalMode}
         accountReturnFocusRef={accountButtonRef}
         properties={properties}
+        hasMoreSearchResults={searchPagination.hasMore}
         isSofiaOpen={isSofiaOpen}
         isSearchOpen={isSearchOpen}
         isFilterOpen={isFilterOpen}

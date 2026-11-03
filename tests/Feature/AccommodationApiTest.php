@@ -397,16 +397,15 @@ class AccommodationApiTest extends TestCase
         $this->postJson('/api/search', ['from' => '2026-11-10', 'to' => '2026-11-13', 'guests' => 2])->assertOk()->assertJsonPath('source', 'stays-live')->assertJsonPath('data.0.pricePerNight', 325)->assertJsonPath('data.0.calculatedPrice.totalAmount', 900);
     }
 
-    public function test_dated_live_search_keeps_bookable_listing_without_fabricating_a_quote(): void
+    public function test_dated_live_search_reports_unquoted_listing_without_fabricating_a_quote(): void
     {
         config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
-        Http::fake(['*booking/search-listings' => Http::response([['id' => 'JQ08G', 'code' => 'JQ08G', '_mstitle' => ['pt_BR' => 'Apto reservável'], '_i_maxGuests' => 4, 'dailyRate' => 325]], 200)]);
+        Http::fake(['*booking/search-listings' => Http::response([['id' => 'JQ08G', 'code' => 'JQ08G', '_mstitle' => ['pt_BR' => 'Apto reservável'], '_i_maxGuests' => 4, 'dailyRate' => 325]], 200), '*booking/calculate-price' => Http::response([], 200)]);
 
         $this->postJson('/api/search', ['from' => '2026-11-10', 'to' => '2026-11-13', 'guests' => 2])
             ->assertOk()
             ->assertJsonPath('source', 'stays-live')
-            ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.pricePerNight', 325)
-            ->assertJsonMissingPath('data.0.calculatedPrice');
+            ->assertJsonCount(0, 'data')
+            ->assertJsonPath('unquotedCount', 1);
     }
 }
