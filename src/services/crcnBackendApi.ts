@@ -521,20 +521,33 @@ class CrcnBackendApiService {
       const query = new URLSearchParams();
       if (from) query.set('from', from);
       if (to) query.set('to', to);
-      const json: unknown = await withApiRequestTimeout(async (signal) => {
+      const requestStartedAt = Date.now();
+      const { json, serverTime } = await withApiRequestTimeout(async (signal) => {
         const res = await apiFetch(
           `/api/accommodations/${encodeURIComponent(id)}/calendar?${query.toString()}`,
           { signal },
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
+        return {
+          json: (await res.json()) as unknown,
+          serverTime: Date.parse(res.headers.get('Date') || ''),
+        };
       });
       if (!isRecord(json) || !Array.isArray(json.data) || !json.data.every(isStaysCalendarDay)) {
         return [];
       }
       if (isRecord(json.meta) && typeof json.meta.expiresAt === 'string') {
         const expiration = Date.parse(json.meta.expiresAt);
-        if (Number.isFinite(expiration)) calendarExpirations.set(json.data, expiration);
+        if (Number.isFinite(expiration)) {
+          // HTTP Date has second precision. Keep the remaining server lifetime,
+          // conservatively allowing for rounding and the entire request duration.
+          // Comparing absolute server time with a phone clock rejects fresh data
+          // on fast clocks and keeps stale data available on slow clocks.
+          const localExpiration = Number.isFinite(serverTime)
+            ? requestStartedAt + expiration - serverTime - 1000
+            : expiration;
+          calendarExpirations.set(json.data, localExpiration);
+        }
       }
       return json.data;
     } catch (err) {

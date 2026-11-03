@@ -201,9 +201,6 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
       if (Number.isFinite(checkInDate.getTime()) && Number.isFinite(checkOutDate.getTime())) {
         onChooseDateRange(checkInDate, checkOutDate);
         suppressClickDatesRef.current = [drag.checkIn, checkOut];
-        window.setTimeout(() => {
-          suppressClickDatesRef.current = [];
-        }, 0);
       }
     }
 
@@ -459,6 +456,9 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                               aria-selected={isSelected}
                               data-calendar-date={dateValue}
                               onPointerDown={(event) => {
+                                // A new gesture is intentional; a click after pointerup
+                                // may still be the delayed compatibility click on iOS.
+                                suppressClickDatesRef.current = [];
                                 if (event.pointerType !== 'touch' || activeDateField !== 'checkIn')
                                   return;
                                 if (!isSelectableDate(dateValue)) return;
