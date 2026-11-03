@@ -57,6 +57,7 @@ function createRouterProps(overrides: Record<string, unknown> = {}) {
     selectedProperty: null,
     accessToken: undefined,
     isOwnerAdmin: false,
+    canManagePayments: false,
     onFiltersChange: () => {},
     onRemoveDestinationFilter: () => {},
     onRemoveDateFilter: () => {},

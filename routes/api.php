@@ -63,16 +63,19 @@ Route::middleware('supabase.guest')->group(function (): void {
 });
 Route::post('/sofia/chat', [SofiaController::class, 'chat']);
 Route::get('/owner/admin/status', [OwnerAdminController::class, 'status'])->middleware('supabase.guest');
-Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->group(function (): void {
+Route::middleware(['supabase.guest', 'owner.admin:reviewer'])->prefix('owner/admin')->group(function (): void {
     Route::get('/requests', [OwnerAdminController::class, 'requests']);
+    Route::get('/stays-owners', [OwnerAdminController::class, 'staysOwners']);
+    Route::post('/approve', [OwnerAdminController::class, 'approve']);
+    Route::post('/reject', [OwnerAdminController::class, 'reject']);
+});
+Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->group(function (): void {
     Route::get('/direct-booking-orders', [OwnerAdminController::class, 'directBookingOrders']);
     Route::post('/direct-booking-webhooks/{webhookId}/retry', [OwnerAdminController::class, 'retryDirectBookingWebhook'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/start-manual-cancellation', [OwnerAdminController::class, 'startManualDirectBookingCancellation'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/verify-manual-stays-cancellation', [OwnerAdminController::class, 'verifyManualDirectBookingStaysCancellation'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/verify-manual-gateway-refund', [OwnerAdminController::class, 'verifyManualDirectBookingGatewayRefund'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/revoke-resume-token', [OwnerAdminController::class, 'revokeDirectBookingResumeToken'])->middleware('throttle:10,1');
-    Route::get('/stays-owners', [OwnerAdminController::class, 'staysOwners']);
-    Route::post('/approve', [OwnerAdminController::class, 'approve']);
 });
 Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->middleware('throttle:5,1');
 Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');

@@ -111,6 +111,7 @@ function MarketplaceApp() {
     ownerAccessStatus,
     setOwnerAccessStatus,
     isOwnerAdmin,
+    canManagePayments,
   } = useAccountWorkspaceData({
     accessToken: accountSession?.access_token,
     currentView,
@@ -420,6 +421,7 @@ function MarketplaceApp() {
         accessToken={accountSession?.access_token}
         ownerAccessStatus={ownerAccessStatus}
         isOwnerAdmin={isOwnerAdmin}
+        canManagePayments={canManagePayments}
         onFiltersChange={setFilters}
         onRemoveDestinationFilter={handleRemoveDestinationFilter}
         onRemoveDateFilter={handleRemoveDateFilter}

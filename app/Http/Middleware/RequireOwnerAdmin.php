@@ -14,9 +14,12 @@ class RequireOwnerAdmin
      *
      * @param  Closure(Request): (Response)  $next
      */
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string $scope = 'admin'): Response
     {
-        $emails = config('services.hospeda.owner_admin_emails', []);
+        $admins = config('services.hospeda.owner_admin_emails', []);
+        $emails = $scope === 'reviewer'
+            ? array_merge($admins, config('services.hospeda.owner_reviewer_emails', []))
+            : $admins;
         if ($emails === []) {
             return response()->json(['success' => false, 'code' => 'owner_admin_not_configured', 'message' => 'A área administrativa ainda não foi configurada.'], 503);
         }

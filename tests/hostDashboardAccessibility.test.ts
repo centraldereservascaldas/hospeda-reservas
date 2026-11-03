@@ -167,6 +167,31 @@ test('accounting uses readable stacked property summaries on narrow screens', as
   }
 });
 
+test('owner reviewer sees approval queue without loading payment operations', async () => {
+  const originalGetRequests = crcnBackendApi.getOwnerAccessRequests;
+  const originalGetOrders = crcnBackendApi.getDirectBookingOperationsOrders;
+  let operationCalls = 0;
+  crcnBackendApi.getOwnerAccessRequests = async () => [];
+  crcnBackendApi.getDirectBookingOperationsOrders = async () => {
+    operationCalls += 1;
+    throw new Error('payment operations must remain private');
+  };
+  try {
+    const { getByText, queryByText } = render(
+      React.createElement(OwnerAccessAdminView, {
+        accessToken: 'reviewer-token',
+        canManagePayments: false,
+      }),
+    );
+    await waitFor(() => assert.ok(getByText('Não há solicitações pendentes no momento.')));
+    assert.equal(operationCalls, 0);
+    assert.equal(queryByText('Itens que precisam de ação'), null);
+  } finally {
+    crcnBackendApi.getOwnerAccessRequests = originalGetRequests;
+    crcnBackendApi.getDirectBookingOperationsOrders = originalGetOrders;
+  }
+});
+
 test('owner admin refresh actions and pagination have mobile touch targets', async () => {
   const originalGetRequests = crcnBackendApi.getOwnerAccessRequests;
   const originalGetOrders = crcnBackendApi.getDirectBookingOperationsOrders;
@@ -183,7 +208,10 @@ test('owner admin refresh actions and pagination have mobile touch targets', asy
   });
   try {
     const { findByRole } = render(
-      React.createElement(OwnerAccessAdminView, { accessToken: 'test-token' }),
+      React.createElement(OwnerAccessAdminView, {
+        accessToken: 'test-token',
+        canManagePayments: true,
+      }),
     );
     const refresh = await findByRole('button', { name: 'Atualizar fila' });
     assert.match(refresh.className, /min-h-11/);
@@ -245,7 +273,12 @@ test('owner admin operations cards wrap long guest and integration identifiers o
       findByText,
       findByText: findText,
       container,
-    } = render(React.createElement(OwnerAccessAdminView, { accessToken: 'test-token' }));
+    } = render(
+      React.createElement(OwnerAccessAdminView, {
+        accessToken: 'test-token',
+        canManagePayments: true,
+      }),
+    );
     await findByText('Pessoa de teste');
     const email = await findText('guest-with-a-very-long-unbroken-address@example.invalid');
     const paymentId = await findText(/payment_identifier_with_a_very_long/);
@@ -287,7 +320,10 @@ test('owner access search exposes touch-sized, announced selections without appr
   ];
   try {
     const { findByLabelText, findByRole, getByRole } = render(
-      React.createElement(OwnerAccessAdminView, { accessToken: 'test-token' }),
+      React.createElement(OwnerAccessAdminView, {
+        accessToken: 'test-token',
+        canManagePayments: true,
+      }),
     );
     const search = await findByLabelText('Localizar cadastro na Stays');
     assert.match(search.className, /min-h-11/);
