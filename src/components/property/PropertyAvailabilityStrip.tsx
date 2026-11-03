@@ -12,6 +12,7 @@ interface PropertyAvailabilityStripProps {
   calendarDays: StaysCalendarDay[];
   calendarAvailable: boolean;
   isLoading: boolean;
+  isRefreshingCalendar?: boolean;
   calendarMessage: string;
   checkIn: string;
   checkOut: string;
@@ -24,6 +25,7 @@ export function PropertyAvailabilityStrip({
   calendarDays,
   calendarAvailable,
   isLoading,
+  isRefreshingCalendar = false,
   calendarMessage,
   checkIn,
   checkOut,
@@ -33,10 +35,7 @@ export function PropertyAvailabilityStrip({
 }: PropertyAvailabilityStripProps) {
   const isCalendarConfirmed = calendarAvailable && !isLoading;
   const isSelectedRangeAvailable = Boolean(
-    isCalendarConfirmed &&
-    checkIn &&
-    checkOut &&
-    isCalendarRangeAvailable(calendarDays, checkIn, checkOut),
+    !isLoading && checkIn && checkOut && isCalendarRangeAvailable(calendarDays, checkIn, checkOut),
   );
   const selectedStayNights =
     isSelectedRangeAvailable && checkIn && checkOut
@@ -58,7 +57,11 @@ export function PropertyAvailabilityStrip({
           <span
             className={`h-2 w-2 rounded-full ${isLoading ? 'animate-pulse bg-amber-500' : isCalendarConfirmed ? 'bg-emerald-500' : 'bg-amber-500'}`}
           />
-          {isLoading ? 'Verificando' : calendarAvailable ? 'Consultada' : 'Não confirmada'}
+          {isLoading || isRefreshingCalendar
+            ? 'Verificando'
+            : calendarAvailable
+              ? 'Consultada'
+              : 'Não confirmada'}
         </span>
       </div>
 
@@ -81,6 +84,11 @@ export function PropertyAvailabilityStrip({
               isCheckoutCandidate &&
               isCalendarRangeAvailable(calendarDays, checkIn, day.date),
             );
+            const displayCanSelect =
+              !isLoading &&
+              (isCheckoutCandidate
+                ? isCalendarRangeAvailable(calendarDays, checkIn, day.date)
+                : isCalendarArrivalAvailable(day));
             const canSelect = isCheckoutCandidate ? canSelectAsCheckOut : isAvailable;
             const displayRate = getStaysCalendarDisplayRate(day, selectedStayNights);
             const accessibleDate = new Date(`${day.date}T12:00:00`).toLocaleDateString('pt-BR', {
@@ -123,11 +131,11 @@ export function PropertyAvailabilityStrip({
                   isSelected
                     ? 'bg-orange-700 text-white font-black shadow-md scale-105'
                     : isInRange
-                      ? 'bg-orange-100 text-orange-950 font-bold'
-                      : canSelect
+                      ? 'bg-calendar-range text-calendar-range-foreground font-bold'
+                      : displayCanSelect
                         ? 'bg-white hover:bg-orange-50 border border-neutral-200/80 text-neutral-800 cursor-pointer'
-                        : isLoading || !calendarAvailable || dayRestriction
-                          ? 'bg-neutral-100/70 text-neutral-600 cursor-not-allowed'
+                        : isLoading || dayRestriction
+                          ? 'bg-calendar-muted text-calendar-muted-foreground cursor-not-allowed'
                           : 'bg-neutral-100/50 text-neutral-600 line-through cursor-not-allowed'
                 } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:hover:bg-inherit`}
               >
