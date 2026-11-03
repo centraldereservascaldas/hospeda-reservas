@@ -10,6 +10,7 @@ interface FilterModalProps {
   onClose: () => void;
   filters: SearchFilters;
   properties: Property[];
+  hasMoreSearchResults?: boolean;
   onApplyFilters: (filters: SearchFilters) => void;
   onResetFilters: () => void;
   currency: Currency;
@@ -41,6 +42,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   onClose,
   filters,
   properties,
+  hasMoreSearchResults = false,
   onApplyFilters,
   onResetFilters,
   currency,
@@ -463,6 +465,12 @@ export const FilterModal: React.FC<FilterModalProps> = ({
           </div>
         </div>
 
+        {hasMoreSearchResults && (
+          <p role="note" className="px-4 py-2 text-xs text-neutral-600 sm:px-6">
+            {matchingCount} {matchingCountLabel} entre as opções carregadas. Há outras páginas a
+            verificar após aplicar os filtros.
+          </p>
+        )}
         {/* Modal Footer */}
         <div className="flex flex-col-reverse gap-2 border-t border-neutral-100 bg-neutral-50/60 px-4 py-3 min-[480px]:flex-row min-[480px]:items-center min-[480px]:justify-between min-[480px]:px-6 min-[480px]:py-2 sm:py-4">
           <button
@@ -478,7 +486,9 @@ export const FilterModal: React.FC<FilterModalProps> = ({
             onClick={handleApply}
             className={`min-h-11 w-full rounded-full bg-neutral-900 px-4 py-3 text-xs font-bold text-white shadow-md transition-all hover:bg-black hover:scale-105 active:scale-95 min-[480px]:w-auto min-[480px]:px-4 sm:px-6 cursor-pointer ${focusRing}`}
           >
-            Mostrar {matchingCount} {matchingCountLabel}
+            {hasMoreSearchResults
+              ? 'Aplicar filtros'
+              : `Mostrar ${matchingCount} ${matchingCountLabel}`}
           </button>
         </div>
       </div>

@@ -1,0 +1,538 @@
+{
+  "benchmark": [
+    {
+      "variant": "before",
+      "profile": "mobile",
+      "repetition": 1,
+      "data": {
+        "lcp": {
+          "time": 2524,
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+          "size": 54405
+        },
+        "cls": 0.023749188308445197,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+            "width": 270,
+            "naturalWidth": 1280,
+            "loading": "lazy",
+            "priority": "auto",
+            "top": 355
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3183/assets/index-BCT16W1K.js",
+        "observedMs": 8933.199999999255
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+          "status": 200,
+          "bytes": 135762
+        }
+      ],
+      "photoBytes": 135762,
+      "errors": []
+    },
+    {
+      "variant": "after",
+      "profile": "mobile",
+      "repetition": 1,
+      "data": {
+        "lcp": {
+          "time": 2256,
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+          "size": 54540
+        },
+        "cls": 0.023749188308445197,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+            "width": 270,
+            "naturalWidth": 272,
+            "loading": "eager",
+            "priority": "high",
+            "top": 355
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3184/assets/index-C7oDm64a.js",
+        "observedMs": 8799.599999997765
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+          "status": 200,
+          "bytes": 71312
+        }
+      ],
+      "photoBytes": 71312,
+      "errors": []
+    },
+    {
+      "variant": "before",
+      "profile": "mobile",
+      "repetition": 2,
+      "data": {
+        "lcp": {
+          "time": 2068,
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+          "size": 54405
+        },
+        "cls": 0.023749188308445197,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+            "width": 270,
+            "naturalWidth": 1280,
+            "loading": "lazy",
+            "priority": "auto",
+            "top": 355
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3183/assets/index-BCT16W1K.js",
+        "observedMs": 8791.800000000745
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+          "status": 200,
+          "bytes": 135762
+        }
+      ],
+      "photoBytes": 135762,
+      "errors": []
+    },
+    {
+      "variant": "after",
+      "profile": "mobile",
+      "repetition": 2,
+      "data": {
+        "lcp": {
+          "time": 2112,
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+          "size": 54405
+        },
+        "cls": 0.023749188308445197,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+            "width": 270,
+            "naturalWidth": 272,
+            "loading": "eager",
+            "priority": "high",
+            "top": 355
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3184/assets/index-C7oDm64a.js",
+        "observedMs": 8823.39999999851
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+          "status": 200,
+          "bytes": 71279
+        }
+      ],
+      "photoBytes": 71279,
+      "errors": []
+    },
+    {
+      "variant": "before",
+      "profile": "mobile",
+      "repetition": 3,
+      "data": {
+        "lcp": {
+          "time": 2352,
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+          "size": 54405
+        },
+        "cls": 0.023749188308445197,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+            "width": 270,
+            "naturalWidth": 1280,
+            "loading": "lazy",
+            "priority": "auto",
+            "top": 355
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3183/assets/index-BCT16W1K.js",
+        "observedMs": 8803.89999999851
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+          "status": 200,
+          "bytes": 135762
+        }
+      ],
+      "photoBytes": 135762,
+      "errors": []
+    },
+    {
+      "variant": "after",
+      "profile": "mobile",
+      "repetition": 3,
+      "data": {
+        "lcp": {
+          "time": 2280,
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+          "size": 54405
+        },
+        "cls": 0.023749188308445197,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+            "width": 270,
+            "naturalWidth": 272,
+            "loading": "eager",
+            "priority": "high",
+            "top": 355
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3184/assets/index-C7oDm64a.js",
+        "observedMs": 8802.39999999851
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+          "status": 200,
+          "bytes": 71312
+        }
+      ],
+      "photoBytes": 71312,
+      "errors": []
+    },
+    {
+      "variant": "before",
+      "profile": "desktop",
+      "repetition": 1,
+      "data": {
+        "lcp": {
+          "time": 868,
+          "url": "",
+          "size": 46827
+        },
+        "cls": 0.49812400103675,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+            "width": 232,
+            "naturalWidth": 1280,
+            "loading": "lazy",
+            "priority": "auto",
+            "top": 594
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3183/assets/index-BCT16W1K.js",
+        "observedMs": 8718.89999999851
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+          "status": 200,
+          "bytes": 135762
+        }
+      ],
+      "photoBytes": 135762,
+      "errors": []
+    },
+    {
+      "variant": "after",
+      "profile": "desktop",
+      "repetition": 1,
+      "data": {
+        "lcp": {
+          "time": 844,
+          "url": "",
+          "size": 46827
+        },
+        "cls": 0.49812400103675,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=320&height=240",
+            "width": 232,
+            "naturalWidth": 234,
+            "loading": "eager",
+            "priority": "high",
+            "top": 594
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3184/assets/index-C7oDm64a.js",
+        "observedMs": 8727.5
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=320&height=240",
+          "status": 200,
+          "bytes": 22072
+        }
+      ],
+      "photoBytes": 22072,
+      "errors": []
+    },
+    {
+      "variant": "before",
+      "profile": "desktop",
+      "repetition": 2,
+      "data": {
+        "lcp": {
+          "time": 948,
+          "url": "",
+          "size": 46827
+        },
+        "cls": 0.49812400103675,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+            "width": 232,
+            "naturalWidth": 1280,
+            "loading": "lazy",
+            "priority": "auto",
+            "top": 594
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3183/assets/index-BCT16W1K.js",
+        "observedMs": 8717.300000000745
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+          "status": 200,
+          "bytes": 135762
+        }
+      ],
+      "photoBytes": 135762,
+      "errors": []
+    },
+    {
+      "variant": "after",
+      "profile": "desktop",
+      "repetition": 2,
+      "data": {
+        "lcp": {
+          "time": 976,
+          "url": "",
+          "size": 46827
+        },
+        "cls": 0.4781944422827827,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=320&height=240",
+            "width": 232,
+            "naturalWidth": 234,
+            "loading": "eager",
+            "priority": "high",
+            "top": 594
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3184/assets/index-C7oDm64a.js",
+        "observedMs": 8752.900000002235
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=320&height=240",
+          "status": 200,
+          "bytes": 22039
+        }
+      ],
+      "photoBytes": 22039,
+      "errors": []
+    },
+    {
+      "variant": "before",
+      "profile": "desktop",
+      "repetition": 3,
+      "data": {
+        "lcp": {
+          "time": 844,
+          "url": "",
+          "size": 46827
+        },
+        "cls": 0.49812400103675,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+            "width": 232,
+            "naturalWidth": 1280,
+            "loading": "lazy",
+            "priority": "auto",
+            "top": 594
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3183/assets/index-BCT16W1K.js",
+        "observedMs": 8726.699999999255
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948",
+          "status": 200,
+          "bytes": 135762
+        }
+      ],
+      "photoBytes": 135762,
+      "errors": []
+    },
+    {
+      "variant": "after",
+      "profile": "desktop",
+      "repetition": 3,
+      "data": {
+        "lcp": {
+          "time": 828,
+          "url": "",
+          "size": 46827
+        },
+        "cls": 0.49812400103675,
+        "overflow": false,
+        "primary": [
+          {
+            "currentSrc": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=320&height=240",
+            "width": 232,
+            "naturalWidth": 234,
+            "loading": "eager",
+            "priority": "high",
+            "top": 594
+          }
+        ],
+        "highPriority": 1,
+        "asset": "http://127.0.0.1:3184/assets/index-C7oDm64a.js",
+        "observedMs": 8722.300000000745
+      },
+      "photos": [
+        {
+          "url": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=320&height=240",
+          "status": 200,
+          "bytes": 22039
+        }
+      ],
+      "photoBytes": 22039,
+      "errors": []
+    }
+  ],
+  "layout": [
+    {
+      "viewport": 320,
+      "dpr": 2,
+      "overflow": false,
+      "src": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+      "width": 228.390625,
+      "height": 170.78125,
+      "priority": "high",
+      "loading": "eager",
+      "high": 1
+    },
+    {
+      "viewport": 390,
+      "dpr": 2,
+      "overflow": false,
+      "src": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=640&height=480",
+      "width": 270,
+      "height": 202,
+      "priority": "high",
+      "loading": "eager",
+      "high": 1
+    },
+    {
+      "viewport": 768,
+      "dpr": 2,
+      "overflow": false,
+      "src": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=960&height=720",
+      "width": 352,
+      "height": 263.5,
+      "priority": "high",
+      "loading": "eager",
+      "high": 1
+    },
+    {
+      "viewport": 1280,
+      "dpr": 2,
+      "overflow": false,
+      "src": "https://crcn.stays.net/image/6a356fe93db977efbea5a948?width=480&height=360",
+      "width": 231.59375,
+      "height": 173.1875,
+      "priority": "high",
+      "loading": "eager",
+      "high": 1
+    }
+  ],
+  "imageVariants": [
+    {
+      "variant": "original",
+      "bytes": 161221,
+      "dimensions": ["  pixelWidth: 1280", "  pixelHeight: 720"]
+    },
+    {
+      "variant": "640",
+      "bytes": 82762,
+      "dimensions": ["  pixelWidth: 640", "  pixelHeight: 480"]
+    },
+    {
+      "variant": "400",
+      "bytes": 36647,
+      "dimensions": ["  pixelWidth: 400", "  pixelHeight: 300"]
+    }
+  ],
+  "retainedBrowser": {
+    "value": "old-lazy-loaded",
+    "oldLazyRequestedAfterSwap": true,
+    "status": 200,
+    "cache": "public, max-age=31536000, immutable",
+    "currentPresent": true
+  },
+  "finalApacheHeaders": [
+    {
+      "path": "/assets/index-current1.js",
+      "status": 200,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "path": "/assets/lazy-previous.js",
+      "status": 200,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "path": "/assets/index-current1.js",
+      "status": 206,
+      "cacheControl": "public, max-age=31536000, immutable"
+    },
+    {
+      "path": "/assets/missing-00000000.js",
+      "status": 404,
+      "cacheControl": null
+    },
+    {
+      "path": "/",
+      "status": 200,
+      "cacheControl": null
+    },
+    {
+      "path": "/api/health",
+      "status": 200,
+      "cacheControl": null
+    }
+  ]
+}

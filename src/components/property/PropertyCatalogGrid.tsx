@@ -18,6 +18,7 @@ interface PropertyCatalogGridProps {
   hasAvailableSearchResults?: boolean;
   searchGuestCount?: number;
   isRefreshingCatalog?: boolean;
+  prioritizeFirstImage?: boolean;
   onRetryCatalog: () => void;
   onToggleSave: (propertyId: string) => void;
   onSelectProperty: (property: Property) => void;
@@ -36,6 +37,7 @@ export function PropertyCatalogGrid({
   hasAvailableSearchResults = false,
   searchGuestCount = 1,
   isRefreshingCatalog = false,
+  prioritizeFirstImage = true,
   onRetryCatalog,
   onToggleSave,
   onSelectProperty,
@@ -119,7 +121,7 @@ export function PropertyCatalogGrid({
             hasSearchDates={hasSearchDates}
             availabilityConfirmed={availabilityConfirmed}
             searchGuestCount={searchGuestCount}
-            prioritizeImage={index === 0}
+            prioritizeImage={prioritizeFirstImage && index === 0}
           />
         ))}
       </div>

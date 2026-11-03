@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SearchAccommodationsRequest;
+use App\Http\Resources\AccommodationSearchResource;
 use App\Services\StaysCalendarService;
 use App\Services\StaysDiscoveryCatalog;
 use App\Services\StaysExternalApiClient;
+use App\Services\StaysSearchQuoteService;
 use App\Services\StaysSimulator;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
@@ -138,14 +141,9 @@ class AccommodationController extends Controller
         return response()->json(['success' => true, 'data' => $existing]);
     }
 
-    public function search(Request $request, StaysSimulator $simulator): JsonResponse
+    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchQuoteService $quoteService): JsonResponse
     {
-        $input = $request->validate([
-            'from' => ['nullable', 'date_format:Y-m-d'], 'to' => ['nullable', 'date_format:Y-m-d'],
-            'guests' => ['nullable', 'integer', 'min:1', 'max:50'], 'destination' => ['nullable', 'string', 'max:160'],
-            'propertyId' => ['nullable', 'string', 'max:100'], 'cities' => ['nullable', 'array'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:100'], 'skip' => ['nullable', 'integer', 'min:0'],
-        ]);
+        $input = $request->validated();
         $from = $input['from'] ?? null;
         $to = $input['to'] ?? null;
         $guests = (int) ($input['guests'] ?? 1);
@@ -189,91 +187,37 @@ class AccommodationController extends Controller
         }
         if ($from && $to) {
             $live = $this->stays->post('/booking/search-listings', array_filter([
-                'from' => $from, 'to' => $to, 'guests' => $guests,
+                'from' => $from, 'to' => $to, 'guests' => $guests, 'isBookable' => true,
                 'properties' => isset($input['propertyId']) ? [$input['propertyId']] : null,
                 'cities' => $input['cities'] ?? null, 'limit' => $limit, 'skip' => $skip,
             ], fn ($value): bool => $value !== null));
-            if (! is_array($live)) {
+            if (! is_array($live) || ! array_is_list($live)
+                || array_filter($live, 'is_array') !== $live || count($live) > $limit) {
                 return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Não foi possível confirmar a disponibilidade agora. Tente novamente.'], 503);
             }
 
+            $resolved = $quoteService->resolve($live, $from, $to, $guests);
             $catalog = $this->catalog();
-            $mapped = array_map(function (array $item) use ($catalog, $from, $to): array {
-                $property = $this->mapListing($item, $catalog);
-                $nights = max(1, (int) now()->parse($from)->diffInDays(now()->parse($to)));
-                $bookingPrice = is_array($item['bookingPrice'] ?? null) ? $item['bookingPrice'] : [];
-                $bookingTotal = $bookingPrice['_mctotal']['BRL'] ?? null;
-                $bookingTotal = is_numeric($bookingTotal) && is_finite((float) $bookingTotal)
-                    ? (float) $bookingTotal
-                    : null;
-                $bookingSubtotal = $bookingPrice['_mcsubtotal']['BRL'] ?? null;
-                $hasBookingSubtotal = is_numeric($bookingSubtotal)
-                    && is_finite((float) $bookingSubtotal)
-                    && (float) $bookingSubtotal > 0;
-                $feesIncluded = $bookingPrice['feesIncluded'] ?? null;
-                $fees = $bookingPrice['fees'] ?? [];
-                $hasFeeList = array_key_exists('fees', $bookingPrice);
-                $feesAreValid = is_array($fees) && array_is_list($fees);
-                $feesTotal = 0.0;
-                if ($feesAreValid) {
-                    foreach ($fees as $fee) {
-                        $feeAmounts = is_array($fee) && is_array($fee['_mcval'] ?? null)
-                            ? $fee['_mcval']
-                            : [];
-                        $feeAmount = $feeAmounts['BRL'] ?? null;
-                        if (! is_numeric($feeAmount) || ! is_finite((float) $feeAmount) || (float) $feeAmount < 0) {
-                            $feesAreValid = false;
-                            break;
-                        }
-
-                        $feesTotal += (float) $feeAmount;
-                    }
-                }
-                $feesAreValid = $feesAreValid && is_finite($feesTotal);
-                $canConfirmFees = is_bool($feesIncluded)
-                    && $feesAreValid
-                    && ($feesIncluded || $hasFeeList);
-                $itemDailyRate = $item['dailyRate'] ?? null;
-                $hasItemDailyRate = is_numeric($itemDailyRate)
-                    && is_finite((float) $itemDailyRate)
-                    && (float) $itemDailyRate > 0;
-                $mainCurrency = $bookingPrice['mainCurrency'] ?? 'BRL';
-                $dailyRate = $hasBookingSubtotal
-                    ? (float) $bookingSubtotal / $nights
-                    : ($mainCurrency === 'BRL'
-                        ? ($hasItemDailyRate
-                            ? (float) $itemDailyRate
-                            : ($bookingTotal !== null && $bookingTotal > 0
-                                ? ($bookingTotal - ($feesIncluded === true ? $feesTotal : 0)) / $nights
-                                : $property['pricePerNight']))
-                        : 0);
-                $property['pricePerNight'] = $dailyRate;
-                if ($bookingTotal !== null && $bookingTotal > 0 && is_finite($dailyRate) && $dailyRate > 0 && $canConfirmFees) {
-                    $displayTotal = $bookingTotal + ($feesIncluded ? 0 : $feesTotal);
-                    $basePrice = $hasBookingSubtotal ? (float) $bookingSubtotal : $dailyRate * $nights;
-                    if (is_finite($displayTotal) && is_finite($basePrice)) {
-                        $firstFeeAmounts = is_array($fees[0]['_mcval'] ?? null) ? $fees[0]['_mcval'] : [];
-                        $property['calculatedPrice'] = [
-                            'nights' => $nights,
-                            'dailyRate' => $dailyRate,
-                            'basePrice' => $basePrice,
-                            'cleaningFee' => (float) ($firstFeeAmounts['BRL'] ?? 0),
-                            'serviceFee' => 0,
-                            'totalAmount' => $displayTotal,
-                            'currency' => 'BRL',
-                            'fees' => $fees,
-                        ];
-                    } else {
-                        unset($property['calculatedPrice']);
-                    }
-                } else {
-                    unset($property['calculatedPrice']);
-                }
+            $mapped = array_map(function (array $listing) use ($catalog): array {
+                $property = $this->mapListing($listing, $catalog);
+                $property['calculatedPrice'] = $listing['calculatedPrice'];
+                $property['pricePerNight'] = $listing['calculatedPrice']['dailyRate'];
 
                 return $property;
-            }, $live);
+            }, $resolved['items']);
 
-            return response()->json(['success' => true, 'total' => count($mapped), 'from' => $from, 'to' => $to, 'guests' => (int) $guests, 'data' => $mapped, 'source' => 'stays-live']);
+            return (new AccommodationSearchResource([
+                'data' => $mapped,
+                'from' => $from,
+                'to' => $to,
+                'guests' => $guests,
+                'unquotedCount' => $resolved['unquotedCount'],
+                'pagination' => [
+                    'receivedCount' => count($live),
+                    'nextSkip' => $skip + count($live),
+                    'hasMore' => count($live) === $limit,
+                ],
+            ]))->response();
         }
 
         if (app()->isProduction()) {

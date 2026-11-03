@@ -3,12 +3,20 @@ import { ArrowRight, CalendarDays, LoaderCircle, Sparkles } from 'lucide-react';
 import type { Currency, Property } from '../../types';
 import type { AccommodationWidgetSearchParams } from '../../hooks/useAccommodationSearch';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
+import type { RequestPriority } from '../../services/requestScheduler';
 import { formatCurrency } from '../../utils/formatters';
 import {
   getHomeDiscoveryCollections,
   type HomeDateSuggestion,
 } from '../../utils/homeDateSuggestions';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
+import { getConfirmedPropertyQuote } from '../../utils/propertyDisplayPrice';
+import { isRecord } from '../../utils/apiValidation';
+import {
+  getPropertyCardImageSources,
+  COLLECTION_IMAGE_SIZES,
+} from '../../utils/propertyImageSources';
+import { isSafeMediaUrl } from '../../utils/propertyMedia';
 import { matchesPropertyCategory } from '../../utils/propertyCategories';
 
 interface SeasonalDateSuggestionsProps {
@@ -20,8 +28,10 @@ interface SeasonalDateSuggestionsProps {
 }
 
 interface SuggestionQuote {
-  status: 'loading' | 'ready' | 'unavailable';
+  status: 'loading' | 'ready' | 'unavailable' | 'error';
   total?: number;
+  expiresAt?: number;
+  guests?: number;
   nightly?: number;
   properties?: number;
   propertyTitle?: string;
@@ -47,7 +57,7 @@ const getNights = (suggestion: HomeDateSuggestion) =>
   );
 
 const cacheKey = (suggestionId: string, suggestion: HomeDateSuggestion, guestCount: number) =>
-  `crcn.home-date-quote.v5.${suggestionId}.${suggestion.checkIn}.${suggestion.checkOut}.${guestCount}`;
+  `crcn.home-date-quote.v6.${suggestionId}.${suggestion.checkIn}.${suggestion.checkOut}.${guestCount}`;
 
 function readCachedQuote(
   suggestionId: string,
@@ -57,10 +67,41 @@ function readCachedQuote(
   try {
     const raw = window.sessionStorage.getItem(cacheKey(suggestionId, suggestion, guestCount));
     if (!raw) return null;
-    const cached = JSON.parse(raw) as SuggestionQuote & { cachedAt?: number };
-    if (!cached.cachedAt || Date.now() - cached.cachedAt > 15 * 60_000) return null;
+    const cached: unknown = JSON.parse(raw);
+    if (
+      !isRecord(cached) ||
+      cached.guests !== guestCount ||
+      typeof cached.expiresAt !== 'number' ||
+      !Number.isFinite(cached.expiresAt) ||
+      cached.expiresAt <= Date.now()
+    )
+      return null;
     if (cached.status !== 'ready' && cached.status !== 'unavailable') return null;
-    return cached;
+    if (
+      cached.status === 'ready' &&
+      (typeof cached.total !== 'number' ||
+        !Number.isFinite(cached.total) ||
+        cached.total <= 0 ||
+        typeof cached.nightly !== 'number' ||
+        !Number.isFinite(cached.nightly) ||
+        cached.nightly <= 0 ||
+        typeof cached.propertyTitle !== 'string')
+    )
+      return null;
+    return {
+      status: cached.status,
+      expiresAt: cached.expiresAt,
+      guests: guestCount,
+      total: typeof cached.total === 'number' ? cached.total : undefined,
+      nightly: typeof cached.nightly === 'number' ? cached.nightly : undefined,
+      propertyTitle: typeof cached.propertyTitle === 'string' ? cached.propertyTitle : undefined,
+      propertyLocation:
+        typeof cached.propertyLocation === 'string' ? cached.propertyLocation : undefined,
+      propertyImage:
+        typeof cached.propertyImage === 'string' && isSafeMediaUrl(cached.propertyImage)
+          ? cached.propertyImage
+          : undefined,
+    };
   } catch {
     return null;
   }
@@ -72,6 +113,7 @@ function writeCachedQuote(
   guestCount: number,
   quote: SuggestionQuote,
 ) {
+  if (quote.status === 'error') return;
   try {
     window.sessionStorage.setItem(
       cacheKey(suggestionId, suggestion, guestCount),
@@ -82,16 +124,9 @@ function writeCachedQuote(
   }
 }
 
-const confirmedQuote = (property: Property) => {
-  const quote = property.calculatedPrice;
-  return quote &&
-    quote.currency.toUpperCase() === 'BRL' &&
-    Number.isFinite(quote.totalAmount) &&
-    quote.totalAmount > 0 &&
-    Number.isFinite(quote.dailyRate) &&
-    quote.dailyRate > 0
-    ? quote
-    : null;
+const confirmedQuote = (property: Property, nights?: number) => {
+  const quote = getConfirmedPropertyQuote(property);
+  return quote && (nights === undefined || quote.nights === nights) ? quote : null;
 };
 
 export function SeasonalDateSuggestions({
@@ -118,16 +153,26 @@ export function SeasonalDateSuggestions({
   const [catalogQuotes, setCatalogQuotes] = useState<
     Record<string, NonNullable<ReturnType<typeof confirmedQuote>>>
   >({});
+  const [catalogQuoteGuests, setCatalogQuoteGuests] = useState<number | null>(null);
   const [catalogSearchProperties, setCatalogSearchProperties] = useState<Property[]>([]);
   const [categoryMetadataProperties, setCategoryMetadataProperties] = useState<Property[]>([]);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    setQuotes(
+      Object.fromEntries(
+        suggestions.map((suggestion) => [
+          suggestion.id,
+          readCachedQuote(suggestion.id, suggestion, guestCount) ?? { status: 'loading' },
+        ]),
+      ),
+    );
     const loadQuotes = async () => {
       const searches = new Map<string, ReturnType<typeof crcnBackendApi.searchAccommodations>>();
       const loadSuggestion = async (
         suggestion: HomeDateSuggestion & { id: string; propertyIndex?: number },
-        index: number,
+        priority: RequestPriority,
       ) => {
         if (readCachedQuote(suggestion.id, suggestion, guestCount)) return;
         let quote: SuggestionQuote = { status: 'unavailable' };
@@ -135,17 +180,23 @@ export function SeasonalDateSuggestions({
           const searchKey = `${suggestion.checkIn}|${suggestion.checkOut}|${guestCount}`;
           let search = searches.get(searchKey);
           if (!search) {
-            search = crcnBackendApi.searchAccommodations({
-              from: suggestion.checkIn,
-              to: suggestion.checkOut,
-              guests: guestCount,
-              limit: 8,
-            });
+            search = crcnBackendApi.searchAccommodations(
+              {
+                from: suggestion.checkIn,
+                to: suggestion.checkOut,
+                guests: guestCount,
+                limit: 8,
+              },
+              { signal: controller.signal, priority },
+            );
             searches.set(searchKey, search);
           }
           const result = await search;
           const confirmed = result.data
-            .map((property) => ({ property, price: confirmedQuote(property) }))
+            .map((property) => ({
+              property,
+              price: confirmedQuote(property, getNights(suggestion)),
+            }))
             .filter(
               (
                 item,
@@ -168,69 +219,95 @@ export function SeasonalDateSuggestions({
               propertyImage: featured.property.images[0],
               propertyLocation: featured.property.complexName || featured.property.location.city,
             };
-          } else {
-            const featured =
-              result.data[propertyIndex % Math.max(result.data.length, 1)] ||
-              (fallbackProperties.length
-                ? fallbackProperties[index % fallbackProperties.length]
-                : undefined);
-            if (featured) {
-              quote = {
-                status: 'unavailable',
-                nightly: featured.pricePerNight,
-                propertyTitle: getPublicPropertyTitle(featured.title),
-                propertyImage: featured.images[0],
-                propertyLocation: featured.complexName || featured.location.city,
-              };
-            }
           }
         } catch {
-          quote = { status: 'unavailable' };
+          quote = { status: 'error' };
         }
+        if (cancelled) return;
+        quote.expiresAt = Date.now() + 45_000;
+        quote.guests = guestCount;
         writeCachedQuote(suggestion.id, suggestion, guestCount, quote);
         if (!cancelled) {
           setQuotes((current) => ({ ...current, [suggestion.id]: quote }));
         }
       };
       const firstCollectionSize = collections[0]?.suggestions.length ?? 0;
-      await Promise.all(suggestions.slice(0, firstCollectionSize).map(loadSuggestion));
+      await Promise.all(
+        suggestions
+          .slice(0, firstCollectionSize)
+          .map((suggestion) => loadSuggestion(suggestion, 'visible')),
+      );
       if (cancelled) return;
       await Promise.all(
         suggestions
           .slice(firstCollectionSize)
-          .map((suggestion, index) => loadSuggestion(suggestion, index + firstCollectionSize)),
+          .map((suggestion) => loadSuggestion(suggestion, 'prefetch')),
       );
     };
     void loadQuotes();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [collections, fallbackProperties, guestCount, suggestions]);
+  }, [collections, guestCount, suggestions]);
+
+  useEffect(() => {
+    const expirations = Object.values(quotes).flatMap((quote) =>
+      quote.status === 'ready' && quote.expiresAt ? [quote.expiresAt] : [],
+    );
+    if (expirations.length === 0) return;
+    const timer = window.setTimeout(
+      () => {
+        setQuotes((current) =>
+          Object.fromEntries(
+            Object.entries(current).map(([id, quote]) => [
+              id,
+              quote.expiresAt && quote.expiresAt <= Date.now()
+                ? { status: 'error', guests: quote.guests }
+                : quote,
+            ]),
+          ),
+        );
+        setCatalogQuotes({});
+      },
+      Math.max(0, Math.min(...expirations) - Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [quotes]);
 
   useEffect(() => {
     if (!catalogPeriod) return;
+    setCatalogQuotes({});
+    setCatalogQuoteGuests(null);
     let cancelled = false;
+    const controller = new AbortController();
+    let expiryTimer: number | undefined;
     void crcnBackendApi
-      .searchAccommodations({
-        from: catalogPeriod.checkIn,
-        to: catalogPeriod.checkOut,
-        guests: guestCount,
-        limit: 100,
-      })
+      .searchAccommodations(
+        {
+          from: catalogPeriod.checkIn,
+          to: catalogPeriod.checkOut,
+          guests: guestCount,
+          limit: 100,
+        },
+        { signal: controller.signal, priority: 'prefetch' },
+      )
       .then((result) => {
         if (cancelled) return;
         setCatalogSearchProperties(result.data);
         const next: Record<string, NonNullable<ReturnType<typeof confirmedQuote>>> = {};
         result.data.forEach((property) => {
-          const quote = confirmedQuote(property);
+          const quote = confirmedQuote(property, getNights(catalogPeriod));
           if (!quote) return;
-          [property.id, property.staysPropertyId, property.staysListingId]
+          [property.id, property.staysListingId]
             .filter((key): key is string => Boolean(key))
             .forEach((key) => {
               next[key] = quote;
             });
         });
         setCatalogQuotes(next);
+        setCatalogQuoteGuests(guestCount);
+        expiryTimer = window.setTimeout(() => setCatalogQuotes({}), 45_000);
       })
       .catch(() => {
         if (!cancelled) {
@@ -240,13 +317,16 @@ export function SeasonalDateSuggestions({
       });
     return () => {
       cancelled = true;
+      controller.abort();
+      if (expiryTimer !== undefined) window.clearTimeout(expiryTimer);
     };
   }, [catalogPeriod, guestCount]);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     void crcnBackendApi
-      .searchAccommodations({ limit: 100 })
+      .searchAccommodations({ limit: 100 }, { signal: controller.signal, priority: 'prefetch' })
       .then((result) => {
         if (!cancelled) setCategoryMetadataProperties(result.data);
       })
@@ -255,6 +335,7 @@ export function SeasonalDateSuggestions({
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, []);
 
@@ -333,7 +414,7 @@ export function SeasonalDateSuggestions({
 
   return (
     <div aria-label="Coleções de hospedagens" className="mb-8 space-y-8 sm:mb-11 sm:space-y-10">
-      {collections.map((collection) => (
+      {collections.map((collection, collectionIndex) => (
         <section key={collection.id} aria-labelledby={`${collection.id}-title`}>
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
@@ -354,8 +435,11 @@ export function SeasonalDateSuggestions({
           </div>
 
           <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-5">
-            {collection.suggestions.map((suggestion) => {
-              const quote = quotes[suggestion.id] ?? { status: 'loading' as const };
+            {collection.suggestions.map((suggestion, suggestionIndex) => {
+              const quote =
+                quotes[suggestion.id]?.guests === guestCount
+                  ? quotes[suggestion.id]!
+                  : { status: 'loading' as const };
               const nights = getNights(suggestion);
               const selectedGuests = collection.includePet
                 ? {
@@ -390,10 +474,17 @@ export function SeasonalDateSuggestions({
                   <span className="relative block aspect-[4/3] overflow-hidden rounded-2xl border border-white/90 bg-neutral-100 shadow-[0_10px_28px_-18px_rgba(15,23,42,0.7)]">
                     {quote.propertyImage ? (
                       <img
-                        src={quote.propertyImage}
-                        alt={quote.propertyTitle || suggestion.label}
+                        {...getPropertyCardImageSources(
+                          quote.propertyImage,
+                          COLLECTION_IMAGE_SIZES,
+                        )}
+                        decoding="async"
+                        alt={quote.status === 'ready' ? quote.propertyTitle : suggestion.label}
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                        loading="lazy"
+                        loading={collectionIndex === 0 && suggestionIndex === 0 ? 'eager' : 'lazy'}
+                        fetchPriority={
+                          collectionIndex === 0 && suggestionIndex === 0 ? 'high' : 'auto'
+                        }
                       />
                     ) : (
                       <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-50 via-white to-sky-100 text-neutral-500">
@@ -415,11 +506,12 @@ export function SeasonalDateSuggestions({
                   <span className="mt-3 flex items-start justify-between gap-2 px-0.5">
                     <span className="min-w-0">
                       <span className="line-clamp-1 block text-sm font-extrabold text-neutral-950">
-                        {quote.propertyTitle || suggestion.label}
+                        {quote.status === 'ready' ? quote.propertyTitle : suggestion.label}
                       </span>
                       <span className="mt-0.5 line-clamp-1 block text-xs font-medium text-neutral-600">
-                        {quote.propertyLocation || suggestion.label} · {nights}{' '}
-                        {nights === 1 ? 'noite' : 'noites'}
+                        {quote.status === 'ready' ? quote.propertyLocation : 'Sugestão de viagem'} ·{' '}
+                        {nights} {nights === 1 ? 'noite' : 'noites'} · {guestCount}{' '}
+                        {guestCount === 1 ? 'hóspede' : 'hóspedes'}
                       </span>
                       {quote.status === 'loading' ? (
                         <span className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500">
@@ -433,16 +525,11 @@ export function SeasonalDateSuggestions({
                           </strong>{' '}
                           total
                         </span>
-                      ) : quote.nightly ? (
-                        <span className="mt-1.5 block text-xs text-neutral-700">
-                          <strong className="text-sm text-neutral-950">
-                            {formatCurrency(quote.nightly, currency)}
-                          </strong>{' '}
-                          / noite · consulte o período
-                        </span>
                       ) : (
                         <span className="mt-1.5 block text-xs font-bold text-neutral-700">
-                          Ver disponibilidade
+                          {quote.status === 'error'
+                            ? 'Consulta indisponível. Tente buscar.'
+                            : 'Explore opções para estas datas'}
                         </span>
                       )}
                     </span>
@@ -480,17 +567,13 @@ export function SeasonalDateSuggestions({
             <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-5">
               {collection.properties.map((property) => {
                 const propertyQuote =
-                  catalogQuotes[property.id] ||
-                  (property.staysPropertyId
-                    ? catalogQuotes[property.staysPropertyId]
-                    : undefined) ||
-                  (property.staysListingId ? catalogQuotes[property.staysListingId] : undefined);
-                const referenceNightly = property.pricePerNight > 0 ? property.pricePerNight : null;
+                  catalogQuoteGuests === guestCount
+                    ? catalogQuotes[property.id] ||
+                      (property.staysListingId ? catalogQuotes[property.staysListingId] : undefined)
+                    : undefined;
                 const priceLabel = propertyQuote
                   ? `${formatCurrency(propertyQuote.totalAmount, currency)} no total`
-                  : referenceNightly
-                    ? `${formatCurrency(referenceNightly, currency)} por noite`
-                    : 'consultar valor';
+                  : 'explorar opções, preço ainda não confirmado';
                 return (
                   <button
                     key={`${collection.id}-${property.id}`}
@@ -505,12 +588,16 @@ export function SeasonalDateSuggestions({
                           property.staysPropertyId || property.staysListingId || property.id,
                       })
                     }
-                    aria-label={`${getPublicPropertyTitle(property.title)}, ${collection.title}, ${formatPeriod(catalogPeriod)}, ${priceLabel}`}
+                    aria-label={`${getPublicPropertyTitle(property.title)}, ${collection.title}, ${propertyQuote ? formatPeriod(catalogPeriod) : 'sugestão de hospedagem'}, ${priceLabel}`}
                     className="group w-[72vw] max-w-[17rem] shrink-0 snap-start rounded-2xl text-left transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700 sm:w-auto sm:max-w-none"
                   >
                     <span className="relative block aspect-[4/3] overflow-hidden rounded-2xl border border-white/90 bg-neutral-100 shadow-[0_10px_28px_-18px_rgba(15,23,42,0.7)]">
                       <img
-                        src={property.images[0]}
+                        {...getPropertyCardImageSources(
+                          property.images[0] || '',
+                          COLLECTION_IMAGE_SIZES,
+                        )}
+                        decoding="async"
                         alt={getPublicPropertyTitle(property.title)}
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                         loading="lazy"
@@ -519,7 +606,7 @@ export function SeasonalDateSuggestions({
                         {collection.badge}
                       </span>
                       <span className="absolute bottom-3 left-3 rounded-full border border-white/80 bg-neutral-950/72 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-md">
-                        {formatPeriod(catalogPeriod)}
+                        {propertyQuote ? formatPeriod(catalogPeriod) : 'Explore acomodações'}
                       </span>
                     </span>
 
@@ -537,18 +624,12 @@ export function SeasonalDateSuggestions({
                             <strong className="text-sm text-neutral-950">
                               {formatCurrency(propertyQuote.totalAmount, currency)}
                             </strong>{' '}
-                            total · {propertyQuote.nights} noites
-                          </span>
-                        ) : referenceNightly ? (
-                          <span className="mt-1.5 block text-xs text-neutral-700">
-                            <strong className="text-sm text-neutral-950">
-                              {formatCurrency(referenceNightly, currency)}
-                            </strong>{' '}
-                            / noite · consulte o período
+                            total · {propertyQuote.nights} noites · {guestCount}{' '}
+                            {guestCount === 1 ? 'hóspede' : 'hóspedes'}
                           </span>
                         ) : (
                           <span className="mt-1.5 block text-xs font-bold text-neutral-700">
-                            Consultar valor para as datas
+                            Sugestão de hospedagem · consulte as datas
                           </span>
                         )}
                       </span>

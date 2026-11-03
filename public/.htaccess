@@ -24,12 +24,17 @@
     RewriteRule ^ %1 [L,R=301]
 
     # Send Requests To Front Controller...
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^assets(?:/|$) - [R=404,L]
+
     RewriteCond %{REQUEST_FILENAME} !-d
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteRule ^ index.php [L]
 </IfModule>
 
 <IfModule mod_headers.c>
+    # Cache only existing hashed build files, never a Laravel fallback or error response.
+    Header always set Cache-Control "public, max-age=31536000, immutable" "expr=(%{REQUEST_STATUS} == 200 || %{REQUEST_STATUS} == 206 || %{REQUEST_STATUS} == 304) && %{REQUEST_URI} =~ m#^/assets/[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8,}\.(js|css)$# && %{REQUEST_FILENAME} =~ m#/assets/[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8,}\.(js|css)$# && -f %{REQUEST_FILENAME}"
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-Frame-Options "DENY"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"

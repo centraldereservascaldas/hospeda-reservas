@@ -4,7 +4,10 @@ import { JSDOM } from 'jsdom';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
 import { createDefaultSearchFilters } from '../src/utils/searchUrlState.ts';
 import type { Property, SearchFilters } from '../src/types/index.ts';
-import type { SearchAccommodationsParams } from '../src/services/crcnBackendApi.ts';
+import type {
+  AccommodationSearchPage,
+  SearchAccommodationsParams,
+} from '../src/services/crcnBackendApi.ts';
 import type { SurpriseDateOption } from '../src/utils/surpriseDates.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', {
@@ -36,7 +39,13 @@ function renderSearchHook(
   options: {
     searchAccommodations?: (
       params: SearchAccommodationsParams,
-    ) => Promise<{ total: number; data: Property[] }>;
+      options?: { signal?: AbortSignal },
+    ) => Promise<{
+      total: number;
+      data: Property[];
+      unquotedCount?: number;
+      pagination?: AccommodationSearchPage['pagination'];
+    }>;
     getSurpriseCandidates?: () => SurpriseDateOption[];
     random?: () => number;
     scrollCatalog?: () => void;
@@ -55,9 +64,12 @@ function renderSearchHook(
     const [filters, setFilters] = useState<SearchFilters>(
       options.initialFilters ?? createDefaultSearchFilters(),
     );
-    const restoreSearchFromUrlRef = useRef<(restoredFilters: SearchFilters) => void>(
-      () => undefined,
-    );
+    const restoreSearchFromUrlRef = useRef<
+      (
+        restoredFilters: SearchFilters,
+        options?: { scrollCatalog?: boolean },
+      ) => void | Promise<void>
+    >(() => undefined);
     const search = useAccommodationSearch({
       setProperties,
       setFilters,
@@ -86,6 +98,8 @@ test('applies filters and replaces the catalogue after a normal search, includin
       guests: 3,
       destination: 'Caldas Novas',
       propertyId: 'listing-1',
+      limit: 12,
+      skip: 0,
     });
     return { total: 1, data: [property] };
   };
@@ -202,6 +216,8 @@ test('clears stale date quotes and returns to catalogue browsing when dates are 
         guests: 1,
         destination: undefined,
         propertyId: undefined,
+        limit: 12,
+        skip: 0,
       });
       return { total: 1, data: [priorDatedQuote] };
     },
@@ -417,6 +433,8 @@ test('runs an initial URL search only once and skips initial deep links to an ac
     guests: 3,
     destination: '',
     propertyId: '',
+    limit: 12,
+    skip: 0,
   });
 
   cleanup();
@@ -486,4 +504,252 @@ test('ignores an older search response after a newer search finishes', async () 
   });
   assert.deepEqual(hook.result.current.properties, [latest]);
   assert.equal(hook.result.current.filters.checkIn, '2027-06-01');
+});
+
+test('keeps verified results and exposes a partial state when some quotes failed', async () => {
+  const hook = renderSearchHook({
+    searchAccommodations: async () => ({ total: 1, data: [property], unquotedCount: 2 }),
+  });
+  await act(async () =>
+    hook.result.current.handleStaysWidgetSearch({
+      checkIn: '2027-05-01',
+      checkOut: '2027-05-04',
+      persons: 2,
+    }),
+  );
+  assert.equal(hook.result.current.availabilitySearchState, 'partial');
+  assert.equal(hook.result.current.properties.length, 1);
+});
+
+test('surprise search also reports partial quote failures for its chosen period', async () => {
+  const hook = renderSearchHook({
+    searchAccommodations: async () => ({
+      total: 1,
+      unquotedCount: 1,
+      data: [
+        {
+          ...property,
+          calculatedPrice: {
+            nights: 3,
+            dailyRate: 250,
+            basePrice: 750,
+            cleaningFee: 0,
+            serviceFee: 0,
+            totalAmount: 750,
+            currency: 'BRL',
+          },
+        },
+      ],
+    }),
+  });
+  await act(async () =>
+    hook.result.current.handleStaysWidgetSearch({
+      checkIn: '',
+      checkOut: '',
+      persons: 2,
+      surpriseMe: true,
+    }),
+  );
+  assert.equal(hook.result.current.availabilitySearchState, 'partial');
+  assert.equal(hook.result.current.properties.length, 1);
+});
+
+const normalSearch = { checkIn: '2027-05-01', checkOut: '2027-05-04', persons: 2 };
+
+test('delivers one page first, preserves it on continuation failure and retries the same raw offset', async () => {
+  const offsets: number[] = [];
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  const hook = renderSearchHook({
+    searchAccommodations: async (params) => {
+      offsets.push(params.skip!);
+      if (offsets.length === 2) throw new Error('next page failed');
+      return offsets.length === 1
+        ? {
+            total: 1,
+            data: [property],
+            unquotedCount: 1,
+            pagination: { receivedCount: 12, nextSkip: 12, hasMore: true },
+          }
+        : {
+            total: 2,
+            data: [property, { ...property, id: 'next' }],
+            pagination: { receivedCount: 2, nextSkip: 14, hasMore: false },
+          };
+    },
+  });
+  try {
+    await act(async () => hook.result.current.handleStaysWidgetSearch(normalSearch));
+    assert.deepEqual(offsets, [0]);
+    assert.equal(hook.result.current.properties.length, 1);
+    assert.equal(hook.result.current.searchPagination.hasMore, true);
+    await act(async () => hook.result.current.loadMoreSearchResults());
+    assert.equal(hook.result.current.searchPagination.error, true);
+    assert.deepEqual(hook.result.current.properties, [property]);
+    await act(async () => hook.result.current.loadMoreSearchResults());
+    assert.deepEqual(offsets, [0, 12, 12]);
+    assert.deepEqual(
+      hook.result.current.properties.map((p) => p.id),
+      [property.id, 'next'],
+    );
+    assert.equal(hook.result.current.searchPagination.loadedCount, 2);
+    assert.equal(hook.result.current.searchPagination.hasMore, false);
+    assert.equal(hook.result.current.searchPagination.error, false);
+    assert.equal(hook.result.current.availabilitySearchState, 'partial');
+    await act(async () => hook.result.current.loadMoreSearchResults());
+    assert.equal(offsets.length, 3);
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test('ignores double load-more clicks and discards a continuation after a new search', async () => {
+  let resolveNext!: (page: AccommodationSearchPage) => void;
+  let nextSignal: AbortSignal | undefined;
+  let calls = 0;
+  const hook = renderSearchHook({
+    searchAccommodations: async (params, options) => {
+      calls += 1;
+      if (params.skip === 12) {
+        nextSignal = options?.signal;
+        return new Promise((resolve) => {
+          resolveNext = resolve;
+        });
+      }
+      return {
+        total: 1,
+        data: [{ ...property, id: params.from! }],
+        pagination: { receivedCount: 12, nextSkip: 12, hasMore: true },
+      };
+    },
+  });
+  await act(async () => hook.result.current.handleStaysWidgetSearch(normalSearch));
+  let pending!: Promise<void>;
+  act(() => {
+    pending = hook.result.current.loadMoreSearchResults();
+  });
+  await act(async () => hook.result.current.loadMoreSearchResults());
+  assert.equal(calls, 2);
+  await act(async () =>
+    hook.result.current.handleStaysWidgetSearch({
+      ...normalSearch,
+      checkIn: '2027-06-01',
+      checkOut: '2027-06-04',
+    }),
+  );
+  assert.equal(nextSignal?.aborted, true);
+  await act(async () => {
+    resolveNext({
+      total: 1,
+      data: [property],
+      unquotedCount: 0,
+      pagination: { receivedCount: 1, nextSkip: 13, hasMore: false },
+    });
+    await pending;
+  });
+  assert.deepEqual(
+    hook.result.current.properties.map((p) => p.id),
+    ['2027-06-01'],
+  );
+  assert.equal(hook.result.current.searchPagination.hasMore, true);
+});
+
+test('keeps an all-unquoted first page partial and permits the user to inspect the next page', async () => {
+  const hook = renderSearchHook({
+    searchAccommodations: async (params) =>
+      params.skip === 0
+        ? {
+            total: 0,
+            data: [],
+            unquotedCount: 12,
+            pagination: { receivedCount: 12, nextSkip: 12, hasMore: true },
+          }
+        : {
+            total: 1,
+            data: [property],
+            pagination: { receivedCount: 1, nextSkip: 13, hasMore: false },
+          },
+  });
+  await act(async () => hook.result.current.handleStaysWidgetSearch(normalSearch));
+  assert.equal(hook.result.current.availabilitySearchState, 'partial');
+  assert.equal(hook.result.current.searchPagination.hasMore, true);
+  await act(async () => hook.result.current.loadMoreSearchResults());
+  assert.equal(hook.result.current.properties.length, 1);
+});
+
+test('unmount cancels the active page and prevents further continuation work', async () => {
+  let signal: AbortSignal | undefined;
+  let resolve!: (page: { total: number; data: Property[] }) => void;
+  const hook = renderSearchHook({
+    searchAccommodations: (_params, options) => {
+      signal = options?.signal;
+      return new Promise((done) => {
+        resolve = done;
+      });
+    },
+  });
+  let pending!: Promise<void>;
+  act(() => {
+    pending = hook.result.current.handleStaysWidgetSearch(normalSearch);
+  });
+  hook.unmount();
+  assert.equal(signal?.aborted, true);
+  resolve({ total: 1, data: [property] });
+  await pending;
+});
+
+test('returning from detail preserves delivered pages for the same search but restores a different context', async () => {
+  let calls = 0;
+  const hook = renderSearchHook({
+    searchAccommodations: async (params) => {
+      calls += 1;
+      return {
+        total: 1,
+        data: [{ ...property, id: String(params.skip) }],
+        pagination: { receivedCount: 12, nextSkip: (params.skip ?? 0) + 12, hasMore: calls === 1 },
+      };
+    },
+  });
+  await act(async () => hook.result.current.handleStaysWidgetSearch(normalSearch));
+  await act(async () => hook.result.current.loadMoreSearchResults());
+  const restored = {
+    ...createDefaultSearchFilters(),
+    checkIn: normalSearch.checkIn,
+    checkOut: normalSearch.checkOut,
+    guests: { adults: 2, children: 0, infants: 0, pets: 0 },
+  };
+  await act(async () =>
+    hook.result.current.restoreSearchFromUrlRef.current(restored, { scrollCatalog: false }),
+  );
+  assert.equal(calls, 2);
+  assert.equal(hook.result.current.properties.length, 2);
+  await act(async () =>
+    hook.result.current.restoreSearchFromUrlRef.current(
+      { ...restored, checkOut: '2027-05-05' },
+      { scrollCatalog: false },
+    ),
+  );
+  assert.equal(calls, 3);
+  assert.equal(hook.result.current.properties.length, 1);
+});
+
+test('surprise search does not declare no availability when its candidate pages remain incomplete', async () => {
+  const hook = renderSearchHook({
+    searchAccommodations: async () => ({
+      total: 0,
+      data: [],
+      unquotedCount: 1,
+      pagination: { receivedCount: 12, nextSkip: 12, hasMore: true },
+    }),
+  });
+  await act(async () =>
+    hook.result.current.handleStaysWidgetSearch({
+      checkIn: '',
+      checkOut: '',
+      persons: 2,
+      surpriseMe: true,
+    }),
+  );
+  assert.equal(hook.result.current.availabilitySearchState, 'error');
+  assert.equal(hook.result.current.searchPagination.active, false);
 });
