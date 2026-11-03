@@ -89,6 +89,7 @@ interface MainContentRouterProps {
   accessToken: string | undefined;
   ownerAccessStatus?: OwnerAccessStatus;
   isOwnerAdmin: boolean;
+  canManagePayments: boolean;
   onFiltersChange: Dispatch<SetStateAction<SearchFilters>>;
   onRemoveDestinationFilter: () => void;
   onRemoveDateFilter: () => void;
@@ -142,6 +143,7 @@ export function MainContentRouter({
   accessToken,
   ownerAccessStatus = 'none',
   isOwnerAdmin,
+  canManagePayments,
   onFiltersChange,
   onRemoveDestinationFilter,
   onRemoveDateFilter,
@@ -436,7 +438,7 @@ export function MainContentRouter({
 
       {!selectedProperty && currentView === 'ownerAdmin' && isOwnerAdmin && accessToken && (
         <LazyFeatureBoundary>
-          <OwnerAccessAdminView accessToken={accessToken} />
+          <OwnerAccessAdminView accessToken={accessToken} canManagePayments={canManagePayments} />
         </LazyFeatureBoundary>
       )}
     </main>

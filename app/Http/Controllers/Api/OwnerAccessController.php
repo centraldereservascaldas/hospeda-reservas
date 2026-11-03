@@ -34,8 +34,8 @@ class OwnerAccessController extends Controller
         if ($access?->status === 'approved' || $access?->status === 'pending') {
             return response()->json(['success' => true, 'status' => $access->status]);
         }
-        if ($access?->status === 'suspended') {
-            return response()->json(['success' => false, 'code' => 'owner_access_suspended', 'message' => 'Entre em contato com a Central para revisar o acesso.'], 403);
+        if (in_array($access?->status, ['suspended', 'rejected'], true)) {
+            return response()->json(['success' => false, 'code' => 'owner_access_not_available', 'message' => 'Entre em contato com a Central para revisar o acesso.'], 403);
         }
         OwnerAccess::query()->updateOrCreate(['user_id' => $guest->id], ['full_name' => $guest->fullName, 'status' => 'pending', 'stays_owner_id' => null, 'approved_at' => null]);
 

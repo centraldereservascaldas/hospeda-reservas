@@ -20,6 +20,7 @@ import {
 
 interface OwnerAccessAdminViewProps {
   accessToken: string;
+  canManagePayments: boolean;
 }
 
 type ConfirmationEmailStatus = NonNullable<
@@ -35,7 +36,10 @@ const confirmationEmailStatusLabels: Record<ConfirmationEmailStatus, string> = {
   skipped: 'não enviado: reserva não está mais confirmada',
 };
 
-export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ accessToken }) => {
+export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
+  accessToken,
+  canManagePayments,
+}) => {
   const [requests, setRequests] = useState<OwnerAccessRequest[]>([]);
   const [operationsOrders, setOperationsOrders] = useState<DirectBookingOperationsOrder[]>([]);
   const [unmatchedWebhooks, setUnmatchedWebhooks] = useState<DirectBookingOperationsWebhook[]>([]);
@@ -78,6 +82,10 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
   }, [accessToken, refreshKey]);
 
   useEffect(() => {
+    if (!canManagePayments) {
+      setOperationsLoading(false);
+      return;
+    }
     let active = true;
     setOperationsLoading(true);
     setOperationsError('');
@@ -113,168 +121,174 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
     return () => {
       active = false;
     };
-  }, [accessToken, operationsPage, webhookPage, operationsRefreshKey]);
+  }, [accessToken, canManagePayments, operationsPage, webhookPage, operationsRefreshKey]);
 
   const handleApproved = () => setRefreshKey((value) => value + 1);
 
   return (
     <section className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-10">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">
-              <AlertCircle className="h-4 w-4" aria-hidden="true" /> Operação de vendas diretas
-            </div>
-            <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">
-              Itens que precisam de ação
-            </h1>
-            <p className="mt-1 max-w-2xl text-sm text-neutral-600">
-              Pedidos em conferência e notificações de pagamento sem tentativa local correspondente.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setOperationsRefreshKey((value) => value + 1)}
-            disabled={operationsLoading}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/80 bg-white/75 px-4 py-2.5 text-sm font-bold text-neutral-700 shadow-sm backdrop-blur-xl hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-60"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${operationsLoading ? 'animate-spin' : ''}`}
-              aria-hidden="true"
-            />{' '}
-            Atualizar fila
-          </button>
-        </div>
-        {operationsError && (
-          <div
-            role="alert"
-            className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800"
-          >
-            {operationsError}
-          </div>
-        )}
-        {operationsLoading ? (
-          <div
-            className="flex items-center justify-center gap-2 rounded-3xl border border-white/80 bg-white/65 p-8 text-sm font-semibold text-neutral-600 backdrop-blur-xl"
-            role="status"
-          >
-            <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" /> Carregando pedidos…
-          </div>
-        ) : !operationsError && operationsOrders.length === 0 && unmatchedWebhookTotal === 0 ? (
-          <div className="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-8 text-center text-sm font-semibold text-emerald-900">
-            Nenhum pedido exige ação operacional agora.
-          </div>
-        ) : (
-          <>
-            {!operationsError && unmatchedWebhookTotal > 0 && unmatchedWebhooks.length === 0 && (
-              <p role="alert">
-                Há {unmatchedWebhookTotal} notificação(ões) pendente(s) sem detalhes disponíveis.
-                Atualize a fila para tentar novamente.
+      {canManagePayments && (
+        <div className="mb-10">
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">
+                <AlertCircle className="h-4 w-4" aria-hidden="true" /> Operação de vendas diretas
+              </div>
+              <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">
+                Itens que precisam de ação
+              </h1>
+              <p className="mt-1 max-w-2xl text-sm text-neutral-600">
+                Pedidos em conferência e notificações de pagamento sem tentativa local
+                correspondente.
               </p>
-            )}
-            {unmatchedWebhooks.length > 0 && (
-              <section aria-labelledby="unmatched-webhooks-title" className="mb-6 space-y-3">
-                <div>
-                  <h2
-                    id="unmatched-webhooks-title"
-                    className="text-base font-extrabold text-neutral-900"
+            </div>
+            <button
+              type="button"
+              onClick={() => setOperationsRefreshKey((value) => value + 1)}
+              disabled={operationsLoading}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/80 bg-white/75 px-4 py-2.5 text-sm font-bold text-neutral-700 shadow-sm backdrop-blur-xl hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-60"
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${operationsLoading ? 'animate-spin' : ''}`}
+                aria-hidden="true"
+              />{' '}
+              Atualizar fila
+            </button>
+          </div>
+          {operationsError && (
+            <div
+              role="alert"
+              className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800"
+            >
+              {operationsError}
+            </div>
+          )}
+          {operationsLoading ? (
+            <div
+              className="flex items-center justify-center gap-2 rounded-3xl border border-white/80 bg-white/65 p-8 text-sm font-semibold text-neutral-600 backdrop-blur-xl"
+              role="status"
+            >
+              <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" /> Carregando
+              pedidos…
+            </div>
+          ) : !operationsError && operationsOrders.length === 0 && unmatchedWebhookTotal === 0 ? (
+            <div className="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-8 text-center text-sm font-semibold text-emerald-900">
+              Nenhum pedido exige ação operacional agora.
+            </div>
+          ) : (
+            <>
+              {!operationsError && unmatchedWebhookTotal > 0 && unmatchedWebhooks.length === 0 && (
+                <p role="alert">
+                  Há {unmatchedWebhookTotal} notificação(ões) pendente(s) sem detalhes disponíveis.
+                  Atualize a fila para tentar novamente.
+                </p>
+              )}
+              {unmatchedWebhooks.length > 0 && (
+                <section aria-labelledby="unmatched-webhooks-title" className="mb-6 space-y-3">
+                  <div>
+                    <h2
+                      id="unmatched-webhooks-title"
+                      className="text-base font-extrabold text-neutral-900"
+                    >
+                      Notificações sem pedido vinculado
+                    </h2>
+                    <p className="mt-1 text-xs text-neutral-600">
+                      {unmatchedWebhookTotal} notificação(ões) aguardam associação ou conferência.
+                      {unmatchedWebhookTotal > 0 &&
+                        ` · página ${webhookPage} de ${Math.max(webhookLastPage, 1)}`}
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    {unmatchedWebhooks.map((webhook) => (
+                      <UnmatchedWebhookCard
+                        key={webhook.id}
+                        webhook={webhook}
+                        accessToken={accessToken}
+                        onRetried={() => setOperationsRefreshKey((value) => value + 1)}
+                      />
+                    ))}
+                  </div>
+                  <nav
+                    aria-label="Paginação das notificações sem pedido vinculado"
+                    className="flex flex-wrap items-center justify-between gap-3"
                   >
-                    Notificações sem pedido vinculado
+                    <p className="text-xs text-neutral-600">
+                      {unmatchedWebhookTotal} notificação(ões) · página {webhookPage} de{' '}
+                      {Math.max(webhookLastPage, 1)}
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setWebhookPage((page) => Math.max(1, page - 1))}
+                        disabled={operationsLoading || webhookPage <= 1}
+                        className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Anterior
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setWebhookPage((page) => Math.min(webhookLastPage, page + 1))
+                        }
+                        disabled={operationsLoading || webhookPage >= webhookLastPage}
+                        className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Próxima <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </nav>
+                </section>
+              )}
+              {operationsOrders.length > 0 && (
+                <>
+                  <h2 className="mb-3 text-base font-extrabold text-neutral-900">
+                    Pedidos em conferência
                   </h2>
-                  <p className="mt-1 text-xs text-neutral-600">
-                    {unmatchedWebhookTotal} notificação(ões) aguardam associação ou conferência.
-                    {unmatchedWebhookTotal > 0 &&
-                      ` · página ${webhookPage} de ${Math.max(webhookLastPage, 1)}`}
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  {unmatchedWebhooks.map((webhook) => (
-                    <UnmatchedWebhookCard
-                      key={webhook.id}
-                      webhook={webhook}
-                      accessToken={accessToken}
-                      onRetried={() => setOperationsRefreshKey((value) => value + 1)}
-                    />
-                  ))}
-                </div>
-                <nav
-                  aria-label="Paginação das notificações sem pedido vinculado"
-                  className="flex flex-wrap items-center justify-between gap-3"
-                >
-                  <p className="text-xs text-neutral-600">
-                    {unmatchedWebhookTotal} notificação(ões) · página {webhookPage} de{' '}
-                    {Math.max(webhookLastPage, 1)}
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setWebhookPage((page) => Math.max(1, page - 1))}
-                      disabled={operationsLoading || webhookPage <= 1}
-                      className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Anterior
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setWebhookPage((page) => Math.min(webhookLastPage, page + 1))}
-                      disabled={operationsLoading || webhookPage >= webhookLastPage}
-                      className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Próxima <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
+                  <div className="space-y-3">
+                    {operationsOrders.map((order) => (
+                      <DirectBookingOperationsCard
+                        key={order.id}
+                        order={order}
+                        accessToken={accessToken}
+                        onUpdated={() => setOperationsRefreshKey((value) => value + 1)}
+                      />
+                    ))}
                   </div>
-                </nav>
-              </section>
-            )}
-            {operationsOrders.length > 0 && (
-              <>
-                <h2 className="mb-3 text-base font-extrabold text-neutral-900">
-                  Pedidos em conferência
-                </h2>
-                <div className="space-y-3">
-                  {operationsOrders.map((order) => (
-                    <DirectBookingOperationsCard
-                      key={order.id}
-                      order={order}
-                      accessToken={accessToken}
-                      onUpdated={() => setOperationsRefreshKey((value) => value + 1)}
-                    />
-                  ))}
-                </div>
-                <nav
-                  aria-label="Paginação dos pedidos em conferência"
-                  className="mt-4 flex flex-wrap items-center justify-between gap-3"
-                >
-                  <p className="text-xs text-neutral-600">
-                    {operationsTotal} pedido(s) · página {operationsPage} de{' '}
-                    {Math.max(operationsLastPage, 1)}
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setOperationsPage((page) => Math.max(1, page - 1))}
-                      disabled={operationsLoading || operationsPage <= 1}
-                      className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Anterior
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setOperationsPage((page) => Math.min(operationsLastPage, page + 1))
-                      }
-                      disabled={operationsLoading || operationsPage >= operationsLastPage}
-                      className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Próxima <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                </nav>
-              </>
-            )}
-          </>
-        )}
-      </div>
+                  <nav
+                    aria-label="Paginação dos pedidos em conferência"
+                    className="mt-4 flex flex-wrap items-center justify-between gap-3"
+                  >
+                    <p className="text-xs text-neutral-600">
+                      {operationsTotal} pedido(s) · página {operationsPage} de{' '}
+                      {Math.max(operationsLastPage, 1)}
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setOperationsPage((page) => Math.max(1, page - 1))}
+                        disabled={operationsLoading || operationsPage <= 1}
+                        className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Anterior
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOperationsPage((page) => Math.min(operationsLastPage, page + 1))
+                        }
+                        disabled={operationsLoading || operationsPage >= operationsLastPage}
+                        className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Próxima <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </nav>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       <div className="border-t border-neutral-200 pt-8">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -1081,6 +1095,27 @@ const OwnerRequestCard: React.FC<{
     }
   };
 
+  const handleReject = async () => {
+    if (
+      !window.confirm(
+        `Recusar o acesso de ${request.fullName || request.email || 'este solicitante'}?`,
+      )
+    )
+      return;
+    setSaving(true);
+    setError('');
+    try {
+      await crcnBackendApi.rejectOwnerAccess(accessToken, request.userId);
+      onApproved();
+    } catch (rejectError) {
+      setError(
+        rejectError instanceof Error ? rejectError.message : 'Não foi possível recusar o acesso.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const requestedAt = request.requestedAt
     ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(
         new Date(request.requestedAt),
@@ -1184,6 +1219,14 @@ const OwnerRequestCard: React.FC<{
         </p>
       )}
       <div className="mt-4 flex justify-end">
+        <button
+          type="button"
+          onClick={() => void handleReject()}
+          disabled={saving}
+          className="mr-2 inline-flex min-h-11 items-center rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-45"
+        >
+          Recusar acesso
+        </button>
         <button
           type="button"
           onClick={() => void handleApprove()}

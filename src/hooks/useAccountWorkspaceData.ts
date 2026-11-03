@@ -6,7 +6,7 @@ import type { DirectBookingOrderListItem } from '../services/checkoutApi';
 import type { MainView } from '../components/MobileBottomNavigation';
 
 export type OwnerAccessStatus =
-  'loading' | 'unavailable' | 'none' | 'pending' | 'approved' | 'suspended';
+  'loading' | 'unavailable' | 'none' | 'pending' | 'approved' | 'suspended' | 'rejected';
 
 interface DirectBookingOrdersState {
   accessToken: string | undefined;
@@ -30,6 +30,7 @@ interface OwnerAccessState {
 interface OwnerAdminState {
   accessToken: string | undefined;
   isAdmin: boolean;
+  canManagePayments: boolean;
 }
 
 interface UseAccountWorkspaceDataOptions {
@@ -128,8 +129,11 @@ export function useAccountWorkspaceData({
   const [ownerAdminState, setOwnerAdminState] = useState<OwnerAdminState>({
     accessToken: undefined,
     isAdmin: false,
+    canManagePayments: false,
   });
   const isOwnerAdmin = ownerAdminState.accessToken === accessToken && ownerAdminState.isAdmin;
+  const canManagePayments =
+    ownerAdminState.accessToken === accessToken && ownerAdminState.canManagePayments;
 
   useEffect(() => {
     if (!accessToken) {
@@ -214,7 +218,7 @@ export function useAccountWorkspaceData({
   useEffect(() => {
     if (!accessToken) {
       setOwnerAccessState({ accessToken: undefined, status: 'none' });
-      setOwnerAdminState({ accessToken: undefined, isAdmin: false });
+      setOwnerAdminState({ accessToken: undefined, isAdmin: false, canManagePayments: false });
       if (currentViewRef.current === 'host' || currentViewRef.current === 'ownerAdmin') {
         setCurrentView('explore');
       }
@@ -240,23 +244,23 @@ export function useAccountWorkspaceData({
 
   useEffect(() => {
     if (!accessToken) {
-      setOwnerAdminState({ accessToken: undefined, isAdmin: false });
+      setOwnerAdminState({ accessToken: undefined, isAdmin: false, canManagePayments: false });
       return;
     }
     let cancelled = false;
-    setOwnerAdminState({ accessToken, isAdmin: false });
+    setOwnerAdminState({ accessToken, isAdmin: false, canManagePayments: false });
     void crcnBackendApi
       .getOwnerAdminStatus(accessToken)
-      .then((isAdmin) => {
+      .then(({ isAdmin, canManagePayments }) => {
         if (cancelled) return;
-        setOwnerAdminState({ accessToken, isAdmin });
+        setOwnerAdminState({ accessToken, isAdmin, canManagePayments });
         if (!isAdmin && currentViewRef.current === 'ownerAdmin') {
           setCurrentView('explore');
         }
       })
       .catch(() => {
         if (cancelled) return;
-        setOwnerAdminState({ accessToken, isAdmin: false });
+        setOwnerAdminState({ accessToken, isAdmin: false, canManagePayments: false });
         if (currentViewRef.current === 'ownerAdmin') setCurrentView('explore');
       });
     return () => {
@@ -276,5 +280,6 @@ export function useAccountWorkspaceData({
     ownerAccessStatus,
     setOwnerAccessStatus,
     isOwnerAdmin,
+    canManagePayments,
   };
 }

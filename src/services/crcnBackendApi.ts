@@ -117,7 +117,7 @@ const isSuggestedFilters = (
   (value.to === undefined || isIsoDate(value.to)) &&
   (value.from === undefined || value.to === undefined || value.to > value.from);
 
-export type OwnerAccessStatus = 'none' | 'pending' | 'approved' | 'suspended';
+export type OwnerAccessStatus = 'none' | 'pending' | 'approved' | 'suspended' | 'rejected';
 
 export interface OwnerAccessRequest {
   userId: string;
@@ -920,19 +920,28 @@ class CrcnBackendApiService {
     }
   }
 
-  public async getOwnerAdminStatus(accessToken: string): Promise<boolean> {
+  public async getOwnerAdminStatus(accessToken: string): Promise<{
+    isAdmin: boolean;
+    canManagePayments: boolean;
+  }> {
     const res = await apiFetch('/api/owner/admin/status', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
-    if (!res.ok || !isRecord(json) || json.success !== true || typeof json.isAdmin !== 'boolean') {
+    if (
+      !res.ok ||
+      !isRecord(json) ||
+      json.success !== true ||
+      typeof json.isAdmin !== 'boolean' ||
+      typeof json.canManagePayments !== 'boolean'
+    ) {
       throw new Error(
         isRecord(json) && typeof json.message === 'string'
           ? json.message
           : 'Não foi possível verificar o acesso administrativo.',
       );
     }
-    return json.isAdmin;
+    return { isAdmin: json.isAdmin, canManagePayments: json.canManagePayments };
   }
 
   public async getOwnerAccessRequests(accessToken: string): Promise<OwnerAccessRequest[]> {
@@ -1183,6 +1192,22 @@ class CrcnBackendApiService {
         isRecord(json) && typeof json.message === 'string'
           ? json.message
           : 'Não foi possível aprovar o acesso.',
+      );
+    }
+  }
+
+  public async rejectOwnerAccess(accessToken: string, userId: string): Promise<void> {
+    const res = await apiFetch('/api/owner/admin/reject', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    const json: unknown = await res.json();
+    if (!res.ok || !isRecord(json) || json.success !== true || json.status !== 'rejected') {
+      throw new Error(
+        isRecord(json) && typeof json.message === 'string'
+          ? json.message
+          : 'Não foi possível recusar o acesso.',
       );
     }
   }

@@ -36,15 +36,22 @@ class OwnerAdminController extends Controller
     public function status(Request $request): JsonResponse
     {
         $admins = config('services.hospeda.owner_admin_emails', []);
-        if ($admins === []) {
-            return response()->json(['success' => true, 'isAdmin' => false]);
+        $reviewers = config('services.hospeda.owner_reviewer_emails', []);
+        if ($admins === [] && $reviewers === []) {
+            return response()->json(['success' => true, 'isAdmin' => false, 'canManagePayments' => false]);
         }
         $guest = $request->attributes->get('verified_guest');
         if (! $guest instanceof VerifiedGuest) {
             return response()->json(['success' => false, 'code' => 'invalid_session'], 401);
         }
 
-        return response()->json(['success' => true, 'isAdmin' => in_array($guest->email, $admins, true)]);
+        $canManagePayments = in_array($guest->email, $admins, true);
+
+        return response()->json([
+            'success' => true,
+            'isAdmin' => $canManagePayments || in_array($guest->email, $reviewers, true),
+            'canManagePayments' => $canManagePayments,
+        ]);
     }
 
     public function requests(): JsonResponse
@@ -608,5 +615,26 @@ class OwnerAdminController extends Controller
         }
 
         return response()->json(['success' => true, 'status' => 'approved']);
+    }
+
+    public function reject(Request $request): JsonResponse
+    {
+        $input = $request->validate(['userId' => ['required', 'uuid']]);
+        $reviewer = $request->attributes->get('verified_guest');
+        $updated = OwnerAccess::query()
+            ->where('user_id', $input['userId'])
+            ->where('status', 'pending')
+            ->update([
+                'status' => 'rejected',
+                'stays_owner_id' => null,
+                'approved_at' => null,
+                'reviewed_at' => now(),
+                'reviewed_by' => $reviewer instanceof VerifiedGuest ? $reviewer->id : null,
+            ]);
+        if ($updated !== 1) {
+            return response()->json(['success' => false, 'code' => 'owner_request_not_pending', 'message' => 'Esta solicitação não está mais pendente.'], 409);
+        }
+
+        return response()->json(['success' => true, 'status' => 'rejected']);
     }
 }

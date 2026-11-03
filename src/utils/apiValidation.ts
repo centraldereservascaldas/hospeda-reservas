@@ -21,8 +21,12 @@ const isPositiveNumber = (value: unknown): value is number => isFiniteNumber(val
 
 export const isOwnerAccessStatus = (
   value: unknown,
-): value is 'none' | 'pending' | 'approved' | 'suspended' =>
-  value === 'none' || value === 'pending' || value === 'approved' || value === 'suspended';
+): value is 'none' | 'pending' | 'approved' | 'suspended' | 'rejected' =>
+  value === 'none' ||
+  value === 'pending' ||
+  value === 'approved' ||
+  value === 'suspended' ||
+  value === 'rejected';
 
 export const isIsoDate = (value: unknown): value is string => {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;

@@ -118,6 +118,10 @@ return [
             static fn (string $email): string => mb_strtolower(trim($email)),
             explode(',', (string) env('OWNER_ADMIN_EMAILS', '')),
         ))),
+        'owner_reviewer_emails' => array_values(array_filter(array_map(
+            static fn (string $email): string => mb_strtolower(trim($email)),
+            explode(',', (string) env('OWNER_REVIEWER_EMAILS', '')),
+        ))),
     ],
 
 ];

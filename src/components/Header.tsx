@@ -31,7 +31,8 @@ interface HeaderProps {
   onOpenAccount: (mode: 'login' | 'signup') => void;
   accountButtonRef?: React.RefObject<HTMLButtonElement | null>;
   onSignOut: () => Promise<void>;
-  ownerAccessStatus: 'loading' | 'unavailable' | 'none' | 'pending' | 'approved' | 'suspended';
+  ownerAccessStatus:
+    'loading' | 'unavailable' | 'none' | 'pending' | 'approved' | 'suspended' | 'rejected';
   ownerRequestLoading: boolean;
   onRequestOwnerAccess: () => Promise<void>;
   isOwnerAdmin: boolean;
@@ -478,7 +479,8 @@ export const Header: React.FC<HeaderProps> = ({
                               </span>
                             </div>
                           )}
-                          {ownerAccessStatus === 'suspended' && (
+                          {(ownerAccessStatus === 'suspended' ||
+                            ownerAccessStatus === 'rejected') && (
                             <div className="px-4 py-2.5 text-[11px] text-neutral-500" role="status">
                               Para revisar seu acesso de proprietário, fale com a Central.
                             </div>

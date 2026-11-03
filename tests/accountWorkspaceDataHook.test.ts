@@ -84,7 +84,7 @@ test('loads reservations and owner permissions with the current access token', a
   };
   crcnBackendApi.getOwnerAdminStatus = async (token) => {
     calls.push(`admin:${token}`);
-    return true;
+    return { isAdmin: true, canManagePayments: false };
   };
 
   try {
@@ -116,8 +116,8 @@ test('ignores responses from a previous account after the access token changes',
   const newReservations = deferred<Reservation[]>();
   const oldOwnerAccess = deferred<'approved' | 'pending'>();
   const newOwnerAccess = deferred<'approved' | 'pending'>();
-  const oldOwnerAdmin = deferred<boolean>();
-  const newOwnerAdmin = deferred<boolean>();
+  const oldOwnerAdmin = deferred<{ isAdmin: boolean; canManagePayments: boolean }>();
+  const newOwnerAdmin = deferred<{ isAdmin: boolean; canManagePayments: boolean }>();
   crcnBackendApi.getMyReservations = (token) =>
     token === 'old-token' ? oldReservations.promise : newReservations.promise;
   crcnBackendApi.getOwnerAccess = (token) =>
@@ -132,7 +132,7 @@ test('ignores responses from a previous account after the access token changes',
     await act(async () => {
       newReservations.resolve([reservation('new-account')]);
       newOwnerAccess.resolve('pending');
-      newOwnerAdmin.resolve(false);
+      newOwnerAdmin.resolve({ isAdmin: false, canManagePayments: false });
     });
     await waitFor(() => {
       assert.equal(result.current.reservations[0]?.id, 'new-account');
@@ -143,7 +143,7 @@ test('ignores responses from a previous account after the access token changes',
     await act(async () => {
       oldReservations.resolve([reservation('old-account')]);
       oldOwnerAccess.resolve('approved');
-      oldOwnerAdmin.resolve(true);
+      oldOwnerAdmin.resolve({ isAdmin: true, canManagePayments: true });
     });
     assert.equal(result.current.reservations[0]?.id, 'new-account');
     assert.equal(result.current.ownerAccessStatus, 'pending');
@@ -163,7 +163,7 @@ test('clears signed-out data and redirects from owner views; admin denial redire
   };
   crcnBackendApi.getMyReservations = async () => [reservation('reservation-live')];
   crcnBackendApi.getOwnerAccess = async () => 'approved';
-  crcnBackendApi.getOwnerAdminStatus = async () => false;
+  crcnBackendApi.getOwnerAdminStatus = async () => ({ isAdmin: false, canManagePayments: false });
 
   try {
     const { result, rerender } = renderWorkspace('access-token', 'ownerAdmin');
