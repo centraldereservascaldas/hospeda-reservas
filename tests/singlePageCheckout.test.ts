@@ -359,7 +359,7 @@ test('a Stays reservation requiring review never presents tracking as a generate
   fireEvent.submit(view.container.querySelector('form')!);
 
   await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pagamento não iniciado' })));
-  assert.ok(view.getByText('A reserva da Stays exige conferência. Nenhum pagamento foi iniciado.'));
+  assert.ok(view.getByText(/Nenhum Pix ou cobrança foi iniciado/));
   assert.equal(view.queryByLabelText('Código Pix copia e cola'), null);
   assert.equal(paymentCalls, 0);
 });

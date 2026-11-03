@@ -238,8 +238,7 @@ export function SinglePageCheckout({
         !['cielo', 'cielo_sandbox'].includes(response.payment.provider)
       ) {
         setCheckoutIssue(
-          response.message ||
-            'A reserva precisa de conferência. O pagamento não foi iniciado; não tente pagar novamente.',
+          'Os dados da reserva precisam de conferência. Nenhum Pix ou cobrança foi iniciado. Acompanhe este pedido e fale com nosso atendimento.',
         );
         setAttemptFinished(true);
         throw new Error(
