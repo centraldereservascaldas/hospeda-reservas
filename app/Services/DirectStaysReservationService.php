@@ -105,7 +105,6 @@ class DirectStaysReservationService
                 'children' => (int) $order->guests['children'],
                 'infants' => (int) $order->guests['infants'],
             ],
-            'price' => ['currency' => $order->currency, '_f_expected' => (float) $order->quote_total],
             'internalNote' => $correlation,
         ];
         $action = $this->action($order, 'create_reservation', $payload);

@@ -615,7 +615,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
                     '_idclient' => $payload['_idclient'], 'type' => 'reserved',
                     'checkInDate' => $payload['checkInDate'], 'checkOutDate' => $payload['checkOutDate'],
                     'guests' => $payload['guests'], 'guestsDetails' => $payload['guestsDetails'],
-                    'price' => $payload['price'], 'internalNote' => $payload['internalNote'],
+                    'price' => ['currency' => 'BRL', '_f_total' => 3001], 'internalNote' => $payload['internalNote'],
                 ];
 
                 return Http::response($reservation, 201);
