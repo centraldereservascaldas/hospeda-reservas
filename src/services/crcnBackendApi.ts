@@ -276,6 +276,10 @@ export interface OwnerAccountingDetails {
   };
 }
 
+const calendarExpirations = new WeakMap<StaysCalendarDay[], number>();
+export const getCalendarExpiration = (days: StaysCalendarDay[]): number | undefined =>
+  calendarExpirations.get(days);
+
 class CrcnBackendApiService {
   private getCachedResorts(): Array<{ id: string; name: string }> {
     try {
@@ -527,6 +531,10 @@ class CrcnBackendApiService {
       });
       if (!isRecord(json) || !Array.isArray(json.data) || !json.data.every(isStaysCalendarDay)) {
         return [];
+      }
+      if (isRecord(json.meta) && typeof json.meta.expiresAt === 'string') {
+        const expiration = Date.parse(json.meta.expiresAt);
+        if (Number.isFinite(expiration)) calendarExpirations.set(json.data, expiration);
       }
       return json.data;
     } catch (err) {

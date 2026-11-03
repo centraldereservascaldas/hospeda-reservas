@@ -94,6 +94,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const [isGuestSelectorOpen, setIsGuestSelectorOpen] = useState(false);
   const guestSelectorTriggerRef = useRef<HTMLButtonElement>(null);
   const [guestPopoverPosition, setGuestPopoverPosition] = useState({ top: 0, left: 0, width: 280 });
+  const [draftCheckIn, setDraftCheckIn] = useState(defaultCheckIn);
+  const [draftCheckOut, setDraftCheckOut] = useState(defaultCheckOut);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [activeDateField, setActiveDateField] = useState<'checkIn' | 'checkOut'>('checkIn');
   const [displayedMonth, setDisplayedMonth] = useState(() => {
@@ -123,6 +125,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     loadCalendarThrough,
     retryCalendarExtension,
     retryCalendar,
+    revalidateCalendar,
     retryPrice,
     isCalculatingPrice,
     priceRequestFailed,
@@ -146,7 +149,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     const displayedYear = displayedMonth.getFullYear();
     const displayedMonthIndex = displayedMonth.getMonth();
     if (!Number.isFinite(displayedYear) || !Number.isFinite(displayedMonthIndex)) return;
-    const monthEnd = new Date(displayedYear, displayedMonthIndex + 1, 0);
+    const monthEnd = new Date(displayedYear, displayedMonthIndex + 2, 0);
     const monthEndIso = `${monthEnd.getFullYear()}-${String(monthEnd.getMonth() + 1).padStart(2, '0')}-${String(monthEnd.getDate()).padStart(2, '0')}`;
     if (monthEndIso > calendarCoverageEnd) void loadCalendarThrough(monthEndIso);
   }, [calendarCoverageEnd, displayedMonth, isDatePickerOpen, loadCalendarThrough]);
@@ -238,7 +241,11 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   };
 
   const openDatePicker = (field: 'checkIn' | 'checkOut') => {
-    setActiveDateField(field);
+    revalidateCalendar();
+    setDraftCheckIn(checkIn);
+    setDraftCheckOut(checkOut);
+    setCalendarInteractionMessage('');
+    setActiveDateField(field === 'checkOut' && !checkIn ? 'checkIn' : field);
     const selectedDate = field === 'checkIn' ? checkIn : checkOut || checkIn;
     const date = new Date(`${selectedDate || todayIso}T12:00:00`);
     setDisplayedMonth(new Date(date.getFullYear(), date.getMonth(), 1));
@@ -309,27 +316,22 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         setCalendarInteractionMessage('Esta data não está disponível para check-in.');
         return;
       }
-      hasEditedBookingContextRef.current = true;
-      hasExplicitDateSelectionRef.current = true;
-      setCheckIn(dateValue);
-      if (checkOut && !isCalendarRangeAvailable(calendarDays, dateValue, checkOut)) {
-        setCheckOut('');
+      setDraftCheckIn(dateValue);
+      if (draftCheckOut && !isCalendarRangeAvailable(calendarDays, dateValue, draftCheckOut)) {
+        setDraftCheckOut('');
       }
       setCalendarInteractionMessage('');
       setActiveDateField('checkOut');
       return;
     }
-    if (!isCalendarRangeAvailable(calendarDays, checkIn, dateValue)) {
+    if (!isCalendarRangeAvailable(calendarDays, draftCheckIn, dateValue)) {
       setCalendarInteractionMessage(
         'Esse período inclui uma data indisponível ou não atende à estadia mínima.',
       );
       return;
     }
-    hasEditedBookingContextRef.current = true;
-    hasExplicitDateSelectionRef.current = true;
-    setCheckOut(dateValue);
+    setDraftCheckOut(dateValue);
     setCalendarInteractionMessage('');
-    setIsDatePickerOpen(false);
   };
 
   const selectCalendarDay = (day: StaysCalendarDay) => {
@@ -353,12 +355,10 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       return;
     }
 
-    hasEditedBookingContextRef.current = true;
-    hasExplicitDateSelectionRef.current = true;
-    setCheckIn(selection.checkIn);
-    setCheckOut(selection.checkOut);
+    setDraftCheckIn(selection.checkIn);
+    setDraftCheckOut(selection.checkOut);
     setCalendarInteractionMessage('');
-    setIsDatePickerOpen(false);
+    setActiveDateField('checkOut');
   };
   const handleShare = async () => {
     const url = new URL(window.location.href);
@@ -593,8 +593,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       <PropertyDatePickerDialog
         isOpen={isDatePickerOpen}
         activeDateField={activeDateField}
-        checkIn={checkIn}
-        checkOut={checkOut}
+        checkIn={draftCheckIn}
+        checkOut={draftCheckOut}
         displayedMonth={displayedMonth}
         today={today}
         todayIso={todayIso}
@@ -611,6 +611,25 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         onDisplayedMonthChange={setDisplayedMonth}
         onChooseDate={chooseDate}
         onChooseDateRange={chooseDateRange}
+        onClear={() => {
+          setDraftCheckIn('');
+          setDraftCheckOut('');
+          setActiveDateField('checkIn');
+          setCalendarInteractionMessage('');
+        }}
+        onApply={() => {
+          if (
+            !calendarAvailable ||
+            isLoadingCalendar ||
+            !isCalendarRangeAvailable(calendarDays, draftCheckIn, draftCheckOut)
+          )
+            return;
+          hasEditedBookingContextRef.current = true;
+          hasExplicitDateSelectionRef.current = true;
+          setCheckIn(draftCheckIn);
+          setCheckOut(draftCheckOut);
+          setIsDatePickerOpen(false);
+        }}
         onClose={() => setIsDatePickerOpen(false)}
       />
 

@@ -536,6 +536,7 @@ class DirectStaysReservationService
      */
     private function adoptReservation(DirectBookingOrder $order, string $reservationId, int $holdMinutes, ?DirectBookingStaysAction $action = null, ?array $reservation = null): array
     {
+        app(StaysCalendarService::class)->invalidate($order->stays_listing_id);
         if ($reservationId === '') {
             return $this->attention($order, 'stays_reservation_id_missing', 'A Stays não retornou identificador para a pré-reserva.');
         }
@@ -741,6 +742,8 @@ class DirectStaysReservationService
         if ($order->status === DirectBookingOrderStatus::AtencaoOperacional) {
             return $this->result(false, 'payment_state_changed_during_reservation_release', 'A Stays cancelou a pré-reserva, mas o estado do pagamento mudou durante a liberação. O pedido requer revisão operacional.');
         }
+
+        app(StaysCalendarService::class)->invalidate($order->stays_listing_id);
 
         return $this->result(true, 'reservation_released', 'A Stays retornou type=canceled. A liberação efetiva do inventário da conta ainda requer validação controlada.');
     }
