@@ -18,6 +18,44 @@ class CieloCheckoutPaymentTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_production_pix_requires_payer_document_before_any_gateway_request(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['services.cielo.direct_environment' => 'production']);
+        $order = $this->createPayableOrder();
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            'paymentMethod' => 'pix', 'paymentMethodId' => 'pix',
+        ], ['Idempotency-Key' => 'cielo-pix-missing-document-001', 'X-Checkout-Resume-Token' => 'synthetic-resume-token'])
+            ->assertUnprocessable()->assertJsonValidationErrors('payerIdentification');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_cielo_failure_records_status_and_codes_without_response_personal_data(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['services.cielo.pix_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        Http::fake(['https://apisandbox.cieloecommerce.cielo.com.br/1/sales/' => Http::response([
+            ['Code' => 104, 'Message' => 'PRIVATE_RESPONSE_SENTINEL'],
+        ], 400)]);
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            'paymentMethod' => 'pix', 'paymentMethodId' => 'pix',
+            'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901'],
+        ], ['Idempotency-Key' => 'cielo-pix-safe-diagnostic-001', 'X-Checkout-Resume-Token' => 'synthetic-resume-token'])
+            ->assertServiceUnavailable()->assertJsonPath('code', 'gateway_result_unknown');
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        $diagnostic = json_decode($attempt->gateway_status_detail, true);
+        $this->assertSame(400, $diagnostic['http_status']);
+        $this->assertSame(['104'], $diagnostic['codes']);
+        $this->assertStringNotContainsString('PRIVATE_RESPONSE_SENTINEL', $attempt->gateway_status_detail);
+        $this->assertLessThanOrEqual(25, strlen($attempt->merchant_order_id));
+        Http::assertSent(fn (ClientRequest $request): bool => $request['Customer']['Identity'] === '12345678901');
+    }
+
     public function test_stays_managed_email_allows_cielo_without_smtp(): void
     {
         $this->configureCielo();

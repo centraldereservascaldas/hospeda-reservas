@@ -2,6 +2,10 @@ import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, QrCode, ShieldCheck } from 'lucide-react';
 import { LogoCRCN } from '../LogoCRCN';
 import { CheckoutSupportLink } from './CheckoutSupportLink';
+import {
+  PixPayerIdentificationField,
+  getPixPayerIdentification,
+} from './PixPayerIdentificationField';
 import type { CheckoutModal } from './CheckoutModal';
 import {
   CieloSopCardForm,
@@ -52,6 +56,8 @@ export function SinglePageCheckout({
   const [terms, setTerms] = useState<{ version: string; fields: [string, string][] } | null>(null);
   const [readiness, setReadiness] = useState<CheckoutReadinessResponse | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
+  const [pixPayerDocument, setPixPayerDocument] = useState('');
+  const [gatewayIssue, setGatewayIssue] = useState(false);
   const [cardPricing, setCardPricing] = useState<CieloCardPricing | null>(null);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
@@ -291,6 +297,8 @@ export function SinglePageCheckout({
   const startCieloPix = async (): Promise<void> => {
     if (!pixReady || !accepted)
       throw new Error('Confira e aceite as condições da hospedagem antes de continuar com o Pix.');
+    const payerIdentification = getPixPayerIdentification(pixPayerDocument);
+    if (!payerIdentification) throw new Error('Informe o CPF ou CNPJ de quem vai pagar o Pix.');
     const context = await preparePayment();
     const response = await checkoutApi.createCheckoutPayment(
       context.reference,
@@ -299,10 +307,16 @@ export function SinglePageCheckout({
       {
         paymentMethod: 'pix',
         paymentMethodId: 'pix',
+        payerIdentification,
         idempotencyKey: crypto.randomUUID(),
       },
     );
     if (response.kind !== 'response' || !response.success) {
+      setGatewayIssue(true);
+      setCheckoutIssue(
+        'O Pix não retornou um código de pagamento. Estamos conferindo a tentativa; acompanhe este pedido antes de tentar novamente.',
+      );
+      setAttemptFinished(true);
       throw new Error(
         response.kind === 'response'
           ? response.message
@@ -430,13 +444,15 @@ export function SinglePageCheckout({
                     ? 'Reserva confirmada!'
                     : rejected
                       ? 'Pagamento não aprovado'
-                      : checkoutIssue && !pendingPix
-                        ? 'Pagamento não iniciado'
-                        : pendingPix
-                          ? 'Pague com Pix nesta página'
-                          : statusUnavailable
-                            ? 'Estamos conferindo seu pedido'
-                            : 'Acompanhando sua confirmação'}
+                      : gatewayIssue
+                        ? 'Pagamento em conferência'
+                        : checkoutIssue && !pendingPix
+                          ? 'Pagamento não iniciado'
+                          : pendingPix
+                            ? 'Pague com Pix nesta página'
+                            : statusUnavailable
+                              ? 'Estamos conferindo seu pedido'
+                              : 'Acompanhando sua confirmação'}
                 </h2>
                 <p className="text-sm leading-6 text-neutral-600">
                   {confirmed
@@ -540,6 +556,11 @@ export function SinglePageCheckout({
                         </p>
                       </div>
                     </div>
+                    <PixPayerIdentificationField
+                      value={pixPayerDocument}
+                      onChange={setPixPayerDocument}
+                      disabled={prepared}
+                    />
                   </section>
                 }
                 submitLabel={paymentMethod === 'pix' ? 'Gerar Pix para pagar aqui' : undefined}

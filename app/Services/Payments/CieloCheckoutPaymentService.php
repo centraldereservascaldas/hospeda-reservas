@@ -9,8 +9,10 @@ use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysReservationService;
 use App\Services\MoneyAmount;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -131,7 +133,7 @@ class CieloCheckoutPaymentService
                     'request_fingerprint' => $fingerprint,
                     'gateway_provider' => $this->configuration->provider(),
                     'gateway_merchant_id' => $lockedOrder->gateway_merchant_id,
-                    'merchant_order_id' => str_replace('-', '', (string) Str::uuid()),
+                    'merchant_order_id' => $paymentMethod === 'pix' ? Str::random(25) : str_replace('-', '', (string) Str::uuid()),
                     'payment_method' => $paymentMethod,
                     'payment_method_id' => $paymentMethod === 'card' ? 'cielo_credit_card' : 'cielo_pix',
                     'installments' => $paymentMethod === 'card' ? (int) $input['installments'] : null,
@@ -187,22 +189,34 @@ class CieloCheckoutPaymentService
                 );
             } else {
                 $configuredExpiration = max(60, min(86_400, (int) $this->configuration->value('pix_qr_expiration_seconds')));
-                $remainingSeconds = max(60, min(86_400, now()->diffInSeconds($order->expires_at, false)));
+                $remainingSeconds = max(60, min(86_400, (int) floor(now()->diffInSeconds($order->expires_at, false))));
                 $gatewayPayment = $this->cielo->createPixPayment(
                     (string) $attempt->merchant_order_id,
                     (string) $attempt->amount,
                     (string) $attempt->currency,
                     $order->guest_name,
                     min($configuredExpiration, $remainingSeconds),
+                    $input['payerIdentification']['number'] ?? null,
+                    $input['payerIdentification']['type'] ?? null,
                 );
             }
 
             return $this->applyGatewayPayment($attempt->order, $attempt, $gatewayPayment);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $response = $exception instanceof RequestException ? $exception->response : null;
+            $body = $response?->json();
+            $errors = is_array($body) ? (array_is_list($body) ? $body : [$body]) : [];
+            $codes = collect($errors)->filter(fn (mixed $error): bool => is_array($error))
+                ->map(fn (array $error): string => is_int($error['Code'] ?? null) || is_string($error['Code'] ?? null) ? (string) $error['Code'] : '')
+                ->filter(fn (string $code): bool => preg_match('/^[0-9]{1,8}$/D', $code) === 1)
+                ->take(10)->values()->all();
+            $diagnostic = ['exception' => get_class($exception), 'http_status' => $response?->status(), 'codes' => $codes];
+            Log::warning('Cielo payment submission failed.', ['order_reference' => $order->public_reference, 'attempt_id' => $attempt->id, ...$diagnostic]);
             $attempt->forceFill([
                 'status' => 'unknown',
                 'gateway_status' => 'unknown',
                 'error_code' => 'gateway_result_unknown',
+                'gateway_status_detail' => json_encode($diagnostic, JSON_THROW_ON_ERROR),
             ])->save();
             $this->markOrderForAttention($attempt->order, 'gateway_result_unknown');
 

@@ -84,12 +84,21 @@ class CieloEcommerceClient
         string $currency,
         string $customerName,
         int $expirationSeconds,
+        ?string $customerIdentity = null,
+        ?string $customerIdentityType = null,
     ): array {
         if (! $this->configuration->canCharge() || ! (bool) $this->configuration->value('pix_enabled')) {
             throw new RuntimeException('Cielo Pix payments are disabled.');
         }
         if (! preg_match('/^[A-Za-z0-9]{1,36}$/D', $merchantOrderId)) {
             throw new InvalidArgumentException('A valid Cielo MerchantOrderId is required.');
+        }
+
+        if ($this->configuration->environment() === 'production'
+            && (strlen($merchantOrderId) > 25
+                || ! in_array($customerIdentityType, ['CPF', 'CNPJ'], true)
+                || ! preg_match($customerIdentityType === 'CPF' ? '/^[0-9]{11}$/D' : '/^[0-9]{14}$/D', $customerIdentity ?? ''))) {
+            throw new InvalidArgumentException('Cielo2 Pix requires an order ID up to 25 characters and a payer CPF or CNPJ.');
         }
 
         $amountCents = MoneyAmount::toCents($amount);
@@ -113,7 +122,10 @@ class CieloEcommerceClient
         $response = $this->request($this->configuration->endpoint('transaction'))
             ->post('/1/sales/', [
                 'MerchantOrderId' => $merchantOrderId,
-                'Customer' => ['Name' => mb_substr(trim($customerName), 0, 255)],
+                'Customer' => [
+                    'Name' => mb_substr(trim($customerName), 0, 255),
+                    ...($customerIdentity !== null ? ['Identity' => $customerIdentity, 'IdentityType' => $customerIdentityType] : []),
+                ],
                 'Payment' => $payment,
             ]);
 

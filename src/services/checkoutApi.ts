@@ -114,6 +114,7 @@ export type CheckoutPaymentRequestPayload =
   | {
       paymentMethod: 'pix';
       paymentMethodId: 'pix';
+      payerIdentification?: { type: 'CPF' | 'CNPJ'; number: string };
       idempotencyKey: string;
     }
   | {

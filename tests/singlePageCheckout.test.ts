@@ -313,6 +313,9 @@ test('Pix stays on the checkout, has no surcharge and waits for authoritative co
     ),
   );
   fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), {
+    target: { value: '12345678901' },
+  });
   fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
   fireEvent.submit(view.container.querySelector('form')!);
 
@@ -324,6 +327,73 @@ test('Pix stays on the checkout, has no surcharge and waits for authoritative co
   assert.equal(window.location.pathname, `/checkout/${reference}`);
   assert.ok(view.getByLabelText('Código Pix copia e cola'));
   assert.ok(view.getByText(/só será confirmada após a consulta segura do pagamento/i));
+});
+
+test('Pix requires payer identity before reserving and an uncertain gateway result opens order review once', async () => {
+  const pixPayment = { ...payment, methods: ['card', 'pix'] as Array<'card' | 'pix'> };
+  let orders = 0;
+  checkoutApi.createCheckout = async () => {
+    orders += 1;
+    return {
+      success: true,
+      order,
+      payment: pixPayment,
+      idempotentReplay: false,
+      resume: {
+        reference,
+        token: 'T'.repeat(64),
+        path: `/checkout/${reference}`,
+        expiresAt: order.expiresAt!,
+      },
+    };
+  };
+  checkoutApi.createCheckoutPayment = async (_ref, _credentials, _amount, payload) => {
+    assert.deepEqual(payload.payerIdentification, { type: 'CPF', number: '12345678901' });
+    return {
+      kind: 'response',
+      success: false,
+      code: 'gateway_result_unknown',
+      message: 'Resultado em conferência.',
+      replayed: false,
+      payment: null,
+    };
+  };
+  checkoutApi.resumeCheckout = async () => ({ kind: 'unavailable' });
+  const view = setup(false, pixPayment);
+  await waitFor(() =>
+    assert.equal(
+      view.getByRole('button', { name: 'Pix, aprovação rápida' }).hasAttribute('disabled'),
+      false,
+    ),
+  );
+  fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
+  fireEvent.submit(view.container.querySelector('form')!);
+  assert.equal(
+    (
+      view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/) as HTMLInputElement
+    ).checkValidity(),
+    false,
+  );
+  assert.equal(orders, 0);
+  fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), {
+    target: { value: '12345678901' },
+  });
+  fireEvent.submit(view.container.querySelector('form')!);
+  await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pagamento em conferência' })));
+  assert.equal(orders, 1);
+  assert.equal(view.queryByRole('button', { name: 'Gerar Pix para pagar aqui' }), null);
+  assert.equal(view.getAllByRole('link', { name: /Falar no WhatsApp/ }).length, 1);
+  assert.equal(
+    new URL(
+      view.getByRole('link', { name: /Falar no WhatsApp/ }).getAttribute('href')!,
+    ).searchParams
+      .get('text')!
+      .includes('12345678901'),
+    false,
+  );
+  assert.equal(view.queryByText(/Não foi possível liberar o pagamento para esta acomodação/), null);
+  assert.equal(view.queryByLabelText('Código Pix copia e cola'), null);
 });
 
 test('a Stays reservation requiring review never presents tracking as a generated Pix', async () => {
@@ -357,6 +427,9 @@ test('a Stays reservation requiring review never presents tracking as a generate
     ),
   );
   fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), {
+    target: { value: '12345678901' },
+  });
   fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
   fireEvent.submit(view.container.querySelector('form')!);
 

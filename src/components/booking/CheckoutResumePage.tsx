@@ -18,6 +18,10 @@ import type {
 import { MercadoPagoCardForm } from './MercadoPagoCardForm';
 import { CieloSopCardForm } from './CieloSopCardForm';
 import { CheckoutSupportLink } from './CheckoutSupportLink';
+import {
+  PixPayerIdentificationField,
+  getPixPayerIdentification,
+} from './PixPayerIdentificationField';
 import { CieloCheckoutIframe } from './CieloCheckoutIframe';
 import {
   clearCheckoutResumeToken,
@@ -240,6 +244,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
     status: 'copied' | 'failed';
   } | null>(null);
   const [isStartingPixPayment, setIsStartingPixPayment] = useState(false);
+  const [pixPayerDocument, setPixPayerDocument] = useState('');
   const [paymentStartError, setPaymentStartError] = useState<string | null>(null);
   const [cancellationRequestError, setCancellationRequestError] = useState<string | null>(null);
   const [isRequestingCancellation, setIsRequestingCancellation] = useState(false);
@@ -317,6 +322,11 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
 
   const startPixPayment = async (order: DirectBookingOrderSummary): Promise<void> => {
     if (pixPaymentSubmissionInFlightRef.current) return;
+    const payerIdentification = getPixPayerIdentification(pixPayerDocument);
+    if (!payerIdentification) {
+      setPaymentStartError('Informe o CPF ou CNPJ de quem vai pagar o Pix.');
+      return;
+    }
 
     const credentials = resumeState.kind === 'ready' ? resumeState.credentials : null;
     if (!credentials) {
@@ -344,6 +354,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
         {
           paymentMethod: 'pix',
           paymentMethodId: 'pix',
+          payerIdentification,
           idempotencyKey: pixPaymentIdempotencyKeyRef.current,
         },
       );
@@ -821,6 +832,11 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
 
                         {showPixPaymentAction && (
                           <div className="space-y-3" aria-labelledby="checkout-start-payment-title">
+                            <PixPayerIdentificationField
+                              value={pixPayerDocument}
+                              onChange={setPixPayerDocument}
+                              disabled={isStartingPixPayment}
+                            />
                             <div>
                               <h2 id="checkout-start-payment-title" className="font-extrabold">
                                 {paymentAttempt
