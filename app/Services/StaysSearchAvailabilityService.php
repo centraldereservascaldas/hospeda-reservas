@@ -3,8 +3,11 @@
 namespace App\Services;
 
 use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Contracts\Cache\Repository;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 class StaysSearchAvailabilityService
 {
@@ -16,23 +19,24 @@ class StaysSearchAvailabilityService
      */
     public function search(array $input): ?array
     {
-        $cities = array_values(array_unique($input['cities'] ?? []));
-        sort($cities, SORT_STRING);
-        $context = [
-            'from' => $input['from'], 'to' => $input['to'], 'guests' => (int) ($input['guests'] ?? 1),
-            'properties' => isset($input['propertyId']) ? [$input['propertyId']] : null,
-            'cities' => $cities === [] ? null : $cities, 'limit' => (int) ($input['limit'] ?? 20), 'skip' => (int) ($input['skip'] ?? 0),
-        ];
-        $key = 'stays.search.v1:'.hash('sha256', json_encode([
-            $this->account(), Cache::get($this->generationKey(), 'initial'), $context, $input['destination'] ?? '', 'BRL',
-        ], JSON_THROW_ON_ERROR));
-        $cached = Cache::get($key);
-        if (is_array($cached)) {
-            return $cached;
-        }
         try {
-            return Cache::lock($key.':lock', max(30, (int) config('services.stays.timeout', 10) + 15))->block(3, function () use ($key, $context): ?array {
-                $cached = Cache::get($key);
+            $cities = array_values(array_unique($input['cities'] ?? []));
+            sort($cities, SORT_STRING);
+            $context = [
+                'from' => $input['from'], 'to' => $input['to'], 'guests' => (int) ($input['guests'] ?? 1),
+                'properties' => isset($input['propertyId']) ? [$input['propertyId']] : null,
+                'cities' => $cities === [] ? null : $cities, 'limit' => (int) ($input['limit'] ?? 20), 'skip' => (int) ($input['skip'] ?? 0),
+            ];
+            $key = 'stays.search.v1:'.hash('sha256', json_encode([
+                $this->account(), $this->cache()->get($this->generationKey(), 'initial'), $context, $input['destination'] ?? '', 'BRL',
+            ], JSON_THROW_ON_ERROR));
+            $cached = $this->cache()->get($key);
+            if (is_array($cached)) {
+                return $cached;
+            }
+
+            return $this->cache()->lock($key.':lock', max(30, (int) config('services.stays.timeout', 10) + 15))->block(3, function () use ($key, $context): ?array {
+                $cached = $this->cache()->get($key);
                 if (is_array($cached)) {
                     return $cached;
                 }
@@ -49,19 +53,32 @@ class StaysSearchAvailabilityService
                     'fetchedAt' => $fetchedAt->toIso8601String(), 'expiresAt' => $expiresAt->toIso8601String(),
                 ]];
                 if ($resolved['unquotedCount'] === 0 && $expiresAt->isFuture()) {
-                    Cache::put($key, $result, $expiresAt);
+                    $this->cache()->put($key, $result, $expiresAt);
                 }
 
                 return $result;
             });
-        } catch (LockTimeoutException) {
+        } catch (QueryException|LockTimeoutException $exception) {
+            if ($exception instanceof QueryException) {
+                report(new RuntimeException('The shared search cache could not be accessed.'));
+            }
+
             return null;
         }
     }
 
     public function invalidate(): void
     {
-        Cache::forever($this->generationKey(), (string) Str::uuid());
+        try {
+            $this->cache()->forever($this->generationKey(), (string) Str::uuid());
+        } catch (QueryException $exception) {
+            report(new RuntimeException('The shared search cache could not be invalidated.'));
+        }
+    }
+
+    private function cache(): Repository
+    {
+        return Cache::store((string) config('services.stays.search_cache_store', 'database'));
     }
 
     private function generationKey(): string

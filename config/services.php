@@ -48,6 +48,7 @@ return [
             )),
         ))),
         'timeout' => (int) env('STAYS_TIMEOUT', 10),
+        'search_cache_store' => env('STAYS_SEARCH_CACHE_STORE', 'database'),
         'search_cache_ttl' => (int) env('STAYS_SEARCH_CACHE_TTL', 45),
         'calendar_cache_ttl' => (int) env('STAYS_CALENDAR_CACHE_TTL', 45),
     ],

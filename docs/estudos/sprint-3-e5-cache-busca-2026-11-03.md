@@ -28,3 +28,17 @@ A invalidação do calendário após operações de reserva também troca a gera
 - E6 ainda precisa completar continuidade visual e revalidação de resultados/detalhe. E7 precisa medir comparação integrada e ganho real.
 
 O PR #42 e sua publicação contêm somente a política de cache negativo de assets e as evidências anteriores. A E5 local será revisada e publicada em lote posterior.
+
+## Complemento local: store compartilhado, limpeza e exclusão concorrente
+
+A busca agora usa `services.stays.search_cache_store`, padrão `database`, independente do cache global da aplicação. Reutiliza as tabelas existentes `cache` e `cache_locks`; não adiciona migrations ou dependências. O PostgreSQL já conectado permite compartilhar snapshots e geração de invalidação durante a troca de containers. Nos testes comuns, o store é explicitamente `array` no `phpunit.xml`.
+
+`stays:prune-search-cache` remove somente chaves com o prefixo literal da aplicação + `stays.search.`, já expiradas. Processa no máximo quatro lotes de 500 por execução e repete o predicado de expiração ao deletar para preservar uma eventual renovação concorrente. É agendado a cada cinco minutos em processo de fundo; outros caches e a geração válida permanecem preservados. Stores não relacionais não recebem SQL de limpeza.
+
+Dois processos PHP independentes passaram nos cenários de compartilhamento e timeout: o teste observa a tentativa real de lock ocupada antes de liberar o primeiro processo. Uma única chamada HTTP fake ocorre; o segundo processo reutiliza o mesmo snapshot ou retorna indisponibilidade após a espera limitada. A verificação local usa SQLite; o workflow de release agora também executa concorrência e limpeza no job PostgreSQL. A prova no PostgreSQL depende do CI e ainda não foi obtida.
+
+Falha SQL do cache retorna 503 na busca sem consulta externa desprotegida. A invalidação secundária não propaga falha de cache à operação comercial. Relatórios usam mensagens genéricas, sem registrar SQL ou valores serializados. O checkout continua revalidando ao vivo; falha de invalidação deixa apenas a janela limitada pelo TTL.
+
+Validação: suíte backend de 353 testes passou antes do último ajuste de sanitização dos relatórios; o teste específico é repetido após esse ajuste. Schedule listado localmente com `CACHE_STORE=array` (o SQLite padrão local não está provisionado), sem executar tarefas. Concurrency/limpeza/calendário/reserva foram exercitados em testes. Nenhum comando de limpeza foi executado em produção.
+
+Pendências atualizadas: resultado do gate PostgreSQL, preparação/aquecimento de vitrines e orçamento de consultas externas, descrição resiliente, E6 e verificação integrada E7. A limpeza e a comprovação local de concorrência citadas anteriormente estão implementadas; não considerar a etapa completa com base apenas em SQLite.

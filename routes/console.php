@@ -13,3 +13,5 @@ Schedule::command('direct-booking:recover-confirmation-emails')->everyMinute()->
 Schedule::command('direct-booking:prune-expired-resume-tokens')->dailyAt('03:30')->withoutOverlapping(10);
 
 Schedule::command('stays:sync-discovery')->hourly()->withoutOverlapping(120)->onOneServer();
+
+Schedule::command('stays:prune-search-cache')->everyFiveMinutes()->withoutOverlapping(5)->runInBackground();

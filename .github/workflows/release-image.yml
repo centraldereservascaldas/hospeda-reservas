@@ -114,6 +114,9 @@ jobs:
       - name: Run PostgreSQL migration compatibility test
         run: php artisan test --compact tests/Feature/GatewayProviderMigrationTest.php
 
+      - name: Verify PostgreSQL search cache locking and pruning
+        run: php artisan test --compact tests/Feature/StaysSearchConcurrencyTest.php tests/Feature/PruneStaysSearchCacheTest.php
+
   container-smoke:
     runs-on: ubuntu-latest
     steps:
