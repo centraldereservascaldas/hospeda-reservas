@@ -35,7 +35,7 @@ for (const [label, fields, expected] of [
         { status: 200 },
       );
     try {
-      const result = await checkoutApi.getCheckoutReadiness('JQ08G');
+      const result = await checkoutApi.getCheckoutReadiness(`JQ08G-${label.replaceAll(' ', '-')}`);
       assert.equal(result.kind, expected);
       if (label === 'old backend' && result.kind === 'ready')
         assert.notEqual(result.data.singlePageCheckoutEnabled, true);
@@ -44,6 +44,38 @@ for (const [label, fields, expected] of [
     }
   });
 }
+
+test('readiness prefetch shares the request and briefly reuses an enabled result', async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(
+      JSON.stringify({
+        success: true,
+        ready: true,
+        checkoutEnabled: true,
+        termsAvailable: true,
+        singlePageCheckoutEnabled: true,
+        payment: { enabled: true, methods: ['card'], publicKey: null, provider: 'cielo' },
+      }),
+      { status: 200 },
+    );
+  };
+  try {
+    const [prefetched, opened] = await Promise.all([
+      checkoutApi.getCheckoutReadiness('CACHE-ENTRY'),
+      checkoutApi.getCheckoutReadiness('CACHE-ENTRY'),
+    ]);
+    const checkout = await checkoutApi.getCheckoutReadiness('CACHE-ENTRY');
+    assert.equal(prefetched.kind, 'ready');
+    assert.equal(opened.kind, 'ready');
+    assert.equal(checkout.kind, 'ready');
+    assert.equal(calls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 const order = {
   id: '90c0a1c0-27aa-4a23-8a63-d750de9f183e',
   status: 'pre_reservado',

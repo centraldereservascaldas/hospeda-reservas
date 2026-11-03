@@ -357,7 +357,8 @@ export function SinglePageCheckout({
                 <div>
                   <p className="font-semibold">Hóspedes</p>
                   <p className="mt-1 text-neutral-600">
-                    {countOccupancyGuests(guests)} pessoas
+                    {countOccupancyGuests(guests)}{' '}
+                    {countOccupancyGuests(guests) === 1 ? 'pessoa' : 'pessoas'}
                     {guests.infants > 0 ? ` · ${guests.infants} bebê(s)` : ''}
                     {guests.pets > 0 ? ` · ${guests.pets} pet(s)` : ''}
                   </p>

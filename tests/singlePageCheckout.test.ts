@@ -472,7 +472,7 @@ test('a slow readiness response cannot replace Stays after the timeout', async (
   let finish:
     ((value: Awaited<ReturnType<typeof checkoutApi.getCheckoutReadiness>>) => void) | undefined;
   window.setTimeout = ((callback: () => void, delay?: number) => {
-    if (delay === 2500) {
+    if (delay === 4000) {
       expire = callback;
       return 12345;
     }
@@ -497,6 +497,8 @@ test('a slow readiness response cannot replace Stays after the timeout', async (
         onClose() {},
       }),
     );
+    assert.ok(view.getByRole('heading', { name: 'Preparando seu pagamento' }));
+    assert.ok(view.getByRole('button', { name: 'Voltar ao imóvel' }));
     const { act } = await import('@testing-library/react');
     await act(async () => {
       expire!();

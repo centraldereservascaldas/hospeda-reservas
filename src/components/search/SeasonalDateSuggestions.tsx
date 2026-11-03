@@ -125,71 +125,80 @@ export function SeasonalDateSuggestions({
     let cancelled = false;
     const loadQuotes = async () => {
       const searches = new Map<string, ReturnType<typeof crcnBackendApi.searchAccommodations>>();
-      await Promise.all(
-        suggestions.map(async (suggestion, index) => {
-          if (readCachedQuote(suggestion.id, suggestion, guestCount)) return;
-          let quote: SuggestionQuote = { status: 'unavailable' };
-          try {
-            const searchKey = `${suggestion.checkIn}|${suggestion.checkOut}|${guestCount}`;
-            let search = searches.get(searchKey);
-            if (!search) {
-              search = crcnBackendApi.searchAccommodations({
-                from: suggestion.checkIn,
-                to: suggestion.checkOut,
-                guests: guestCount,
-                limit: 8,
-              });
-              searches.set(searchKey, search);
-            }
-            const result = await search;
-            const confirmed = result.data
-              .map((property) => ({ property, price: confirmedQuote(property) }))
-              .filter(
-                (
-                  item,
-                ): item is {
-                  property: Property;
-                  price: NonNullable<ReturnType<typeof confirmedQuote>>;
-                } => Boolean(item.price),
-              )
-              .sort((first, second) => first.price.totalAmount - second.price.totalAmount);
-            const propertyIndex = suggestion.propertyIndex ?? 0;
-            const featuredConfirmed = confirmed[propertyIndex % Math.max(confirmed.length, 1)];
-            if (featuredConfirmed) {
-              const featured = featuredConfirmed;
+      const loadSuggestion = async (
+        suggestion: HomeDateSuggestion & { id: string; propertyIndex?: number },
+        index: number,
+      ) => {
+        if (readCachedQuote(suggestion.id, suggestion, guestCount)) return;
+        let quote: SuggestionQuote = { status: 'unavailable' };
+        try {
+          const searchKey = `${suggestion.checkIn}|${suggestion.checkOut}|${guestCount}`;
+          let search = searches.get(searchKey);
+          if (!search) {
+            search = crcnBackendApi.searchAccommodations({
+              from: suggestion.checkIn,
+              to: suggestion.checkOut,
+              guests: guestCount,
+              limit: 8,
+            });
+            searches.set(searchKey, search);
+          }
+          const result = await search;
+          const confirmed = result.data
+            .map((property) => ({ property, price: confirmedQuote(property) }))
+            .filter(
+              (
+                item,
+              ): item is {
+                property: Property;
+                price: NonNullable<ReturnType<typeof confirmedQuote>>;
+              } => Boolean(item.price),
+            )
+            .sort((first, second) => first.price.totalAmount - second.price.totalAmount);
+          const propertyIndex = suggestion.propertyIndex ?? 0;
+          const featuredConfirmed = confirmed[propertyIndex % Math.max(confirmed.length, 1)];
+          if (featuredConfirmed) {
+            const featured = featuredConfirmed;
+            quote = {
+              status: 'ready',
+              total: featured.price.totalAmount,
+              nightly: featured.price.dailyRate,
+              properties: confirmed.length,
+              propertyTitle: getPublicPropertyTitle(featured.property.title),
+              propertyImage: featured.property.images[0],
+              propertyLocation: featured.property.complexName || featured.property.location.city,
+            };
+          } else {
+            const featured =
+              result.data[propertyIndex % Math.max(result.data.length, 1)] ||
+              (fallbackProperties.length
+                ? fallbackProperties[index % fallbackProperties.length]
+                : undefined);
+            if (featured) {
               quote = {
-                status: 'ready',
-                total: featured.price.totalAmount,
-                nightly: featured.price.dailyRate,
-                properties: confirmed.length,
-                propertyTitle: getPublicPropertyTitle(featured.property.title),
-                propertyImage: featured.property.images[0],
-                propertyLocation: featured.property.complexName || featured.property.location.city,
+                status: 'unavailable',
+                nightly: featured.pricePerNight,
+                propertyTitle: getPublicPropertyTitle(featured.title),
+                propertyImage: featured.images[0],
+                propertyLocation: featured.complexName || featured.location.city,
               };
-            } else {
-              const featured =
-                result.data[propertyIndex % Math.max(result.data.length, 1)] ||
-                (fallbackProperties.length
-                  ? fallbackProperties[index % fallbackProperties.length]
-                  : undefined);
-              if (featured) {
-                quote = {
-                  status: 'unavailable',
-                  nightly: featured.pricePerNight,
-                  propertyTitle: getPublicPropertyTitle(featured.title),
-                  propertyImage: featured.images[0],
-                  propertyLocation: featured.complexName || featured.location.city,
-                };
-              }
             }
-          } catch {
-            quote = { status: 'unavailable' };
           }
-          writeCachedQuote(suggestion.id, suggestion, guestCount, quote);
-          if (!cancelled) {
-            setQuotes((current) => ({ ...current, [suggestion.id]: quote }));
-          }
-        }),
+        } catch {
+          quote = { status: 'unavailable' };
+        }
+        writeCachedQuote(suggestion.id, suggestion, guestCount, quote);
+        if (!cancelled) {
+          setQuotes((current) => ({ ...current, [suggestion.id]: quote }));
+        }
+      };
+      const firstCollectionSize = collections[0]?.suggestions.length ?? 0;
+      await Promise.all(suggestions.slice(0, firstCollectionSize).map(loadSuggestion));
+      if (cancelled) return;
+      await Promise.all(
+        suggestions
+          .slice(firstCollectionSize)
+          .map((suggestion, index) => loadSuggestion(suggestion, index + firstCollectionSize)),
       );
     };
     void loadQuotes();
