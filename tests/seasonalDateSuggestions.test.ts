@@ -13,22 +13,88 @@ Object.assign(globalThis, {
 });
 
 const React = (await import('react')).default;
-const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react');
+const { act, cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react');
 const { SeasonalDateSuggestions } =
   await import('../src/components/search/SeasonalDateSuggestions.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 const { STAYS_NET_APARTMENTS } = await import('../src/data/staysApartments.ts');
 
-const originalSearch = crcnBackendApi.searchAccommodations;
+import type {
+  AccommodationSearchPage,
+  SearchAccommodationsParams,
+} from '../src/services/crcnBackendApi.ts';
+import type { ScheduledRequestOptions } from '../src/services/requestScheduler.ts';
+
+const originalSearch = crcnBackendApi.searchAccommodationsPage;
+
+function mockSearch(
+  search: (
+    params: SearchAccommodationsParams,
+    options?: ScheduledRequestOptions,
+  ) => Promise<Pick<AccommodationSearchPage, 'data' | 'total'> & Partial<AccommodationSearchPage>>,
+) {
+  crcnBackendApi.searchAccommodationsPage = async (params, options) => {
+    const result = await search(params, options);
+    return {
+      ...result,
+      unquotedCount: result.unquotedCount ?? 0,
+      pagination: result.pagination ?? {
+        receivedCount: result.data.length,
+        nextSkip: (params.skip ?? 0) + result.data.length,
+        hasMore: false,
+      },
+    };
+  };
+}
+
+class VisibilityObserver {
+  static automatic = true;
+  static instances = new Set<VisibilityObserver>();
+  readonly targets = new Set<Element>();
+  constructor(private callback: ConstructorParameters<typeof IntersectionObserver>[0]) {
+    VisibilityObserver.instances.add(this);
+  }
+  observe(element: Element) {
+    this.targets.add(element);
+    if (VisibilityObserver.automatic) this.emit(element, true);
+  }
+  disconnect() {
+    this.targets.clear();
+    VisibilityObserver.instances.delete(this);
+  }
+  emit(element: Element, visible: boolean) {
+    this.callback(
+      [
+        {
+          target: element,
+          isIntersecting: visible,
+          intersectionRatio: visible ? 1 : 0,
+          boundingClientRect: element.getBoundingClientRect(),
+          intersectionRect: element.getBoundingClientRect(),
+          rootBounds: null,
+          time: 0,
+        },
+      ],
+      this as unknown as IntersectionObserver,
+    );
+  }
+  static show(key: string, visible: boolean) {
+    for (const instance of this.instances)
+      for (const element of instance.targets)
+        if (element.getAttribute('data-discovery-query') === key) instance.emit(element, visible);
+  }
+}
+Object.assign(globalThis, { IntersectionObserver: VisibilityObserver });
 
 afterEach(() => {
   cleanup();
+  VisibilityObserver.automatic = true;
   window.sessionStorage.clear();
-  crcnBackendApi.searchAccommodations = originalSearch;
+  crcnBackendApi.searchAccommodationsPage = originalSearch;
 });
 
 test('shows date suggestions with real quoted totals and applies the selected period', async () => {
-  crcnBackendApi.searchAccommodations = async () => ({
+  mockSearch(async () => ({
     total: 1,
     data: [
       {
@@ -44,7 +110,7 @@ test('shows date suggestions with real quoted totals and applies the selected pe
         },
       },
     ],
-  });
+  }));
   const selections: Array<{ checkIn: string; checkOut: string }> = [];
 
   render(
@@ -72,9 +138,9 @@ test('shows date suggestions with real quoted totals and applies the selected pe
 });
 
 test('keeps a consultation failure separate from no availability and never caches it', async () => {
-  crcnBackendApi.searchAccommodations = async () => {
+  mockSearch(async () => {
     throw new Error('offline');
-  };
+  });
   render(
     React.createElement(SeasonalDateSuggestions, {
       currency: 'BRL',
@@ -100,7 +166,7 @@ test('does not use a neighbouring apartment quote for another unit of the same c
     maxGuests: 4,
   };
   const unitB = { ...unitA, id: 'unit-b', title: 'Apartamento B', staysListingId: 'unit-b' };
-  crcnBackendApi.searchAccommodations = async (params) => ({
+  mockSearch(async (params) => ({
     total: 1,
     data: params.from
       ? [
@@ -118,7 +184,7 @@ test('does not use a neighbouring apartment quote for another unit of the same c
           },
         ]
       : [unitB],
-  });
+  }));
   render(
     React.createElement(SeasonalDateSuggestions, {
       currency: 'BRL',
@@ -138,7 +204,7 @@ test('does not use a neighbouring apartment quote for another unit of the same c
 });
 
 test('hides quotes from a previous occupancy while the new search is pending', async () => {
-  crcnBackendApi.searchAccommodations = async (params) => {
+  mockSearch(async (params) => {
     if (params.guests === 3) return new Promise(() => {});
     return {
       total: 1,
@@ -160,7 +226,7 @@ test('hides quotes from a previous occupancy while the new search is pending', a
         },
       ],
     };
-  };
+  });
   const props = {
     currency: 'BRL' as const,
     guestCount: 2,
@@ -181,7 +247,7 @@ test('hides quotes from a previous occupancy while the new search is pending', a
 
 test('does not restore an expired price as a confirmed offer on the next visit', async () => {
   const now = Date.now;
-  crcnBackendApi.searchAccommodations = async (params) => ({
+  mockSearch(async (params) => ({
     total: 1,
     data: [
       {
@@ -200,7 +266,7 @@ test('does not restore an expired price as a confirmed offer on the next visit',
         },
       },
     ],
-  });
+  }));
   const props = {
     currency: 'BRL' as const,
     guestCount: 2,
@@ -213,7 +279,7 @@ test('does not restore an expired price as a confirmed offer on the next visit',
   try {
     const expiredNow = now() + 46_000;
     Date.now = () => expiredNow;
-    crcnBackendApi.searchAccommodations = async () => new Promise(() => {});
+    mockSearch(async () => new Promise(() => {}));
     render(React.createElement(SeasonalDateSuggestions, props));
     assert.doesNotMatch(document.body.textContent || '', /R\$ 500/);
   } finally {
@@ -222,7 +288,7 @@ test('does not restore an expired price as a confirmed offer on the next visit',
 });
 
 test('prioritizes only the first collection cover and supplies responsive image variants', async () => {
-  crcnBackendApi.searchAccommodations = async (params) => ({
+  mockSearch(async (params) => ({
     total: 1,
     data: [
       {
@@ -242,7 +308,7 @@ test('prioritizes only the first collection cover and supplies responsive image 
         },
       },
     ],
-  });
+  }));
   render(
     React.createElement(SeasonalDateSuggestions, {
       currency: 'BRL',
@@ -261,14 +327,14 @@ test('prioritizes only the first collection cover and supplies responsive image 
 
 test('detaches every promotional query when its collection unmounts', async () => {
   const signals: AbortSignal[] = [];
-  crcnBackendApi.searchAccommodations = (_params, options) => {
+  mockSearch((_params, options) => {
     assert.ok(options?.signal);
     const signal = options.signal;
     signals.push(signal);
     return new Promise((_resolve, reject) =>
       signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
     );
-  };
+  });
   const rendered = render(
     React.createElement(SeasonalDateSuggestions, {
       currency: 'BRL',
@@ -282,4 +348,152 @@ test('detaches every promotional query when its collection unmounts', async () =
   assert.ok(signals.every((signal) => signal.aborted));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(window.sessionStorage.length, 0);
+});
+
+const discoveryProps = {
+  currency: 'BRL' as const,
+  guestCount: 2,
+  guests: { adults: 2, children: 0, infants: 0, pets: 0 },
+  onSelect: () => {},
+};
+const quoteResult = (total = 500) => ({
+  total: 1,
+  data: [
+    {
+      ...STAYS_NET_APARTMENTS[0]!,
+      calculatedPrice: {
+        nights: 2,
+        dailyRate: total / 2,
+        basePrice: total,
+        cleaningFee: 0,
+        serviceFee: 0,
+        totalAmount: total,
+        currency: 'BRL',
+      },
+    },
+  ],
+});
+
+test('queries only visible dates, groups equal dates and defers the thematic catalogue', async () => {
+  VisibilityObserver.automatic = false;
+  const calls: SearchAccommodationsParams[] = [];
+  mockSearch(async (params) => {
+    calls.push(params);
+    return quoteResult();
+  });
+  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  assert.equal(calls.length, 0);
+  act(() => VisibilityObserver.show('pet-weekend-1', true));
+  await waitFor(() => assert.equal(calls.length, 1));
+  assert.equal(calls[0]!.limit, 8);
+  act(() => VisibilityObserver.show('caldas-country-1', true));
+  await waitFor(() => assert.equal(calls.length, 2));
+  act(() => VisibilityObserver.show('caldas-country-2', true));
+  await act(async () => Promise.resolve());
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every((params) => params.from));
+  act(() => VisibilityObserver.show('catalog', true));
+  await waitFor(() => assert.equal(calls.length, 4));
+  assert.equal(calls.filter((params) => !params.from).length, 1);
+  assert.equal(calls.filter((params) => params.limit === 20).length, 2);
+});
+
+test('leaving a date aborts its query and discards a late quote before a fresh re-entry', async () => {
+  VisibilityObserver.automatic = false;
+  const pending: Array<{
+    signal: AbortSignal;
+    resolve: (value: ReturnType<typeof quoteResult>) => void;
+  }> = [];
+  mockSearch(
+    (_params, options) =>
+      new Promise((resolve) => pending.push({ signal: options!.signal!, resolve })),
+  );
+  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  act(() => VisibilityObserver.show('pet-weekend-1', true));
+  await waitFor(() => assert.equal(pending.length, 1));
+  act(() => VisibilityObserver.show('pet-weekend-1', false));
+  assert.equal(pending[0]!.signal.aborted, true);
+  act(() => VisibilityObserver.show('pet-weekend-1', true));
+  await waitFor(() => assert.equal(pending.length, 2));
+  await act(async () => pending[0]!.resolve(quoteResult(666)));
+  assert.doesNotMatch(document.body.textContent || '', /666,00/);
+  await act(async () => pending[1]!.resolve(quoteResult(778)));
+  await waitFor(() => assert.ok(screen.getAllByText('R$ 778,00').length > 0));
+});
+
+test('visibility re-entry reuses fresh quotes instead of querying the same date again', async () => {
+  VisibilityObserver.automatic = false;
+  let calls = 0;
+  mockSearch(async () => {
+    calls++;
+    return quoteResult();
+  });
+  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  act(() => VisibilityObserver.show('pet-weekend-1', true));
+  await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
+  act(() => VisibilityObserver.show('pet-weekend-1', false));
+  act(() => VisibilityObserver.show('pet-weekend-1', true));
+  await act(async () => Promise.resolve());
+  assert.equal(calls, 1);
+});
+
+test('guest changes cancel active visible work and can restore a still-valid prior occupancy quote', async () => {
+  VisibilityObserver.automatic = false;
+  const pending: Array<{
+    guests: number;
+    signal: AbortSignal;
+    resolve: (value: ReturnType<typeof quoteResult>) => void;
+  }> = [];
+  mockSearch(
+    (params, options) =>
+      new Promise((resolve) =>
+        pending.push({ guests: params.guests!, signal: options!.signal!, resolve }),
+      ),
+  );
+  const rendered = render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  act(() => VisibilityObserver.show('pet-weekend-1', true));
+  await waitFor(() => assert.equal(pending.length, 1));
+  await act(async () => pending[0]!.resolve(quoteResult(500)));
+  await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
+  rendered.rerender(
+    React.createElement(SeasonalDateSuggestions, {
+      ...discoveryProps,
+      guestCount: 3,
+      guests: { ...discoveryProps.guests, adults: 3 },
+    }),
+  );
+  await waitFor(() => assert.equal(pending.length, 2));
+  assert.equal(pending[0]!.signal.aborted, true);
+  assert.equal(pending[1]!.guests, 3);
+  assert.doesNotMatch(document.body.textContent || '', /R\$ 500/);
+  rendered.rerender(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
+  assert.equal(pending[1]!.signal.aborted, true);
+  assert.equal(pending.length, 2);
+});
+
+test('does not cache an incomplete empty page as no availability and permits a visibility retry', async () => {
+  VisibilityObserver.automatic = false;
+  let calls = 0;
+  mockSearch(async () => {
+    calls++;
+    return calls === 1
+      ? {
+          total: 0,
+          data: [],
+          unquotedCount: 1,
+          pagination: { receivedCount: 8, nextSkip: 8, hasMore: true },
+        }
+      : quoteResult();
+  });
+  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  act(() => VisibilityObserver.show('pet-weekend-1', true));
+  await waitFor(() =>
+    assert.ok(screen.getAllByText('Consulta indisponível. Tente buscar.').length > 0),
+  );
+  assert.equal(window.sessionStorage.length, 0);
+  act(() => VisibilityObserver.show('pet-weekend-1', false));
+  act(() => VisibilityObserver.show('pet-weekend-1', true));
+  await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
+  assert.equal(calls, 2);
 });

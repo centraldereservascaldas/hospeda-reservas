@@ -1,6 +1,6 @@
 # Plano de otimização de performance e experiência
 
-Data: 03/11/2026. Status: E0 com versão identificada e baseline de laboratório registrado; E1 implementada e validada localmente na branch `codex/performance-sprints`; E2/E3 implementadas e validadas localmente; validação do container E2 pendente; E4 em andamento: fila integrada e visibilidade pendente.
+Data: 03/11/2026. Status: E0 com baseline registrado; E1–E3 e a base da fila E4 publicadas no commit `84155ab`. O complemento de visibilidade E4 está validado localmente e aguarda publicação; E5–E7 e a observabilidade real permanecem pendentes. [Registro da primeira publicação](estudos/publicacao-performance-2026-11-03.md).
 
 Registro da Sprint 0: [versão publicada, método e resultados da E0](estudos/baseline-performance-e0-2026-11-03.md). Telemetria de backend e p75 real permanecem pendentes, explicitados no registro.
 
@@ -49,8 +49,8 @@ Total estimado: **10,5–20 dias de trabalho**, sem somar itens opcionais abaixo
 | Sprint | Escopo  | Esforço estimado | Saída verificável                                                   | Estado                                                           |
 | ------ | ------- | ---------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | S0     | E0      | 0,5–1 dia        | Artefato identificado, amostras e instrumentos reproduzíveis        | Baseline de laboratório concluído; observabilidade real pendente |
-| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 locais validadas; container E2 pendente                                   |
-| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3 validada; E4 com fila integrada, visibilidade pendente |
+| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 publicadas; CI Docker e smoke público passaram                                   |
+| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3/fila E4 publicadas; visibilidade E4 validada localmente |
 | S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Planejada                                                        |
 | S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Planejada                                                        |
 
@@ -115,7 +115,7 @@ Progresso local em 03/11/2026: serviço e interface de página única integrados
 
 ## E4 — Fila por página/seção
 
-Progresso local: concorrência de duas páginas, prioridade, deduplicação, cancelamento por consumidor e políticas de aba/economia de dados implementados. Efeitos das vitrines cancelam ao desmontar. Gatilhos por visibilidade ainda pendentes; ver [registro da E4](estudos/sprint-2-e4-2026-11-03.md).
+Progresso: fila publicada; gate por IntersectionObserver/fallback, páginas limitadas por data/área, cancelamento por visibilidade e reutilização de cotações validados localmente. A entrega usa demandas visíveis e não antecipa seções distantes. A publicação do complemento ainda está pendente; ver [registro da E4](estudos/sprint-2-e4-2026-11-03.md).
 
 **Trabalho:** usar um agendador compartilhado no frontend. Unidade de trabalho: página de resultados ou seção de ofertas, sem consulta de disponibilidade por cartão. Iniciar com duas requisições de dados concorrentes; priorizar ação explícita sobre antecipação. Acionar `IntersectionObserver` perto da próxima área, considerando também a rolagem horizontal das vitrines.
 
@@ -176,6 +176,7 @@ Progresso local: concorrência de duas páginas, prioridade, deduplicação, can
 - Melhorar mediana do tempo até primeiro resultado útil e LCP contra E0, sem regressão relevante nos demais cenários; registrar valores absolutos e variação, não apenas percentual.
 - Definir em E0 o limiar de regressão conforme a variabilidade; não aprovar com uma única execução favorável.
 - Metas de acompanhamento real: LCP ≤ 2,5 s, INP ≤ 200 ms e CLS ≤ 0,1 no p75, separados por dispositivo. Não declarar cumprimento sem amostra suficiente; laboratório é comparação controlada.
+- Rever cache negativo de assets ausentes (404 público com `max-age=14400` no primeiro lote) e a remoção de assets expirados em builds com cache reutilizado.
 - Registro por etapa contém versão, cenários, medidas antes/depois, testes e pendências. Dados de teste distinguem cache frio, quente e falha do provedor.
 
 Publicação futura depende de solicitação explícita, conferência de CI/workflows e checklist Coolify. Rollback deve reverter o artefato ou a funcionalidade, preservando banco, pedidos e pagamentos. Não restaurar banco nem reverter migrations automaticamente para desfazer otimização.
