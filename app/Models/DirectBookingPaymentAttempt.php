@@ -40,6 +40,7 @@ class DirectBookingPaymentAttempt extends Model
         'error_code',
         'gateway_submission_started_at',
         'gateway_submission_count',
+        'fraud_analysis_required',
         'gateway_retry_payload',
     ];
 
@@ -66,6 +67,7 @@ class DirectBookingPaymentAttempt extends Model
             'gateway_updated_at' => 'immutable_datetime',
             'gateway_submission_started_at' => 'immutable_datetime',
             'gateway_submission_count' => 'integer',
+            'fraud_analysis_required' => 'boolean',
             'gateway_retry_payload' => 'encrypted:array',
         ];
     }
