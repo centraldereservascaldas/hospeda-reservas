@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { CalendarDayButton } from './CalendarDayButton';
+import { CalendarMonthNavigation } from './CalendarMonthNavigation';
 import { useDialogFocus } from '../useDialogFocus';
 import type { StaysCalendarDay } from '../../utils/staysAvailability';
 import {
@@ -26,6 +28,7 @@ interface PropertyDatePickerDialogProps {
   calendarExtensionMessage: string;
   calendarAvailable: boolean;
   isLoadingCalendar: boolean;
+  isRefreshingCalendar?: boolean;
   availabilityMessage: string;
   interactionMessage: string;
   onRetryCalendar: () => void;
@@ -53,6 +56,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
   calendarExtensionMessage,
   calendarAvailable,
   isLoadingCalendar,
+  isRefreshingCalendar = false,
   availabilityMessage,
   interactionMessage,
   onRetryCalendar,
@@ -101,10 +105,6 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
         : null;
     },
   );
-  const calendarMonthLabel = displayedMonth.toLocaleDateString('pt-BR', {
-    month: 'long',
-    year: 'numeric',
-  });
   const calendarByDate = new Map(calendarDays.map((day) => [day.date, day]));
   const displayedMonthPrefix = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-`;
   const isSelectableDate = (dateValue: string) => {
@@ -304,28 +304,11 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
           </button>
         </div>
 
-        <div className="mb-3 flex shrink-0 items-center justify-between [@media(max-height:500px)]:mb-1">
-          <button
-            type="button"
-            onClick={() => onDisplayedMonthChange(new Date(calendarYear, calendarMonth - 1, 1))}
-            disabled={calendarYear === today.getFullYear() && calendarMonth <= today.getMonth()}
-            aria-label="Mês anterior"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-orange-200 hover:bg-orange-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-35"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <h3 aria-live="polite" className="text-sm font-bold capitalize text-neutral-900">
-            {calendarMonthLabel}
-          </h3>
-          <button
-            type="button"
-            onClick={() => onDisplayedMonthChange(new Date(calendarYear, calendarMonth + 1, 1))}
-            aria-label="Próximo mês"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-orange-200 hover:bg-orange-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+        <CalendarMonthNavigation
+          month={displayedMonth}
+          earliestMonth={today}
+          onMonthChange={onDisplayedMonthChange}
+        />
 
         <div className="-mx-3 min-h-0 flex-1 overflow-y-auto sm:mx-0">
           <div className="grid gap-6 md:grid-cols-2">
@@ -407,7 +390,6 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                           const isBlocked = Boolean(
                             !isPast &&
                             !isLoadingCalendar &&
-                            calendarAvailable &&
                             calendarDay &&
                             !isAvailableForActiveField &&
                             !isSelectedForAnotherField,
@@ -495,7 +477,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                                 updateTouchRangePreview(event.pointerId, dateValue);
                               }}
                             >
-                              <button
+                              <CalendarDayButton
                                 key={dateValue}
                                 ref={(button) => {
                                   if (button) {
@@ -537,23 +519,22 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                                   setKeyboardFocusDate(dateValue);
                                   onChooseDate(date);
                                 }}
-                                className={`h-11 w-full rounded-xl text-xs font-semibold transition ${
-                                  isTouchPreviewDate
+                                visualState={{
+                                  preview: isTouchPreviewDate
                                     ? isTouchPreviewValid
-                                      ? 'bg-orange-100 text-orange-900 ring-1 ring-orange-300'
-                                      : 'bg-rose-100 text-rose-900 ring-1 ring-rose-300'
-                                    : dayRestriction && !isSelected && !isInRange
-                                      ? `bg-neutral-100/70 text-neutral-600 ${isDisabled ? 'cursor-not-allowed' : 'hover:bg-orange-50'}`
-                                      : isBlocked && !isInRange
-                                        ? 'relative cursor-not-allowed bg-rose-50 text-rose-700'
-                                        : isSelected
-                                          ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
-                                          : isInRange
-                                            ? 'bg-orange-100 text-orange-900'
-                                            : isDisabled
-                                              ? 'cursor-not-allowed bg-neutral-100/70 text-neutral-600'
-                                              : 'text-neutral-700 hover:bg-orange-50 hover:text-orange-800'
-                                } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-orange-600 disabled:hover:bg-inherit`}
+                                      ? 'valid'
+                                      : 'invalid'
+                                    : null,
+                                  restricted: Boolean(dayRestriction),
+                                  blocked: isBlocked,
+                                  selected: isSelected,
+                                  inRange: isInRange,
+                                  disabled:
+                                    isPast ||
+                                    isLoadingCalendar ||
+                                    !calendarDay ||
+                                    !isAvailableForActiveField,
+                                }}
                                 title={availabilityLabel}
                               >
                                 {date.getDate()}
@@ -563,7 +544,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                                     className={`pointer-events-none absolute left-1/2 top-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 rotate-[-42deg] ${isSelectedCheckOut ? 'bg-rose-700' : 'bg-rose-500/80'}`}
                                   />
                                 )}
-                              </button>
+                              </CalendarDayButton>
                             </div>
                           );
                         })}
@@ -575,9 +556,11 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
             })}
           </div>
           <div className="mt-4 space-y-3 border-t border-neutral-100 px-3 pt-3 sm:px-0">
-            {isLoadingCalendar ? (
+            {isLoadingCalendar || isRefreshingCalendar ? (
               <p className="text-center text-caption text-neutral-500" role="status">
-                Atualizando disponibilidade. As datas ficam bloqueadas até a confirmação.
+                {isRefreshingCalendar
+                  ? 'Atualizando disponibilidade. Sua seleção foi preservada.'
+                  : 'Atualizando disponibilidade. As datas ficam bloqueadas até a confirmação.'}
               </p>
             ) : !calendarAvailable ? (
               <div className="flex flex-col items-center gap-2">

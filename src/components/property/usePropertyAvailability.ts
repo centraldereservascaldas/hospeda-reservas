@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Property } from '../../types';
 import { crcnBackendApi, getCalendarExpiration } from '../../services/crcnBackendApi';
-import type { CalculatedPriceResponse } from '../../services/crcnBackendApi';
+import { usePropertyQuote } from './usePropertyQuote';
 import type { StaysCalendarDay } from '../../utils/staysAvailability';
 
 const CALENDAR_TTL_MS = 45_000;
@@ -72,14 +72,20 @@ export function usePropertyAvailability({
   guests,
   todayIso,
 }: UsePropertyAvailabilityOptions) {
-  const [staysPrice, setStaysPrice] = useState<CalculatedPriceResponse | null>(null);
   const [calendarDays, setCalendarDays] = useState<StaysCalendarDay[]>([]);
   const [calendarAvailable, setCalendarAvailable] = useState(false);
   const [calendarMessage, setCalendarMessage] = useState('');
   const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
+  const [isRefreshingCalendar, setIsRefreshingCalendar] = useState(false);
+  const calendarSnapshotRef = useRef({
+    contextKey: '',
+    days: [] as StaysCalendarDay[],
+    coverageEnd: '',
+  });
   const [calendarRefreshToken, setCalendarRefreshToken] = useState(0);
   const [calendarCoverageEnd, setCalendarCoverageEnd] = useState('');
   const [calendarExpiresAt, setCalendarExpiresAt] = useState<number | null>(null);
+  const calendarGenerationRef = useRef(0);
   const incompleteInitialWindowRef = useRef(false);
   const [isExtendingCalendar, setIsExtendingCalendar] = useState(false);
   const [calendarExtensionMessage, setCalendarExtensionMessage] = useState('');
@@ -89,28 +95,26 @@ export function usePropertyAvailability({
   const latestCalendarContextKeyRef = useRef('');
   const extensionTargetRef = useRef<{ contextKey: string; targetDate: string } | null>(null);
   const [calendarContextKey, setCalendarContextKey] = useState('');
-  const [priceRefreshToken, setPriceRefreshToken] = useState(0);
-  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
-  const [priceRequestFailed, setPriceRequestFailed] = useState(false);
-  const [priceContextKey, setPriceContextKey] = useState('');
+  const listingId = property ? property.staysListingId || property.id : '';
+  calendarSnapshotRef.current = {
+    contextKey: calendarContextKey,
+    days: calendarDays,
+    coverageEnd: calendarCoverageEnd,
+  };
   const requestedCalendarContextKey = property
     ? JSON.stringify([property.id, property.staysListingId || property.id, todayIso])
     : '';
   useEffect(() => {
     latestCalendarContextKeyRef.current = requestedCalendarContextKey;
   }, [requestedCalendarContextKey]);
-  const requestedPriceContextKey = property
-    ? JSON.stringify([
-        property.id,
-        property.staysListingId || property.id,
-        checkIn,
-        checkOut,
-        guests,
-      ])
-    : '';
+  const quote = usePropertyQuote({ listingId, checkIn, checkOut, guests });
 
   useEffect(() => {
-    if (!property) {
+    calendarGenerationRef.current += 1;
+    extensionInFlightContextKeyRef.current = '';
+    if (!listingId) {
+      setCalendarExpiresAt(null);
+      setIsRefreshingCalendar(false);
       extensionTargetRef.current = null;
       setCalendarDays([]);
       setCalendarAvailable(false);
@@ -129,28 +133,59 @@ export function usePropertyAvailability({
       .toISOString()
       .slice(0, 10);
 
-    setCalendarExpiresAt(null);
+    const previous = calendarSnapshotRef.current;
+    const isRefresh =
+      previous.contextKey === requestedCalendarContextKey && previous.days.length > 0;
+    const targetEnd =
+      isRefresh && previous.coverageEnd > calendarEnd ? previous.coverageEnd : calendarEnd;
+    if (!isRefresh) {
+      setCalendarExpiresAt(null);
+      setCalendarAvailable(false);
+      setCalendarDays([]);
+      setCalendarCoverageEnd('');
+      extensionTargetRef.current = null;
+    }
     incompleteInitialWindowRef.current = false;
-    setCalendarAvailable(false);
-    setCalendarMessage('Atualizando disponibilidade...');
-    setIsLoadingCalendar(true);
-    setCalendarDays([]);
-    setCalendarCoverageEnd('');
-    extensionTargetRef.current = null;
+    setCalendarMessage(
+      isRefresh ? 'Atualizando disponibilidade...' : 'Consultando disponibilidade...',
+    );
+    setIsLoadingCalendar(!isRefresh);
+    setIsRefreshingCalendar(isRefresh);
     failedExtensionContextRef.current = '';
     setCalendarExtensionMessage('');
     setIsExtendingCalendar(false);
     setCalendarContextKey(requestedCalendarContextKey);
-    requestCalendar(property.staysListingId || property.id, calendarStart, calendarEnd)
-      .then((days) => {
+    const windows: Array<{ from: string; to: string }> = [];
+    for (
+      let from = calendarStart, to = calendarEnd;
+      from <= targetEnd;
+      from = addCalendarDays(to, 1), to = addCalendarDays(to, 90)
+    ) {
+      windows.push({ from, to: to > targetEnd ? targetEnd : to });
+    }
+    Promise.all(windows.map(({ from, to }) => requestCalendar(listingId, from, to)))
+      .then((responses) => {
         if (!isMounted) return;
+        const days = responses.flat();
+        if (
+          isRefresh &&
+          (days.length === 0 || contiguousCoverageEnd(days, calendarStart, targetEnd) !== targetEnd)
+        ) {
+          incompleteInitialWindowRef.current = true;
+          throw new Error('Calendar refresh has unconfirmed dates');
+        }
+        const expirations = responses
+          .map(getCalendarExpiration)
+          .filter((value): value is number => value !== undefined);
+        const expiresAt = expirations.length ? Math.min(...expirations) : null;
+
         setCalendarDays(days);
-        setCalendarExpiresAt(getCalendarExpiration(days) ?? null);
+        setCalendarExpiresAt(expiresAt);
         setCalendarAvailable(days.length > 0);
-        setCalendarCoverageEnd(days.length > 0 ? calendarEnd : '');
+        setCalendarCoverageEnd(days.length > 0 ? targetEnd : '');
         if (
           days.length > 0 &&
-          contiguousCoverageEnd(days, calendarStart, calendarEnd) !== calendarEnd
+          contiguousCoverageEnd(days, calendarStart, targetEnd) !== targetEnd
         ) {
           incompleteInitialWindowRef.current = true;
           setCalendarExtensionMessage(
@@ -158,6 +193,7 @@ export function usePropertyAvailability({
           );
         }
         setIsLoadingCalendar(false);
+        setIsRefreshingCalendar(false);
         setCalendarMessage(
           days.length > 0
             ? ''
@@ -166,9 +202,10 @@ export function usePropertyAvailability({
       })
       .catch(() => {
         if (!isMounted) return;
-        setCalendarDays([]);
+        if (!isRefresh) setCalendarDays([]);
         setCalendarAvailable(false);
         setIsLoadingCalendar(false);
+        setIsRefreshingCalendar(false);
         setCalendarMessage(
           'Não foi possível confirmar a disponibilidade. Tente novamente mais tarde.',
         );
@@ -177,7 +214,7 @@ export function usePropertyAvailability({
     return () => {
       isMounted = false;
     };
-  }, [property, todayIso, calendarRefreshToken, requestedCalendarContextKey]);
+  }, [listingId, todayIso, calendarRefreshToken, requestedCalendarContextKey]);
 
   useEffect(() => {
     if (calendarExpiresAt === null) return;
@@ -195,9 +232,12 @@ export function usePropertyAvailability({
     async (targetDate: string) => {
       if (!Number.isFinite(new Date(`${targetDate}T12:00:00`).getTime())) return;
       const contextKey = requestedCalendarContextKey;
+      const generation = calendarGenerationRef.current;
       extensionTargetRef.current = { contextKey, targetDate };
       if (
-        !property ||
+        !listingId ||
+        isLoadingCalendar ||
+        isRefreshingCalendar ||
         failedExtensionContextRef.current === contextKey ||
         !calendarCoverageEnd ||
         targetDate <= calendarCoverageEnd ||
@@ -206,7 +246,6 @@ export function usePropertyAvailability({
         return;
       }
 
-      const listingId = property.staysListingId || property.id;
       extensionInFlightContextKeyRef.current = contextKey;
       setIsExtendingCalendar(true);
       setCalendarExtensionMessage('Consultando disponibilidade deste mês...');
@@ -232,7 +271,11 @@ export function usePropertyAvailability({
             requestedEnd,
           );
 
-          if (latestCalendarContextKeyRef.current !== contextKey) return;
+          if (
+            latestCalendarContextKeyRef.current !== contextKey ||
+            calendarGenerationRef.current !== generation
+          )
+            return;
           if (days.length === 0) {
             throw new Error('Calendar extension returned no availability data');
           }
@@ -266,18 +309,35 @@ export function usePropertyAvailability({
 
         setCalendarExtensionMessage('');
       } catch {
-        if (latestCalendarContextKeyRef.current === contextKey) {
+        if (
+          latestCalendarContextKeyRef.current === contextKey &&
+          calendarGenerationRef.current === generation
+        ) {
           failedExtensionContextRef.current = contextKey;
           setCalendarExtensionMessage('Não foi possível consultar este mês. Tente novamente.');
         }
       } finally {
-        if (extensionInFlightContextKeyRef.current === contextKey) {
+        if (
+          extensionInFlightContextKeyRef.current === contextKey &&
+          calendarGenerationRef.current === generation
+        ) {
           extensionInFlightContextKeyRef.current = '';
         }
-        if (latestCalendarContextKeyRef.current === contextKey) setIsExtendingCalendar(false);
+        if (
+          latestCalendarContextKeyRef.current === contextKey &&
+          calendarGenerationRef.current === generation
+        )
+          setIsExtendingCalendar(false);
       }
     },
-    [calendarCoverageEnd, calendarDays, property, requestedCalendarContextKey],
+    [
+      calendarCoverageEnd,
+      calendarDays,
+      listingId,
+      isLoadingCalendar,
+      isRefreshingCalendar,
+      requestedCalendarContextKey,
+    ],
   );
 
   useEffect(() => {
@@ -287,51 +347,12 @@ export function usePropertyAvailability({
     }
   }, [calendarExtensionToken, loadCalendarThrough, requestedCalendarContextKey]);
 
-  useEffect(() => {
-    if (!property || !checkIn || !checkOut) {
-      setStaysPrice(null);
-      setIsCalculatingPrice(false);
-      setPriceRequestFailed(false);
-      setPriceContextKey(requestedPriceContextKey);
-      return;
-    }
-
-    let isMounted = true;
-    setIsCalculatingPrice(true);
-    setStaysPrice(null);
-    setPriceRequestFailed(false);
-    setPriceContextKey(requestedPriceContextKey);
-    crcnBackendApi
-      .calculatePrice({
-        listingId: property.staysListingId || property.id,
-        from: checkIn,
-        to: checkOut,
-        guests,
-      })
-      .then((response) => {
-        if (!isMounted) return;
-        setStaysPrice(response);
-        setIsCalculatingPrice(false);
-      })
-      .catch(() => {
-        if (isMounted) {
-          setIsCalculatingPrice(false);
-          setPriceRequestFailed(true);
-        }
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [property, checkIn, checkOut, guests, priceRefreshToken, requestedPriceContextKey]);
-
   const hasCurrentCalendarContext = Boolean(
     property && calendarContextKey === requestedCalendarContextKey,
   );
-  const hasCurrentPriceContext = Boolean(property && priceContextKey === requestedPriceContextKey);
 
   return {
-    staysPrice: hasCurrentPriceContext ? staysPrice : null,
+    ...quote,
     calendarDays: hasCurrentCalendarContext ? calendarDays : [],
     calendarCoverageEnd: hasCurrentCalendarContext ? calendarCoverageEnd : '',
     isExtendingCalendar: hasCurrentCalendarContext && isExtendingCalendar,
@@ -353,10 +374,12 @@ export function usePropertyAvailability({
         ? 'Atualizando disponibilidade...'
         : '',
     isLoadingCalendar: Boolean(property && (!hasCurrentCalendarContext || isLoadingCalendar)),
-    revalidateCalendar: () => setCalendarRefreshToken((token) => token + 1),
+    isRefreshingCalendar: hasCurrentCalendarContext && isRefreshingCalendar,
+    revalidateCalendar: () => {
+      if (!calendarAvailable || (calendarExpiresAt !== null && calendarExpiresAt <= Date.now())) {
+        setCalendarRefreshToken((token) => token + 1);
+      }
+    },
     retryCalendar: () => setCalendarRefreshToken((token) => token + 1),
-    retryPrice: () => setPriceRefreshToken((token) => token + 1),
-    isCalculatingPrice: Boolean(property && (!hasCurrentPriceContext || isCalculatingPrice)),
-    priceRequestFailed: hasCurrentPriceContext && priceRequestFailed,
   };
 }

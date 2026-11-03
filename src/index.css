@@ -13,6 +13,12 @@
 }
 
 @theme {
+  --color-calendar-range: #ffedd5;
+  --color-calendar-range-foreground: #7c2d12;
+  --color-calendar-muted: rgb(245 245 245 / 0.7);
+  --color-calendar-muted-foreground: #525252;
+  --color-calendar-unavailable: #fff1f2;
+  --color-calendar-unavailable-foreground: #be123c;
   --color-focus-ring: #ea580c;
   --color-page: #f8fafc;
   --color-glass-border: rgba(148, 163, 184, 0.3);

@@ -123,6 +123,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     calendarAvailable,
     calendarMessage: availabilityMessage,
     isLoadingCalendar,
+    isRefreshingCalendar,
     isExtendingCalendar,
     calendarExtensionMessage,
     loadCalendarThrough,
@@ -539,6 +540,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   calendarDays={calendarDays}
                   calendarAvailable={calendarAvailable}
                   isLoading={isLoadingCalendar}
+                  isRefreshingCalendar={isRefreshingCalendar}
                   calendarMessage={calendarInteractionMessage || availabilityMessage}
                   checkIn={checkIn}
                   checkOut={checkOut}
@@ -602,6 +604,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         calendarExtensionMessage={calendarExtensionMessage}
         calendarAvailable={calendarAvailable}
         isLoadingCalendar={isLoadingCalendar}
+        isRefreshingCalendar={isRefreshingCalendar}
         availabilityMessage={availabilityMessage}
         interactionMessage={calendarInteractionMessage}
         onRetryCalendar={retryCalendar}

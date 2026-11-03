@@ -221,7 +221,7 @@ test('a valid selected stay highlights its nights even when minimum stay prevent
   assert.ok(night);
   assert.equal(night.disabled, true);
   assert.match(night.getAttribute('aria-label') || '', /noite incluída no período selecionado/);
-  assert.match(night.className, /bg-orange-100/);
+  assert.match(night.className, /bg-calendar-range/);
   assert.equal(night.querySelector('[aria-hidden="true"]'), null);
 });
 
@@ -373,7 +373,7 @@ test('touch drag previews and commits an available check-in to check-out range o
   document.elementFromPoint = () => checkOutCell;
   fireEvent.pointerDown(checkInCell, { pointerId: 7, pointerType: 'touch' });
   fireEvent.pointerEnter(checkOutCell, { pointerId: 7, pointerType: 'touch' });
-  assert.match(checkOutButton.className, /bg-orange-100/);
+  assert.match(checkOutButton.className, /bg-calendar-range/);
   fireEvent.pointerUp(checkOutCell, { pointerId: 7, pointerType: 'touch' });
   fireEvent.click(checkInButton);
 
@@ -1324,8 +1324,8 @@ test('booking calendar visibly blocks unavailable arrival dates and invalid chec
     assert.ok(blockedArrival);
     assert.equal(blockedArrival.disabled, true);
     assert.match(blockedArrival.getAttribute('aria-label') || '', /indisponível para esta seleção/);
-    assert.match(blockedArrival.className, /bg-rose-50/);
-    assert.match(blockedArrival.className, /text-rose-700/);
+    assert.match(blockedArrival.className, /bg-calendar-unavailable/);
+    assert.match(blockedArrival.className, /text-calendar-unavailable-foreground/);
     assert.ok(blockedArrival.querySelector('[aria-hidden="true"]'));
 
     const dateBeforeBlocked = calendar.querySelector<HTMLButtonElement>(
@@ -1340,7 +1340,7 @@ test('booking calendar visibly blocks unavailable arrival dates and invalid chec
     assert.ok(dateBeforeBlocked);
     assert.ok(dateWithoutCalendarData);
     assert.ok(dateAfterBlocked);
-    assert.match(dateWithoutCalendarData.className, /text-neutral-600/);
+    assert.match(dateWithoutCalendarData.className, /text-calendar-muted-foreground/);
     dateBeforeBlocked.focus();
     fireEvent.keyDown(dateBeforeBlocked, { key: 'ArrowRight' });
     assert.equal(document.activeElement, dateAfterBlocked);
@@ -1360,7 +1360,7 @@ test('booking calendar visibly blocks unavailable arrival dates and invalid chec
       blockedRangeCheckout.getAttribute('aria-label') || '',
       /indisponível para esta seleção/,
     );
-    assert.match(blockedRangeCheckout.className, /bg-rose-50/);
+    assert.match(blockedRangeCheckout.className, /bg-calendar-unavailable/);
 
     const blockedArrivalCheckout = calendar.querySelector<HTMLButtonElement>(
       'button[aria-label*="16 de novembro de 2026"]',
@@ -1915,11 +1915,11 @@ test('calendar renders tariff and unconfirmed states neutrally and permits check
       React.createElement(PropertyDatePickerDialog, { ...props, interactionMessage: explanation }),
     );
     assert.equal(getByRole('status').textContent, explanation);
-    assert.match(day.className, /bg-neutral/);
+    assert.match(day.className, /bg-calendar-muted/);
     assert.equal(day.querySelector('[aria-hidden="true"]'), null);
   }
   const unavailable = getByRole('button', { name: /14 de novembro/ });
-  assert.match(unavailable.className, /bg-rose/);
+  assert.match(unavailable.className, /bg-calendar-unavailable/);
   assert.ok(unavailable.querySelector('[aria-hidden="true"]'));
   rerender(
     React.createElement(PropertyDatePickerDialog, { ...props, activeDateField: 'checkOut' }),

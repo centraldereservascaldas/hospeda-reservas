@@ -121,8 +121,8 @@ test('does not highlight a selected range while calendar data is refreshing', ()
   );
   assert.ok(inRangeDate);
   assert.equal(inRangeDate.disabled, true);
-  assert.doesNotMatch(inRangeDate.className, /bg-orange-100/);
-  assert.match(inRangeDate.className, /text-neutral-600/);
+  assert.doesNotMatch(inRangeDate.className, /bg-calendar-range/);
+  assert.match(inRangeDate.className, /text-calendar-muted-foreground/);
 });
 
 test('missing tariff states stay neutral and still allow departure after available nights', () => {
@@ -181,4 +181,53 @@ test('missing tariff states stay neutral and still allow departure after availab
     (getByRole('button', { name: /checkout|check-out/ }) as HTMLButtonElement).disabled,
     false,
   );
+});
+
+test('background refresh preserves the displayed range while blocking unconfirmed selection', () => {
+  render(
+    React.createElement(PropertyAvailabilityStrip, {
+      calendarDays: [
+        { date: '2026-11-11', avail: 1 },
+        { date: '2026-11-12', avail: 1 },
+        { date: '2026-11-13', avail: 1 },
+      ],
+      calendarAvailable: false,
+      isLoading: false,
+      isRefreshingCalendar: true,
+      calendarMessage: 'Atualizando disponibilidade...',
+      checkIn: '2026-11-11',
+      checkOut: '2026-11-13',
+      onSelectDay: () => {},
+      onRetryCalendar: () => {},
+    }),
+  );
+  const middle = document.querySelector<HTMLButtonElement>('button[aria-label*="12 de novembro"]');
+  const departure = document.querySelector<HTMLButtonElement>(
+    'button[aria-label*="13 de novembro"]',
+  );
+  assert.ok(middle);
+  assert.ok(departure);
+  assert.match(middle.className, /bg-calendar-range/);
+  assert.equal(departure.getAttribute('aria-pressed'), 'true');
+  assert.equal(middle.disabled, true);
+});
+
+test('expired background refresh preserves blocked-day marks', () => {
+  render(
+    React.createElement(PropertyAvailabilityStrip, {
+      calendarDays: [{ date: '2026-11-11', avail: 0 }],
+      calendarAvailable: false,
+      isLoading: false,
+      isRefreshingCalendar: true,
+      calendarMessage: 'Atualizando disponibilidade...',
+      checkIn: '',
+      checkOut: '',
+      onSelectDay: () => {},
+      onRetryCalendar: () => {},
+    }),
+  );
+  const day = document.querySelector<HTMLButtonElement>('button[aria-label*="11 de novembro"]');
+  assert.ok(day);
+  assert.match(day.className, /line-through/);
+  assert.equal(day.disabled, true);
 });
