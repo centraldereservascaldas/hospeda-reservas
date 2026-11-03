@@ -40,16 +40,8 @@ class DirectStaysReservationMatcher
         }
 
         $price = $reservation['price'];
-        $hostingDetails = is_array($price['hostingDetails'] ?? null) ? $price['hostingDetails'] : [];
-        $hasCurrency = array_key_exists('currency', $price) || array_key_exists('currency', $hostingDetails);
-        $hasAmount = collect([
-            [$price, '_f_total'],
-            [$price, '_f_expected'],
-            [$hostingDetails, '_f_total'],
-            [$hostingDetails, '_f_expected'],
-        ])->contains(fn (array $field): bool => array_key_exists($field[1], $field[0]));
-
-        return $hasCurrency && $hasAmount;
+        return array_key_exists('currency', $price)
+            && array_key_exists('_f_total', $price);
     }
 
     /** @param array<string, mixed> $reservation */
@@ -103,22 +95,14 @@ class DirectStaysReservationMatcher
             }
         }
 
-        $hasAmount = false;
-        $expectedAmountCents = null;
-        foreach ([[$price, '_f_total'], [$price, '_f_expected'], [$hostingDetails, '_f_total'], [$hostingDetails, '_f_expected']] as [$details, $key]) {
-            if (! array_key_exists($key, $details)) {
-                continue;
-            }
+        if (array_key_exists('_f_total', $price)) {
+            $expectedAmountCents = MoneyAmount::toCents($order->quote_total);
+            $externalAmountCents = MoneyAmount::toCents($price['_f_total']);
 
-            $hasAmount = true;
-            $expectedAmountCents ??= MoneyAmount::toCents($order->quote_total);
-            $externalAmountCents = MoneyAmount::toCents($details[$key]);
-            if ($expectedAmountCents === null || $externalAmountCents !== $expectedAmountCents) {
-                return false;
-            }
+            return $expectedAmountCents !== null && $externalAmountCents === $expectedAmountCents;
         }
 
-        return ! $hasAmount || $expectedAmountCents !== null;
+        return true;
     }
 
     /** @param array<string, mixed> $reservation */

@@ -17,6 +17,30 @@ class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_reservation_total_must_match_quote_even_when_expected_and_hosting_subtotals_differ(): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        $reservation = [
+            '_id' => 'reservation-with-fees',
+            '_idlisting' => $order->stays_listing_id,
+            '_idclient' => $order->stays_client_id,
+            'type' => 'reserved',
+            'checkInDate' => $order->check_in->toDateString(),
+            'checkOutDate' => $order->check_out->toDateString(),
+            'internalNote' => 'CRCN_DIRECT_ORDER:'.$order->id,
+            'guests' => 2,
+            'price' => ['currency' => 'BRL', '_f_expected' => 2000, '_f_total' => 3001,
+                'hostingDetails' => ['_f_total' => 2900]],
+        ];
+
+        $matcher = app(\App\Services\DirectStaysReservationMatcher::class);
+        $this->assertTrue($matcher->matchesCommercialDetails($reservation, $order));
+        $reservation['price']['_f_total'] = 3600;
+        $this->assertFalse($matcher->matchesCommercialDetails($reservation, $order));
+        unset($reservation['price']['_f_total']);
+        $this->assertFalse($matcher->matchesCommercialDetails($reservation, $order));
+    }
+
     public function test_stays_object_listing_id_matches_quote_but_booked_before_payment_stays_blocked(): void
     {
         $order = $this->order(DirectBookingOrderStatus::Cotado);
