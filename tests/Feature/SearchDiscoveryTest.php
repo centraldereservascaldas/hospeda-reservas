@@ -73,19 +73,24 @@ class SearchDiscoveryTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_home_fallback_stays_inside_the_react_root_for_default_and_filtered_catalogs(): void
+    public function test_home_shows_loading_shell_with_seo_fallback_outside_react_root(): void
     {
         Http::preventStrayRequests();
         foreach (['/', '/?category=condominiums', '/?category=pools_24h'] as $path) {
             $response = $this->get($path)->assertOk()
                 ->assertSee('Hospedagens em Caldas Novas e região')
+                ->assertSee('Carregando hospedagens', false)
                 ->assertSee('href="https://centraldereservascaldas.com/"', false);
             $document = new \DOMDocument;
             $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
             $xpath = new \DOMXPath($document);
             $this->assertSame(1, $xpath->query('//*[@id="public-introduction"]')->length);
-            $this->assertSame(1, $xpath->query('//*[@id="root"]//*[@id="public-introduction"]')->length,
-                'The initial public content must be replaced by React instead of remaining after the app footer.');
+            $this->assertSame(0, $xpath->query('//*[@id="root"]//*[@id="public-introduction"]')->length,
+                'SEO content must not appear inside the React root while its bundle loads.');
+            $this->assertSame(1, $xpath->query('//noscript//*[@id="public-introduction"]')->length,
+                'The SEO fallback must remain available when JavaScript is disabled.');
+            $this->assertSame(1, $xpath->query('//*[@id="root"]//*[@class="home-loading"]')->length,
+                'The React root must show a branded loading shell before the application mounts.');
         }
         Http::assertNothingSent();
     }

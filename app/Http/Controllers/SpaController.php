@@ -93,7 +93,9 @@ class SpaController extends Controller
             '<script id="public-page-schema" type="application/ld+json">'.$graph.'</script>';
         $html = Str::replaceFirst('</head>', $head."\n</head>", $html);
         $content = view('seo.introduction', ['pages' => $this->publicPages->all()])->render();
-        $html = Str::replaceFirst('<div id="root"></div>', '<div id="root">'.$content.'</div>', $html);
+        $loadingShell = view('seo.home-loading-shell')->render();
+        $rootContent = '<div id="root">'.$loadingShell.'</div><noscript>'.$content.'</noscript>';
+        $html = Str::replaceFirst('<div id="root"></div>', $rootContent, $html);
 
         return response($html)->header('Content-Type', 'text/html; charset=utf-8');
     }
