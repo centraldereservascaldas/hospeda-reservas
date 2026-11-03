@@ -418,7 +418,7 @@ test('property detail page uses normal page semantics and labels unconfirmed pri
     assert.ok(page);
     assert.equal(document.activeElement, document.getElementById('property-detail-title'));
     assert.match(page.querySelector('h1')?.className ?? '', /w-fit max-w-full/);
-    assert.match(page.querySelector('h1')?.className ?? '', /focus:outline-orange-600/);
+    assert.match(page.querySelector('h1')?.className ?? '', /focus-visible:outline-orange-600/);
     assert.match(page.className, /max-w-7xl/);
     const pageSurface = page.firstElementChild?.firstElementChild as HTMLElement | null;
     assert.ok(pageSurface);
