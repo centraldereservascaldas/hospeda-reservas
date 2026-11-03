@@ -154,6 +154,9 @@ class DirectStaysPaymentService
 
         $action = $this->action($order, 'register_payment', $payload);
         if ($matches->count() === 1) {
+            if (($matches->first()['status'] ?? null) === 'pending') {
+                return $this->completePendingPayment($order, $attempt, $action, $matches->first(), $payload, $endpoint);
+            }
             if (! $this->matchesPayment($matches->first(), $attempt)) {
                 return $this->markAttention($action, $order, 'stays_payment_mismatch', 'O lançamento encontrado na Stays não corresponde ao valor e estado aprovados.');
             }
@@ -195,6 +198,49 @@ class DirectStaysPaymentService
         }
 
         return $this->markAttention($action, $order, 'stays_payment_write_unknown', 'A Stays não confirmou o lançamento do pagamento; nenhuma repetição automática será feita.');
+    }
+
+    /** @param array<string, mixed> $payment
+     * @param  array<string, mixed>  $payload
+     * @return array{ready: bool, code: string, message: string}
+     */
+    private function completePendingPayment(DirectBookingOrder $order, DirectBookingPaymentAttempt $attempt, DirectBookingStaysAction $action, array $payment, array $payload, string $endpoint): array
+    {
+        $paymentId = $payment['_id'] ?? null;
+        $recordedPendingId = $order->staysActions()->where('action_type', 'register_pending_payment')->where('status', 'succeeded')->value('external_id');
+        if (! $this->matchesPaymentDetails($payment, $attempt)
+            || ! is_string($paymentId) || trim($paymentId) === ''
+            || ($recordedPendingId !== null && $recordedPendingId !== $paymentId)
+            || filled($payment['paymentDate'] ?? null)
+            || ($payment['readonly'] ?? false) !== false) {
+            return $this->markAttention($action, $order, 'stays_pending_payment_mismatch', 'O lançamento pendente não corresponde ao pagamento aprovado ou não permite alteração. Nenhuma baixa foi enviada.');
+        }
+        if ($action->attempt_count > 0 || $action->status !== 'pending') {
+            return $this->markAttention($action, $order, 'stays_payment_write_unknown', 'A baixa anterior ainda não foi confirmada na Stays. A alteração não será repetida e nenhum lançamento duplicado será criado.');
+        }
+        $claim = $this->claim($action, $order);
+        if (! $claim['claimed']) {
+            return $this->result(false, $claim['status'], 'A baixa do pagamento pendente está em andamento ou requer revisão.');
+        }
+
+        $this->stays->request('PATCH', $endpoint.'/'.rawurlencode($paymentId), payload: [
+            'status' => 'completed',
+            'paymentDate' => $payload['paymentDate'],
+            'name' => $payload['name'],
+        ]);
+
+        $payments = $this->findPayments($endpoint);
+        $matches = collect($payments ?? [])->filter(fn (array $candidate): bool => ($candidate['desc'] ?? null) === ($payment['desc'] ?? null))->values();
+        if ($matches->count() === 1
+            && ($matches->first()['_id'] ?? null) === $paymentId
+            && $this->matchesPayment($matches->first(), $attempt)
+            && ($matches->first()['paymentDate'] ?? null) === $payload['paymentDate']) {
+            $this->markActionSucceeded($action, $paymentId, $this->safePaymentSnapshot($matches->first()));
+
+            return $this->result(true, 'stays_payment_recorded', 'O mesmo lançamento pendente foi baixado na Stays após confirmação do gateway.');
+        }
+
+        return $this->markAttention($action, $order, 'stays_payment_write_unknown', 'A consulta não confirmou a baixa do lançamento pendente. Nenhuma reserva será confirmada nem será criado outro lançamento.');
     }
 
     /** @return array{ready: bool, code: string, message: string} */
@@ -293,13 +339,18 @@ class DirectStaysPaymentService
     /** @param array<string, mixed> $payment */
     private function matchesPayment(array $payment, DirectBookingPaymentAttempt $attempt): bool
     {
+        return $this->matchesPaymentDetails($payment, $attempt) && ($payment['status'] ?? null) === 'completed';
+    }
+
+    /** @param array<string, mixed> $payment */
+    private function matchesPaymentDetails(array $payment, DirectBookingPaymentAttempt $attempt): bool
+    {
         $paymentAmountCents = MoneyAmount::toCents($payment['_f_val'] ?? null);
         $attemptAmountCents = MoneyAmount::toCents($attempt->base_amount ?? $attempt->amount);
 
         return $paymentAmountCents !== null
             && $attemptAmountCents !== null
             && $paymentAmountCents === $attemptAmountCents
-            && ($payment['status'] ?? null) === 'completed'
             && ($payment['type'] ?? null) === config('direct-booking.stays_payment_type')
             && (string) ($payment['_idpaymentProvider'] ?? '') === (string) config('direct-booking.stays_payment_provider_id');
     }
@@ -464,7 +515,7 @@ class DirectStaysPaymentService
     /** @return array{ready: bool, code: string, message: string} */
     private function markAttention(DirectBookingStaysAction $action, DirectBookingOrder $order, string $code, string $message): array
     {
-        DB::transaction(function () use ($action, $order, $code): void {
+        DB::transaction(function () use ($action, $order, $code, $message): void {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $lockedAction = DirectBookingStaysAction::query()->lockForUpdate()->findOrFail($action->id);
             $lockedAction->forceFill([
