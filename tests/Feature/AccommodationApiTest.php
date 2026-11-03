@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\StaysAccommodationCatalog;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -10,16 +11,12 @@ use Tests\TestCase;
 
 class AccommodationApiTest extends TestCase
 {
-    private const LIVE_CATALOG_CACHE_KEY = 'stays.live-accommodation-catalog.v1';
-
-    private const LIVE_CATALOG_LOCK_KEY = 'stays.live-accommodation-catalog.v1:lock';
-
     protected function setUp(): void
     {
         parent::setUp();
 
         config(['services.stays.client_id' => '', 'services.stays.client_secret' => '']);
-        Cache::forget(self::LIVE_CATALOG_CACHE_KEY);
+        Cache::forget(app(StaysAccommodationCatalog::class)->key());
         Carbon::setTestNow();
     }
 
@@ -76,7 +73,7 @@ class AccommodationApiTest extends TestCase
             ->push([['id' => 'cached-listing', '_mstitle' => ['pt_BR' => 'Versão atualizada']]])]);
 
         $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Primeira versão');
-        $lock = Cache::lock(self::LIVE_CATALOG_LOCK_KEY, 2100);
+        $lock = Cache::lock(app(StaysAccommodationCatalog::class)->key().':lock', 2100);
         $this->assertTrue($lock->get());
         $lock->release();
 
@@ -100,7 +97,7 @@ class AccommodationApiTest extends TestCase
             ->push([['id' => 'cached-listing', '_mstitle' => ['pt_BR' => 'Versão invalidada']]])]);
 
         $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Versão em cache');
-        Cache::forget(self::LIVE_CATALOG_CACHE_KEY);
+        Cache::forget(app(StaysAccommodationCatalog::class)->key());
         $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Versão invalidada');
 
         Http::assertSentCount(2);

@@ -111,11 +111,14 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Prepare test environment file
+        run: cp .env.example .env
+
       - name: Run PostgreSQL migration compatibility test
         run: php artisan test --compact tests/Feature/GatewayProviderMigrationTest.php
 
       - name: Verify PostgreSQL search cache locking and pruning
-        run: php artisan test --compact --display-warnings tests/Feature/StaysSearchConcurrencyTest.php tests/Feature/PruneStaysSearchCacheTest.php
+        run: php artisan test --compact --display-warnings --fail-on-warning tests/Feature/StaysSearchConcurrencyTest.php tests/Feature/PruneStaysSearchCacheTest.php
 
   container-smoke:
     runs-on: ubuntu-latest

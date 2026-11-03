@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use RuntimeException;
+
 class StaysAccommodationMapper
 {
     /** @var array<string, string> */
@@ -15,6 +17,16 @@ class StaysAccommodationMapper
     private bool $staysPropertyCatalogLoaded = false;
 
     public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysDiscoveryCatalog $discovery) {}
+
+    private bool $requireCompleteMetadata = false;
+
+    public function reset(): void
+    {
+        $this->amenityNameDictionary = [];
+        $this->amenityNameDictionaryLoaded = false;
+        $this->staysPropertiesById = [];
+        $this->staysPropertyCatalogLoaded = false;
+    }
 
     public function localized(mixed $value): string
     {
@@ -69,6 +81,9 @@ class StaysAccommodationMapper
         $this->amenityNameDictionaryLoaded = true;
         foreach (['/translation/listing-amenities', '/translation/property-amenities'] as $endpoint) {
             $amenities = $this->stays->get($endpoint);
+            if ($this->requireCompleteMetadata && (! is_array($amenities) || ! array_is_list($amenities))) {
+                throw new RuntimeException('Accommodation amenity metadata is unavailable.');
+            }
             foreach (is_array($amenities) ? $amenities : [] as $amenity) {
                 if (! is_array($amenity)) {
                     continue;
@@ -100,6 +115,9 @@ class StaysAccommodationMapper
                     'skip' => $skip,
                     'status' => 'active',
                 ]);
+                if ($this->requireCompleteMetadata && (! is_array($page) || ! array_is_list($page) || array_filter($page, 'is_array') !== $page)) {
+                    throw new RuntimeException('Accommodation property metadata is unavailable.');
+                }
                 if (! is_array($page)) {
                     break;
                 }
@@ -125,8 +143,9 @@ class StaysAccommodationMapper
         return $this->staysPropertiesById[$propertyId] ?? [];
     }
 
-    public function map(array $listing, array $catalog): array
+    public function map(array $listing, array $catalog, bool $requireCompleteMetadata = false): array
     {
+        $this->requireCompleteMetadata = $requireCompleteMetadata;
         $id = (string) ($listing['id'] ?? $listing['code'] ?? $listing['_id'] ?? '');
         $listingIds = array_values(array_filter([
             (string) ($listing['id'] ?? ''),

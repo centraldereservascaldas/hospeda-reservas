@@ -5,28 +5,18 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SearchAccommodationsRequest;
 use App\Http\Resources\AccommodationSearchResource;
+use App\Services\StaysAccommodationCatalog;
 use App\Services\StaysAccommodationMapper;
 use App\Services\StaysCalendarService;
 use App\Services\StaysExternalApiClient;
 use App\Services\StaysSearchAvailabilityService;
 use App\Services\StaysSimulator;
-use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use RuntimeException;
 
 class AccommodationController extends Controller
 {
-    private const LIVE_CATALOG_CACHE_KEY = 'stays.live-accommodation-catalog.v1';
-
-    private const LIVE_CATALOG_CACHE_TTL_SECONDS = 300;
-
-    private const LIVE_CATALOG_LOCK_LEASE_SECONDS = 2100;
-
-    private const LIVE_CATALOG_LOCK_WAIT_SECONDS = 15;
-
-    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysAccommodationMapper $mapper) {}
+    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysAccommodationMapper $mapper, private readonly StaysAccommodationCatalog $accommodationCatalog) {}
 
     public function resorts(): JsonResponse
     {
@@ -61,22 +51,8 @@ class AccommodationController extends Controller
             return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
         }
 
-        try {
-            $catalog = Cache::get(self::LIVE_CATALOG_CACHE_KEY);
-            if (! is_array($catalog)) {
-                $catalog = Cache::lock(self::LIVE_CATALOG_CACHE_KEY.':lock', self::LIVE_CATALOG_LOCK_LEASE_SECONDS)
-                    ->block(self::LIVE_CATALOG_LOCK_WAIT_SECONDS, fn (): array => Cache::remember(self::LIVE_CATALOG_CACHE_KEY, self::LIVE_CATALOG_CACHE_TTL_SECONDS, function () use ($fallback): array {
-                        $listings = $this->stays->activeListings();
-                        if ($listings === null) {
-                            throw new RuntimeException('Stays returned an unavailable accommodation catalog.');
-                        }
-
-                        $mapped = array_map(fn (array $listing): array => $this->mapper->map($listing, $fallback), $listings);
-
-                        return ['success' => true, 'source' => 'stays-live', 'count' => count($mapped), 'data' => $mapped];
-                    }));
-            }
-        } catch (RuntimeException|LockTimeoutException) {
+        $catalog = $this->accommodationCatalog->get();
+        if ($catalog === null) {
             return response()->json([
                 'success' => false,
                 'source' => 'unavailable',
@@ -390,7 +366,7 @@ class AccommodationController extends Controller
 
     private function catalog(): array
     {
-        return json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
+        return $this->accommodationCatalog->fallback();
     }
 
     private function listingPayload(array $property): array

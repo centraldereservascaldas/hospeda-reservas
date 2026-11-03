@@ -56,3 +56,13 @@ As consultas de busca e cálculo de preço agora propagam o sinal de rate limit 
 Resultados de preço parciais continuam sendo retornados com aviso e não são gravados como snapshot completo. O sinal interno de rate limit não é exposto como payload do catálogo. A pausa usa o mesmo banco compartilhado, e a chave expirada participa da limpeza existente.
 
 356 testes backend passaram na suíte completa após a implementação. Os três casos adicionais de limites/fallback passaram na execução direcionada do arquivo, com 11 testes no total. Pint e diff sem erros. Permanecem pendentes o CI dos novos commits, catálogo resiliente/preparado, jobs isolados, aquecimento e E6/E7. A E5 segue sem publicação.
+
+## Catálogo descritivo resiliente — etapa local
+
+O catálogo foi extraído para `StaysAccommodationCatalog`. O namespace agora inclui versão do mapeamento e conta/base Stays. Usa `STAYS_CONTENT_CACHE_STORE=database` por padrão, mantendo o cache global existente independente. Conserva o último snapshot completo por 24 horas e tenta atualizar após cinco minutos; falha de atualização devolve o snapshot ainda dentro do limite sem renovar seu prazo. Conteúdo vazio bem formado substitui o anterior, evitando manter anúncios removidos. A montagem do snapshot requer metadados auxiliares completos quando necessários; falha dessas consultas preserva a versão anterior.
+
+O formato JSON do catálogo e as rotas existentes foram preservados. Os prazos estão no envelope interno do conteúdo, separado da validade das cotações. A atualização ainda é síncrona: orçamento de execução, preparação das coleções, jobs únicos e worker promocional isolado continuam pendentes.
+
+363 testes backend passaram após a mudança; 47 cenários direcionados cobriram API/catálogo/cotações. Pint e diff passaram.
+
+A execução `e657898` revelou os seis avisos do gate PostgreSQL: ausência do arquivo `.env` no checkout de CI, reportada pelo Dotenv. As 27 asserções foram executadas. O job agora copia somente `.env.example` para `.env`, mantendo as variáveis de teste do runner, e usa `--fail-on-warning` no gate de cache. Ainda aguardar a execução sem avisos antes de encerrar essa pendência.
