@@ -99,6 +99,9 @@ export function SinglePageCheckout({
     setLoading(true);
     setReadiness(null);
     setTerms(null);
+    const loadingTimeout = window.setTimeout(() => {
+      if (active) setLoading(false);
+    }, 10_000);
     void Promise.all([
       checkoutApi.getCheckoutTerms(bookingData.property.staysListingId || bookingData.property.id),
       checkoutApi.getCheckoutReadiness(bookingData.property.id),
@@ -125,10 +128,12 @@ export function SinglePageCheckout({
         /* Fail closed; the retry control remains available. */
       })
       .finally(() => {
+        window.clearTimeout(loadingTimeout);
         if (active) setLoading(false);
       });
     return () => {
       active = false;
+      window.clearTimeout(loadingTimeout);
     };
   }, [bookingData, previewOnly, retry]);
 

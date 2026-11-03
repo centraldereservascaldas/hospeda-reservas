@@ -20,6 +20,7 @@ const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/r
 const { SinglePageCheckout } = await import('../src/components/booking/SinglePageCheckout.tsx');
 const { CheckoutEntry } = await import('../src/components/booking/CheckoutEntry.tsx');
 const originals = { ...checkoutApi };
+const originalWindowTimeout = window.setTimeout;
 const originalPrice = crcnBackendApi.calculatePrice;
 const originalHostedReadiness = crcnBackendApi.getStaysCheckoutReadiness;
 const reference = 'U'.repeat(40);
@@ -77,6 +78,7 @@ const order: CheckoutResumeResponse['order'] = {
 };
 
 afterEach(() => {
+  window.setTimeout = originalWindowTimeout;
   cleanup();
   Object.assign(checkoutApi, originals);
   crcnBackendApi.calculatePrice = originalPrice;
@@ -538,6 +540,14 @@ test('readiness failure keeps our checkout open without creating an order or red
 });
 
 test('a slow readiness response keeps our checkout and enables payment only after readiness', async () => {
+  let showSupport: (() => void) | undefined;
+  window.setTimeout = ((callback: () => void, delay?: number) => {
+    if (delay === 10_000) {
+      showSupport = callback;
+      return 12345;
+    }
+    return originalWindowTimeout(callback, delay);
+  }) as typeof window.setTimeout;
   checkoutApi.getCheckoutTerms = async () => ({
     kind: 'ready',
     data: {
@@ -568,6 +578,8 @@ test('a slow readiness response keeps our checkout and enables payment only afte
   await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Confirme e pague' })));
   assert.equal(view.queryByRole('button', { name: 'Continuar na Stays' }), null);
   const { act } = await import('@testing-library/react');
+  await act(async () => showSupport!());
+  assert.ok(view.getByRole('link', { name: /Falar no WhatsApp/ }));
   await act(async () => {
     finish!({
       kind: 'ready',
@@ -583,4 +595,5 @@ test('a slow readiness response keeps our checkout and enables payment only afte
   });
   assert.ok(view.getByRole('heading', { name: 'Confirme e pague' }));
   assert.equal(view.queryByRole('button', { name: 'Continuar na Stays' }), null);
+  assert.equal(view.queryByRole('link', { name: /Falar no WhatsApp/ }), null);
 });
