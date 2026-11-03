@@ -413,8 +413,15 @@ jobs:
           fi
 
       - name: Verify the public checkout deployment
+        env:
+          DIRECT_CHECKOUT_EXPECTED_ENABLED: ${{ vars.DIRECT_CHECKOUT_EXPECTED_ENABLED || 'false' }}
         run: |
           set -euo pipefail
+
+          if [ "$DIRECT_CHECKOUT_EXPECTED_ENABLED" != 'true' ] && [ "$DIRECT_CHECKOUT_EXPECTED_ENABLED" != 'false' ]; then
+            echo 'DIRECT_CHECKOUT_EXPECTED_ENABLED must be true or false.' >&2
+            exit 1
+          fi
 
           base_url='https://crcn.caldasindica.com'
           deadline=$((SECONDS + 300))
@@ -424,10 +431,19 @@ jobs:
             checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/stays-checkout/readiness" || true)
             direct_checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/checkout/readiness/LG02J" || true)
 
+            direct_checkout_matches_expected=false
+            if [ "$DIRECT_CHECKOUT_EXPECTED_ENABLED" = 'true' ]; then
+              if jq --exit-status '.ready == true and .checkoutEnabled == true and .singlePageCheckoutEnabled == true and .payment.enabled == true and (.payment.methods | index("card")) != null and (.payment.methods | index("pix")) != null' <<< "$direct_checkout" >/dev/null 2>&1; then
+                direct_checkout_matches_expected=true
+              fi
+            elif jq --exit-status '.success == true and .ready == false and .checkoutEnabled == false and .singlePageCheckoutEnabled == false and .payment.enabled == false' <<< "$direct_checkout" >/dev/null 2>&1; then
+              direct_checkout_matches_expected=true
+            fi
+
             if jq --exit-status '.success == true' <<< "$health" >/dev/null 2>&1 \
               && jq --exit-status '.connected == true and .hasCredentials == true and .environment == "production"' <<< "$stays" >/dev/null 2>&1 \
               && jq --exit-status '.ready == true and .code == null' <<< "$checkout" >/dev/null 2>&1 \
-              && jq --exit-status '.ready == true and .checkoutEnabled == true and .singlePageCheckoutEnabled == true and .payment.enabled == true and (.payment.methods | index("card")) != null and (.payment.methods | index("pix")) != null' <<< "$direct_checkout" >/dev/null 2>&1; then
+              && [ "$direct_checkout_matches_expected" = true ]; then
               curl --fail --silent --show-error --max-time 15 \
                 --dump-header /tmp/hospeda-public-headers.txt \
                 --output /dev/null \
@@ -439,12 +455,12 @@ jobs:
                 echo 'The public response still exposes X-Powered-By.' >&2
                 exit 1
               fi
-              echo 'Public domain, direct checkout, and hosted Stays fallback are ready.'
+              echo "Public domain is healthy; direct checkout matches expected enabled state: $DIRECT_CHECKOUT_EXPECTED_ENABLED."
               exit 0
             fi
 
             sleep 10
           done
 
-          echo 'The public domain did not become ready for the direct checkout.' >&2
+          echo "The public domain did not reach the expected direct checkout state: $DIRECT_CHECKOUT_EXPECTED_ENABLED." >&2
           exit 1

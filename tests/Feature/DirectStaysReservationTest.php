@@ -17,6 +17,30 @@ class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_reservation_total_must_match_quote_even_when_expected_and_hosting_subtotals_differ(): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        $reservation = [
+            '_id' => 'reservation-with-fees',
+            '_idlisting' => $order->stays_listing_id,
+            '_idclient' => $order->stays_client_id,
+            'type' => 'reserved',
+            'checkInDate' => $order->check_in->toDateString(),
+            'checkOutDate' => $order->check_out->toDateString(),
+            'internalNote' => 'CRCN_DIRECT_ORDER:'.$order->id,
+            'guests' => 2,
+            'price' => ['currency' => 'BRL', '_f_expected' => 2000, '_f_total' => 3001,
+                'hostingDetails' => ['_f_total' => 2900]],
+        ];
+
+        $matcher = app(\App\Services\DirectStaysReservationMatcher::class);
+        $this->assertTrue($matcher->matchesCommercialDetails($reservation, $order));
+        $reservation['price']['_f_total'] = 3600;
+        $this->assertFalse($matcher->matchesCommercialDetails($reservation, $order));
+        unset($reservation['price']['_f_total']);
+        $this->assertFalse($matcher->matchesCommercialDetails($reservation, $order));
+    }
+
     public function test_stays_object_listing_id_matches_quote_but_booked_before_payment_stays_blocked(): void
     {
         $order = $this->order(DirectBookingOrderStatus::Cotado);
@@ -132,6 +156,10 @@ class DirectStaysReservationTest extends TestCase
         $this->assertSame('client-1', $order->stays_client_id);
         $this->assertNotNull($order->expires_at);
         $this->assertSame('succeeded', DirectBookingStaysAction::query()->where('action_type', 'create_reservation')->value('status'));
+        Http::assertSent(fn (ClientRequest $request): bool => $request->method() === 'POST'
+            && str_ends_with((string) parse_url($request->url(), PHP_URL_PATH), '/booking/reservations')
+            && ($request->data()['type'] ?? null) === 'reserved'
+            && ! array_key_exists('price', $request->data()));
 
         $resume = $response->json('resume');
         $this->assertSame('/checkout/'.$order->public_reference, $resume['path']);
@@ -337,6 +365,6 @@ class DirectStaysReservationTest extends TestCase
      */
     private function reservationFrom(array $requestData, string $id): array
     {
-        return ['_id' => $id, '_idlisting' => $requestData['listingId'] ?? 'JQ08G', '_idclient' => $requestData['_idclient'] ?? 'client-1', 'type' => $requestData['type'] ?? 'reserved', 'checkInDate' => $requestData['checkInDate'] ?? '2026-11-10', 'checkOutDate' => $requestData['checkOutDate'] ?? '2026-11-13', 'guests' => $requestData['guests'] ?? 2, 'guestsDetails' => $requestData['guestsDetails'] ?? ['adults' => 2, 'children' => 0, 'infants' => 0], 'price' => $requestData['price'] ?? ['currency' => 'BRL', '_f_expected' => 3001], 'internalNote' => $requestData['internalNote'] ?? ''];
+        return ['_id' => $id, '_idlisting' => $requestData['listingId'] ?? 'JQ08G', '_idclient' => $requestData['_idclient'] ?? 'client-1', 'type' => $requestData['type'] ?? 'reserved', 'checkInDate' => $requestData['checkInDate'] ?? '2026-11-10', 'checkOutDate' => $requestData['checkOutDate'] ?? '2026-11-13', 'guests' => $requestData['guests'] ?? 2, 'guestsDetails' => $requestData['guestsDetails'] ?? ['adults' => 2, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 3001], 'internalNote' => $requestData['internalNote'] ?? ''];
     }
 }
