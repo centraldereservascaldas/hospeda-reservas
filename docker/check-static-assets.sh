@@ -15,8 +15,25 @@ if [ -n "$previous" ]; then
   printf '%s\n' "$headers" | grep -iEq '^cache-control:.*immutable'
 fi
 
-status=$(curl --silent --show-error --max-time 10 --output /dev/null --write-out '%{http_code}' "$base/assets/missing-00000000.js")
-test "$status" = 404
+for method in GET HEAD; do
+  headers=$(mktemp)
+  trap 'rm -f "$headers"' EXIT HUP INT TERM
+  if [ "$method" = HEAD ]; then
+    set -- --head
+  else
+    set --
+  fi
+  status=$(curl "$@" --silent --show-error --max-time 10 --dump-header "$headers" --output /dev/null --write-out '%{http_code}' "$base/assets/missing-00000000.js")
+  test "$status" = 404
+  grep -iEq '^cache-control: *no-store, max-age=0' "$headers"
+  test "$(grep -ic '^cache-control:' "$headers")" -eq 1
+  if grep -iEq '^expires:|^cache-control:.*(immutable|public)' "$headers"; then
+    rm -f "$headers"
+    exit 1
+  fi
+  rm -f "$headers"
+  trap - EXIT HUP INT TERM
+done
 for resource in / /api/health; do
   headers=$(curl --head --fail --silent --show-error --max-time 10 "$base$resource")
   if printf '%s\n' "$headers" | grep -iEq '^cache-control:.*immutable'; then
