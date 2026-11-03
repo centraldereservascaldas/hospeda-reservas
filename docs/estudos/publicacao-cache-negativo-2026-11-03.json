@@ -1,0 +1,45 @@
+{
+  "release": "9518dc35c9f44ad7554f6a2ae7c17e6a105988c1",
+  "verifiedAt": "2026-11-03T23:43:36.582Z",
+  "checks": [
+    {
+      "method": "GET",
+      "status": 404,
+      "cache": "no-store, max-age=0",
+      "edge": "BYPASS"
+    },
+    {
+      "method": "HEAD",
+      "status": 404,
+      "cache": "no-store, max-age=0",
+      "edge": "BYPASS"
+    },
+    {
+      "resource": "/api/health",
+      "status": 200,
+      "cache": "no-cache, private"
+    },
+    {
+      "resource": "/api/ready",
+      "status": 200,
+      "cache": "no-cache, private"
+    },
+    {
+      "resource": "/assets/index-kgNU18fA.js",
+      "status": 200,
+      "cache": "public, max-age=31536000, immutable"
+    },
+    {
+      "resource": "/assets/index-BBdL3cTh.js",
+      "status": 200,
+      "cache": "public, max-age=31536000, immutable"
+    }
+  ],
+  "digest": "sha256:f73e321cb46627470b63fa4369af3747ba49c2edc5aed57537cb4a3ffdb16eff",
+  "container": "8fb6b098a47c",
+  "healthy": true,
+  "ciDigestMatchesRuntime": true,
+  "releaseRun": "https://github.com/centraldereservascaldas/hospeda-reservas/actions/runs/41740440452",
+  "rollbackDigest": "sha256:b7580dcdc543b39bbac7737ed3a349c49cbc9fc932f94f22855de8df56ab5804",
+  "newMigrations": false
+}
