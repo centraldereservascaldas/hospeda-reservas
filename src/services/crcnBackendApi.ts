@@ -27,6 +27,9 @@ import { matchesPropertyDestination } from '../utils/propertySearchFilters';
 import { apiFetch } from './apiFetch';
 import { getConfirmedPropertyQuote } from '../utils/propertyDisplayPrice';
 
+import { scheduleAccommodationSearch } from './accommodationSearchQueue';
+import type { ScheduledRequestOptions } from './requestScheduler';
+
 const API_REQUEST_TIMEOUT_MS = 20_000;
 const STAYS_SEARCH_PAGE_SIZE = 20;
 
@@ -424,7 +427,7 @@ class CrcnBackendApiService {
   /** Fetch one raw page without filling gaps or requesting subsequent pages. */
   public async searchAccommodationsPage(
     params: SearchAccommodationsParams,
-    options: { signal?: AbortSignal } = {},
+    options: ScheduledRequestOptions = {},
   ): Promise<AccommodationSearchPage> {
     const limit = params.limit ?? 12;
     const skip = params.skip ?? 0;
@@ -437,6 +440,18 @@ class CrcnBackendApiService {
     ) {
       throw new Error('A paginação solicitada é inválida.');
     }
+    return scheduleAccommodationSearch(
+      { ...params, limit, skip },
+      (signal) => this.fetchAccommodationSearchPage({ ...params, limit, skip }, signal),
+      options,
+    );
+  }
+
+  private async fetchAccommodationSearchPage(
+    params: SearchAccommodationsParams & { limit: number; skip: number },
+    requestSignal: AbortSignal,
+  ): Promise<AccommodationSearchPage> {
+    const { limit, skip } = params;
     const json: unknown = await withApiRequestTimeout(async (signal) => {
       const res = await apiFetch('/api/search', {
         method: 'POST',
@@ -446,7 +461,7 @@ class CrcnBackendApiService {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
-    }, options.signal);
+    }, requestSignal);
     if (
       !isRecord(json) ||
       !isFiniteNumber(json.total) ||
@@ -521,7 +536,10 @@ class CrcnBackendApiService {
   }
 
   // 3. POST /api/search
-  public async searchAccommodations(params: SearchAccommodationsParams): Promise<{
+  public async searchAccommodations(
+    params: SearchAccommodationsParams,
+    options: ScheduledRequestOptions = {},
+  ): Promise<{
     total: number;
     data: Property[];
     unquotedCount?: number;
@@ -541,11 +559,15 @@ class CrcnBackendApiService {
           STAYS_SEARCH_PAGE_SIZE,
           requestedResultCount - propertiesById.size,
         );
-        const page = await this.searchAccommodationsPage({
-          ...params,
-          limit: pageLimit,
-          skip: pageOffset,
-        });
+        options.signal?.throwIfAborted();
+        const page = await this.searchAccommodationsPage(
+          {
+            ...params,
+            limit: pageLimit,
+            skip: pageOffset,
+          },
+          { ...options, priority: options.priority ?? 'visible' },
+        );
         unquotedCount += page.unquotedCount;
         let addedProperties = 0;
         for (const property of page.data) {
@@ -567,6 +589,7 @@ class CrcnBackendApiService {
       }
       return { total: data.length, data, ...(unquotedCount > 0 ? { unquotedCount } : {}) };
     } catch (err) {
+      if (options.signal?.aborted) throw err;
       console.warn('Accommodation search failed:', err);
       if (params.from && params.to) {
         // A static catalog cannot confirm availability or provide a date-specific quote.

@@ -3,6 +3,7 @@ import { ArrowRight, CalendarDays, LoaderCircle, Sparkles } from 'lucide-react';
 import type { Currency, Property } from '../../types';
 import type { AccommodationWidgetSearchParams } from '../../hooks/useAccommodationSearch';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
+import type { RequestPriority } from '../../services/requestScheduler';
 import { formatCurrency } from '../../utils/formatters';
 import {
   getHomeDiscoveryCollections,
@@ -158,6 +159,7 @@ export function SeasonalDateSuggestions({
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     setQuotes(
       Object.fromEntries(
         suggestions.map((suggestion) => [
@@ -170,6 +172,7 @@ export function SeasonalDateSuggestions({
       const searches = new Map<string, ReturnType<typeof crcnBackendApi.searchAccommodations>>();
       const loadSuggestion = async (
         suggestion: HomeDateSuggestion & { id: string; propertyIndex?: number },
+        priority: RequestPriority,
       ) => {
         if (readCachedQuote(suggestion.id, suggestion, guestCount)) return;
         let quote: SuggestionQuote = { status: 'unavailable' };
@@ -177,12 +180,15 @@ export function SeasonalDateSuggestions({
           const searchKey = `${suggestion.checkIn}|${suggestion.checkOut}|${guestCount}`;
           let search = searches.get(searchKey);
           if (!search) {
-            search = crcnBackendApi.searchAccommodations({
-              from: suggestion.checkIn,
-              to: suggestion.checkOut,
-              guests: guestCount,
-              limit: 8,
-            });
+            search = crcnBackendApi.searchAccommodations(
+              {
+                from: suggestion.checkIn,
+                to: suggestion.checkOut,
+                guests: guestCount,
+                limit: 8,
+              },
+              { signal: controller.signal, priority },
+            );
             searches.set(searchKey, search);
           }
           const result = await search;
@@ -217,6 +223,7 @@ export function SeasonalDateSuggestions({
         } catch {
           quote = { status: 'error' };
         }
+        if (cancelled) return;
         quote.expiresAt = Date.now() + 45_000;
         quote.guests = guestCount;
         writeCachedQuote(suggestion.id, suggestion, guestCount, quote);
@@ -226,16 +233,21 @@ export function SeasonalDateSuggestions({
       };
       const firstCollectionSize = collections[0]?.suggestions.length ?? 0;
       await Promise.all(
-        suggestions.slice(0, firstCollectionSize).map((suggestion) => loadSuggestion(suggestion)),
+        suggestions
+          .slice(0, firstCollectionSize)
+          .map((suggestion) => loadSuggestion(suggestion, 'visible')),
       );
       if (cancelled) return;
       await Promise.all(
-        suggestions.slice(firstCollectionSize).map((suggestion) => loadSuggestion(suggestion)),
+        suggestions
+          .slice(firstCollectionSize)
+          .map((suggestion) => loadSuggestion(suggestion, 'prefetch')),
       );
     };
     void loadQuotes();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [collections, guestCount, suggestions]);
 
@@ -268,14 +280,18 @@ export function SeasonalDateSuggestions({
     setCatalogQuotes({});
     setCatalogQuoteGuests(null);
     let cancelled = false;
+    const controller = new AbortController();
     let expiryTimer: number | undefined;
     void crcnBackendApi
-      .searchAccommodations({
-        from: catalogPeriod.checkIn,
-        to: catalogPeriod.checkOut,
-        guests: guestCount,
-        limit: 100,
-      })
+      .searchAccommodations(
+        {
+          from: catalogPeriod.checkIn,
+          to: catalogPeriod.checkOut,
+          guests: guestCount,
+          limit: 100,
+        },
+        { signal: controller.signal, priority: 'prefetch' },
+      )
       .then((result) => {
         if (cancelled) return;
         setCatalogSearchProperties(result.data);
@@ -301,14 +317,16 @@ export function SeasonalDateSuggestions({
       });
     return () => {
       cancelled = true;
+      controller.abort();
       if (expiryTimer !== undefined) window.clearTimeout(expiryTimer);
     };
   }, [catalogPeriod, guestCount]);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     void crcnBackendApi
-      .searchAccommodations({ limit: 100 })
+      .searchAccommodations({ limit: 100 }, { signal: controller.signal, priority: 'prefetch' })
       .then((result) => {
         if (!cancelled) setCategoryMetadataProperties(result.data);
       })
@@ -317,6 +335,7 @@ export function SeasonalDateSuggestions({
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, []);
 

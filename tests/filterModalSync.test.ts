@@ -297,6 +297,6 @@ test('does not present a partial page count as the global filter result', () => 
     /0 acomodações entre as opções carregadas/,
   );
   assert.equal(screen.queryByRole('button', { name: 'Mostrar 0 acomodações' }), null);
-  fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }));
   assert.equal(applied, true);
 });

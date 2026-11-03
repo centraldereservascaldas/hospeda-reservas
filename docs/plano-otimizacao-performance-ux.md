@@ -1,6 +1,6 @@
 # Plano de otimização de performance e experiência
 
-Data: 03/11/2026. Status: E0 com versão identificada e baseline de laboratório registrado; E1 implementada e validada localmente na branch `codex/performance-sprints`; E2/E3 implementadas e validadas localmente; validação do container E2 pendente; E4 é a próxima etapa.
+Data: 03/11/2026. Status: E0 com versão identificada e baseline de laboratório registrado; E1 implementada e validada localmente na branch `codex/performance-sprints`; E2/E3 implementadas e validadas localmente; validação do container E2 pendente; E4 em andamento: fila integrada e visibilidade pendente.
 
 Registro da Sprint 0: [versão publicada, método e resultados da E0](estudos/baseline-performance-e0-2026-11-03.md). Telemetria de backend e p75 real permanecem pendentes, explicitados no registro.
 
@@ -8,7 +8,7 @@ Registro da Sprint 0: [versão publicada, método e resultados da E0](estudos/ba
 
 Reduzir o tempo até o primeiro resultado útil, as consultas à Stays e o trabalho de renderização, mantendo disponibilidade e preços corretos. Entregar melhorias em etapas independentes e mensuráveis, sem alterar a autorização da compra ou os contratos existentes durante a transição.
 
-A goal ativa autoriza a implementação local por sprints. Commits locais por progresso foram autorizados em 03/11/2026. Mudanças de infraestrutura, push e publicação dependem de solicitação explícita. Preservar as alterações preexistentes no worktree `codex/calendario-responsivo-cache` e o backend legado.
+A goal ativa autoriza a implementação local por sprints. Commits locais por progresso e publicação incremental foram solicitados em 03/11/2026. Cada publicação depende dos gates, integração da main atual e conferência do alvo/rollback. Mudanças de infraestrutura fora do deploy continuam dependendo de solicitação explícita. Preservar as alterações preexistentes no worktree `codex/calendario-responsivo-cache` e o backend legado.
 
 ## Evidências e incertezas
 
@@ -50,7 +50,7 @@ Total estimado: **10,5–20 dias de trabalho**, sem somar itens opcionais abaixo
 | ------ | ------- | ---------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | S0     | E0      | 0,5–1 dia        | Artefato identificado, amostras e instrumentos reproduzíveis        | Baseline de laboratório concluído; observabilidade real pendente |
 | S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 locais validadas; container E2 pendente                                   |
-| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3 local validada; E4 pendente |
+| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3 validada; E4 com fila integrada, visibilidade pendente |
 | S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Planejada                                                        |
 | S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Planejada                                                        |
 
@@ -114,6 +114,8 @@ Progresso local em 03/11/2026: serviço e interface de página única integrados
 - Montar apenas páginas entregues; preservar posição, contexto e retorno do detalhe. Não introduzir virtualização sem evidência de necessidade.
 
 ## E4 — Fila por página/seção
+
+Progresso local: concorrência de duas páginas, prioridade, deduplicação, cancelamento por consumidor e políticas de aba/economia de dados implementados. Efeitos das vitrines cancelam ao desmontar. Gatilhos por visibilidade ainda pendentes; ver [registro da E4](estudos/sprint-2-e4-2026-11-03.md).
 
 **Trabalho:** usar um agendador compartilhado no frontend. Unidade de trabalho: página de resultados ou seção de ofertas, sem consulta de disponibilidade por cartão. Iniciar com duas requisições de dados concorrentes; priorizar ação explícita sobre antecipação. Acionar `IntersectionObserver` perto da próxima área, considerando também a rolagem horizontal das vitrines.
 

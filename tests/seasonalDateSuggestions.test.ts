@@ -258,3 +258,28 @@ test('prioritizes only the first collection cover and supplies responsive image 
   assert.equal(document.querySelectorAll('img[fetchpriority="high"]').length, 1);
   assert.ok(document.querySelectorAll('img[loading="lazy"]').length > 0);
 });
+
+test('detaches every promotional query when its collection unmounts', async () => {
+  const signals: AbortSignal[] = [];
+  crcnBackendApi.searchAccommodations = (_params, options) => {
+    assert.ok(options?.signal);
+    const signal = options.signal;
+    signals.push(signal);
+    return new Promise((_resolve, reject) =>
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true }),
+    );
+  };
+  const rendered = render(
+    React.createElement(SeasonalDateSuggestions, {
+      currency: 'BRL',
+      guestCount: 2,
+      guests: { adults: 2, children: 0, infants: 0, pets: 0 },
+      onSelect: () => {},
+    }),
+  );
+  await waitFor(() => assert.ok(signals.length > 0));
+  rendered.unmount();
+  assert.ok(signals.every((signal) => signal.aborted));
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(window.sessionStorage.length, 0);
+});

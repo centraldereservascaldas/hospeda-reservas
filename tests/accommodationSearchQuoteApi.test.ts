@@ -166,14 +166,20 @@ test('a cancelled page never issues a request or falls back to cached inventory'
 });
 
 test('cancels an in-flight page and permits an independent retry', async () => {
+  let requestStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    requestStarted = resolve;
+  });
   let requestSignal: AbortSignal | null = null;
   globalThis.fetch = (_input, init) =>
     new Promise((_resolve, reject) => {
       requestSignal = init?.signal as AbortSignal;
       requestSignal.addEventListener('abort', () => reject(requestSignal?.reason), { once: true });
+      requestStarted();
     });
   const controller = new AbortController();
   const pending = crcnBackendApi.searchAccommodationsPage(params, { signal: controller.signal });
+  await started;
   controller.abort();
   await assert.rejects(pending, { name: 'AbortError' });
   assert.equal((requestSignal as AbortSignal | null)?.aborted, true);
@@ -185,4 +191,87 @@ test('single-page HTTP failures propagate without a static availability fallback
   globalThis.fetch = async () => new Response('unavailable', { status: 503 });
   await assert.rejects(crcnBackendApi.searchAccommodationsPage(params), /HTTP 503/);
   await assert.rejects(crcnBackendApi.searchAccommodationsPage({}), /HTTP 503/);
+});
+
+test('shares equivalent pending pages while preserving the remaining HTTP consumer after cancellation', async () => {
+  let finish!: (response: Response) => void;
+  let requestStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    requestStarted = resolve;
+  });
+  let calls = 0;
+  let requestSignal: AbortSignal | null = null;
+  globalThis.fetch = (_input, init) => {
+    calls += 1;
+    requestSignal = init?.signal as AbortSignal;
+    requestStarted();
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  };
+  const controller = new AbortController();
+  const first = crcnBackendApi.searchAccommodationsPage(
+    { ...params, cities: ['Caldas Novas', 'Rio Quente'], skip: 0, limit: 12 },
+    { signal: controller.signal },
+  );
+  const second = crcnBackendApi.searchAccommodationsPage({
+    ...params,
+    cities: ['Rio Quente', 'Caldas Novas', 'Rio Quente'],
+  });
+  await started;
+  controller.abort();
+  await assert.rejects(first, { name: 'AbortError' });
+  assert.equal((requestSignal as AbortSignal | null)?.aborted, false);
+  finish(response([property]));
+  assert.equal((await second).data.length, 1);
+  assert.equal(calls, 1);
+});
+
+test('caps actual concurrent HTTP search pages at two', async () => {
+  const pending: Array<() => void> = [];
+  let live = 0;
+  let maxLive = 0;
+  globalThis.fetch = () =>
+    new Promise((resolve) => {
+      live += 1;
+      maxLive = Math.max(maxLive, live);
+      pending.push(() => {
+        live -= 1;
+        resolve(response([property]));
+      });
+    });
+  const a = crcnBackendApi.searchAccommodationsPage({ ...params, skip: 0 });
+  const b = crcnBackendApi.searchAccommodationsPage({ ...params, skip: 12 });
+  const c = crcnBackendApi.searchAccommodationsPage({ ...params, skip: 24 });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(pending.length, 2);
+  pending[0]!();
+  await a;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(pending.length, 3);
+  pending[1]!();
+  pending[2]!();
+  await Promise.all([b, c]);
+  assert.equal(maxLive, 2);
+});
+
+test('cancelling an undated aggregate stops its pages without returning a static fallback', async () => {
+  let requestStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    requestStarted = resolve;
+  });
+  let calls = 0;
+  globalThis.fetch = (_input, init) =>
+    new Promise((_resolve, reject) => {
+      calls += 1;
+      const signal = init?.signal as AbortSignal;
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      requestStarted();
+    });
+  const controller = new AbortController();
+  const pending = crcnBackendApi.searchAccommodations({}, { signal: controller.signal });
+  await started;
+  controller.abort();
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.equal(calls, 1);
 });
