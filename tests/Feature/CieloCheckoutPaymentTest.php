@@ -181,7 +181,8 @@ class CieloCheckoutPaymentTest extends TestCase
         Http::assertNothingSent();
     }
 
-    public function test_pix_stays_pending_without_fee_and_only_authoritative_lookup_approves_it(): void
+    #[DataProvider('pixQrImageKeys')]
+    public function test_pix_stays_pending_without_fee_and_only_authoritative_lookup_approves_it(string $qrImageKey): void
     {
         Http::preventStrayRequests();
         $this->configureCielo();
@@ -190,14 +191,20 @@ class CieloCheckoutPaymentTest extends TestCase
         $this->mock(DirectStaysReservationService::class)
             ->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
         $paymentId = '123e4567-e89b-12d3-a456-426614174080';
-        Http::fake(function (ClientRequest $request) use ($paymentId): mixed {
+        Http::fake(function (ClientRequest $request) use ($paymentId, $qrImageKey): mixed {
             if ($request->method() === 'POST') {
-                return Http::response($this->cieloPixPayment(
+                $payment = $this->cieloPixPayment(
                     $paymentId,
                     $request['MerchantOrderId'],
                     12,
                     true,
-                ), 201);
+                );
+                if ($qrImageKey !== 'QrCodeBase64Image') {
+                    $payment['Payment'][$qrImageKey] = $payment['Payment']['QrCodeBase64Image'];
+                    unset($payment['Payment']['QrCodeBase64Image']);
+                }
+
+                return Http::response($payment, 201);
             }
 
             return Http::response($this->cieloPixPayment(
@@ -220,6 +227,7 @@ class CieloCheckoutPaymentTest extends TestCase
             ->assertJsonPath('payment.processingFeeAmount', '0.00');
 
         $this->assertNotEmpty($response->json('payment.pix.copyPaste'));
+        $this->assertNotEmpty($response->json('payment.pix.qrCodeBase64'));
         $attempt = DirectBookingPaymentAttempt::query()->sole();
         $this->assertSame('pix', $attempt->payment_method);
         $this->assertSame(0, $attempt->processing_fee_basis_points);
@@ -234,6 +242,14 @@ class CieloCheckoutPaymentTest extends TestCase
         $this->assertSame(DirectBookingOrderStatus::PagoEmConfirmacao, $order->refresh()->status);
         $this->assertNull($attempt->refresh()->pix_copy_paste);
         $this->assertNull($attempt->pix_qr_code_base64);
+    }
+
+    public static function pixQrImageKeys(): array
+    {
+        return [
+            'QrCodeBase64Image' => ['QrCodeBase64Image'],
+            'QrcodeBase64Image' => ['QrcodeBase64Image'],
+        ];
     }
 
     public function test_initial_pending_pix_without_safe_qr_instructions_fails_closed(): void

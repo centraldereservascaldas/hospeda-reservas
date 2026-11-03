@@ -230,6 +230,22 @@ test('one submit prepares the reservation then tokenizes and pays without leavin
 
 test('Pix stays on the checkout, has no surcharge and waits for authoritative confirmation', async () => {
   const calls: string[] = [];
+  const pixAttempt = {
+    status: 'pending' as const,
+    method: 'pix' as const,
+    amount: '3001.00',
+    baseAmount: '3001.00',
+    processingFeeAmount: '0.00',
+    processingFeeRate: '0.00',
+    currency: 'BRL' as const,
+    expiresAt: order.expiresAt,
+    paidAt: null,
+    pix: {
+      copyPaste: '00020101021226890014br.gov.bcb.pix',
+      qrCodeBase64:
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    },
+  };
   const pixPayment = {
     ...payment,
     methods: ['card', 'pix'] as Array<'card' | 'pix'>,
@@ -266,36 +282,26 @@ test('Pix stays on the checkout, has no surcharge and waits for authoritative co
       code: 'payment_pending',
       message: 'Pix gerado.',
       replayed: false,
-      payment: null,
+      payment: pixAttempt,
     };
   };
-  checkoutApi.resumeCheckout = async () => ({
-    kind: 'ready',
-    data: {
-      success: true,
-      order: { ...order, status: 'pagamento_pendente', paymentStatus: 'pending' },
-      confirmation: null,
-      payment: {
-        ...pixPayment,
-        attempt: {
-          status: 'pending',
-          method: 'pix',
-          amount: '3001.00',
-          baseAmount: '3001.00',
-          processingFeeAmount: '0.00',
-          processingFeeRate: '0.00',
-          currency: 'BRL',
-          expiresAt: order.expiresAt,
-          paidAt: null,
-          pix: {
-            copyPaste: '00020101021226890014br.gov.bcb.pix',
-            qrCodeBase64:
-              'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
-          },
+  let resumeCalls = 0;
+  checkoutApi.resumeCheckout = async () => {
+    resumeCalls += 1;
+    if (resumeCalls === 1) return { kind: 'unavailable' };
+    return {
+      kind: 'ready',
+      data: {
+        success: true,
+        order: { ...order, status: 'pagamento_pendente', paymentStatus: 'pending' },
+        confirmation: null,
+        payment: {
+          ...pixPayment,
+          attempt: pixAttempt,
         },
       },
-    },
-  });
+    };
+  };
 
   const view = setup(false, pixPayment);
   await waitFor(() =>
@@ -309,10 +315,53 @@ test('Pix stays on the checkout, has no surcharge and waits for authoritative co
   fireEvent.submit(view.container.querySelector('form')!);
 
   await waitFor(() => assert.ok(view.getByText('Pix gerado · aguardando pagamento')));
+  assert.ok(view.getByLabelText('Código Pix copia e cola'));
+  fireEvent.click(view.getByRole('button', { name: 'Atualizar situação' }));
+  await waitFor(() => assert.equal(resumeCalls, 2));
   assert.deepEqual(calls, ['reservation', 'pix']);
   assert.equal(window.location.pathname, `/checkout/${reference}`);
   assert.ok(view.getByLabelText('Código Pix copia e cola'));
   assert.ok(view.getByText(/só será confirmada após a consulta segura do pagamento/i));
+});
+
+test('a Stays reservation requiring review never presents tracking as a generated Pix', async () => {
+  const pixPayment = { ...payment, methods: ['card', 'pix'] as Array<'card' | 'pix'> };
+  let paymentCalls = 0;
+  checkoutApi.createCheckout = async () => ({
+    success: false,
+    code: 'stays_reservation_not_reserved',
+    message: 'A reserva da Stays exige conferência. Nenhum pagamento foi iniciado.',
+    order: { ...order, status: 'atencao_operacional' },
+    payment: pixPayment,
+    idempotentReplay: false,
+    resume: {
+      reference,
+      token: 'T'.repeat(64),
+      path: `/checkout/${reference}`,
+      expiresAt: order.expiresAt!,
+    },
+  });
+  checkoutApi.createCheckoutPayment = async () => {
+    paymentCalls += 1;
+    return { kind: 'unavailable' };
+  };
+  checkoutApi.resumeCheckout = async () => ({ kind: 'unavailable' });
+
+  const view = setup(false, pixPayment);
+  await waitFor(() =>
+    assert.equal(
+      view.getByRole('button', { name: 'Pix, aprovação rápida' }).hasAttribute('disabled'),
+      false,
+    ),
+  );
+  fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
+  fireEvent.submit(view.container.querySelector('form')!);
+
+  await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pagamento não iniciado' })));
+  assert.ok(view.getByText(/Nenhum Pix ou cobrança foi iniciado/));
+  assert.equal(view.queryByLabelText('Código Pix copia e cola'), null);
+  assert.equal(paymentCalls, 0);
 });
 
 test('a changed quote requires fresh consent and never starts Cielo', async () => {

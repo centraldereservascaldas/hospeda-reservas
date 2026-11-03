@@ -10,6 +10,7 @@ import {
 } from './CieloSopCardForm';
 import {
   checkoutApi,
+  type CheckoutPaymentAttemptSummary,
   type CheckoutReadinessResponse,
   type CheckoutResumeResponse,
 } from '../../services/checkoutApi';
@@ -59,6 +60,10 @@ export function SinglePageCheckout({
   const preparedRef = useRef<CieloPaymentContext | null>(null);
   const [attemptFinished, setAttemptFinished] = useState(false);
   const [result, setResult] = useState<CheckoutResumeResponse | null>(null);
+  const [initialPixAttempt, setInitialPixAttempt] = useState<CheckoutPaymentAttemptSummary | null>(
+    null,
+  );
+  const [checkoutIssue, setCheckoutIssue] = useState<string | null>(null);
   const [statusUnavailable, setStatusUnavailable] = useState(false);
   const [statusRetry, setStatusRetry] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -232,6 +237,9 @@ export function SinglePageCheckout({
         !response.payment.enabled ||
         !['cielo', 'cielo_sandbox'].includes(response.payment.provider)
       ) {
+        setCheckoutIssue(
+          'Os dados da reserva precisam de conferência. Nenhum Pix ou cobrança foi iniciado. Acompanhe este pedido e fale com nosso atendimento.',
+        );
         setAttemptFinished(true);
         throw new Error(
           'Este pedido já possui uma atualização. Estamos consultando a situação antes de qualquer pagamento.',
@@ -279,6 +287,22 @@ export function SinglePageCheckout({
           : 'Não foi possível gerar o Pix. Atualize o pedido antes de tentar novamente.',
       );
     }
+    if (response.payment?.status === 'pending') {
+      if (
+        response.payment.method !== 'pix' ||
+        !response.payment.pix?.copyPaste ||
+        !response.payment.pix.qrCodeBase64
+      ) {
+        setCheckoutIssue(
+          'O Pix ainda não retornou um código válido. Acompanhe o pedido antes de tentar novamente.',
+        );
+        setAttemptFinished(true);
+        throw new Error(
+          'O Pix ainda não retornou um código válido. Acompanhe o pedido antes de tentar novamente.',
+        );
+      }
+      setInitialPixAttempt(response.payment);
+    }
     setAttemptFinished(true);
   };
 
@@ -288,8 +312,11 @@ export function SinglePageCheckout({
     result.order.paymentStatus === 'approved';
   const rejected =
     result?.payment.attempt?.status === 'rejected' || result?.order.status === 'pagamento_recusado';
+  const visiblePixAttempt = result ? result.payment.attempt : initialPixAttempt;
   const pendingPix =
-    result?.payment.attempt?.method === 'pix' && result.payment.attempt.status === 'pending';
+    visiblePixAttempt?.method === 'pix' &&
+    visiblePixAttempt.status === 'pending' &&
+    (!result || result.order.status === 'pagamento_pendente');
 
   return (
     <main className="checkout-purchase min-h-screen pb-24 text-neutral-950">
@@ -377,68 +404,70 @@ export function SinglePageCheckout({
                   <BadgeCheck className="text-emerald-700" size={36} aria-hidden="true" />
                 )}
                 <h2 className="text-xl font-bold">
-                  {statusUnavailable
-                    ? 'Estamos conferindo seu pedido'
-                    : confirmed
-                      ? 'Reserva confirmada!'
-                      : rejected
-                        ? 'Pagamento não aprovado'
+                  {confirmed
+                    ? 'Reserva confirmada!'
+                    : rejected
+                      ? 'Pagamento não aprovado'
+                      : checkoutIssue && !pendingPix
+                        ? 'Pagamento não iniciado'
                         : pendingPix
                           ? 'Pague com Pix nesta página'
-                          : 'Acompanhando sua confirmação'}
+                          : statusUnavailable
+                            ? 'Estamos conferindo seu pedido'
+                            : 'Acompanhando sua confirmação'}
                 </h2>
                 <p className="text-sm leading-6 text-neutral-600">
                   {confirmed
                     ? 'Tudo certo com a sua hospedagem. Guarde o código da reserva e confira os detalhes no comprovante.'
                     : rejected
                       ? 'O pagamento foi recusado e a hospedagem não está confirmada. Consulte os detalhes do pedido para ver os próximos passos.'
-                      : pendingPix
-                        ? 'Escaneie o QR Code ou copie o código abaixo. A confirmação aparecerá aqui após a aprovação do pagamento.'
-                        : 'A reserva só estará confirmada após a verificação do pagamento e da hospedagem. Acompanhe aqui, sem repetir a compra.'}
+                      : checkoutIssue && !pendingPix
+                        ? checkoutIssue
+                        : pendingPix
+                          ? 'Escaneie o QR Code ou copie o código abaixo. A confirmação aparecerá aqui após a aprovação do pagamento.'
+                          : 'A reserva só estará confirmada após a verificação do pagamento e da hospedagem. Acompanhe aqui, sem repetir a compra.'}
                 </p>
                 {confirmed && result?.confirmation?.reservationCode && (
                   <p className="font-mono text-lg font-bold">
                     {result.confirmation.reservationCode}
                   </p>
                 )}
-                {result?.payment.attempt?.method === 'pix' &&
-                  result.payment.attempt.status === 'pending' &&
-                  result.payment.attempt.pix && (
-                    <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
-                      <p className="font-bold">Pix gerado · aguardando pagamento</p>
-                      {result.payment.attempt.pix.qrCodeBase64 && (
-                        <img
-                          src={`data:image/png;base64,${result.payment.attempt.pix.qrCodeBase64}`}
-                          alt="QR Code Pix para pagamento"
-                          className="mx-auto h-48 w-48 rounded-xl bg-white p-2"
+                {pendingPix && visiblePixAttempt.pix && (
+                  <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+                    <p className="font-bold">Pix gerado · aguardando pagamento</p>
+                    {visiblePixAttempt.pix.qrCodeBase64 && (
+                      <img
+                        src={`data:image/png;base64,${visiblePixAttempt.pix.qrCodeBase64}`}
+                        alt="QR Code Pix para pagamento"
+                        className="mx-auto h-48 w-48 rounded-xl bg-white p-2"
+                      />
+                    )}
+                    {visiblePixAttempt.pix.copyPaste && (
+                      <>
+                        <textarea
+                          readOnly
+                          value={visiblePixAttempt.pix.copyPaste}
+                          aria-label="Código Pix copia e cola"
+                          className="min-h-24 w-full resize-none rounded-xl border border-emerald-300 bg-white p-3 font-mono text-xs"
                         />
-                      )}
-                      {result.payment.attempt.pix.copyPaste && (
-                        <>
-                          <textarea
-                            readOnly
-                            value={result.payment.attempt.pix.copyPaste}
-                            aria-label="Código Pix copia e cola"
-                            className="min-h-24 w-full resize-none rounded-xl border border-emerald-300 bg-white p-3 font-mono text-xs"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void navigator.clipboard?.writeText(
-                                result.payment.attempt?.pix?.copyPaste ?? '',
-                              )
-                            }
-                            className="min-h-11 w-full rounded-xl bg-emerald-800 px-4 py-3 text-sm font-bold text-white"
-                          >
-                            Copiar código Pix
-                          </button>
-                        </>
-                      )}
-                      <p className="text-xs leading-5">
-                        A reserva só será confirmada após a consulta segura do pagamento na Cielo.
-                      </p>
-                    </div>
-                  )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void navigator.clipboard?.writeText(
+                              visiblePixAttempt.pix?.copyPaste ?? '',
+                            )
+                          }
+                          className="min-h-11 w-full rounded-xl bg-emerald-800 px-4 py-3 text-sm font-bold text-white"
+                        >
+                          Copiar código Pix
+                        </button>
+                      </>
+                    )}
+                    <p className="text-xs leading-5">
+                      A reserva só será confirmada após a consulta segura do pagamento na Cielo.
+                    </p>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => setStatusRetry((value) => value + 1)}

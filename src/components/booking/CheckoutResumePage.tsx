@@ -577,6 +577,15 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                       </p>
                     </div>
                   </div>
+                  {order.status === 'atencao_operacional' && paymentAttempt === null && (
+                    <p
+                      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
+                      role="alert"
+                    >
+                      O pagamento não foi iniciado. Nenhum código Pix foi gerado para este pedido.
+                      Fale com nosso atendimento antes de tentar outra compra.
+                    </p>
+                  )}
                   {order.status === 'pagamento_recusado' && !reservationIsActive && (
                     <p
                       className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
