@@ -26,8 +26,16 @@ function requestCalendar(listingId: string, from: string, to: string): Promise<S
   if (pending) return pending;
   const request = crcnBackendApi
     .getAccommodationCalendar(listingId, from, to)
-    .then((days) => {
-      const expiresAt = getCalendarExpiration(days);
+    .then(async (days) => {
+      let expiresAt = getCalendarExpiration(days);
+      if (expiresAt !== undefined && expiresAt <= Date.now()) {
+        // Server cache TTL and HTTP timestamps have second precision. A refresh
+        // at that boundary can still receive the previous snapshot. Retry once
+        // after that boundary, without making expired dates selectable.
+        await new Promise((resolve) => window.setTimeout(resolve, 1250));
+        days = await requester.call(crcnBackendApi, listingId, from, to);
+        expiresAt = getCalendarExpiration(days);
+      }
       if (expiresAt !== undefined && expiresAt <= Date.now())
         throw new Error('Calendar response expired');
       if (

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { crcnBackendApi } from '../src/services/crcnBackendApi.ts';
+import { crcnBackendApi, getCalendarExpiration } from '../src/services/crcnBackendApi.ts';
 import { checkoutApi } from '../src/services/checkoutApi.ts';
 import { isProperty, isReservation, isStaysCalendarDay } from '../src/utils/apiValidation.ts';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
@@ -645,6 +645,55 @@ test('rejects a hosted Cielo checkout URL from an untrusted host', async () => {
     );
 
     assert.deepEqual(result, { kind: 'unavailable' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('calendar freshness follows server time even when a phone clock is ahead or behind', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const clockOffset of [-300_000, 300_000]) {
+      const serverNow = Math.floor((Date.now() + clockOffset) / 1000) * 1000;
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ date: '2026-11-06', avail: 1 }],
+            meta: { expiresAt: new Date(serverNow + 45_000).toISOString() },
+          }),
+          { headers: { Date: new Date(serverNow).toUTCString() } },
+        );
+      const startedAt = Date.now();
+      const days = await crcnBackendApi.getAccommodationCalendar('LG02J');
+      const expiration = getCalendarExpiration(days);
+      assert.ok(expiration);
+      assert.ok(expiration > startedAt + 40_000, 'fresh availability must stay usable');
+      assert.ok(expiration <= Date.now() + 45_000, 'clock skew must not extend freshness');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('server time does not revive an expired calendar or reset the age of a cached response', async () => {
+  const originalFetch = globalThis.fetch;
+  const serverNow = Math.floor((Date.now() - 300_000) / 1000) * 1000;
+  try {
+    for (const remaining of [-1000, 5000]) {
+      globalThis.fetch = async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ date: '2026-11-06', avail: 1 }],
+            meta: { expiresAt: new Date(serverNow + remaining).toISOString() },
+          }),
+          { headers: { Date: new Date(serverNow).toUTCString() } },
+        );
+      const days = await crcnBackendApi.getAccommodationCalendar('LG02J');
+      const expiration = getCalendarExpiration(days);
+      assert.ok(expiration);
+      if (remaining < 0) assert.ok(expiration < Date.now());
+      else assert.ok(expiration > Date.now() && expiration <= Date.now() + remaining);
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }
