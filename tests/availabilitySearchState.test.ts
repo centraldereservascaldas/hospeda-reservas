@@ -145,8 +145,12 @@ test('invalid dates offer a correction action instead of retrying the invalid re
       checkOut: '',
       hasResults: false,
       hasAvailableResults: false,
-      onRetry: () => { retryCount += 1; },
-      onOpenSearch: () => { openSearchCount += 1; },
+      onRetry: () => {
+        retryCount += 1;
+      },
+      onOpenSearch: () => {
+        openSearchCount += 1;
+      },
     }),
   );
 
@@ -155,4 +159,27 @@ test('invalid dates offer a correction action instead of retrying the invalid re
   screen.getByRole('button', { name: 'Alterar datas e hóspedes' }).click();
   assert.equal(openSearchCount, 1);
   assert.equal(retryCount, 0);
+});
+
+test('partial results explain the quote failure and offer a retry without claiming no availability', () => {
+  let retries = 0;
+  render(
+    React.createElement(AvailabilitySearchState, {
+      state: 'partial',
+      checkIn: '2027-01-10',
+      checkOut: '2027-01-13',
+      hasResults: true,
+      hasAvailableResults: true,
+      onRetry: () => {
+        retries += 1;
+      },
+    }),
+  );
+  assert.match(screen.getByRole('status').textContent || '', /apenas as opções verificadas/);
+  assert.doesNotMatch(
+    screen.getByRole('status').textContent || '',
+    /Nenhuma acomodação disponível/,
+  );
+  screen.getByRole('button', { name: 'Tentar consultar novamente' }).click();
+  assert.equal(retries, 1);
 });

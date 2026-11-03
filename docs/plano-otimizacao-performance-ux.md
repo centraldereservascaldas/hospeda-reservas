@@ -1,6 +1,6 @@
 # Plano de otimização de performance e experiência
 
-Data: 03/11/2026. Status: E0 com versão identificada e baseline de laboratório registrado; nenhuma otimização da aplicação implementada.
+Data: 03/11/2026. Status: E0 com versão identificada e baseline de laboratório registrado; E1 implementada e validada localmente na branch `codex/performance-sprints`; E2 pendente.
 
 Registro da Sprint 0: [versão publicada, método e resultados da E0](estudos/baseline-performance-e0-2026-11-03.md). Telemetria de backend e p75 real permanecem pendentes, explicitados no registro.
 
@@ -49,12 +49,12 @@ Total estimado: **10,5–20 dias de trabalho**, sem somar itens opcionais abaixo
 | Sprint | Escopo  | Esforço estimado | Saída verificável                                                   | Estado                                                           |
 | ------ | ------- | ---------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | S0     | E0      | 0,5–1 dia        | Artefato identificado, amostras e instrumentos reproduzíveis        | Baseline de laboratório concluído; observabilidade real pendente |
-| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | Planejada                                   |
+| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1 local validada; E2 pendente                                   |
 | S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | Planejada                                                        |
 | S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Planejada                                                        |
 | S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Planejada                                                        |
 
-A goal desta conversa acompanha o plano por sprints. A E0 identificou a versão publicada e registrou o baseline; as implementações locais seguem nas próximas sprints. A base isolada de implementação foi preparada a partir da versão remota verificada; no diagnóstico original, o commit publicado observado está 67 commits à frente do HEAD local, além de haver alterações locais pendentes. Preservar esse worktree e revisar a integração do calendário existente, sem substituí-lo em massa. Não associar avanço de sprint a autorização de publicação.
+A goal desta conversa acompanha o plano por sprints. A continuação da goal iniciou a S1 em base isolada; E1 está implementada localmente, e E2 permanece pendente. A base isolada de implementação foi preparada a partir da versão remota verificada; no diagnóstico original, o commit publicado observado está 67 commits à frente do HEAD local, além de haver alterações locais pendentes. Preservar esse worktree e revisar a integração do calendário existente, sem substituí-lo em massa. Não associar avanço de sprint a autorização de publicação.
 
 ## E0 — Alinhar versões e medir
 
@@ -69,6 +69,8 @@ A goal desta conversa acompanha o plano por sprints. A E0 identificou a versão 
 - Planejar contadores de chamadas externas, hit ratio e latência p50/p95 sem registrar tokens, dados pessoais ou segredos. Se não houver amostra suficiente para percentis, informar quantidade e distribuição observadas.
 
 ## E1 — Disponibilidade e preço consistentes
+
+Registro local: [entrega e validação da E1](estudos/sprint-1-e1-2026-11-03.md).
 
 **Trabalho:** validar o filtro `isBookable` e os limites de cotação em lote com documentação vigente e testes isolados. Normalizar resultados por imóvel, período, ocupação, moeda e condições comerciais. Completar cotações ausentes em lote, com orçamento de tempo e concorrência. Reservar a apresentação de oferta para contexto completo e válido; sugestões sem cotação têm outra apresentação e levam à busca.
 

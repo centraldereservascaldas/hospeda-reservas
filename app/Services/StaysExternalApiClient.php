@@ -19,7 +19,7 @@ class StaysExternalApiClient
             && (string) config('services.stays.client_secret') !== '';
     }
 
-    public function request(string $method, string $endpoint, array $query = [], ?array $payload = null): ?Response
+    public function request(string $method, string $endpoint, array $query = [], ?array $payload = null, ?int $timeout = null): ?Response
     {
         if (! $this->isConfigured()) {
             return null;
@@ -40,7 +40,7 @@ class StaysExternalApiClient
                     (string) config('services.stays.client_secret'),
                 )
                 ->connectTimeout(3)
-                ->timeout((int) config('services.stays.timeout', 10));
+                ->timeout($timeout ?? (int) config('services.stays.timeout', 10));
 
             return $request->send(strtoupper($method), $url, [
                 'query' => $query,
@@ -89,9 +89,9 @@ class StaysExternalApiClient
         return null;
     }
 
-    public function post(string $endpoint, array $payload): ?array
+    public function post(string $endpoint, array $payload, ?int $timeout = null): ?array
     {
-        $response = $this->request('POST', $endpoint, payload: $payload);
+        $response = $this->request('POST', $endpoint, payload: $payload, timeout: $timeout);
 
         return $response?->successful() && is_array($response->json()) ? $response->json() : null;
     }

@@ -25,6 +25,7 @@ import type {
 import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
 import { matchesPropertyDestination } from '../utils/propertySearchFilters';
 import { apiFetch } from './apiFetch';
+import { getConfirmedPropertyQuote } from '../utils/propertyDisplayPrice';
 
 const API_REQUEST_TIMEOUT_MS = 20_000;
 const STAYS_SEARCH_PAGE_SIZE = 20;
@@ -404,6 +405,7 @@ class CrcnBackendApiService {
   public async searchAccommodations(params: SearchAccommodationsParams): Promise<{
     total: number;
     data: Property[];
+    unquotedCount?: number;
   }> {
     try {
       const initialSkip = Math.max(0, Math.trunc(params.skip ?? 0));
@@ -420,6 +422,7 @@ class CrcnBackendApiService {
           : null;
       const propertiesById = new Map<string, Property>();
       let pageOffset = initialSkip;
+      let unquotedCount = 0;
 
       while (propertiesById.size < requestedResultCount) {
         const pageLimit = Math.min(
@@ -456,30 +459,62 @@ class CrcnBackendApiService {
           throw new Error('A pesquisa retornou uma resposta inválida.');
         }
 
+        const pageUnquoted = json.unquotedCount ?? 0;
+        if (!Number.isInteger(pageUnquoted) || !isFiniteNumber(pageUnquoted) || pageUnquoted < 0) {
+          throw new Error('A pesquisa retornou uma contagem de cotações inválida.');
+        }
+        unquotedCount += pageUnquoted;
+        const pagination = json.pagination;
+        if (
+          pagination !== undefined &&
+          (!isRecord(pagination) ||
+            !Number.isInteger(pagination.receivedCount) ||
+            !isFiniteNumber(pagination.receivedCount) ||
+            pagination.receivedCount < json.data.length ||
+            pagination.receivedCount > pageLimit ||
+            pagination.nextSkip !== pageOffset + pagination.receivedCount ||
+            typeof pagination.hasMore !== 'boolean' ||
+            (pagination.hasMore && pagination.receivedCount === 0))
+        ) {
+          throw new Error('A paginação da pesquisa retornou dados inválidos.');
+        }
+
         let addedProperties = 0;
+        let rejectedQuotes = 0;
         for (const item of json.data) {
           const property = sanitizePropertyMedia(item);
-          const normalizedProperty =
-            requestedNights !== null &&
-            property.calculatedPrice &&
-            property.calculatedPrice.nights !== requestedNights
-              ? { ...property, calculatedPrice: undefined }
-              : property;
-          if (!propertiesById.has(normalizedProperty.id)) {
-            propertiesById.set(normalizedProperty.id, normalizedProperty);
+          const quote = getConfirmedPropertyQuote(property);
+          if (requestedNights !== null && (!quote || quote.nights !== requestedNights)) {
+            unquotedCount += 1;
+            rejectedQuotes += 1;
+            continue;
+          }
+          if (!propertiesById.has(property.id)) {
+            propertiesById.set(property.id, property);
             addedProperties += 1;
           }
         }
 
-        pageOffset += json.data.length;
-        if (json.data.length < pageLimit) break;
-        if (addedProperties === 0) {
+        pageOffset = isRecord(pagination)
+          ? Number(pagination.nextSkip)
+          : pageOffset + json.data.length;
+        const hasMore = isRecord(pagination) ? pagination.hasMore : json.data.length === pageLimit;
+        if (!hasMore) break;
+        if (
+          json.data.length > 0 &&
+          addedProperties === 0 &&
+          pageUnquoted === 0 &&
+          rejectedQuotes === 0
+        ) {
           throw new Error('A paginação da pesquisa retornou anúncios repetidos.');
         }
       }
 
       const data = [...propertiesById.values()];
-      return { total: data.length, data };
+      if (requestedNights !== null && data.length === 0 && unquotedCount > 0) {
+        throw new Error('Não foi possível confirmar os preços para esse período.');
+      }
+      return { total: data.length, data, ...(unquotedCount > 0 ? { unquotedCount } : {}) };
     } catch (err) {
       console.warn('Accommodation search failed:', err);
       if (params.from && params.to) {

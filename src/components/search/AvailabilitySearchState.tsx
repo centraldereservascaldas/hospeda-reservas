@@ -46,6 +46,27 @@ export function AvailabilitySearchState({
   const guestLabel = `${guests} ${guests === 1 ? 'hóspede' : 'hóspedes'}`;
   const searchContext = dateRange ? `${dateRange} · ${guestLabel}` : guestLabel;
 
+  if (state === 'partial') {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+      >
+        <p>
+          Algumas opções não puderam ter o preço confirmado. Mostramos apenas as opções verificadas.
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-2 min-h-11 rounded-lg px-3 font-bold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+        >
+          Tentar consultar novamente
+        </button>
+      </div>
+    );
+  }
+
   if (state === 'success' && hasResults) {
     const count = resultCount ?? 1;
     const accommodationLabel = count === 1 ? 'acomodação' : 'acomodações';
@@ -112,26 +133,28 @@ export function AvailabilitySearchState({
             {invalidDates
               ? 'Confira as datas da estadia'
               : dateRange
-              ? 'Não foi possível confirmar a disponibilidade'
-              : 'Não foi possível concluir a busca'}
+                ? 'Não foi possível confirmar a disponibilidade'
+                : 'Não foi possível concluir a busca'}
           </h2>
           <p className="text-sm text-amber-900">
             {invalidDates
               ? 'Escolha uma entrada a partir de hoje e uma saída posterior à entrada para pesquisar novamente.'
               : dateRange
-              ? `Não conseguimos verificar a disponibilidade para ${searchContext}. Tente novamente.`
-              : 'Não conseguimos concluir a busca. Tente novamente.'}
+                ? `Não conseguimos verificar a disponibilidade para ${searchContext}. Tente novamente.`
+                : 'Não conseguimos concluir a busca. Tente novamente.'}
           </p>
         </div>
         <div className="mt-1 flex flex-wrap justify-center gap-3">
-          {!invalidDates && <button
-            type="button"
-            onClick={onRetry}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-          >
-            <RefreshCw aria-hidden="true" className="h-4 w-4" />
-            Tentar novamente
-          </button>}
+          {!invalidDates && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+            >
+              <RefreshCw aria-hidden="true" className="h-4 w-4" />
+              Tentar novamente
+            </button>
+          )}
           {onOpenSearch && (
             <button
               type="button"
@@ -172,20 +195,25 @@ export function AvailabilitySearchState({
               : 'Não encontramos acomodações para esta busca'}
         </h2>
         <p className="text-sm text-neutral-600 [@media(max-height:400px)]:max-w-sm [@media(max-width:639px)_and_(max-height:400px)]:sr-only">
-          {hasAvailableResults
-            ? dateRange
-              ? `A disponibilidade foi confirmada para ${searchContext}, mas nenhum resultado corresponde aos filtros selecionados. Remova alguns filtros e tente novamente.`
-              : <>
-                  <span className="[@media(max-height:400px)]:sr-only">
-                    Nenhuma acomodação corresponde aos filtros selecionados. Limpe os filtros para ver mais opções.
-                  </span>
-                  <span aria-hidden="true" className="hidden [@media(max-height:400px)]:inline">
-                    Nenhuma acomodação corresponde aos filtros.
-                  </span>
-                </>
-            : dateRange
-              ? `Não encontramos disponibilidade confirmada para ${searchContext}. Experimente outras datas ou ajuste os filtros.`
-              : 'Experimente outras datas ou ajuste os filtros para ver mais opções.'}
+          {hasAvailableResults ? (
+            dateRange ? (
+              `A disponibilidade foi confirmada para ${searchContext}, mas nenhum resultado corresponde aos filtros selecionados. Remova alguns filtros e tente novamente.`
+            ) : (
+              <>
+                <span className="[@media(max-height:400px)]:sr-only">
+                  Nenhuma acomodação corresponde aos filtros selecionados. Limpe os filtros para ver
+                  mais opções.
+                </span>
+                <span aria-hidden="true" className="hidden [@media(max-height:400px)]:inline">
+                  Nenhuma acomodação corresponde aos filtros.
+                </span>
+              </>
+            )
+          ) : dateRange ? (
+            `Não encontramos disponibilidade confirmada para ${searchContext}. Experimente outras datas ou ajuste os filtros.`
+          ) : (
+            'Experimente outras datas ou ajuste os filtros para ver mais opções.'
+          )}
         </p>
       </div>
       {hasAvailableResults && onClearFilters ? (

@@ -22,7 +22,8 @@ export interface AccommodationWidgetSearchParams {
   surpriseMe?: boolean;
 }
 
-export type AvailabilitySearchState = 'idle' | 'loading' | 'success' | 'error' | 'invalid-dates';
+export type AvailabilitySearchState =
+  'idle' | 'loading' | 'success' | 'partial' | 'error' | 'invalid-dates';
 
 interface UseAccommodationSearchOptions {
   setProperties: Dispatch<SetStateAction<Property[]>>;
@@ -32,7 +33,7 @@ interface UseAccommodationSearchOptions {
   >;
   searchAccommodations?: (
     params: SearchAccommodationsParams,
-  ) => Promise<{ total: number; data: Property[] }>;
+  ) => Promise<{ total: number; data: Property[]; unquotedCount?: number }>;
   getSurpriseCandidates?: () => SurpriseDateOption[];
   random?: () => number;
   scrollCatalog?: () => void;
@@ -143,6 +144,7 @@ export function useAccommodationSearch({
           ];
       let selectedDateOption: (typeof dateOptions)[number] | null = null;
       let successfulSearchCount = 0;
+      let hasUnquotedResults = false;
 
       for (const dateOption of dateOptions) {
         try {
@@ -155,6 +157,7 @@ export function useAccommodationSearch({
           });
           if (searchGeneration !== searchGenerationRef.current) return;
           successfulSearchCount += 1;
+          hasUnquotedResults = (searchResult.unquotedCount ?? 0) > 0;
           const results = searchResult?.data || [];
           if (searchParams.surpriseMe) {
             const confirmedQuotes = results.filter(
@@ -206,7 +209,13 @@ export function useAccommodationSearch({
         const completedAllDateOptions =
           dateOptions.length > 0 && successfulSearchCount === dateOptions.length;
         setAvailabilitySearchState(
-          chosenProperties.length > 0 || completedAllDateOptions ? 'success' : 'error',
+          chosenProperties.length > 0
+            ? hasUnquotedResults
+              ? 'partial'
+              : 'success'
+            : completedAllDateOptions
+              ? 'success'
+              : 'error',
         );
         if (chosenProperties.length) {
           const suggestedDates = selectedDateOption!;
@@ -222,7 +231,9 @@ export function useAccommodationSearch({
             ? searchedProperties
             : searchedProperties.map((property) => ({ ...property, calculatedPrice: undefined })),
         );
-        setAvailabilitySearchState(hasSearchDates ? 'success' : 'idle');
+        setAvailabilitySearchState(
+          hasSearchDates ? (hasUnquotedResults ? 'partial' : 'success') : 'idle',
+        );
       } else {
         setProperties([]);
         setAvailabilitySearchState('error');

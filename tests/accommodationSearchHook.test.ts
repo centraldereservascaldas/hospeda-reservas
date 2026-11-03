@@ -487,3 +487,51 @@ test('ignores an older search response after a newer search finishes', async () 
   assert.deepEqual(hook.result.current.properties, [latest]);
   assert.equal(hook.result.current.filters.checkIn, '2027-06-01');
 });
+
+test('keeps verified results and exposes a partial state when some quotes failed', async () => {
+  const hook = renderSearchHook({
+    searchAccommodations: async () => ({ total: 1, data: [property], unquotedCount: 2 }),
+  });
+  await act(async () =>
+    hook.result.current.handleStaysWidgetSearch({
+      checkIn: '2027-05-01',
+      checkOut: '2027-05-04',
+      persons: 2,
+    }),
+  );
+  assert.equal(hook.result.current.availabilitySearchState, 'partial');
+  assert.equal(hook.result.current.properties.length, 1);
+});
+
+test('surprise search also reports partial quote failures for its chosen period', async () => {
+  const hook = renderSearchHook({
+    searchAccommodations: async () => ({
+      total: 1,
+      unquotedCount: 1,
+      data: [
+        {
+          ...property,
+          calculatedPrice: {
+            nights: 3,
+            dailyRate: 250,
+            basePrice: 750,
+            cleaningFee: 0,
+            serviceFee: 0,
+            totalAmount: 750,
+            currency: 'BRL',
+          },
+        },
+      ],
+    }),
+  });
+  await act(async () =>
+    hook.result.current.handleStaysWidgetSearch({
+      checkIn: '',
+      checkOut: '',
+      persons: 2,
+      surpriseMe: true,
+    }),
+  );
+  assert.equal(hook.result.current.availabilitySearchState, 'partial');
+  assert.equal(hook.result.current.properties.length, 1);
+});

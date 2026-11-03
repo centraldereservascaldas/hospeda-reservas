@@ -162,14 +162,16 @@ export function MainContentRouter({
   onCancelReservation,
   onExploreMore,
 }: MainContentRouterProps) {
+  const isCompletedSearch =
+    availabilitySearchState === 'success' || availabilitySearchState === 'partial';
   const shouldShowAvailabilityState =
     !isCondominiumView ||
     availabilitySearchState === 'loading' ||
     availabilitySearchState === 'error' ||
     availabilitySearchState === 'invalid-dates' ||
-    (availabilitySearchState === 'success' && filteredProperties.length === 0);
+    (isCompletedSearch && filteredProperties.length === 0);
   const hasConfirmedSearchAvailability =
-    availabilitySearchState === 'success' && Boolean(filters.checkIn && filters.checkOut);
+    isCompletedSearch && Boolean(filters.checkIn && filters.checkOut);
   const visibleCatalogStatus: PropertyCatalogStatus = hasConfirmedSearchAvailability
     ? 'ready'
     : catalogStatus;
@@ -184,8 +186,7 @@ export function MainContentRouter({
       resultCount={filteredProperties.length}
       hasResults={filteredProperties.length > 0}
       hasAvailableResults={
-        hasAvailableSearchResults &&
-        (isCondominiumView || viewMode === 'map' || availabilitySearchState === 'success')
+        hasAvailableSearchResults && (isCondominiumView || viewMode === 'map' || isCompletedSearch)
       }
       showEmptyResults={viewMode === 'map' && !isCondominiumView}
       showIdleNotice={isCondominiumView}
@@ -347,7 +348,7 @@ export function MainContentRouter({
 
             {!isCondominiumView &&
               (availabilitySearchState === 'idle' ||
-                (availabilitySearchState === 'success' && filteredProperties.length > 0)) &&
+                (isCompletedSearch && filteredProperties.length > 0)) &&
               (viewMode === 'grid' ? (
                 <PropertyCatalogGrid
                   status={visibleCatalogStatus}
