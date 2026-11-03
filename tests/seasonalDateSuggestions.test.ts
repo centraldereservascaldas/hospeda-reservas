@@ -497,3 +497,18 @@ test('does not cache an incomplete empty page as no availability and permits a v
   await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
   assert.equal(calls, 2);
 });
+
+test('retains the server deadline when persisting a reused promotional quote', async () => {
+  VisibilityObserver.automatic = false;
+  const expiresAt = Date.now() + 5_000;
+  mockSearch(async () => ({ ...quoteResult(), expiresAt }));
+  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  act(() => VisibilityObserver.show('pet-weekend-1', true));
+  await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
+  assert.ok(window.sessionStorage.length > 0);
+  for (let index = 0; index < window.sessionStorage.length; index++) {
+    const key = window.sessionStorage.key(index)!;
+    const cached = JSON.parse(window.sessionStorage.getItem(key)!);
+    assert.equal(cached.expiresAt, expiresAt);
+  }
+});

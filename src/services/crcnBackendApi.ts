@@ -64,6 +64,8 @@ export interface SearchAccommodationsParams {
 }
 
 export interface AccommodationSearchPage {
+  /** Original server deadline, never renewed when a cached page is read. */
+  expiresAt?: number;
   /** Number of usable results in this page, never a global result count. */
   total: number;
   data: Property[];
@@ -498,6 +500,26 @@ class CrcnBackendApiService {
     ) {
       throw new Error('A paginação da pesquisa retornou dados inválidos.');
     }
+    let expiresAt: number | undefined;
+    if (json.meta !== undefined) {
+      if (
+        !isRecord(json.meta) ||
+        typeof json.meta.fetchedAt !== 'string' ||
+        typeof json.meta.expiresAt !== 'string'
+      ) {
+        throw new Error('A pesquisa retornou uma validade inválida.');
+      }
+      const fetchedAt = Date.parse(json.meta.fetchedAt);
+      expiresAt = Date.parse(json.meta.expiresAt);
+      if (
+        !Number.isFinite(fetchedAt) ||
+        !Number.isFinite(expiresAt) ||
+        expiresAt <= fetchedAt ||
+        expiresAt <= Date.now()
+      ) {
+        throw new Error('A cotação da pesquisa expirou. Tente novamente.');
+      }
+    }
     const requestedNights =
       params.from && params.to
         ? Math.round(
@@ -518,6 +540,7 @@ class CrcnBackendApiService {
     }
     const data = [...properties.values()];
     return {
+      ...(expiresAt === undefined ? {} : { expiresAt }),
       total: data.length,
       data,
       unquotedCount,

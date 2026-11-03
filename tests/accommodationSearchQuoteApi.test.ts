@@ -275,3 +275,32 @@ test('cancelling an undated aggregate stops its pages without returning a static
   await assert.rejects(pending, { name: 'AbortError' });
   assert.equal(calls, 1);
 });
+
+test('preserves the server deadline of a reused search page', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date'], now });
+  try {
+    globalThis.fetch = async () =>
+      response([property], {
+        meta: {
+          fetchedAt: new Date(now - 40_000).toISOString(),
+          expiresAt: new Date(now + 5_000).toISOString(),
+        },
+      });
+    const result = await crcnBackendApi.searchAccommodationsPage(params);
+    assert.equal(result.expiresAt, now + 5_000);
+  } finally {
+    context.mock.timers.reset();
+  }
+});
+
+test('rejects expired or malformed search validity instead of confirming cached prices', async () => {
+  for (const meta of [
+    { fetchedAt: 'invalid', expiresAt: 'invalid' },
+    { fetchedAt: '2020-01-01T00:00:00Z', expiresAt: '2020-01-01T00:00:45Z' },
+    { fetchedAt: '2099-01-01T00:00:45Z', expiresAt: '2099-01-01T00:00:00Z' },
+  ]) {
+    globalThis.fetch = async () => response([property], { meta });
+    await assert.rejects(crcnBackendApi.searchAccommodationsPage(params), /validade|expirou/);
+  }
+});

@@ -8,7 +8,7 @@ use App\Http\Resources\AccommodationSearchResource;
 use App\Services\StaysCalendarService;
 use App\Services\StaysDiscoveryCatalog;
 use App\Services\StaysExternalApiClient;
-use App\Services\StaysSearchQuoteService;
+use App\Services\StaysSearchAvailabilityService;
 use App\Services\StaysSimulator;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
@@ -141,7 +141,7 @@ class AccommodationController extends Controller
         return response()->json(['success' => true, 'data' => $existing]);
     }
 
-    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchQuoteService $quoteService): JsonResponse
+    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchAvailabilityService $availabilityService): JsonResponse
     {
         $input = $request->validated();
         $from = $input['from'] ?? null;
@@ -186,17 +186,11 @@ class AccommodationController extends Controller
             return response()->json(['success' => true, 'total' => $total, 'from' => $from, 'to' => $to, 'guests' => $guests, 'data' => $data, 'source' => 'stays-simulated']);
         }
         if ($from && $to) {
-            $live = $this->stays->post('/booking/search-listings', array_filter([
-                'from' => $from, 'to' => $to, 'guests' => $guests, 'isBookable' => true,
-                'properties' => isset($input['propertyId']) ? [$input['propertyId']] : null,
-                'cities' => $input['cities'] ?? null, 'limit' => $limit, 'skip' => $skip,
-            ], fn ($value): bool => $value !== null));
-            if (! is_array($live) || ! array_is_list($live)
-                || array_filter($live, 'is_array') !== $live || count($live) > $limit) {
+            $resolved = $availabilityService->search($input);
+            if ($resolved === null) {
                 return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Não foi possível confirmar a disponibilidade agora. Tente novamente.'], 503);
             }
 
-            $resolved = $quoteService->resolve($live, $from, $to, $guests);
             $catalog = $this->catalog();
             $mapped = array_map(function (array $listing) use ($catalog): array {
                 $property = $this->mapListing($listing, $catalog);
@@ -211,11 +205,12 @@ class AccommodationController extends Controller
                 'from' => $from,
                 'to' => $to,
                 'guests' => $guests,
+                'meta' => $resolved['meta'],
                 'unquotedCount' => $resolved['unquotedCount'],
                 'pagination' => [
-                    'receivedCount' => count($live),
-                    'nextSkip' => $skip + count($live),
-                    'hasMore' => count($live) === $limit,
+                    'receivedCount' => $resolved['receivedCount'],
+                    'nextSkip' => $skip + $resolved['receivedCount'],
+                    'hasMore' => $resolved['receivedCount'] === $limit,
                 ],
             ]))->response();
         }

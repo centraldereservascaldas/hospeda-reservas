@@ -277,7 +277,7 @@ export function SeasonalDateSuggestions({
                   status:
                     result.unquotedCount > 0 || result.pagination.hasMore ? 'error' : 'unavailable',
                 };
-            quote.expiresAt = Date.now() + 45_000;
+            quote.expiresAt = Math.min(result.expiresAt ?? Infinity, Date.now() + 45_000);
             quote.guests = guestCount;
             writeCachedQuote(item.id, item, guestCount, quote);
             next[item.id] = quote;
@@ -366,7 +366,10 @@ export function SeasonalDateSuggestions({
             });
         });
         setCatalogQuotes(next);
-        catalogCacheRef.current = { guests: guestCount, expiresAt: Date.now() + 45_000 };
+        catalogCacheRef.current = {
+          guests: guestCount,
+          expiresAt: Math.min(result.expiresAt ?? Infinity, Date.now() + 45_000),
+        };
         setCatalogExpiresAt(catalogCacheRef.current.expiresAt);
         setCatalogQuoteGuests(guestCount);
       })

@@ -21,6 +21,7 @@ class AccommodationSearchResource extends JsonResource
             'guests' => $this->resource['guests'],
             'data' => $this->resource['data'],
             'unquotedCount' => $this->resource['unquotedCount'],
+            'meta' => $this->resource['meta'],
             'pagination' => $this->resource['pagination'],
         ];
     }
