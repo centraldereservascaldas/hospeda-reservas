@@ -148,7 +148,12 @@ test('parcelamento destaca a parcela e mantém o total final para conferência',
     view.getByRole('button', { name: /Confirmar e pagar/ }).textContent!,
     /6x de até R\$\s*[\d.,]+/,
   );
-  assert.ok(view.getByText('Total da compra'));
+  const payButton = view.getByRole('button', { name: /Confirmar e pagar/ });
+  assert.equal(payButton.querySelectorAll('span > span').length, 2);
+  assert.equal(payButton.querySelector('span > span')?.textContent, 'Confirmar e pagar');
+  const totalAmount = view.getByText('Total da compra').nextElementSibling?.textContent;
+  assert.ok(totalAmount);
+  assert.ok(!payButton.textContent?.includes(totalAmount));
   assert.match(view.getByLabelText('Resumo da compra').textContent!, /6x de até R\$/);
 });
 
