@@ -34,6 +34,17 @@ Verificações executadas nesta revisão: 79 testes PHP passaram, com 430 asser�
 
 Após a primeira implementação local, os 100 testes PHP direcionados passaram (613 asserções) e a suíte completa passou com 320 testes e 2.308 asserções. Pint e a verificação de whitespace também passaram. A migration aditiva foi exercitada no SQLite de testes; não foi aplicada em produção nem homologada em PostgreSQL nesta etapa. A consulta ao portal continuou indisponível por falha da conexão de automação; nenhum status comercial foi inferido dessa falha.
 
+## Evidência de preparação da publicação de 03/11/2026
+
+O responsável autorizou commit, PR, simulação e publicação do cartão após validação, preservando o Pix. PR #38. Uma inspeção temporária executada via GitHub Actions usou o acesso Coolify já existente, sem registrar credenciais, e será retirada do workflow antes do merge.
+
+- Alvo confirmado: `hospeda-reservas-production`, aplicação `7pgw9mcr2vjt5red5pswmvi6`, estado `running:healthy`, imagem anterior `ghcr.io/centraldereservascaldas/hospeda-reservas:76cd4cf684b09e079ba562abcf75c720dfc48702`.
+- Banco associado inequivocamente pelo host configurado na aplicação: `9bn7a32xssdvsi56wa3om1vv`, estado `running:healthy`.
+- Backup novo solicitado no agendamento existente: execução `2lrwy4m1uqah3romaodlahrm`, `success`, 97.482 bytes, criada em 03/11/2026 às 17:57:58 de Brasília. O resultado do dump foi verificado pelo Coolify; não houve restauração em produção nem ensaio novo de restauração.
+- Com as credenciais já implantadas, a Cielo retornou HTTP 200 no OAuth e HTTP 201 no endpoint SOP, com criação de AccessToken comprovada. Tokens e credenciais não foram exibidos. Essa verificação não enviou cartão nem solicitou autorização/captura financeira.
+- A simulação integrada adicional de cartão cobriu captura em revisão sem baixa Stays, aceitação posterior por consulta autoritativa, webhook repetido e confirmação/lançamento únicos. Também existem cenários de aprovação e recusa. As respostas financeiras e a Stays nesses testes são simuladas; não comprovam autorização real de um cartão nem habilitação comercial de antifraude.
+- Evidência operacional: [job de preparação no GitHub Actions](https://github.com/centraldereservascaldas/hospeda-reservas/actions/runs/41717137166/job/126200767886). A migration será compatível com a imagem anterior, que ignora os campos aditivos; eventual retorno de imagem deve preservar o banco e esses campos, sem executar `down` nem restaurar o dump automaticamente.
+
 ## Decisões que precisam vir antes do desenvolvimento
 
 1. Confirmar que o produto é API E-commerce Cielo e qual provedor de antifraude está contratado para o MID efetivamente utilizado: ClearSale ou CyberSource. A existência de antifraude no Link/Checkout hospedado não comprova habilitação para a API própria.
