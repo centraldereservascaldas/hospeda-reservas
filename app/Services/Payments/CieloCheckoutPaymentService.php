@@ -59,10 +59,38 @@ class CieloCheckoutPaymentService
         ]));
     }
 
+    /** @param array<string, mixed> $context */
+    private function logCheckoutPaymentEvent(string $level, string $event, array $context): void
+    {
+        $safeContext = array_filter([
+            'event' => $event,
+            'correlation_id' => $context['attempt_id'] ?? $context['order_id'] ?? null,
+            'order_id' => $context['order_id'] ?? null,
+            'attempt_id' => $context['attempt_id'] ?? null,
+            'gateway' => 'cielo',
+            'payment_method' => $context['payment_method'] ?? null,
+            'reason' => $context['reason'] ?? null,
+            'phase' => $context['phase'] ?? null,
+            'result_code' => $context['result_code'] ?? null,
+            'http_status' => $context['http_status'] ?? null,
+            'gateway_http_status' => $context['gateway_http_status'] ?? null,
+            'exception_class' => $context['exception_class'] ?? null,
+            'gateway_error_codes' => $context['gateway_error_codes'] ?? null,
+            'payment_status' => $context['payment_status'] ?? null,
+        ], static fn (mixed $value): bool => $value !== null);
+
+        Log::log($level, $event, $safeContext);
+    }
+
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
     public function createAttempt(DirectBookingOrder $order, StoreCheckoutPaymentRequest $request): array
     {
         if (! $this->isAvailable() || ! $this->orderUsesCurrentMerchant($order)) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'reason' => 'payment_configuration_incomplete',
+            ]);
+
             return $this->result(null, 'payment_configuration_incomplete', 'O pagamento Cielo ainda não está habilitado para este pedido.', 503);
         }
 
@@ -71,19 +99,43 @@ class CieloCheckoutPaymentService
         if (! in_array($paymentMethod, $this->availableMethods(), true)
             || ($paymentMethod === 'card'
                 && mb_strtolower(trim($input['cardholderEmail'])) !== mb_strtolower(trim($order->guest_email)))) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => $paymentMethod,
+                'reason' => 'payment_method_unavailable_or_payer_mismatch',
+            ]);
+
             return $this->result(null, 'payment_method_unavailable', 'Este método de pagamento ainda não está disponível.', 503);
         }
         if ($paymentMethod === 'card' && ! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iD', $input['token'])) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => 'card',
+                'reason' => 'invalid_payment_token',
+            ]);
+
             return $this->result(null, 'invalid_payment_token', 'Não foi possível validar o token do cartão. Recarregue os campos e tente novamente.', 422);
         }
         $baseAmountCents = MoneyAmount::toCents($order->quote_total);
         if ($baseAmountCents === null) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => $paymentMethod,
+                'reason' => 'unsupported_payment_amount',
+            ]);
+
             return $this->result(null, 'unsupported_payment_amount', 'O valor do pedido não é compatível com o pagamento.', 422);
         }
         $paymentPricing = $paymentMethod === 'card'
             ? $this->pricing->calculate($order->quote_total, (int) $input['installments'])
             : ['baseCents' => $baseAmountCents, 'feeCents' => 0, 'totalCents' => $baseAmountCents, 'rateBasisPoints' => 0];
         if ($paymentMethod === 'card' && intdiv($paymentPricing['totalCents'], (int) $input['installments']) < 500) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => 'card',
+                'reason' => 'invalid_installments',
+            ]);
+
             return $this->result(null, 'invalid_installments', 'Cada parcela precisa ter o valor mínimo de R$ 5,00.', 422);
         }
 
@@ -96,9 +148,21 @@ class CieloCheckoutPaymentService
 
         $reservationMatches = $this->reservations->validateReservedOrderForPayment($order);
         if ($reservationMatches === null) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => $paymentMethod,
+                'reason' => 'reservation_state_unavailable',
+            ]);
+
             return $this->result(null, 'reservation_state_unavailable', 'Não foi possível confirmar os dados da pré-reserva na Stays. Nenhuma cobrança foi iniciada.', 503);
         }
         if (! $reservationMatches) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => $paymentMethod,
+                'reason' => 'stays_reservation_mismatch',
+            ]);
+
             return $this->result(null, 'stays_reservation_mismatch', 'A pré-reserva não corresponde mais ao pedido. Nenhuma cobrança foi iniciada.', 409);
         }
 
@@ -166,6 +230,12 @@ class CieloCheckoutPaymentService
                 return $this->replay($existingAttempt, $order, $fingerprint);
             }
 
+            $this->logCheckoutPaymentEvent('error', 'checkout.payment.persistence_conflict', [
+                'order_id' => $order->id,
+                'payment_method' => $paymentMethod,
+                'reason' => 'payment_attempt_conflict',
+            ]);
+
             return $this->result(null, 'payment_attempt_conflict', 'Não foi possível registrar a tentativa de pagamento.', 409);
         }
 
@@ -173,10 +243,23 @@ class CieloCheckoutPaymentService
             return $this->replay($attempt['existing'], $order, $fingerprint);
         }
         if (is_array($attempt)) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => $paymentMethod,
+                'reason' => $attempt['error'],
+            ]);
+
             return $this->result(null, $attempt['error'], 'Já existe uma tentativa de pagamento pendente para este pedido ou o pedido não está pronto para pagamento.', 409);
         }
 
         try {
+            $gatewayPhase = 'submit_payment';
+            $this->logCheckoutPaymentEvent('info', 'checkout.gateway.payment_submission_started', [
+                'order_id' => $order->id,
+                'attempt_id' => $attempt->id,
+                'payment_method' => $attempt->payment_method,
+            ]);
+
             if ($paymentMethod === 'card') {
                 $gatewayPayment = $this->cielo->createCardPayment(
                     $input['token'],
@@ -201,7 +284,27 @@ class CieloCheckoutPaymentService
                 );
             }
 
-            return $this->applyGatewayPayment($attempt->order, $attempt, $gatewayPayment);
+            $this->logCheckoutPaymentEvent('info', 'checkout.gateway.payment_created', [
+                'order_id' => $order->id,
+                'attempt_id' => $attempt->id,
+                'payment_method' => $attempt->payment_method,
+            ]);
+            $gatewayPhase = 'validate_payment_response';
+            $result = $this->applyGatewayPayment($attempt->order, $attempt, $gatewayPayment);
+            $this->logCheckoutPaymentEvent(
+                in_array($result['status'], [200, 201], true) ? 'info' : 'warning',
+                'checkout.gateway.payment_reconciled',
+                [
+                    'order_id' => $order->id,
+                    'attempt_id' => $attempt->id,
+                    'payment_method' => $attempt->payment_method,
+                    'result_code' => $result['code'],
+                    'http_status' => $result['status'],
+                    'payment_status' => $result['attempt']?->status,
+                ],
+            );
+
+            return $result;
         } catch (Throwable $exception) {
             $response = $exception instanceof RequestException ? $exception->response : null;
             $body = $response?->json();
@@ -211,7 +314,15 @@ class CieloCheckoutPaymentService
                 ->filter(fn (string $code): bool => preg_match('/^[0-9]{1,8}$/D', $code) === 1)
                 ->take(10)->values()->all();
             $diagnostic = ['exception' => get_class($exception), 'http_status' => $response?->status(), 'codes' => $codes];
-            Log::warning('Cielo payment submission failed.', ['order_reference' => $order->public_reference, 'attempt_id' => $attempt->id, ...$diagnostic]);
+            $this->logCheckoutPaymentEvent('error', 'checkout.gateway.payment_result_unknown', [
+                'order_id' => $order->id,
+                'attempt_id' => $attempt->id,
+                'payment_method' => $attempt->payment_method,
+                'phase' => $gatewayPhase ?? 'submit_payment',
+                'exception_class' => $exception::class,
+                'gateway_http_status' => $response?->status(),
+                'gateway_error_codes' => $codes,
+            ]);
             $attempt->forceFill([
                 'status' => 'unknown',
                 'gateway_status' => 'unknown',

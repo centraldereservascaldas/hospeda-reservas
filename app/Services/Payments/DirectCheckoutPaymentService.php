@@ -11,8 +11,10 @@ use App\Models\DirectBookingPaymentWebhook;
 use App\Services\DirectStaysReservationService;
 use App\Services\MoneyAmount;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -108,6 +110,28 @@ class DirectCheckoutPaymentService
         }
 
         return $methods;
+    }
+
+    /** @param array<string, scalar|null> $context */
+    private function logCheckoutPaymentEvent(string $level, string $event, array $context): void
+    {
+        $safeContext = array_filter([
+            'event' => $event,
+            'correlation_id' => $context['attempt_id'] ?? $context['order_id'] ?? null,
+            'order_id' => $context['order_id'] ?? null,
+            'attempt_id' => $context['attempt_id'] ?? null,
+            'payment_method' => $context['payment_method'] ?? null,
+            'gateway' => $context['gateway'] ?? null,
+            'reason' => $context['reason'] ?? null,
+            'result_code' => $context['result_code'] ?? null,
+            'http_status' => $context['http_status'] ?? null,
+            'gateway_http_status' => $context['gateway_http_status'] ?? null,
+            'payment_status' => $context['payment_status'] ?? null,
+            'exception_class' => $context['exception_class'] ?? null,
+            'phase' => $context['phase'] ?? null,
+        ], static fn (mixed $value): bool => $value !== null);
+
+        Log::log($level, $event, $safeContext);
     }
 
     public function createCieloCheckoutPage(DirectBookingOrder $order, string $idempotencyKey): array
@@ -430,6 +454,11 @@ class DirectCheckoutPaymentService
     public function createAttempt(DirectBookingOrder $order, StoreCheckoutPaymentRequest $request): array
     {
         if ($this->availableMethods($order) === []) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'reason' => 'payments_disabled_or_not_ready',
+            ]);
+
             return $this->result(null, 'payments_disabled', 'O pagamento no site ainda não está habilitado.', 503);
         }
 
@@ -462,15 +491,32 @@ class DirectCheckoutPaymentService
             || trim($mercadoPagoWebhookSecret) === ''
             || $webhookQueueConnection === 'sync'
             || ! config("queue.connections.{$webhookQueueConnection}")) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'reason' => 'payment_configuration_incomplete',
+            ]);
+
             return $this->result(null, 'payment_configuration_incomplete', 'A configuração necessária para cobrar e confirmar a reserva ainda não está completa.', 503);
         }
 
         $input = $request->validated();
         if (! in_array($input['paymentMethod'], $this->availableMethods(), true)) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => $input['paymentMethod'],
+                'reason' => 'payment_method_unavailable',
+            ]);
+
             return $this->result(null, 'payment_method_unavailable', 'Este método de pagamento ainda não está disponível.', 503);
         }
         if ($input['paymentMethod'] === 'card'
             && mb_strtolower(trim($input['cardholderEmail'])) !== mb_strtolower(trim($order->guest_email))) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => 'card',
+                'reason' => 'cardholder_email_mismatch',
+            ]);
+
             return $this->result(null, 'cardholder_email_mismatch', 'Use o mesmo e-mail informado no pedido para pagar com cartão.', 422);
         }
 
@@ -511,9 +557,21 @@ class DirectCheckoutPaymentService
 
         $reservationMatches = $this->reservations->validateReservedOrderForPayment($order);
         if ($reservationMatches === null) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => $input['paymentMethod'],
+                'reason' => 'reservation_state_unavailable',
+            ]);
+
             return $this->result(null, 'reservation_state_unavailable', 'Não foi possível confirmar os dados da pré-reserva na Stays. Nenhuma cobrança foi iniciada.', 503);
         }
         if (! $reservationMatches) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => $input['paymentMethod'],
+                'reason' => 'stays_reservation_mismatch',
+            ]);
+
             return $this->result(null, 'stays_reservation_mismatch', 'A pré-reserva não corresponde mais ao pedido. Nenhuma cobrança foi iniciada.', 409);
         }
 
@@ -584,6 +642,12 @@ class DirectCheckoutPaymentService
                 return $this->replay($existingAttempt, $order, $fingerprint);
             }
 
+            $this->logCheckoutPaymentEvent('error', 'checkout.payment.persistence_conflict', [
+                'order_id' => $order->id,
+                'payment_method' => $input['paymentMethod'],
+                'reason' => 'payment_attempt_conflict',
+            ]);
+
             return $this->result(null, 'payment_attempt_conflict', 'Não foi possível registrar a tentativa de pagamento.', 409);
         }
 
@@ -592,6 +656,12 @@ class DirectCheckoutPaymentService
         }
 
         if (is_array($attempt)) {
+            $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
+                'order_id' => $order->id,
+                'payment_method' => $input['paymentMethod'],
+                'reason' => $attempt['error'],
+            ]);
+
             return match ($attempt['error']) {
                 'reservation_expires_too_soon' => $this->result(null, $attempt['error'], 'A retenção da reserva é curta demais para iniciar um Pix com segurança. Nenhuma cobrança foi iniciada.', 409),
                 'payment_attempt_in_progress' => $this->result(null, $attempt['error'], 'Já existe uma tentativa de pagamento pendente para este pedido.', 409),
@@ -602,9 +672,17 @@ class DirectCheckoutPaymentService
         $order->refresh();
 
         try {
+            $gatewayPhase = 'create_payment';
             if (! $this->claimInitialGatewaySubmission($attempt)) {
                 return $this->result($attempt->refresh(), 'payment_attempt_in_progress', 'A tentativa de pagamento está sendo processada.', 409, replayed: true);
             }
+
+            $this->logCheckoutPaymentEvent('info', 'checkout.gateway.payment_submission_started', [
+                'order_id' => $order->id,
+                'attempt_id' => $attempt->id,
+                'payment_method' => $attempt->payment_method,
+                'gateway' => 'mercadopago',
+            ]);
 
             $createdPayment = $this->mercadoPago->createPayment(
                 (string) $order->quote_total,
@@ -613,6 +691,12 @@ class DirectCheckoutPaymentService
                 $methodData,
                 $additionalData,
             );
+            $this->logCheckoutPaymentEvent('info', 'checkout.gateway.payment_created', [
+                'order_id' => $order->id,
+                'attempt_id' => $attempt->id,
+                'payment_method' => $attempt->payment_method,
+                'gateway' => 'mercadopago',
+            ]);
             $gatewayId = $createdPayment['id'] ?? null;
             if (! $this->isValidGatewayPaymentId($gatewayId)) {
                 throw new \RuntimeException('Mercado Pago did not return a payment identifier.');
@@ -622,8 +706,20 @@ class DirectCheckoutPaymentService
 
                 return $this->result($attempt->refresh(), 'gateway_payment_id_conflict', 'O gateway retornou mais de um pagamento para esta tentativa. A conciliação foi interrompida para conferência.', 503);
             }
+            $gatewayPhase = 'fetch_payment';
             $gatewayPayment = $this->mercadoPago->getPayment($gatewayId);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $this->logCheckoutPaymentEvent('error', 'checkout.gateway.payment_result_unknown', [
+                'order_id' => $order->id,
+                'attempt_id' => $attempt->id,
+                'payment_method' => $attempt->payment_method,
+                'gateway' => 'mercadopago',
+                'phase' => $gatewayPhase ?? 'claim_submission',
+                'exception_class' => $exception::class,
+                'gateway_http_status' => $exception instanceof RequestException
+                    ? $exception->response->status()
+                    : null,
+            ]);
             $attempt->forceFill([
                 'status' => 'unknown',
                 'error_code' => 'gateway_result_unknown',
@@ -634,7 +730,22 @@ class DirectCheckoutPaymentService
             return $this->result($attempt->refresh(), 'gateway_result_unknown', 'O resultado da solicitação ao gateway é incerto e será conciliado antes de permitir outra tentativa.', 503);
         }
 
-        return $this->applyGatewayPayment($order, $attempt, $gatewayPayment);
+        $result = $this->applyGatewayPayment($order, $attempt, $gatewayPayment);
+        $this->logCheckoutPaymentEvent(
+            in_array($result['status'], [200, 201], true) ? 'info' : 'warning',
+            'checkout.gateway.payment_reconciled',
+            [
+                'order_id' => $order->id,
+                'attempt_id' => $attempt->id,
+                'payment_method' => $attempt->payment_method,
+                'gateway' => 'mercadopago',
+                'result_code' => $result['code'],
+                'http_status' => $result['status'],
+                'payment_status' => $attempt->refresh()->status,
+            ],
+        );
+
+        return $result;
     }
 
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool, gatewayStatus: string|null} */
