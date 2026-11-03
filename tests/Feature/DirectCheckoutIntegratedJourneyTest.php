@@ -204,6 +204,55 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             ->assertJsonPath('payment.attempt.status', 'approved');
     }
 
+    public function test_cielo_card_fraud_review_waits_and_accepted_capture_confirms_stays_only_once(): void
+    {
+        $this->freezeTime();
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        $this->configureCieloSandbox();
+        config([
+            'services.cielo.webhook_header_name' => 'X-Cielo-Secret',
+            'services.cielo.webhook_header_value' => 'synthetic-card-review-secret',
+            'services.cielo.webhook_queue_connection' => 'database',
+        ]);
+        Http::preventStrayRequests();
+        Mail::fake();
+        $gatewayStatus = 'approved';
+        $fraudAnalysis = ['Status' => 999, 'StatusDescription' => 'Review'];
+        $this->fakeJourneyHttp($gatewayStatus, 'cielo_credit_card', $fraudAnalysis);
+        $checkout = $this->postJson('/api/checkout', $this->checkoutPayload(), ['Idempotency-Key' => 'cielo-card-review-checkout-001'])->assertCreated();
+        $reference = $checkout->json('resume.reference');
+        $headers = ['X-Checkout-Resume-Token' => $checkout->json('resume.token'), 'Idempotency-Key' => 'cielo-card-review-payment-001'];
+        $this->postJson('/api/checkout/'.$reference.'/payments', [...$this->cardPayload(), 'paymentMethodId' => 'cielo_credit_card', 'token' => '123e4567-e89b-12d3-a456-426614174000'], $headers)
+            ->assertOk()->assertJsonPath('payment.status', 'attention_required');
+        $this->artisan('direct-booking:recover-reservations')->assertSuccessful();
+        $order = DirectBookingOrder::query()->sole();
+        $this->assertSame('attention_required', $order->payment_status);
+        $this->assertSame('reserved', $order->reservation_status);
+        $this->assertSame(0, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1/payments', 'POST'));
+        $this->assertSame(0, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1', 'PATCH'));
+        Mail::assertNothingOutgoing();
+
+        $fraudAnalysis = ['Status' => 1, 'StatusDescription' => 'Accept'];
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        $notification = ['PaymentId' => $attempt->gateway_payment_id, 'ChangeType' => 3];
+        $notificationHeaders = ['X-Cielo-Secret' => 'synthetic-card-review-secret'];
+        $this->postJson('/api/webhooks/cielo', $notification, $notificationHeaders)->assertOk();
+        $this->postJson('/api/webhooks/cielo', $notification, $notificationHeaders)->assertOk()->assertJsonPath('duplicate', true);
+        $webhook = DirectBookingPaymentWebhook::query()->sole();
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class), app(DirectStaysPaymentService::class));
+        (new ReconcileCieloPaymentWebhook($webhook->id))->handle(app(DirectCheckoutPaymentService::class), app(DirectStaysPaymentService::class));
+        $this->artisan('direct-booking:recover-reservations')->assertSuccessful();
+
+        $this->assertSame(DirectBookingOrderStatus::Confirmado, $order->refresh()->status);
+        $this->assertSame('approved', $order->payment_status);
+        $this->assertSame('booked', $order->reservation_status);
+        $this->assertSame('processed', $webhook->refresh()->status);
+        $this->assertSame(1, $this->recordedRequests('/1/sales/', 'POST'));
+        $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1/payments', 'POST'));
+        $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1', 'PATCH'));
+    }
+
     public function test_cielo_sandbox_decline_keeps_the_stays_reservation_unconfirmed(): void
     {
         $this->configureCheckout();
@@ -587,11 +636,11 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         ])->assertAccepted()->assertJsonPath('received', true);
     }
 
-    private function fakeJourneyHttp(string &$gatewayStatus, string $paymentMethodId = 'pix'): void
+    private function fakeJourneyHttp(string &$gatewayStatus, string $paymentMethodId = 'pix', ?array &$fraudAnalysis = null): void
     {
         $reservation = null;
         $staysPayments = [];
-        Http::fake(function (ClientRequest $request) use (&$reservation, &$staysPayments, &$gatewayStatus, $paymentMethodId) {
+        Http::fake(function (ClientRequest $request) use (&$reservation, &$staysPayments, &$gatewayStatus, $paymentMethodId, &$fraudAnalysis) {
             $path = parse_url($request->url(), PHP_URL_PATH);
             $method = $request->method();
 
@@ -659,6 +708,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
                         'Amount' => $request['Payment']['Amount'],
                         'Currency' => 'BRL',
                         'Status' => $gatewayStatus === 'approved' ? 2 : ($gatewayStatus === 'pending' ? 12 : 3),
+                        ...(is_array($fraudAnalysis) ? ['FraudAnalysis' => $fraudAnalysis] : []),
                         ...($paymentMethodId === 'cielo_pix' ? [
                             'QrCodeString' => 'synthetic-pix-copy-paste',
                             'QrCodeBase64Image' => base64_encode("\x89PNG\r\n\x1a\nsynthetic-qr"),
@@ -674,11 +724,12 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
                     'MerchantOrderId' => $attempt->merchant_order_id,
                     'Payment' => [
                         'PaymentId' => $attempt->gateway_payment_id,
-                        'Type' => 'Pix',
-                        'Amount' => 300100,
+                        'Type' => $attempt->payment_method === 'card' ? 'CreditCard' : 'Pix',
+                        'Amount' => $attempt->payment_method === 'card' ? 319222 : 300100,
                         'Currency' => 'BRL',
                         'Status' => $gatewayStatus === 'approved' ? 2 : 12,
                         'CapturedDate' => now()->toIso8601String(),
+                        ...(is_array($fraudAnalysis) ? ['FraudAnalysis' => $fraudAnalysis] : []),
                     ],
                 ]);
             }

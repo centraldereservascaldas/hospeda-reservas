@@ -17,11 +17,21 @@ class StoreCheckoutPaymentRequest extends FormRequest
 
     public function rules(): array
     {
+        $rawCardDataIsProhibited = Rule::prohibitedIf(fn (): bool => $this->input('paymentMethod') === 'card');
+
         return [
             'idempotencyKey' => ['required', 'string', 'min:16', 'max:128', 'regex:/^[A-Za-z0-9._~-]+$/'],
             'paymentMethod' => ['required', 'in:pix,card'],
             'paymentMethodId' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/'],
             'token' => ['nullable', 'string', 'max:255', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
+            'cardNumber' => [$rawCardDataIsProhibited],
+            'pan' => [$rawCardDataIsProhibited],
+            'cardExpirationDate' => [$rawCardDataIsProhibited],
+            'cardSecurityCode' => [$rawCardDataIsProhibited],
+            'securityCode' => [$rawCardDataIsProhibited],
+            'cvv' => [$rawCardDataIsProhibited],
+            'creditCard' => [$rawCardDataIsProhibited],
+            'CreditCard' => [$rawCardDataIsProhibited],
             'installments' => ['nullable', 'integer', 'min:1', 'max:'.self::MAX_CARD_INSTALLMENTS, 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
             'cardholderName' => ['nullable', 'string', 'max:150', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
             'cardholderEmail' => ['nullable', 'email:rfc', 'max:255', 'required_if:paymentMethod,card', 'prohibited_if:paymentMethod,pix'],
