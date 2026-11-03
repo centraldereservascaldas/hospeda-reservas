@@ -10,7 +10,9 @@ use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -34,6 +36,7 @@ class CieloCheckoutPaymentTest extends TestCase
 
     public function test_cielo_failure_records_status_and_codes_without_response_personal_data(): void
     {
+        Log::spy();
         Http::preventStrayRequests();
         $this->configureCielo();
         config(['services.cielo.pix_enabled' => true]);
@@ -54,6 +57,18 @@ class CieloCheckoutPaymentTest extends TestCase
         $this->assertStringNotContainsString('PRIVATE_RESPONSE_SENTINEL', $attempt->gateway_status_detail);
         $this->assertLessThanOrEqual(25, strlen($attempt->merchant_order_id));
         Http::assertSent(fn (ClientRequest $request): bool => $request['Customer']['Identity'] === '12345678901');
+        Log::shouldHaveReceived('log')->with('error', 'checkout.gateway.payment_result_unknown', Mockery::on(
+            static fn (array $context): bool => $context['event'] === 'checkout.gateway.payment_result_unknown'
+                && $context['order_id'] === $order->id
+                && $context['attempt_id'] === $attempt->id
+                && $context['gateway'] === 'cielo'
+                && $context['payment_method'] === 'pix'
+                && $context['phase'] === 'submit_payment'
+                && $context['gateway_http_status'] === 400
+                && $context['gateway_error_codes'] === ['104']
+                && ! array_key_exists('order_reference', $context)
+                && ! in_array('PRIVATE_RESPONSE_SENTINEL', $context, true),
+        ));
     }
 
     public function test_stays_managed_email_allows_cielo_without_smtp(): void
