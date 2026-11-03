@@ -40,7 +40,7 @@ const fieldClass =
 const formatDate = (value: string) =>
   new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
 
-/** Isolated own-checkout entry. The public Stays checkout remains selected by AppOverlayLayer. */
+/** Own checkout; payment stays gated by the server's current readiness. */
 export function SinglePageCheckout({
   bookingData,
   guestPrefill,

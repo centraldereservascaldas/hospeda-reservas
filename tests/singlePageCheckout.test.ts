@@ -440,7 +440,7 @@ test('park tickets stay absent even if an old preview flag is returned', async (
 });
 
 for (const enabled of [false, undefined, true]) {
-  test(`checkout entry selects only an explicitly enabled pilot: ${String(enabled)}`, async () => {
+  test(`checkout entry keeps our checkout when payment UI readiness is ${String(enabled)}`, async () => {
     let orders = 0;
     checkoutApi.createCheckout = async () => {
       orders++;
@@ -487,7 +487,7 @@ for (const enabled of [false, undefined, true]) {
       () =>
         assert.ok(
           view.getByRole('heading', {
-            name: enabled === true ? 'Confirme e pague' : 'Resumo da reserva',
+            name: 'Confirme e pague',
           }),
         ),
       { timeout: 10000 },
@@ -497,7 +497,13 @@ for (const enabled of [false, undefined, true]) {
   });
 }
 
-test('readiness failure falls back to Stays without creating an order', async () => {
+test('readiness failure keeps our checkout open without creating an order or redirecting', async () => {
+  let orders = 0;
+  checkoutApi.createCheckout = async () => {
+    orders += 1;
+    throw new Error('Unexpected order');
+  };
+  checkoutApi.getCheckoutTerms = async () => ({ kind: 'unavailable' });
   checkoutApi.getCheckoutReadiness = async () => {
     throw new Error('Network unavailable');
   };
@@ -515,23 +521,23 @@ test('readiness failure falls back to Stays without creating an order', async ()
       onClose() {},
     }),
   );
-  await waitFor(() => assert.ok(view.getByRole('button', { name: 'Continuar na Stays' })), {
+  await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Confirme e pague' })), {
     timeout: 10000,
   });
+  assert.equal(view.queryByRole('button', { name: 'Continuar na Stays' }), null);
+  assert.equal(orders, 0);
 });
 
-test('a slow readiness response cannot replace Stays after the timeout', async () => {
-  const originalTimeout = window.setTimeout;
-  let expire: (() => void) | undefined;
+test('a slow readiness response keeps our checkout and enables payment only after readiness', async () => {
+  checkoutApi.getCheckoutTerms = async () => ({
+    kind: 'ready',
+    data: {
+      success: true,
+      terms: { version: 'v1', snapshot: { Cancelamento: 'Condições de teste.' } },
+    },
+  });
   let finish:
     ((value: Awaited<ReturnType<typeof checkoutApi.getCheckoutReadiness>>) => void) | undefined;
-  window.setTimeout = ((callback: () => void, delay?: number) => {
-    if (delay === 4000) {
-      expire = callback;
-      return 12345;
-    }
-    return originalTimeout(callback, delay);
-  }) as typeof window.setTimeout;
   checkoutApi.getCheckoutReadiness = () =>
     new Promise((resolve) => {
       finish = resolve;
@@ -541,40 +547,31 @@ test('a slow readiness response cannot replace Stays after the timeout', async (
     code: null,
     message: 'Checkout Stays disponível.',
   });
-  try {
-    const view = render(
-      React.createElement(CheckoutEntry, {
-        isOpen: true,
-        bookingData,
-        currency: 'BRL',
-        guestPrefill: { fullName: '', email: '', phone: '' },
-        onClose() {},
-      }),
-    );
-    assert.ok(view.getByRole('heading', { name: 'Preparando seu pagamento' }));
-    assert.ok(view.getByRole('button', { name: 'Voltar ao imóvel' }));
-    const { act } = await import('@testing-library/react');
-    await act(async () => {
-      expire!();
+  const view = render(
+    React.createElement(CheckoutEntry, {
+      isOpen: true,
+      bookingData,
+      currency: 'BRL',
+      guestPrefill: { fullName: '', email: '', phone: '' },
+      onClose() {},
+    }),
+  );
+  await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Confirme e pague' })));
+  assert.equal(view.queryByRole('button', { name: 'Continuar na Stays' }), null);
+  const { act } = await import('@testing-library/react');
+  await act(async () => {
+    finish!({
+      kind: 'ready',
+      data: {
+        success: true,
+        ready: true,
+        checkoutEnabled: true,
+        termsAvailable: true,
+        singlePageCheckoutEnabled: true,
+        payment,
+      },
     });
-    await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Resumo da reserva' })), {
-      timeout: 10000,
-    });
-    await act(async () => {
-      finish!({
-        kind: 'ready',
-        data: {
-          success: true,
-          ready: true,
-          checkoutEnabled: true,
-          termsAvailable: true,
-          singlePageCheckoutEnabled: true,
-          payment,
-        },
-      });
-    });
-    assert.equal(view.queryByRole('heading', { name: 'Confirme e pague' }), null);
-  } finally {
-    window.setTimeout = originalTimeout;
-  }
+  });
+  assert.ok(view.getByRole('heading', { name: 'Confirme e pague' }));
+  assert.equal(view.queryByRole('button', { name: 'Continuar na Stays' }), null);
 });
