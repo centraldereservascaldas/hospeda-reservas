@@ -357,7 +357,8 @@ test('simultaneous consumers deduplicate calendar requests and expose incomplete
   }
 });
 
-test('calendar expiration blocks old availability and refreshes an open consumer', async () => {
+test('calendar expiration blocks old availability and refreshes an open consumer', async (context) => {
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.UTC(2026, 10, 3) });
   const originalFetch = globalThis.fetch;
   let requests = 0;
   let resolveRefresh!: (response: Response) => void;
@@ -390,9 +391,19 @@ test('calendar expiration blocks old availability and refreshes an open consumer
     );
   }
   try {
-    const { container } = render(React.createElement(Probe));
-    await waitFor(() => assert.match(container.textContent || '', /"available":true/));
-    await waitFor(() => assert.equal(requests, 2));
+    let container!: HTMLElement;
+    await act(async () => {
+      container = render(React.createElement(Probe)).container;
+    });
+    assert.match(container.textContent || '', /"available":true/);
+    await act(async () => {
+      context.mock.timers.tick(79);
+    });
+    assert.equal(requests, 1);
+    await act(async () => {
+      context.mock.timers.tick(1);
+    });
+    assert.equal(requests, 2);
     assert.match(container.textContent || '', /"available":false/);
     await act(async () => {
       resolveRefresh(
@@ -400,11 +411,14 @@ test('calendar expiration blocks old availability and refreshes an open consumer
       );
     });
   } finally {
+    cleanup();
     globalThis.fetch = originalFetch;
+    context.mock.timers.reset();
   }
 });
 
-test('an expired server cache boundary recovers automatically without exposing expired dates', async () => {
+test('an expired server cache boundary recovers automatically without exposing expired dates', async (context) => {
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.UTC(2026, 10, 3) });
   const originalFetch = globalThis.fetch;
   let requests = 0;
   let state!: ReturnType<typeof usePropertyAvailability>;
@@ -428,17 +442,30 @@ test('an expired server cache boundary recovers automatically without exposing e
     return null;
   }
   try {
-    render(React.createElement(Probe));
-    await waitFor(() => assert.equal(requests, 1));
+    await act(async () => {
+      render(React.createElement(Probe));
+    });
+    assert.equal(requests, 1);
     assert.equal(state.calendarAvailable, false);
-    await waitFor(() => assert.equal(state.calendarAvailable, true), { timeout: 3000 });
+    await act(async () => {
+      context.mock.timers.tick(1249);
+    });
+    assert.equal(requests, 1);
+    assert.equal(state.calendarAvailable, false);
+    await act(async () => {
+      context.mock.timers.tick(1);
+    });
+    assert.equal(state.calendarAvailable, true);
     assert.equal(requests, 2);
   } finally {
+    cleanup();
     globalThis.fetch = originalFetch;
+    context.mock.timers.reset();
   }
 });
 
-test('persistently expired calendars stay blocked and do not cause an unlimited retry loop', async () => {
+test('persistently expired calendars stay blocked and do not cause an unlimited retry loop', async (context) => {
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.UTC(2026, 10, 3) });
   const originalFetch = globalThis.fetch;
   let requests = 0;
   let state!: ReturnType<typeof usePropertyAvailability>;
@@ -462,13 +489,25 @@ test('persistently expired calendars stay blocked and do not cause an unlimited 
     return null;
   }
   try {
-    render(React.createElement(Probe));
-    await waitFor(() => assert.equal(state.isLoadingCalendar, false), { timeout: 3000 });
+    await act(async () => {
+      render(React.createElement(Probe));
+    });
+    assert.equal(state.calendarAvailable, false);
+    await act(async () => {
+      context.mock.timers.tick(1250);
+    });
+    assert.equal(state.isLoadingCalendar, false);
     assert.equal(state.calendarAvailable, false);
     assert.equal(requests, 2);
     assert.match(state.calendarMessage, /Não foi possível confirmar/);
+    await act(async () => {
+      context.mock.timers.tick(60_000);
+    });
+    assert.equal(requests, 2);
   } finally {
+    cleanup();
     globalThis.fetch = originalFetch;
+    context.mock.timers.reset();
   }
 });
 
@@ -506,7 +545,8 @@ test('retry after navigating beyond an incomplete initial window repairs that in
   }
 });
 
-test('an extension expiring before the initial window triggers revalidation', async () => {
+test('an extension expiring before the initial window triggers revalidation', async (context) => {
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.UTC(2026, 10, 3) });
   const originalFetch = globalThis.fetch;
   let extensionRequests = 0;
   globalThis.fetch = async (input) => {
@@ -540,17 +580,29 @@ test('an extension expiring before the initial window triggers revalidation', as
     return null;
   }
   try {
-    render(React.createElement(Probe));
-    await waitFor(() => assert.equal(state.calendarAvailable, true));
+    await act(async () => {
+      render(React.createElement(Probe));
+    });
+    assert.equal(state.calendarAvailable, true);
     await act(async () => {
       await state.loadCalendarThrough('2027-04-01');
     });
     assert.ok(state.calendarDays.some((day) => day.date === '2027-04-01'));
-    await waitFor(() => assert.equal(extensionRequests, 2));
+    assert.equal(extensionRequests, 1);
+    await act(async () => {
+      context.mock.timers.tick(79);
+    });
+    assert.equal(extensionRequests, 1);
+    await act(async () => {
+      context.mock.timers.tick(1);
+    });
+    assert.equal(extensionRequests, 2);
     assert.ok(state.calendarDays.some((day) => day.date === '2027-04-01'));
-    await waitFor(() => assert.equal(state.calendarAvailable, true));
+    assert.equal(state.calendarAvailable, true);
   } finally {
+    cleanup();
     globalThis.fetch = originalFetch;
+    context.mock.timers.reset();
   }
 });
 
