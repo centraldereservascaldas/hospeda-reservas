@@ -360,6 +360,15 @@ test('a Stays reservation requiring review never presents tracking as a generate
 
   await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pagamento não iniciado' })));
   assert.ok(view.getByText(/Nenhum Pix ou cobrança foi iniciado/));
+  const support = new URL(
+    view.getByRole('link', { name: /Falar no WhatsApp/ }).getAttribute('href')!,
+  );
+  const message = support.searchParams.get('text')!;
+  assert.ok(message.includes('Como quero pagar: Pix'));
+  assert.ok(message.includes(bookingData.property.id));
+  assert.ok(message.includes(reference));
+  assert.equal(message.includes('Sandbox Guest'), false);
+  assert.equal(message.includes('guest@example.test'), false);
   assert.equal(view.queryByLabelText('Código Pix copia e cola'), null);
   assert.equal(paymentCalls, 0);
 });

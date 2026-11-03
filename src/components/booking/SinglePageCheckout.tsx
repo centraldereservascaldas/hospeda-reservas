@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, QrCode, ShieldCheck } from 'lucide-react';
 import { LogoCRCN } from '../LogoCRCN';
+import { CheckoutSupportLink } from './CheckoutSupportLink';
 import type { CheckoutModal } from './CheckoutModal';
 import {
   CieloSopCardForm,
@@ -198,6 +199,22 @@ export function SinglePageCheckout({
   const paymentTotal =
     paymentMethod === 'card' && cardPricing ? cardPricing.totalCents / 100 : total;
   const cardPaymentLabel = cardPricing ? formatCieloCardPayment(cardPricing) : money(paymentTotal);
+  const supportLink = (
+    <CheckoutSupportLink
+      details={{
+        listingId: property.id,
+        listingTitle: getPublicPropertyTitle(property.title),
+        from: checkIn,
+        to: checkOut,
+        guests,
+        paymentMethod,
+        installments: paymentMethod === 'card' ? cardPricing?.installments : undefined,
+        baseTotal: total,
+        total: paymentTotal,
+        reference: preparedRef.current?.reference,
+      }}
+    />
+  );
 
   const preparePayment = async (): Promise<CieloPaymentContext> => {
     if (preparedRef.current) return preparedRef.current;
@@ -475,6 +492,12 @@ export function SinglePageCheckout({
                 >
                   Atualizar situação
                 </button>
+                {!confirmed &&
+                  (rejected ||
+                    checkoutIssue ||
+                    statusUnavailable ||
+                    result?.order.status === 'atencao_operacional') &&
+                  supportLink}
                 <a
                   href={`/checkout/${preparedRef.current?.reference}`}
                   className="block min-h-11 rounded-xl bg-neutral-950 px-4 py-3 text-center text-sm font-semibold text-white"
@@ -493,6 +516,7 @@ export function SinglePageCheckout({
                 disabled={!ready || !accepted}
                 paymentMethod={paymentMethod}
                 onPricingChange={setCardPricing}
+                failureContent={supportLink}
                 onAlternativeSubmit={startCieloPix}
                 alternativeContent={
                   <section className="checkout-pix-panel" aria-labelledby="checkout-pix-title">
@@ -663,7 +687,7 @@ export function SinglePageCheckout({
                     <div role="status" className="mt-3 text-sm text-amber-900">
                       {loading
                         ? 'Consultando preço, condições e pagamento…'
-                        : 'Não foi possível liberar a compra com cartão para esta acomodação.'}
+                        : 'Não foi possível liberar o pagamento para esta acomodação.'}
                       {!loading && (
                         <button
                           type="button"
@@ -673,6 +697,7 @@ export function SinglePageCheckout({
                           Consultar novamente
                         </button>
                       )}
+                      {!loading && <div>{supportLink}</div>}
                     </div>
                   )}
                 </section>
