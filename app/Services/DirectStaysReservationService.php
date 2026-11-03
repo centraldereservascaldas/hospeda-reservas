@@ -240,7 +240,7 @@ class DirectStaysReservationService
         DirectBookingOrder::query()
             ->whereNotNull('stays_reservation_id')
             ->where(function ($query): void {
-                $query->whereIn('status', [DirectBookingOrderStatus::PreReservado, DirectBookingOrderStatus::PagamentoRecusado])
+                $query->whereIn('status', [DirectBookingOrderStatus::PreReservado, DirectBookingOrderStatus::PagamentoRecusado, DirectBookingOrderStatus::LiberacaoPendente])
                     ->orWhere('status', DirectBookingOrderStatus::AtencaoOperacional);
             })
             ->where(function ($query): void {

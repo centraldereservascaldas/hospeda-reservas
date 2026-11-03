@@ -6,9 +6,11 @@ use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysReservationService;
+use App\Services\Payments\CieloCheckoutPaymentService;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -306,7 +308,7 @@ class CieloCheckoutPaymentTest extends TestCase
     }
 
     #[DataProvider('legacyPixHoldWindows')]
-    public function test_legacy_pix_requires_a_safe_hold_and_displays_its_real_expiration(int $holdMinutes, bool $allowed): void
+    public function test_legacy_pix_requires_a_safe_hold_and_displays_its_real_expiration(int $holdMinutes, bool $allowed, int $lookupStatus = 12): void
     {
         Http::preventStrayRequests();
         $this->configureCielo();
@@ -325,8 +327,11 @@ class CieloCheckoutPaymentTest extends TestCase
         $order->update(['expires_at' => now()->addMinutes($holdMinutes)]);
         $reservationService = $this->mock(DirectStaysReservationService::class);
         $reservationService->shouldReceive('validateReservedOrderForPayment')->times($allowed ? 1 : 0)->andReturn(true);
-        Http::fake(function (ClientRequest $request) {
-            $payment = $this->cieloPixPayment('123e4567-e89b-12d3-a456-426614174080', $request['MerchantOrderId'], 12, true);
+        Http::fake(function (ClientRequest $request) use ($lookupStatus) {
+            if ($request->method() === 'GET' && $lookupStatus === 500) {
+                return Http::response([], 500);
+            }
+            $payment = $this->cieloPixPayment('123e4567-e89b-12d3-a456-426614174080', $request['MerchantOrderId'] ?? DirectBookingPaymentAttempt::query()->sole()->merchant_order_id, $request->method() === 'GET' ? $lookupStatus : 12, true);
             unset($payment['Payment']['ExpirationDate']);
 
             return Http::response($payment, 201);
@@ -350,11 +355,29 @@ class CieloCheckoutPaymentTest extends TestCase
         $this->assertTrue($order->refresh()->expires_at->greaterThan($order->payment_expires_at));
         Http::assertSentCount(1);
         Http::assertSent(fn (ClientRequest $request): bool => $request['Payment']['Provider'] === 'Cielo' && ! isset($request['Payment']['QrCode']));
+
+        $this->travel(126)->minutes();
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        if ($lookupStatus === 500) {
+            try {
+                app(CieloCheckoutPaymentService::class)->reconcileAttempt($attempt);
+                $this->fail('An unavailable lookup must not release inventory.');
+            } catch (RequestException) {
+                $this->assertSame(DirectBookingOrderStatus::PagamentoPendente, $order->refresh()->status);
+                $this->assertSame('pending', $attempt->refresh()->status);
+            }
+
+            return;
+        }
+        app(CieloCheckoutPaymentService::class)->reconcileAttempt($attempt);
+        $this->assertSame($lookupStatus === 2 ? 'approved' : 'expired', $attempt->refresh()->status);
+        $this->assertSame($lookupStatus === 2 ? DirectBookingOrderStatus::PagoEmConfirmacao : DirectBookingOrderStatus::LiberacaoPendente, $order->refresh()->status);
+        $this->assertNull($attempt->pix_copy_paste);
     }
 
     public static function legacyPixHoldWindows(): array
     {
-        return ['short hold' => [60, false], 'no safety margin' => [120, false], 'safe hold' => [180, true]];
+        return ['short hold' => [60, false], 'no safety margin' => [120, false], 'safe hold unpaid' => [180, true], 'paid near expiration' => [180, true, 2], 'lookup unavailable' => [180, true, 500]];
     }
 
     public function test_initial_pending_pix_without_safe_qr_instructions_fails_closed(): void
