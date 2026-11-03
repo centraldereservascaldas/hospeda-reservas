@@ -3,7 +3,10 @@ import { X } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { calculateNights } from '../../utils/formatters';
 import type { CalculatedPriceResponse } from '../../services/crcnBackendApi';
-import { isCalendarRangeAvailable } from '../../utils/staysAvailability';
+import {
+  isCalendarRangeAvailable,
+  isCalendarArrivalAvailable,
+} from '../../utils/staysAvailability';
 import type { StaysCalendarDay } from '../../utils/staysAvailability';
 import { calculatePropertyPricing, isConfirmedPropertyQuote } from '../../utils/propertyPricing';
 import { getSyncedPropertyReviews } from '../../utils/propertyReviews';
@@ -307,12 +310,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     if (activeDateField === 'checkIn') {
       const selectedDay = calendarDays.find((day) => day.date === dateValue);
-      if (
-        !calendarAvailable ||
-        !selectedDay ||
-        selectedDay.avail < 1 ||
-        selectedDay.closedToArrival
-      ) {
+      if (!calendarAvailable || !selectedDay || !isCalendarArrivalAvailable(selectedDay)) {
         setCalendarInteractionMessage('Esta data não está disponível para check-in.');
         return;
       }
@@ -545,6 +543,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   checkIn={checkIn}
                   checkOut={checkOut}
                   onRetryCalendar={retryCalendar}
+                  onExplainDate={setCalendarInteractionMessage}
                   onSelectDay={selectCalendarDay}
                 />
 
@@ -609,6 +608,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         onRetryCalendarExtension={retryCalendarExtension}
         onActiveDateFieldChange={setActiveDateField}
         onDisplayedMonthChange={setDisplayedMonth}
+        onExplainDate={setCalendarInteractionMessage}
         onChooseDate={chooseDate}
         onChooseDateRange={chooseDateRange}
         onClear={() => {

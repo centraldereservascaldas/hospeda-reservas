@@ -1,4 +1,8 @@
-import { isCalendarRangeAvailable } from './staysAvailability';
+import {
+  isCalendarRangeAvailable,
+  isCalendarArrivalAvailable,
+  getCalendarDayRestriction,
+} from './staysAvailability';
 import type { StaysCalendarDay } from './staysAvailability';
 
 export interface PropertyDateSelection {
@@ -16,6 +20,17 @@ export function selectAvailabilityDay(
   currentCheckOut: string,
   selectedDay: StaysCalendarDay,
 ): PropertyDateSelection {
+  if (
+    (!currentCheckIn || currentCheckOut || selectedDay.date <= currentCheckIn) &&
+    !isCalendarArrivalAvailable(selectedDay)
+  ) {
+    return {
+      checkIn: currentCheckIn,
+      checkOut: currentCheckOut,
+      message:
+        getCalendarDayRestriction(selectedDay) || 'Esta data não está disponível para check-in.',
+    };
+  }
   if (!currentCheckIn || currentCheckOut) {
     return { checkIn: selectedDay.date, checkOut: '', message: '' };
   }
@@ -37,11 +52,13 @@ export function selectAvailabilityRange(
   checkOut: string,
 ): PropertyDateSelection {
   const arrival = calendar.find((day) => day.date === checkIn);
-  if (!arrival || arrival.avail < 1 || arrival.closedToArrival) {
+  if (!arrival || !isCalendarArrivalAvailable(arrival)) {
     return {
       checkIn,
       checkOut: '',
-      message: 'Esta data não está disponível para check-in.',
+      message:
+        (arrival && getCalendarDayRestriction(arrival)) ||
+        'Esta data não está disponível para check-in.',
     };
   }
 

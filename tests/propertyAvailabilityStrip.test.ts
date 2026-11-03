@@ -124,3 +124,61 @@ test('does not highlight a selected range while calendar data is refreshing', ()
   assert.doesNotMatch(inRangeDate.className, /bg-orange-100/);
   assert.match(inRangeDate.className, /text-neutral-600/);
 });
+
+test('missing tariff states stay neutral and still allow departure after available nights', () => {
+  let explanation = '';
+  let selected = 0;
+  const { getByRole, rerender } = render(
+    React.createElement(PropertyAvailabilityStrip, {
+      calendarDays: [
+        { date: '2026-11-11', avail: 1, availabilityStatus: 'available' },
+        { date: '2026-11-12', avail: 1, availabilityStatus: 'unpriced' },
+        { date: '2026-11-13', avail: 0, availabilityStatus: 'unconfirmed' },
+      ],
+      calendarAvailable: true,
+      isLoading: false,
+      calendarMessage: '',
+      checkIn: '',
+      checkOut: '',
+      onSelectDay: () => {
+        selected += 1;
+      },
+      onExplainDate: (message: string) => {
+        explanation = message;
+      },
+      onRetryCalendar: () => {},
+    }),
+  );
+  const unpriced = getByRole('button', {
+    name: /Tarifa não disponível para esta data/,
+  }) as HTMLButtonElement;
+  const unconfirmed = getByRole('button', { name: /motivo não confirmado/ }) as HTMLButtonElement;
+  assert.equal(unpriced.getAttribute('aria-disabled'), 'true');
+  assert.equal(unconfirmed.getAttribute('aria-disabled'), 'true');
+  fireEvent.click(unpriced);
+  assert.equal(explanation, 'Tarifa não disponível para esta data');
+  fireEvent.click(unconfirmed);
+  assert.equal(explanation, 'Data não disponível para reserva; motivo não confirmado');
+  assert.equal(selected, 0);
+  assert.doesNotMatch(unpriced.className, /line-through/);
+  assert.doesNotMatch(unconfirmed.className, /line-through/);
+  rerender(
+    React.createElement(PropertyAvailabilityStrip, {
+      calendarDays: [
+        { date: '2026-11-11', avail: 1 },
+        { date: '2026-11-12', avail: 0, availabilityStatus: 'unpriced' },
+      ],
+      calendarAvailable: true,
+      isLoading: false,
+      calendarMessage: '',
+      checkIn: '2026-11-11',
+      checkOut: '',
+      onSelectDay: () => {},
+      onRetryCalendar: () => {},
+    }),
+  );
+  assert.equal(
+    (getByRole('button', { name: /checkout|check-out/ }) as HTMLButtonElement).disabled,
+    false,
+  );
+});

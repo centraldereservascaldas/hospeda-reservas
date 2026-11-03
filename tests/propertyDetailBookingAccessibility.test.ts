@@ -1863,3 +1863,74 @@ test('calendar supports week boundaries and month keys without overflowing short
   fireEvent.keyDown(februaryEnd, { key: 'PageUp' });
   assert.equal(nextMonth?.getMonth(), 0);
 });
+
+test('calendar renders tariff and unconfirmed states neutrally and permits checkout on an unpriced day', () => {
+  let explanation = '';
+  let chosenDates = 0;
+  const props = {
+    isOpen: true,
+    activeDateField: 'checkIn' as 'checkIn' | 'checkOut',
+    checkIn: '2026-11-11',
+    checkOut: '',
+    displayedMonth: new Date(2026, 10, 1),
+    today: new Date(2026, 10, 1),
+    todayIso: '2026-11-01',
+    calendarDays: [
+      { date: '2026-11-11', avail: 1, availabilityStatus: 'available' as const },
+      { date: '2026-11-12', avail: 1, availabilityStatus: 'unpriced' as const },
+      { date: '2026-11-13', avail: 0, availabilityStatus: 'unconfirmed' as const },
+      { date: '2026-11-14', avail: 0, availabilityStatus: 'unavailable' as const },
+    ],
+    isExtendingCalendar: false,
+    calendarExtensionMessage: '',
+    calendarAvailable: true,
+    isLoadingCalendar: false,
+    availabilityMessage: '',
+    interactionMessage: '',
+    onRetryCalendar: () => {},
+    onRetryCalendarExtension: () => {},
+    onActiveDateFieldChange: () => {},
+    onDisplayedMonthChange: () => {},
+    onExplainDate: (message: string) => {
+      explanation = message;
+    },
+    onChooseDate: () => {
+      chosenDates += 1;
+    },
+    onChooseDateRange: () => {},
+    onClose: () => {},
+  };
+  const { getByRole, rerender } = render(React.createElement(PropertyDatePickerDialog, props));
+  for (const name of [
+    /12 de novembro.*Tarifa não disponível/,
+    /13 de novembro.*motivo não confirmado/,
+  ]) {
+    const day = getByRole('button', { name }) as HTMLButtonElement;
+    assert.equal(day.disabled, false);
+    assert.equal(day.getAttribute('aria-disabled'), 'true');
+    fireEvent.click(day);
+    assert.equal(explanation, day.getAttribute('title'));
+    assert.equal(chosenDates, 0);
+    rerender(
+      React.createElement(PropertyDatePickerDialog, { ...props, interactionMessage: explanation }),
+    );
+    assert.equal(getByRole('status').textContent, explanation);
+    assert.match(day.className, /bg-neutral/);
+    assert.equal(day.querySelector('[aria-hidden="true"]'), null);
+  }
+  const unavailable = getByRole('button', { name: /14 de novembro/ });
+  assert.match(unavailable.className, /bg-rose/);
+  assert.ok(unavailable.querySelector('[aria-hidden="true"]'));
+  rerender(
+    React.createElement(PropertyDatePickerDialog, { ...props, activeDateField: 'checkOut' }),
+  );
+  const checkout = getByRole('button', {
+    name: /12 de novembro.*checkout permitido/,
+  }) as HTMLButtonElement;
+  assert.equal(checkout.disabled, false);
+  explanation = '';
+  fireEvent.click(checkout);
+  assert.equal(chosenDates, 1);
+  assert.equal(explanation, '');
+  assert.equal(checkout.querySelector('[aria-hidden="true"]'), null);
+});

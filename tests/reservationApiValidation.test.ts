@@ -3,7 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { crcnBackendApi } from '../src/services/crcnBackendApi.ts';
 import { checkoutApi } from '../src/services/checkoutApi.ts';
-import { isProperty, isReservation } from '../src/utils/apiValidation.ts';
+import { isProperty, isReservation, isStaysCalendarDay } from '../src/utils/apiValidation.ts';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
 import { saveMeasurementConsent } from '../src/utils/measurementConsent.ts';
 import { updateMeasurementAttribution } from '../src/utils/measurementAttribution.ts';
@@ -824,5 +824,16 @@ test('dated search rejects availability confirmed for different dates or guest c
   } finally {
     globalThis.fetch = originalFetch;
     console.warn = originalWarn;
+  }
+});
+
+test('calendar external status accepts only the documented optional enum', () => {
+  const day = { date: '2026-11-11', avail: 0 };
+  assert.equal(isStaysCalendarDay(day), true);
+  for (const availabilityStatus of ['available', 'unavailable', 'unpriced', 'unconfirmed']) {
+    assert.equal(isStaysCalendarDay({ ...day, availabilityStatus }), true);
+  }
+  for (const availabilityStatus of ['reserved', 'released', '', null, 1, {}]) {
+    assert.equal(isStaysCalendarDay({ ...day, availabilityStatus }), false);
   }
 });
