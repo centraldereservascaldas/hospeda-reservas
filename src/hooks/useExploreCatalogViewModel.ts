@@ -14,6 +14,7 @@ interface UseExploreCatalogViewModelOptions {
   savedPropertyIds: string[];
   catalogLoading: boolean;
   catalogLoadError: boolean;
+  hasMoreSearchResults?: boolean;
 }
 
 export function useExploreCatalogViewModel({
@@ -22,6 +23,7 @@ export function useExploreCatalogViewModel({
   savedPropertyIds,
   catalogLoading,
   catalogLoadError,
+  hasMoreSearchResults = false,
 }: UseExploreCatalogViewModelOptions) {
   const filteredProperties = useMemo(
     () => filterPropertiesBySearchFilters(properties, filters),
@@ -31,13 +33,14 @@ export function useExploreCatalogViewModel({
     () =>
       CATEGORIES.filter(
         (category) =>
+          hasMoreSearchResults ||
           category.id === 'all' ||
           category.id === 'condominiums' ||
           category.id === 'pools_24h' ||
           category.id === filters.category ||
           properties.some((property) => matchesPropertyCategory(property, category.id)),
       ),
-    [properties, filters.category],
+    [properties, filters.category, hasMoreSearchResults],
   );
   const isCondominiumView = filters.category === 'condominiums';
   const condominiums = useMemo(

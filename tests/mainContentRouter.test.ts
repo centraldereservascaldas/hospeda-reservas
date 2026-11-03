@@ -358,3 +358,73 @@ test('map view shows a retry action when the catalog fails instead of an empty m
   fireEvent.click(getByRole('button', { name: 'Tentar novamente' }));
   assert.equal(retryCount, 1);
 });
+
+test('filtered empty pages in grid, map and condominium views offer continuation without claiming global absence', () => {
+  for (const view of [
+    { viewMode: 'grid', isCondominiumView: false },
+    { viewMode: 'map', isCondominiumView: false },
+    { viewMode: 'grid', isCondominiumView: true },
+  ]) {
+    let loads = 0;
+    const rendered = render(
+      React.createElement(
+        MainContentRouter,
+        createRouterProps({
+          ...view,
+          availabilitySearchState: 'success',
+          filteredProperties: [],
+          filters: {
+            ...createDefaultSearchFilters(),
+            checkIn: '2027-05-01',
+            checkOut: '2027-05-04',
+            minBedrooms: 4,
+          },
+          searchPagination: {
+            active: true,
+            hasMore: true,
+            isLoading: false,
+            error: false,
+            loadedCount: 12,
+          },
+          onLoadMoreSearchResults: () => {
+            loads += 1;
+          },
+        }),
+      ),
+    );
+    assert.equal(rendered.queryByText('Nenhuma acomodação disponível para esse período'), null);
+    assert.equal(rendered.queryByText('Nenhum imóvel corresponde a esses filtros'), null);
+    assert.match(
+      rendered.getByRole('region', { name: 'Paginação das acomodações' }).textContent || '',
+      /12 acomodações carregadas/,
+    );
+    fireEvent.click(rendered.getByRole('button', { name: 'Carregar mais' }));
+    assert.equal(loads, 1);
+    rendered.unmount();
+  }
+});
+
+test('continuation errors retain the catalog and offer a dedicated retry', () => {
+  let loads = 0;
+  const { getByRole } = render(
+    React.createElement(
+      MainContentRouter,
+      createRouterProps({
+        searchPagination: {
+          active: true,
+          hasMore: true,
+          isLoading: false,
+          error: true,
+          loadedCount: 1,
+        },
+        onLoadMoreSearchResults: () => {
+          loads += 1;
+        },
+      }),
+    ),
+  );
+  assert.ok(getByRole('button', { name: `Ver detalhes de ${STAYS_NET_APARTMENTS[0]!.title}` }));
+  assert.match(getByRole('alert').textContent || '', /Seus resultados foram mantidos/);
+  fireEvent.click(getByRole('button', { name: 'Tentar carregar mais' }));
+  assert.equal(loads, 1);
+});

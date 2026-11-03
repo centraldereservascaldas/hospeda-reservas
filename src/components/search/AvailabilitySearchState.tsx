@@ -8,6 +8,7 @@ interface AvailabilitySearchStateProps {
   guests?: number;
   resultCount?: number;
   hasResults: boolean;
+  hasMoreResults?: boolean;
   hasAvailableResults: boolean;
   showEmptyResults?: boolean;
   showIdleNotice?: boolean;
@@ -35,6 +36,7 @@ export function AvailabilitySearchState({
   guests = 1,
   resultCount,
   hasResults,
+  hasMoreResults = false,
   hasAvailableResults,
   showEmptyResults = false,
   showIdleNotice = true,
@@ -64,6 +66,18 @@ export function AvailabilitySearchState({
           Tentar consultar novamente
         </button>
       </div>
+    );
+  }
+
+  if (hasMoreResults && !hasResults && (state === 'success' || state === 'idle')) {
+    return (
+      <p
+        role="status"
+        className="mb-6 rounded-2xl bg-neutral-100 px-4 py-3 text-sm text-neutral-700"
+      >
+        Nenhuma opção entre os resultados carregados corresponde aos filtros. Ainda há acomodações a
+        verificar. Carregue mais resultados ou ajuste os filtros.
+      </p>
     );
   }
 

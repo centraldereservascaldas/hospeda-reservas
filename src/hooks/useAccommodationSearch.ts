@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Property, SearchFilters } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
-import type { SearchAccommodationsParams } from '../services/crcnBackendApi';
+import type {
+  AccommodationSearchPage,
+  SearchAccommodationsParams,
+} from '../services/crcnBackendApi';
 import { getSurpriseDateCandidates } from '../utils/surpriseDates';
 import type { SurpriseDateOption } from '../utils/surpriseDates';
 import { getAccommodationIdFromPath, parseSearchFilters } from '../utils/searchUrlState';
@@ -33,19 +36,52 @@ interface UseAccommodationSearchOptions {
   >;
   searchAccommodations?: (
     params: SearchAccommodationsParams,
-  ) => Promise<{ total: number; data: Property[]; unquotedCount?: number }>;
+    options?: { signal?: AbortSignal },
+  ) => Promise<{
+    total: number;
+    data: Property[];
+    unquotedCount?: number;
+    pagination?: AccommodationSearchPage['pagination'];
+  }>;
   getSurpriseCandidates?: () => SurpriseDateOption[];
   random?: () => number;
   scrollCatalog?: () => void;
 }
 
-const searchAccommodations = (params: SearchAccommodationsParams) =>
-  crcnBackendApi.searchAccommodations(params);
+export interface SearchPaginationState {
+  active: boolean;
+  hasMore: boolean;
+  isLoading: boolean;
+  error: boolean;
+  loadedCount: number;
+}
+
+const emptyPagination: SearchPaginationState = {
+  active: false,
+  hasMore: false,
+  isLoading: false,
+  error: false,
+  loadedCount: 0,
+};
+
+const searchAccommodations = (
+  params: SearchAccommodationsParams,
+  options?: { signal?: AbortSignal },
+) => crcnBackendApi.searchAccommodationsPage(params, options);
 
 const scrollToAccommodationCatalog = () => {
   const catalogElement = document.getElementById('stays-apartments-catalog');
   if (catalogElement) scrollIntoViewRespectingMotion(catalogElement);
 };
+
+const getSearchContextKey = (params: AccommodationWidgetSearchParams) =>
+  JSON.stringify([
+    params.checkIn,
+    params.checkOut,
+    params.persons,
+    params.destination || '',
+    params.propertyId || '',
+  ]);
 
 const getTodayIsoDate = () => {
   const today = new Date();
@@ -70,6 +106,17 @@ export function useAccommodationSearch({
   const initialUrlSearchHandledRef = useRef(false);
   const searchGenerationRef = useRef(0);
   const lastSearchParamsRef = useRef<AccommodationWidgetSearchParams | null>(null);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const continuationRef = useRef<{
+    params: SearchAccommodationsParams;
+    nextSkip: number;
+    generation: number;
+    loading: boolean;
+  } | null>(null);
+  const loadedIdsRef = useRef(new Set<string>());
+  const hasUnquotedRef = useRef(false);
+  const completedContextRef = useRef<string | null>(null);
+  const [searchPagination, setSearchPagination] = useState<SearchPaginationState>(emptyPagination);
   const [availabilitySearchState, setAvailabilitySearchState] = useState<AvailabilitySearchState>(
     () => {
       const initialUrl = new URL(initialLocationRef.current, window.location.origin);
@@ -84,6 +131,14 @@ export function useAccommodationSearch({
       { scrollCatalogAfterSearch = true }: { scrollCatalogAfterSearch?: boolean } = {},
     ) => {
       const searchGeneration = ++searchGenerationRef.current;
+      requestControllerRef.current?.abort();
+      const controller = new AbortController();
+      requestControllerRef.current = controller;
+      continuationRef.current = null;
+      loadedIdsRef.current = new Set();
+      hasUnquotedRef.current = false;
+      completedContextRef.current = null;
+      setSearchPagination(emptyPagination);
       lastSearchParamsRef.current = searchParams;
 
       const hasAnySearchDate = Boolean(searchParams.checkIn || searchParams.checkOut);
@@ -145,21 +200,29 @@ export function useAccommodationSearch({
       let selectedDateOption: (typeof dateOptions)[number] | null = null;
       let successfulSearchCount = 0;
       let hasUnquotedResults = false;
+      let hasUnresolvedSurpriseResults = false;
 
       for (const dateOption of dateOptions) {
         try {
-          const searchResult = await searchAccommodationsOverride({
-            from: dateOption.checkIn,
-            to: dateOption.checkOut,
-            guests: searchParams.persons,
-            destination: searchParams.destination,
-            propertyId: searchParams.propertyId,
-          });
+          const searchResult = await searchAccommodationsOverride(
+            {
+              from: dateOption.checkIn,
+              to: dateOption.checkOut,
+              guests: searchParams.persons,
+              destination: searchParams.destination,
+              propertyId: searchParams.propertyId,
+              limit: 12,
+              skip: 0,
+            },
+            { signal: controller.signal },
+          );
           if (searchGeneration !== searchGenerationRef.current) return;
           successfulSearchCount += 1;
           hasUnquotedResults = (searchResult.unquotedCount ?? 0) > 0;
           const results = searchResult?.data || [];
           if (searchParams.surpriseMe) {
+            hasUnresolvedSurpriseResults ||=
+              hasUnquotedResults || Boolean(searchResult.pagination?.hasMore);
             const confirmedQuotes = results.filter(
               (property) =>
                 Number((property as SearchResultProperty).calculatedPrice?.totalAmount) > 0,
@@ -171,6 +234,31 @@ export function useAccommodationSearch({
             }
           } else {
             searchedProperties = results;
+            loadedIdsRef.current = new Set(results.map((property) => property.id));
+            hasUnquotedRef.current = hasUnquotedResults;
+            const pagination = searchResult.pagination;
+            continuationRef.current = pagination?.hasMore
+              ? {
+                  params: {
+                    from: dateOption.checkIn,
+                    to: dateOption.checkOut,
+                    guests: searchParams.persons,
+                    destination: searchParams.destination,
+                    propertyId: searchParams.propertyId,
+                    limit: 12,
+                  },
+                  nextSkip: pagination.nextSkip,
+                  generation: searchGeneration,
+                  loading: false,
+                }
+              : null;
+            setSearchPagination({
+              active: true,
+              hasMore: Boolean(pagination?.hasMore),
+              isLoading: false,
+              error: false,
+              loadedCount: loadedIdsRef.current.size,
+            });
             break;
           }
         } catch (error) {
@@ -207,7 +295,9 @@ export function useAccommodationSearch({
         const chosenProperties = randomizedCandidates.slice(0, 5);
         setProperties(chosenProperties);
         const completedAllDateOptions =
-          dateOptions.length > 0 && successfulSearchCount === dateOptions.length;
+          dateOptions.length > 0 &&
+          successfulSearchCount === dateOptions.length &&
+          !hasUnresolvedSurpriseResults;
         setAvailabilitySearchState(
           chosenProperties.length > 0
             ? hasUnquotedResults
@@ -219,6 +309,13 @@ export function useAccommodationSearch({
         );
         if (chosenProperties.length) {
           const suggestedDates = selectedDateOption!;
+          completedContextRef.current = getSearchContextKey({
+            ...searchParams,
+            checkIn: suggestedDates.checkIn,
+            checkOut: suggestedDates.checkOut,
+            destination: '',
+            propertyId: '',
+          });
           setFilters((previous) => ({
             ...previous,
             checkIn: suggestedDates.checkIn,
@@ -226,6 +323,7 @@ export function useAccommodationSearch({
           }));
         }
       } else if (searchedProperties) {
+        completedContextRef.current = getSearchContextKey(searchParams);
         setProperties(
           hasSearchDates
             ? searchedProperties
@@ -251,24 +349,76 @@ export function useAccommodationSearch({
     ],
   );
 
+  const loadMoreSearchResults = useCallback(async () => {
+    const continuation = continuationRef.current;
+    if (!continuation || continuation.loading) return;
+    continuation.loading = true;
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    setSearchPagination((previous) => ({ ...previous, isLoading: true, error: false }));
+    try {
+      const page = await searchAccommodationsOverride(
+        { ...continuation.params, skip: continuation.nextSkip },
+        { signal: controller.signal },
+      );
+      if (continuation.generation !== searchGenerationRef.current) return;
+      const pagination = page.pagination;
+      if (pagination?.hasMore && pagination.nextSkip <= continuation.nextSkip)
+        throw new Error('A paginação não avançou.');
+      const incoming = page.data.filter((property) => !loadedIdsRef.current.has(property.id));
+      const unique = [...new Map(incoming.map((property) => [property.id, property])).values()];
+      unique.forEach((property) => loadedIdsRef.current.add(property.id));
+      const hasDates = Boolean(continuation.params.from && continuation.params.to);
+      setProperties((previous) => [
+        ...previous,
+        ...unique.map((property) =>
+          hasDates ? property : { ...property, calculatedPrice: undefined },
+        ),
+      ]);
+      hasUnquotedRef.current ||= (page.unquotedCount ?? 0) > 0;
+      if (hasDates && hasUnquotedRef.current) setAvailabilitySearchState('partial');
+      continuationRef.current = pagination?.hasMore
+        ? { ...continuation, nextSkip: pagination.nextSkip, loading: false }
+        : null;
+      setSearchPagination({
+        active: true,
+        hasMore: Boolean(pagination?.hasMore),
+        isLoading: false,
+        error: false,
+        loadedCount: loadedIdsRef.current.size,
+      });
+    } catch (error) {
+      if (continuation.generation !== searchGenerationRef.current) return;
+      console.warn('Unable to load the next search page:', error);
+      continuation.loading = false;
+      setSearchPagination((previous) => ({ ...previous, isLoading: false, error: true }));
+    }
+  }, [searchAccommodationsOverride, setProperties]);
+
   const retryLastSearch = useCallback(async () => {
     if (lastSearchParamsRef.current) {
       await handleStaysWidgetSearch(lastSearchParamsRef.current);
     }
   }, [handleStaysWidgetSearch]);
 
-  restoreSearchFromUrlRef.current = (restoredFilters, options) =>
-    handleStaysWidgetSearch(
-      {
-        checkIn: restoredFilters.checkIn,
-        checkOut: restoredFilters.checkOut,
-        persons: countOccupancyGuests(restoredFilters.guests),
-        guests: restoredFilters.guests,
-        destination: restoredFilters.destination,
-        propertyId: restoredFilters.destinationPropertyId,
-      },
-      { scrollCatalogAfterSearch: options?.scrollCatalog !== false },
-    );
+  restoreSearchFromUrlRef.current = (restoredFilters, options) => {
+    const restoredParams = {
+      checkIn: restoredFilters.checkIn,
+      checkOut: restoredFilters.checkOut,
+      persons: countOccupancyGuests(restoredFilters.guests),
+      guests: restoredFilters.guests,
+      destination: restoredFilters.destination,
+      propertyId: restoredFilters.destinationPropertyId,
+    };
+    if (
+      options?.scrollCatalog === false &&
+      completedContextRef.current === getSearchContextKey(restoredParams)
+    )
+      return;
+    return handleStaysWidgetSearch(restoredParams, {
+      scrollCatalogAfterSearch: options?.scrollCatalog !== false,
+    });
+  };
 
   useEffect(() => {
     if (initialUrlSearchHandledRef.current) return;
@@ -289,5 +439,21 @@ export function useAccommodationSearch({
     });
   }, [handleStaysWidgetSearch]);
 
-  return { handleStaysWidgetSearch, retryLastSearch, availabilitySearchState };
+  useEffect(
+    () => () => {
+      searchGenerationRef.current += 1;
+      requestControllerRef.current?.abort();
+      continuationRef.current = null;
+      initialUrlSearchHandledRef.current = false;
+    },
+    [],
+  );
+
+  return {
+    handleStaysWidgetSearch,
+    retryLastSearch,
+    availabilitySearchState,
+    searchPagination,
+    loadMoreSearchResults,
+  };
 }

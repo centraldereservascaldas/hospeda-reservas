@@ -50,6 +50,7 @@ export interface AppOverlayLayerProps {
   accountModalMode: AccountModalMode;
   accountReturnFocusRef?: RefObject<HTMLButtonElement | null>;
   properties: Property[];
+  hasMoreSearchResults?: boolean;
   isSofiaOpen: boolean;
   isSearchOpen: boolean;
   isFilterOpen: boolean;
@@ -78,6 +79,7 @@ export function AppOverlayLayer({
   accountModalMode,
   accountReturnFocusRef,
   properties,
+  hasMoreSearchResults = false,
   isSofiaOpen,
   isSearchOpen,
   isFilterOpen,
@@ -142,6 +144,7 @@ export function AppOverlayLayer({
 
       <DeferredModal active={isFilterOpen}>
         <FilterModal
+          hasMoreSearchResults={hasMoreSearchResults}
           isOpen={isFilterOpen}
           onClose={onCloseFilter}
           filters={filters}

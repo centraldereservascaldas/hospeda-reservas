@@ -24,6 +24,8 @@ import { ActiveSearchFilters } from './search/ActiveSearchFilters';
 import { AvailabilitySearchState as AvailabilitySearchStateView } from './search/AvailabilitySearchState';
 import { StaysSearchWidget } from './search/StaysSearchWidget';
 import { SeasonalDateSuggestions } from './search/SeasonalDateSuggestions';
+import { SearchPagination } from './search/SearchPagination';
+import type { SearchPaginationState } from '../hooks/useAccommodationSearch';
 import { PropertyCatalogGrid } from './property/PropertyCatalogGrid';
 import { CatalogLoadNotice } from './property/CatalogLoadNotice';
 import { LazyFeatureBoundary } from './LazyFeatureBoundary';
@@ -69,6 +71,8 @@ interface MainContentRouterProps {
   catalogLoading: boolean;
   onRetryCatalog: () => void;
   availabilitySearchState: AvailabilitySearchState;
+  searchPagination?: SearchPaginationState;
+  onLoadMoreSearchResults?: () => void;
   hasAvailableSearchResults: boolean;
   onRetryAvailabilitySearch: () => void;
   savedPropertyIds: string[];
@@ -123,6 +127,8 @@ export function MainContentRouter({
   catalogLoading,
   onRetryCatalog,
   availabilitySearchState,
+  searchPagination,
+  onLoadMoreSearchResults,
   hasAvailableSearchResults,
   onRetryAvailabilitySearch,
   savedPropertyIds,
@@ -169,7 +175,8 @@ export function MainContentRouter({
     availabilitySearchState === 'loading' ||
     availabilitySearchState === 'error' ||
     availabilitySearchState === 'invalid-dates' ||
-    (isCompletedSearch && filteredProperties.length === 0);
+    (isCompletedSearch && filteredProperties.length === 0) ||
+    Boolean(searchPagination?.hasMore && filteredProperties.length === 0);
   const hasConfirmedSearchAvailability =
     isCompletedSearch && Boolean(filters.checkIn && filters.checkOut);
   const visibleCatalogStatus: PropertyCatalogStatus = hasConfirmedSearchAvailability
@@ -179,6 +186,7 @@ export function MainContentRouter({
 
   const availabilitySearchStateView = (
     <AvailabilitySearchStateView
+      hasMoreResults={searchPagination?.hasMore}
       state={availabilitySearchState}
       checkIn={filters.checkIn}
       checkOut={filters.checkOut}
@@ -349,6 +357,7 @@ export function MainContentRouter({
             {!isCondominiumView &&
               (availabilitySearchState === 'idle' ||
                 (isCompletedSearch && filteredProperties.length > 0)) &&
+              !(searchPagination?.hasMore && filteredProperties.length === 0) &&
               (viewMode === 'grid' ? (
                 <PropertyCatalogGrid
                   prioritizeFirstImage={Boolean(filters.checkIn && filters.checkOut)}
@@ -393,6 +402,9 @@ export function MainContentRouter({
                     )}
                 </div>
               ))}
+            {searchPagination?.active && onLoadMoreSearchResults && (
+              <SearchPagination state={searchPagination} onLoadMore={onLoadMoreSearchResults} />
+            )}
           </div>
         </div>
       )}
