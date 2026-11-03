@@ -455,7 +455,7 @@ class CieloCheckoutPaymentService
         };
         $fraudAnalysisRequired = $expectedPaymentType === 'CreditCard'
             && ($attempt->fraud_analysis_required
-                || array_key_exists('FraudAnalysis', $payment)
+                || (array_key_exists('FraudAnalysis', $payment) && $payment['FraudAnalysis'] !== null)
                 || DirectBookingPaymentWebhook::query()->where('gateway_payment_id', $paymentId)->where('gateway_provider', $attempt->gateway_provider)->where('change_type', 3)->exists());
         $fraudReviewRequired = $fraudAnalysisRequired && $status === 'captured'
             && ! $this->hasAcceptedFraudAnalysis($payment['FraudAnalysis'] ?? null);

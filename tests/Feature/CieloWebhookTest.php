@@ -333,6 +333,7 @@ class CieloWebhookTest extends TestCase
         Http::preventStrayRequests();
         $order = $this->createCieloOrder();
         $attempt = $this->createCieloAttempt($order);
+        $attempt->forceFill(['fraud_analysis_required' => true])->save();
         $paymentId = '123e4567-e89b-12d3-a456-426614174040';
         Http::fake(['https://apiquerysandbox.cieloecommerce.cielo.com.br/1/sales/'.$paymentId => Http::response([
             'MerchantOrderId' => $attempt->merchant_order_id,
@@ -367,6 +368,28 @@ class CieloWebhookTest extends TestCase
             'empty result' => [[], false],
             'null result' => [null, false],
         ];
+    }
+
+    public function test_optional_null_fraud_analysis_does_not_enable_a_risk_requirement_for_an_existing_card_flow(): void
+    {
+        $this->freezeTime();
+        $this->configureWebhook();
+        Http::preventStrayRequests();
+        $order = $this->createCieloOrder();
+        $attempt = $this->createCieloAttempt($order);
+        $paymentId = '123e4567-e89b-12d3-a456-426614174040';
+        Http::fake(['https://apiquerysandbox.cieloecommerce.cielo.com.br/1/sales/'.$paymentId => Http::response([
+            'MerchantOrderId' => $attempt->merchant_order_id,
+            'Payment' => ['PaymentId' => $paymentId, 'Type' => 'CreditCard', 'Status' => 2, 'Amount' => 125050, 'Currency' => 'BRL', 'FraudAnalysis' => null],
+        ])]);
+
+        app(DirectCheckoutPaymentService::class)->reconcileCieloPaymentId($paymentId);
+
+        $this->assertSame('approved', $attempt->refresh()->status);
+        $this->assertFalse($attempt->fraud_analysis_required);
+        $this->assertSame(DirectBookingOrderStatus::PagoEmConfirmacao, $order->refresh()->status);
+        $this->assertDatabaseCount('direct_booking_stays_actions', 0);
+        Http::assertSentCount(1);
     }
 
     public function test_fraud_review_is_not_forgotten_when_a_later_lookup_omits_it_and_recovery_waits_for_acceptance(): void
