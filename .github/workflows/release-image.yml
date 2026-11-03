@@ -210,6 +210,16 @@ jobs:
           test -n "$VITE_GA_ID"
           [[ "$VITE_GA_ID" =~ ^G-[A-Z0-9]+$ ]]
 
+      - name: Validate account configuration
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VITE_SUPABASE_URL"
+          [[ "$VITE_SUPABASE_URL" =~ ^https://[a-z0-9-]+\.supabase\.co/?$ ]]
+          test -n "$VITE_SUPABASE_ANON_KEY"
+
       - name: Build and publish image
         id: image
         uses: docker/build-push-action@v6

@@ -554,9 +554,18 @@ export function CieloSopCardForm({
               ? 'Abrindo Pix seguro…'
               : 'Enviando pagamento…'
             : (submitLabel ??
-              (paymentMethod === 'card' && selectedPricing
-                ? `Confirmar e pagar ${formatCieloCardPayment(selectedPricing)}`
-                : 'Pagar com cartão'))}
+              (paymentMethod === 'card' && selectedPricing?.installments > 1 ? (
+                <span className="flex flex-col items-center gap-1 leading-tight">
+                  <span>Confirmar e pagar</span>
+                  <span className="text-base font-extrabold">
+                    {formatCieloCardPayment(selectedPricing)}
+                  </span>
+                </span>
+              ) : paymentMethod === 'card' && selectedPricing ? (
+                `Confirmar e pagar ${formatCieloCardPayment(selectedPricing)}`
+              ) : (
+                'Pagar com cartão'
+              )))}
       </button>
       <p className="text-xs leading-5 text-neutral-600">
         {paymentMethod === 'pix'
