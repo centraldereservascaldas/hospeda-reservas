@@ -305,6 +305,58 @@ class CieloCheckoutPaymentTest extends TestCase
         ];
     }
 
+    #[DataProvider('legacyPixHoldWindows')]
+    public function test_legacy_pix_requires_a_safe_hold_and_displays_its_real_expiration(int $holdMinutes, bool $allowed): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        $this->app->detectEnvironment(fn () => 'production');
+        config([
+            'services.cielo.direct_environment' => 'production',
+            'services.cielo.production.enabled' => true,
+            'services.cielo.production.pix_enabled' => true,
+            'services.cielo.production.pix_provider' => 'Cielo',
+            'services.cielo.production.merchant_id' => 'cielo-merchant-sentinel',
+            'services.cielo.production.merchant_key' => 'cielo-key-sentinel',
+            'direct-booking.live_payments_enabled' => true,
+        ]);
+        $this->freezeTime();
+        $order = $this->createPayableOrder('cielo');
+        $order->update(['expires_at' => now()->addMinutes($holdMinutes)]);
+        $reservationService = $this->mock(DirectStaysReservationService::class);
+        $reservationService->shouldReceive('validateReservedOrderForPayment')->times($allowed ? 1 : 0)->andReturn(true);
+        Http::fake(function (ClientRequest $request) {
+            $payment = $this->cieloPixPayment('123e4567-e89b-12d3-a456-426614174080', $request['MerchantOrderId'], 12, true);
+            unset($payment['Payment']['ExpirationDate']);
+
+            return Http::response($payment, 201);
+        });
+
+        $response = $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            'paymentMethod' => 'pix', 'paymentMethodId' => 'pix',
+            'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901'],
+        ], ['Idempotency-Key' => 'legacy-pix-safe-window-0001', 'X-Checkout-Resume-Token' => 'synthetic-resume-token']);
+
+        if (! $allowed) {
+            $response->assertStatus(409)->assertJsonPath('code', 'reservation_expires_too_soon');
+            Http::assertNothingSent();
+            $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+
+            return;
+        }
+        $response->assertCreated()->assertJsonPath('payment.status', 'pending');
+        $this->assertNotEmpty($response->json('payment.pix.copyPaste'));
+        $this->assertSame(now()->addHours(2)->getTimestamp(), DirectBookingPaymentAttempt::query()->sole()->expires_at->getTimestamp());
+        $this->assertTrue($order->refresh()->expires_at->greaterThan($order->payment_expires_at));
+        Http::assertSentCount(1);
+        Http::assertSent(fn (ClientRequest $request): bool => $request['Payment']['Provider'] === 'Cielo' && ! isset($request['Payment']['QrCode']));
+    }
+
+    public static function legacyPixHoldWindows(): array
+    {
+        return ['short hold' => [60, false], 'no safety margin' => [120, false], 'safe hold' => [180, true]];
+    }
+
     public function test_initial_pending_pix_without_safe_qr_instructions_fails_closed(): void
     {
         Http::preventStrayRequests();

@@ -51,6 +51,11 @@ class CieloDirectConfiguration
         return config($prefix.$key);
     }
 
+    public function usesLegacyPix(): bool
+    {
+        return $this->environment() === 'production' && $this->value('pix_provider') === 'Cielo';
+    }
+
     public function sandboxSopMerchantIsCompatible(): bool
     {
         if ($this->environment() !== 'sandbox') {

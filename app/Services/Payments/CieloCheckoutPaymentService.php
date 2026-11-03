@@ -146,6 +146,11 @@ class CieloCheckoutPaymentService
             return $this->replay($existingAttempt, $order, $fingerprint);
         }
 
+        if ($paymentMethod === 'pix' && $this->configuration->usesLegacyPix()
+            && ($order->expires_at === null || $order->expires_at->lessThanOrEqualTo(now()->addSeconds(7200 + max(60, (int) config('direct-booking.payment_safety_margin_minutes', 5) * 60))))) {
+            return $this->result(null, 'reservation_expires_too_soon', 'O prazo da pré-reserva é insuficiente para gerar este Pix com segurança. Nenhuma cobrança foi iniciada.', 409);
+        }
+
         $reservationMatches = $this->reservations->validateReservedOrderForPayment($order);
         if ($reservationMatches === null) {
             $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
@@ -272,6 +277,9 @@ class CieloCheckoutPaymentService
                 );
             } else {
                 $configuredExpiration = max(60, min(86_400, (int) $this->configuration->value('pix_qr_expiration_seconds')));
+                if ($this->configuration->usesLegacyPix()) {
+                    $configuredExpiration = 7200;
+                }
                 $remainingSeconds = max(60, min(86_400, (int) floor(now()->diffInSeconds($order->expires_at, false))));
                 $gatewayPayment = $this->cielo->createPixPayment(
                     (string) $attempt->merchant_order_id,
@@ -446,6 +454,12 @@ class CieloCheckoutPaymentService
         };
         $paidAt = $status === 'captured' ? ($this->parseDate($payment['CapturedDate'] ?? null) ?? now()) : null;
         $gatewayExpiration = $this->parseDate($payment['ExpirationDate'] ?? null);
+        if ($expectedPaymentType === 'Pix' && $this->configuration->usesLegacyPix()) {
+            $legacyExpiration = $attempt->created_at->copy()->addHours(2);
+            if ($gatewayExpiration === null || $legacyExpiration->lessThan($gatewayExpiration)) {
+                $gatewayExpiration = $legacyExpiration;
+            }
+        }
         $expiresAt = $gatewayExpiration !== null && $order->expires_at !== null && $gatewayExpiration->lessThan($order->expires_at)
             ? $gatewayExpiration
             : $order->expires_at;

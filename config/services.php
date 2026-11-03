@@ -68,6 +68,7 @@ return [
             'enabled' => (bool) env('CIELO_DIRECT_PRODUCTION_ENABLED', false),
             'sop_enabled' => (bool) env('CIELO_DIRECT_PRODUCTION_SOP_ENABLED', false),
             'pix_enabled' => (bool) env('CIELO_DIRECT_PRODUCTION_PIX_ENABLED', false),
+            'pix_provider' => env('CIELO_DIRECT_PRODUCTION_PIX_PROVIDER', 'Cielo2'),
             'pix_qr_expiration_seconds' => (int) env('CIELO_DIRECT_PRODUCTION_PIX_EXPIRATION_SECONDS', 1800),
             'merchant_id' => env('CIELO_DIRECT_PRODUCTION_MERCHANT_ID') ?: env('CIELO_MERCHANT_ID'),
             'merchant_key' => env('CIELO_DIRECT_PRODUCTION_MERCHANT_KEY') ?: env('CIELO_MERCHANT_KEY'),
