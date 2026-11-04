@@ -428,6 +428,7 @@ class CrcnBackendApiService {
   private async fetchAccommodationSearchPage(
     params: SearchAccommodationsParams & { limit: number; skip: number },
     requestSignal: AbortSignal,
+    retryExpiredSnapshot = true,
   ): Promise<AccommodationSearchPage> {
     const { limit, skip } = params;
     const startedAt = performance.now();
@@ -490,7 +491,8 @@ class CrcnBackendApiService {
         throw new Error('A pesquisa retornou uma validade inválida.');
       }
       const fetchedAt = Date.parse(json.meta.fetchedAt);
-      expiresAt = Date.parse(json.meta.expiresAt);
+      const serverExpiresAt = Date.parse(json.meta.expiresAt);
+      expiresAt = serverExpiresAt;
       if (
         !Number.isFinite(fetchedAt) ||
         !Number.isFinite(expiresAt) ||
@@ -510,6 +512,24 @@ class CrcnBackendApiService {
         expiresAt = Date.now() + remaining;
       }
       if (expiresAt <= Date.now()) {
+        if (retryExpiredSnapshot && Number.isFinite(serverTime)) {
+          // A snapshot can expire in transit or just before an explicit refresh.
+          // Give the shared cache a bounded chance to expire, then retry once.
+          requestSignal.throwIfAborted();
+          const delay = Math.min(2000, Math.max(0, serverExpiresAt - serverTime));
+          await new Promise<void>((resolve, reject) => {
+            const abort = () => {
+              globalThis.clearTimeout(timer);
+              reject(requestSignal.reason);
+            };
+            const timer = globalThis.setTimeout(() => {
+              requestSignal.removeEventListener('abort', abort);
+              resolve();
+            }, delay);
+            requestSignal.addEventListener('abort', abort, { once: true });
+          });
+          return this.fetchAccommodationSearchPage(params, requestSignal, false);
+        }
         throw new Error('A cotação da pesquisa expirou. Tente novamente.');
       }
     }

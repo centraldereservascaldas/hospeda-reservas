@@ -352,3 +352,119 @@ test('rejects a server-expired snapshot even on a slow device clock', async (con
     context.mock.timers.reset();
   }
 });
+
+test('renews a snapshot with one server second left without confirming the expired price', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    const result = response([property], {
+      meta:
+        calls === 1
+          ? {
+              fetchedAt: new Date(now - 44_000).toISOString(),
+              expiresAt: new Date(now + 1000).toISOString(),
+            }
+          : {
+              fetchedAt: new Date(now + 1000).toISOString(),
+              expiresAt: new Date(now + 46_000).toISOString(),
+            },
+    });
+    result.headers.set('Date', new Date(now + (calls === 1 ? 0 : 1000)).toUTCString());
+    return result;
+  };
+  try {
+    let settled = false;
+    const pending = crcnBackendApi.searchAccommodationsPage(params).then((result) => {
+      settled = true;
+      return result;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls, 1);
+    assert.equal(settled, false);
+    context.mock.timers.tick(1000);
+    const result = await pending;
+    assert.equal(calls, 2);
+    assert.equal(result.data.length, 1);
+    assert.ok(result.expiresAt! > now + 44_000);
+  } finally {
+    context.mock.timers.reset();
+  }
+});
+
+test('does not loop when the repeated server snapshot is still expired', async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    const result = response([property], {
+      meta: { fetchedAt: '2026-11-03T00:00:00Z', expiresAt: '2026-11-03T00:00:45Z' },
+    });
+    result.headers.set('Date', 'Tue, 03 Nov 2026 00:00:45 GMT');
+    return result;
+  };
+  await assert.rejects(crcnBackendApi.searchAccommodationsPage(params), /expirou/);
+  assert.equal(calls, 2);
+});
+
+test('cancels an expiry retry before another network request', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    const result = response([property], {
+      meta: {
+        fetchedAt: new Date(now - 44_000).toISOString(),
+        expiresAt: new Date(now + 1000).toISOString(),
+      },
+    });
+    result.headers.set('Date', new Date(now).toUTCString());
+    return result;
+  };
+  const controller = new AbortController();
+  try {
+    const pending = crcnBackendApi.searchAccommodationsPage(params, { signal: controller.signal });
+    const rejected = assert.rejects(pending, { name: 'AbortError' });
+    await new Promise((resolve) => setImmediate(resolve));
+    controller.abort();
+    await rejected;
+    context.mock.timers.tick(2000);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls, 1);
+  } finally {
+    context.mock.timers.reset();
+  }
+});
+
+test('bounds the expired-snapshot wait even after a slow round trip', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
+  let clockCalls = 0;
+  context.mock.method(performance, 'now', () => (clockCalls++ === 0 ? 0 : 5000));
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    const result = response([property], {
+      meta: {
+        fetchedAt: new Date(now - (calls === 1 ? 41_000 : 0)).toISOString(),
+        expiresAt: new Date(now + (calls === 1 ? 4000 : 45_000)).toISOString(),
+      },
+    });
+    result.headers.set('Date', new Date(now).toUTCString());
+    return result;
+  };
+  try {
+    const pending = crcnBackendApi.searchAccommodationsPage(params);
+    await new Promise((resolve) => setImmediate(resolve));
+    context.mock.timers.tick(1999);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls, 1);
+    context.mock.timers.tick(1);
+    const result = await pending;
+    assert.equal(calls, 2);
+    assert.equal(result.data.length, 1);
+  } finally {
+    context.mock.timers.reset();
+  }
+});
