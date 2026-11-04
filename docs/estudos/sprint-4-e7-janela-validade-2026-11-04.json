@@ -1,0 +1,145 @@
+{
+  "publishedSource": "02edfd17003f6c3f0cc800fc4e98a2fc139a78a6",
+  "publicBeforeGuard": {
+    "source": "02edfd17003f6c3f0cc800fc4e98a2fc139a78a6",
+    "before": {
+      "cards": 12,
+      "quoted": 12
+    },
+    "expired": {
+      "cards": 12,
+      "quoted": 0,
+      "notice": 1
+    },
+    "after": {
+      "cards": 12,
+      "quoted": 0,
+      "retry": 0
+    },
+    "responses": [
+      {
+        "observedAt": "2026-11-04T09:39:14.878Z",
+        "status": 200,
+        "date": "Wed, 04 Nov 2026 09:39:14 GMT",
+        "meta": {
+          "fetchedAt": "2026-11-04T09:39:13+00:00",
+          "expiresAt": "2026-11-04T09:39:58+00:00"
+        },
+        "count": 12
+      },
+      {
+        "observedAt": "2026-11-04T09:39:56.436Z",
+        "status": 200,
+        "date": "Wed, 04 Nov 2026 09:39:56 GMT",
+        "meta": {
+          "fetchedAt": "2026-11-04T09:39:13+00:00",
+          "expiresAt": "2026-11-04T09:39:58+00:00"
+        },
+        "count": 12
+      }
+    ],
+    "errors": []
+  },
+  "localGuardScenarios": [
+    {
+      "remainingSeconds": 2,
+      "before": {
+        "cards": 12,
+        "quoted": 12
+      },
+      "expired": {
+        "cards": 12,
+        "quoted": 0
+      },
+      "after": {
+        "cards": 12,
+        "quoted": 12,
+        "retry": 0
+      },
+      "responses": [
+        {
+          "observedAt": "2026-11-04T09:42:07.935Z",
+          "status": 200,
+          "date": "Wed, 04 Nov 2026 09:42:07 GMT",
+          "meta": {
+            "fetchedAt": "2026-11-04T09:41:27.000Z",
+            "expiresAt": "2026-11-04T09:42:12.000Z"
+          },
+          "count": 12
+        },
+        {
+          "observedAt": "2026-11-04T09:42:12.136Z",
+          "status": 200,
+          "date": "Wed, 04 Nov 2026 09:42:12 GMT",
+          "meta": {
+            "fetchedAt": "2026-11-04T09:41:29.000Z",
+            "expiresAt": "2026-11-04T09:42:14.000Z"
+          },
+          "count": 12
+        },
+        {
+          "observedAt": "2026-11-04T09:42:14.621Z",
+          "status": 200,
+          "date": "Wed, 04 Nov 2026 09:42:14 GMT",
+          "meta": {
+            "fetchedAt": "2026-11-04T09:42:14.000Z",
+            "expiresAt": "2026-11-04T09:42:59.000Z"
+          },
+          "count": 12
+        }
+      ],
+      "errors": [],
+      "status": "passed"
+    },
+    {
+      "remainingSeconds": 3,
+      "before": {
+        "cards": 12,
+        "quoted": 12
+      },
+      "expired": {
+        "cards": 12,
+        "quoted": 0
+      },
+      "after": {
+        "cards": 12,
+        "quoted": 12,
+        "retry": 0
+      },
+      "responses": [
+        {
+          "observedAt": "2026-11-04T09:42:21.650Z",
+          "status": 200,
+          "date": "Wed, 04 Nov 2026 09:42:21 GMT",
+          "meta": {
+            "fetchedAt": "2026-11-04T09:41:41.000Z",
+            "expiresAt": "2026-11-04T09:42:26.000Z"
+          },
+          "count": 12
+        },
+        {
+          "observedAt": "2026-11-04T09:42:25.811Z",
+          "status": 200,
+          "date": "Wed, 04 Nov 2026 09:42:25 GMT",
+          "meta": {
+            "fetchedAt": "2026-11-04T09:41:43.000Z",
+            "expiresAt": "2026-11-04T09:42:28.000Z"
+          },
+          "count": 12
+        },
+        {
+          "observedAt": "2026-11-04T09:42:29.296Z",
+          "status": 200,
+          "date": "Wed, 04 Nov 2026 09:42:29 GMT",
+          "meta": {
+            "fetchedAt": "2026-11-04T09:42:29.000Z",
+            "expiresAt": "2026-11-04T09:43:14.000Z"
+          },
+          "count": 12
+        }
+      ],
+      "errors": [],
+      "status": "passed"
+    }
+  ]
+}

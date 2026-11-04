@@ -392,6 +392,85 @@ test('renews a snapshot with one server second left without confirming the expir
     context.mock.timers.reset();
   }
 });
+test('renews a snapshot with two server seconds left instead of briefly confirming its price', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    const result = response([property], {
+      meta:
+        calls === 1
+          ? {
+              fetchedAt: new Date(now - 43_000).toISOString(),
+              expiresAt: new Date(now + 2000).toISOString(),
+            }
+          : {
+              fetchedAt: new Date(now + 2000).toISOString(),
+              expiresAt: new Date(now + 47_000).toISOString(),
+            },
+    });
+    result.headers.set('Date', new Date(now + (calls === 1 ? 0 : 2000)).toUTCString());
+    return result;
+  };
+  try {
+    let settled = false;
+    const pending = crcnBackendApi.searchAccommodationsPage(params).then((result) => {
+      settled = true;
+      return result;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls, 1);
+    assert.equal(settled, false);
+    context.mock.timers.tick(2000);
+    const result = await pending;
+    assert.equal(calls, 2);
+    assert.equal(result.data.length, 1);
+    assert.ok(result.expiresAt! > now + 44_000);
+  } finally {
+    context.mock.timers.reset();
+  }
+});
+
+test('renews a snapshot with three server seconds left instead of briefly confirming its price', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    const result = response([property], {
+      meta:
+        calls === 1
+          ? {
+              fetchedAt: new Date(now - 42_000).toISOString(),
+              expiresAt: new Date(now + 3000).toISOString(),
+            }
+          : {
+              fetchedAt: new Date(now + 3000).toISOString(),
+              expiresAt: new Date(now + 48_000).toISOString(),
+            },
+    });
+    result.headers.set('Date', new Date(now + (calls === 1 ? 0 : 3000)).toUTCString());
+    return result;
+  };
+  try {
+    let settled = false;
+    const pending = crcnBackendApi.searchAccommodationsPage(params).then((result) => {
+      settled = true;
+      return result;
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls, 1);
+    assert.equal(settled, false);
+    context.mock.timers.tick(3000);
+    const result = await pending;
+    assert.equal(calls, 2);
+    assert.equal(result.data.length, 1);
+    assert.ok(result.expiresAt! > now + 44_000);
+  } finally {
+    context.mock.timers.reset();
+  }
+});
 
 test('does not loop when the repeated server snapshot is still expired', async () => {
   let calls = 0;
@@ -457,7 +536,7 @@ test('bounds the expired-snapshot wait even after a slow round trip', async (con
   try {
     const pending = crcnBackendApi.searchAccommodationsPage(params);
     await new Promise((resolve) => setImmediate(resolve));
-    context.mock.timers.tick(1999);
+    context.mock.timers.tick(3999);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(calls, 1);
     context.mock.timers.tick(1);
