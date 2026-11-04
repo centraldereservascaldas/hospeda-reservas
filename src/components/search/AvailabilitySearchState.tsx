@@ -48,6 +48,53 @@ export function AvailabilitySearchState({
   const guestLabel = `${guests} ${guests === 1 ? 'hóspede' : 'hóspedes'}`;
   const searchContext = dateRange ? `${dateRange} · ${guestLabel}` : guestLabel;
 
+  if (state === 'expired' || state === 'refreshing') {
+    const refreshing = state === 'refreshing';
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+      >
+        <p>
+          {refreshing
+            ? 'Atualizando preços e disponibilidade…'
+            : 'A consulta anterior perdeu a validade. Atualize para confirmar preços e disponibilidade.'}
+        </p>
+        {!refreshing && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-2 min-h-11 rounded-lg px-3 font-bold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+          >
+            Atualizar disponibilidade
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (state === 'error' && hasResults) {
+    return (
+      <div
+        role="alert"
+        className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+      >
+        <p>
+          Não foi possível atualizar a consulta. Tente novamente para confirmar preços e
+          disponibilidade.
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-2 min-h-11 rounded-lg px-3 font-bold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+        >
+          Tentar atualizar novamente
+        </button>
+      </div>
+    );
+  }
+
   if (state === 'partial') {
     return (
       <div

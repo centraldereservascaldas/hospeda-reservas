@@ -1,7 +1,7 @@
 import type { Property, SearchFilters } from '../types';
 import { matchesPropertyCategory } from './propertyCategories';
 import { countOccupancyGuests } from './guestCounts';
-import { getConfirmedPropertyQuote } from './propertyDisplayPrice';
+import { getStoredPropertyQuote } from './propertyDisplayPrice';
 import { getCatalogAmenities, matchesPropertyAmenity } from './propertyAmenities';
 
 export function matchesPropertyDestination(property: Property, destination: string): boolean {
@@ -39,7 +39,7 @@ export function filterPropertiesBySearchFilters(
     if (hasPriceFilter) {
       const hasSearchDates = Boolean(filters.checkIn && filters.checkOut);
       const confirmedNightlyPrice = hasSearchDates
-        ? (getConfirmedPropertyQuote(property)?.dailyRate ?? null)
+        ? (getStoredPropertyQuote(property)?.dailyRate ?? null)
         : property.pricePerNight;
       if (
         confirmedNightlyPrice === null ||

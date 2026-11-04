@@ -8,7 +8,7 @@ export type PropertyDisplayPrice =
   | { kind: 'select-dates'; message: string }
   | { kind: 'no-price'; message: string };
 
-export function getConfirmedPropertyQuote(
+export function getStoredPropertyQuote(
   property: Property,
 ): NonNullable<Property['calculatedPrice']> | null {
   const quote = property.calculatedPrice;
@@ -25,12 +25,24 @@ export function getConfirmedPropertyQuote(
   return hasValidAmounts && quote.currency.trim().toUpperCase() === 'BRL' ? quote : null;
 }
 
+export function getConfirmedPropertyQuote(
+  property: Property,
+): NonNullable<Property['calculatedPrice']> | null {
+  const quote = getStoredPropertyQuote(property);
+  if (!quote) return null;
+  return quote.expiresAt === undefined ||
+    (Number.isFinite(quote.expiresAt) && quote.expiresAt > Date.now())
+    ? quote
+    : null;
+}
+
 export function getPropertyDisplayPrice(
   property: Property,
   hasSearchDates: boolean,
   showTotalWithTaxes: boolean,
 ): PropertyDisplayPrice {
   const quote = getConfirmedPropertyQuote(property);
+  const storedQuote = getStoredPropertyQuote(property);
   const hasValidQuote = hasSearchDates && quote !== null;
 
   if (hasValidQuote && quote) {
@@ -45,12 +57,14 @@ export function getPropertyDisplayPrice(
   }
 
   if (hasSearchDates) {
+    if (storedQuote && !quote)
+      return { kind: 'pending', message: 'Cotação expirada; atualize a disponibilidade' };
     return quote
       ? { kind: 'unavailable', message: 'Preço indisponível para estas datas' }
       : { kind: 'pending', message: 'Preço ainda não confirmado para esse período' };
   }
 
-  if (quote) {
+  if (storedQuote) {
     return {
       kind: 'select-dates',
       message: 'Selecione as datas para consultar o preço atualizado',

@@ -165,3 +165,27 @@ test('uses confirmed nightly quotes for price filters on dated searches', () => 
     [unquotedProperty],
   );
 });
+
+test('keeps an expired result under its last known price refinement while its display requires renewal', () => {
+  const expired = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    calculatedPrice: {
+      nights: 2,
+      dailyRate: 250,
+      basePrice: 500,
+      cleaningFee: 0,
+      serviceFee: 0,
+      totalAmount: 500,
+      currency: 'BRL',
+      expiresAt: 1,
+    },
+  };
+  const filters = {
+    ...createDefaultSearchFilters(),
+    checkIn: '2027-01-10',
+    checkOut: '2027-01-12',
+    minPrice: 200,
+    maxPrice: 300,
+  };
+  assert.deepEqual(filterPropertiesBySearchFilters([expired], filters), [expired]);
+});

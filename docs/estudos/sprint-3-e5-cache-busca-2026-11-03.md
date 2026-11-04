@@ -108,3 +108,16 @@ HTTP 429 no catálogo ou nos auxiliares agora produz pausa compartilhada com os 
 Validação local final: 383 testes backend e 2.629 asserções aprovados; 40 cenários direcionados de conteúdo/API/catálogo passaram, além dos testes de rate limit e worker. Pint e diff passaram. O gate PostgreSQL passa a incluir os novos testes de cache auxiliar.
 
 Uma leitura operacional GET de um anúncio ativo, limitada a um item e timeout de três segundos, retornou 200 sem cabeçalhos de cota. O corpo não foi registrado. A documentação local também não informa a cota da conta; a pergunta ficou pendente com o usuário. Aquecimento automático de ofertas/coleções, orçamento e medição do provedor continuam pendentes, junto de E6/E7. Nenhuma alteração deste lote foi publicada.
+
+
+## Integração E6: validade das cotações da busca
+
+Todos os gates do SHA `f4775e3` passaram no run `41748066790`, incluindo PostgreSQL (25 testes, 124 asserções, sem warnings) e imagem com cinco programas. Esse lote permanece na PR 43, sem deploy.
+
+A integração seguinte aplica às cotações da busca um prazo absoluto por página: o menor entre a validade recebida do servidor e 45 segundos no navegador. A expiração usa temporizador local e verificação ao recuperar a visibilidade, sem polling da API. Cada cartão perde a indicação de disponibilidade e o total confirmado quando sua cotação expira; páginas carregadas posteriormente conservam seu próprio prazo.
+
+Os resultados permanecem na tela durante a atualização explícita e após falha transitória. O refinamento por preço conserva o último valor apenas para manter os cartões no conjunto filtrado; a interface exige renovação para voltar a apresentar preço confirmado. Retornar do detalhe preserva páginas e posição, inclusive após expiração, com ação explícita para atualizar. Uma página de continuação expirada não consome IDs nem impede nova tentativa.
+
+Testes direcionados cobrem prazos independentes, ausência de chamadas automáticas, retorno do detalhe, troca de contexto, falha na renovação, recuperação da paginação e remoção do selo/preço expirado. A validade da cotação própria do detalhe e os demais critérios de E6 ainda precisam de revisão; este lote não encerra E6 ou E5.
+
+Validação deste incremento: 544 testes frontend aprovados, lint/TypeScript, build e formatação aprovados. Os 83 testes direcionados de busca, paginação, cards, mapa, filtros e roteamento também passaram. Nenhuma alteração de backend neste incremento.

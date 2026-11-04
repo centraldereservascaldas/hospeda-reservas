@@ -527,6 +527,8 @@ class CrcnBackendApiService {
               86_400_000,
           )
         : null;
+    const quoteDeadline =
+      requestedNights === null ? undefined : Math.min(expiresAt ?? Infinity, Date.now() + 45_000);
     let unquotedCount = pageUnquoted;
     const properties = new Map<string, Property>();
     for (const item of json.data) {
@@ -536,8 +538,21 @@ class CrcnBackendApiService {
         unquotedCount += 1;
         continue;
       }
-      properties.set(property.id, property);
+      properties.set(
+        property.id,
+        quote && quoteDeadline !== undefined
+          ? {
+              ...property,
+              calculatedPrice: {
+                ...quote,
+                expiresAt: Math.min(quote.expiresAt ?? Infinity, quoteDeadline),
+              },
+            }
+          : property,
+      );
     }
+    if (quoteDeadline !== undefined && quoteDeadline <= Date.now())
+      throw new Error('A cotação da pesquisa expirou. Tente novamente.');
     const data = [...properties.values()];
     return {
       ...(expiresAt === undefined ? {} : { expiresAt }),

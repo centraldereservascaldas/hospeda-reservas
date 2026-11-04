@@ -495,9 +495,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
             : displayPrice.kind === 'reference'
               ? `${pinPrice} por noite, tarifa de referência`
               : displayPrice.message;
-        const availabilityLabel = availabilityConfirmed
-          ? `, disponível nas datas selecionadas para ${searchGuestCount} ${searchGuestCount === 1 ? 'hóspede' : 'hóspedes'}`
-          : '';
+        const availabilityLabel =
+          availabilityConfirmed && displayPrice.kind === 'quote'
+            ? `, disponível nas datas selecionadas para ${searchGuestCount} ${searchGuestCount === 1 ? 'hóspede' : 'hóspedes'}`
+            : '';
         return (
           <button
             key={property.id}
@@ -678,7 +679,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           <p className="truncate text-xs text-neutral-500">
             {activeProperty.location.neighborhood}, {activeProperty.location.city}
           </p>
-          {availabilityConfirmed && (
+          {availabilityConfirmed && activePropertyDisplayPrice?.kind === 'quote' && (
             <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800">
               <Check aria-hidden="true" className="h-3 w-3 shrink-0" />
               Disponível nas datas selecionadas para {searchGuestCount}{' '}

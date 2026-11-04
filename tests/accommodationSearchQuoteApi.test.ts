@@ -289,6 +289,7 @@ test('preserves the server deadline of a reused search page', async (context) =>
       });
     const result = await crcnBackendApi.searchAccommodationsPage(params);
     assert.equal(result.expiresAt, now + 5_000);
+    assert.equal(result.data[0]?.calculatedPrice?.expiresAt, now + 5_000);
   } finally {
     context.mock.timers.reset();
   }

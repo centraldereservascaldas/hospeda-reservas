@@ -26,7 +26,7 @@ export interface AccommodationWidgetSearchParams {
 }
 
 export type AvailabilitySearchState =
-  'idle' | 'loading' | 'success' | 'partial' | 'error' | 'invalid-dates';
+  'idle' | 'loading' | 'refreshing' | 'success' | 'partial' | 'expired' | 'error' | 'invalid-dates';
 
 interface UseAccommodationSearchOptions {
   setProperties: Dispatch<SetStateAction<Property[]>>;
@@ -42,6 +42,7 @@ interface UseAccommodationSearchOptions {
     data: Property[];
     unquotedCount?: number;
     pagination?: AccommodationSearchPage['pagination'];
+    expiresAt?: number;
   }>;
   getSurpriseCandidates?: () => SurpriseDateOption[];
   random?: () => number;
@@ -116,6 +117,77 @@ export function useAccommodationSearch({
   const loadedIdsRef = useRef(new Set<string>());
   const hasUnquotedRef = useRef(false);
   const completedContextRef = useRef<string | null>(null);
+  const expirationsRef = useRef(new Map<string, number>());
+  const hasExpiredResultsRef = useRef(false);
+  const [nextExpiration, setNextExpiration] = useState<number | null>(null);
+  const rememberPageExpiry = useCallback(
+    (properties: Property[], deadline: number, offset: number, replace: boolean) => {
+      if (replace) expirationsRef.current.clear();
+      expirationsRef.current.set(`page:${offset}`, deadline);
+      for (const property of properties) {
+        if (property.calculatedPrice) {
+          expirationsRef.current.set(
+            `quote:${property.id}`,
+            Math.min(property.calculatedPrice.expiresAt ?? Infinity, deadline),
+          );
+        }
+      }
+      setNextExpiration(Math.min(...expirationsRef.current.values()));
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (nextExpiration === null) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      if (!active || expirationsRef.current.size === 0) return;
+      const deadline = Math.min(...expirationsRef.current.values());
+      timer = setTimeout(check, Math.max(1, deadline - Date.now()));
+    };
+    const check = () => {
+      if (!active) return;
+      const expiredQuotes = new Map<string, number>();
+      let expired = false;
+      for (const [key, deadline] of expirationsRef.current) {
+        if (deadline > Date.now()) continue;
+        expired = true;
+        expirationsRef.current.delete(key);
+        if (key.startsWith('quote:')) expiredQuotes.set(key.slice(6), deadline);
+      }
+      if (expired) {
+        hasExpiredResultsRef.current = true;
+        setProperties((previous) =>
+          previous.map((property) => {
+            const deadline = expiredQuotes.get(property.id);
+            return deadline !== undefined && property.calculatedPrice
+              ? {
+                  ...property,
+                  calculatedPrice: { ...property.calculatedPrice, expiresAt: deadline },
+                }
+              : property;
+          }),
+        );
+        setAvailabilitySearchState((previous) =>
+          previous === 'loading' || previous === 'refreshing' ? previous : 'expired',
+        );
+      }
+      arm();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+    arm();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      active = false;
+      if (timer !== undefined) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [nextExpiration, setProperties]);
+
   const [searchPagination, setSearchPagination] = useState<SearchPaginationState>(emptyPagination);
   const [availabilitySearchState, setAvailabilitySearchState] = useState<AvailabilitySearchState>(
     () => {
@@ -130,6 +202,12 @@ export function useAccommodationSearch({
       searchParams: AccommodationWidgetSearchParams,
       { scrollCatalogAfterSearch = true }: { scrollCatalogAfterSearch?: boolean } = {},
     ) => {
+      const retainSnapshot =
+        !searchParams.surpriseMe &&
+        Boolean(searchParams.checkIn && searchParams.checkOut) &&
+        completedContextRef.current === getSearchContextKey(searchParams) &&
+        loadedIdsRef.current.size > 0;
+      const retainedIds = new Set(loadedIdsRef.current);
       const searchGeneration = ++searchGenerationRef.current;
       requestControllerRef.current?.abort();
       const controller = new AbortController();
@@ -137,7 +215,12 @@ export function useAccommodationSearch({
       continuationRef.current = null;
       loadedIdsRef.current = new Set();
       hasUnquotedRef.current = false;
-      completedContextRef.current = null;
+      if (!retainSnapshot) {
+        completedContextRef.current = null;
+        expirationsRef.current.clear();
+        hasExpiredResultsRef.current = false;
+        setNextExpiration(null);
+      }
       setSearchPagination(emptyPagination);
       lastSearchParamsRef.current = searchParams;
 
@@ -170,7 +253,7 @@ export function useAccommodationSearch({
         return;
       }
 
-      setAvailabilitySearchState('loading');
+      setAvailabilitySearchState(retainSnapshot ? 'refreshing' : 'loading');
       let searchedProperties: SearchResultProperty[] | null = null;
       setFilters((previous) => ({
         ...previous,
@@ -197,6 +280,7 @@ export function useAccommodationSearch({
               weight: 1,
             },
           ];
+      let resultDeadline: number | null = null;
       let selectedDateOption: (typeof dateOptions)[number] | null = null;
       let successfulSearchCount = 0;
       let hasUnquotedResults = false;
@@ -217,6 +301,12 @@ export function useAccommodationSearch({
             { signal: controller.signal },
           );
           if (searchGeneration !== searchGenerationRef.current) return;
+          const deadline =
+            dateOption.checkIn && dateOption.checkOut
+              ? Math.min(searchResult.expiresAt ?? Infinity, Date.now() + 45_000)
+              : null;
+          if (deadline !== null && (!Number.isFinite(deadline) || deadline <= Date.now()))
+            throw new Error('A cotação expirou.');
           successfulSearchCount += 1;
           hasUnquotedResults = (searchResult.unquotedCount ?? 0) > 0;
           const results = searchResult?.data || [];
@@ -230,10 +320,13 @@ export function useAccommodationSearch({
             if (confirmedQuotes.length) {
               searchedProperties = confirmedQuotes;
               selectedDateOption = dateOption;
+              resultDeadline = deadline;
               break;
             }
+            if (deadline !== null) resultDeadline = Math.min(resultDeadline ?? Infinity, deadline);
           } else {
             searchedProperties = results;
+            resultDeadline = deadline;
             loadedIdsRef.current = new Set(results.map((property) => property.id));
             hasUnquotedRef.current = hasUnquotedResults;
             const pagination = searchResult.pagination;
@@ -294,6 +387,10 @@ export function useAccommodationSearch({
         }
         const chosenProperties = randomizedCandidates.slice(0, 5);
         setProperties(chosenProperties);
+        if (resultDeadline !== null) {
+          hasExpiredResultsRef.current = false;
+          rememberPageExpiry(chosenProperties, resultDeadline, 0, true);
+        }
         const completedAllDateOptions =
           dateOptions.length > 0 &&
           successfulSearchCount === dateOptions.length &&
@@ -309,6 +406,15 @@ export function useAccommodationSearch({
         );
         if (chosenProperties.length) {
           const suggestedDates = selectedDateOption!;
+          loadedIdsRef.current = new Set(chosenProperties.map((property) => property.id));
+          lastSearchParamsRef.current = {
+            ...searchParams,
+            checkIn: suggestedDates.checkIn,
+            checkOut: suggestedDates.checkOut,
+            destination: '',
+            propertyId: undefined,
+            surpriseMe: false,
+          };
           completedContextRef.current = getSearchContextKey({
             ...searchParams,
             checkIn: suggestedDates.checkIn,
@@ -324,6 +430,9 @@ export function useAccommodationSearch({
         }
       } else if (searchedProperties) {
         completedContextRef.current = getSearchContextKey(searchParams);
+        hasExpiredResultsRef.current = false;
+        if (hasSearchDates && resultDeadline !== null)
+          rememberPageExpiry(searchedProperties, resultDeadline, 0, true);
         setProperties(
           hasSearchDates
             ? searchedProperties
@@ -333,7 +442,8 @@ export function useAccommodationSearch({
           hasSearchDates ? (hasUnquotedResults ? 'partial' : 'success') : 'idle',
         );
       } else {
-        setProperties([]);
+        if (retainSnapshot) loadedIdsRef.current = retainedIds;
+        else setProperties([]);
         setAvailabilitySearchState('error');
       }
 
@@ -342,6 +452,7 @@ export function useAccommodationSearch({
     [
       getSurpriseCandidates,
       random,
+      rememberPageExpiry,
       searchAccommodationsOverride,
       scrollCatalog,
       setFilters,
@@ -367,8 +478,14 @@ export function useAccommodationSearch({
         throw new Error('A paginação não avançou.');
       const incoming = page.data.filter((property) => !loadedIdsRef.current.has(property.id));
       const unique = [...new Map(incoming.map((property) => [property.id, property])).values()];
-      unique.forEach((property) => loadedIdsRef.current.add(property.id));
       const hasDates = Boolean(continuation.params.from && continuation.params.to);
+      if (hasDates) {
+        const deadline = Math.min(page.expiresAt ?? Infinity, Date.now() + 45_000);
+        if (!Number.isFinite(deadline) || deadline <= Date.now())
+          throw new Error('A cotação expirou.');
+        rememberPageExpiry(unique, deadline, continuation.nextSkip, false);
+      }
+      unique.forEach((property) => loadedIdsRef.current.add(property.id));
       setProperties((previous) => [
         ...previous,
         ...unique.map((property) =>
@@ -376,7 +493,8 @@ export function useAccommodationSearch({
         ),
       ]);
       hasUnquotedRef.current ||= (page.unquotedCount ?? 0) > 0;
-      if (hasDates && hasUnquotedRef.current) setAvailabilitySearchState('partial');
+      if (hasDates && hasUnquotedRef.current && !hasExpiredResultsRef.current)
+        setAvailabilitySearchState('partial');
       continuationRef.current = pagination?.hasMore
         ? { ...continuation, nextSkip: pagination.nextSkip, loading: false }
         : null;
@@ -393,7 +511,7 @@ export function useAccommodationSearch({
       continuation.loading = false;
       setSearchPagination((previous) => ({ ...previous, isLoading: false, error: true }));
     }
-  }, [searchAccommodationsOverride, setProperties]);
+  }, [rememberPageExpiry, searchAccommodationsOverride, setProperties]);
 
   const retryLastSearch = useCallback(async () => {
     if (lastSearchParamsRef.current) {
@@ -444,6 +562,7 @@ export function useAccommodationSearch({
       searchGenerationRef.current += 1;
       requestControllerRef.current?.abort();
       continuationRef.current = null;
+      expirationsRef.current.clear();
       initialUrlSearchHandledRef.current = false;
     },
     [],

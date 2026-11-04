@@ -347,3 +347,30 @@ test('exposes a crawlable property link and preserves modified-click navigation'
   assert.equal(fireEvent.click(link), false);
   assert.equal(selected, 1);
 });
+
+test('expired search quotes do not display a current total or availability badge', () => {
+  const property = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    calculatedPrice: {
+      nights: 2,
+      dailyRate: 250,
+      basePrice: 500,
+      cleaningFee: 0,
+      serviceFee: 0,
+      totalAmount: 500,
+      currency: 'BRL',
+      expiresAt: 1,
+    },
+  };
+  render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [property],
+      hasSearchDates: true,
+      availabilityConfirmed: true,
+    }),
+  );
+  assert.ok(screen.getByText('Cotação expirada; atualize a disponibilidade'));
+  assert.equal(screen.queryByText(/Disponível nas datas selecionadas/), null);
+});

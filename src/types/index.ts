@@ -92,6 +92,8 @@ export interface Property {
   simulatedData?: boolean;
   dataSource?: 'stays-live' | 'stays-simulated' | 'local-catalog';
   calculatedPrice?: {
+    /** Absolute validity deadline of the confirmed search quote. */
+    expiresAt?: number;
     nights: number;
     dailyRate: number;
     basePrice: number;

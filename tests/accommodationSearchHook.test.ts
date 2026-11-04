@@ -8,6 +8,7 @@ import type {
   AccommodationSearchPage,
   SearchAccommodationsParams,
 } from '../src/services/crcnBackendApi.ts';
+import { getConfirmedPropertyQuote } from '../src/utils/propertyDisplayPrice.ts';
 import type { SurpriseDateOption } from '../src/utils/surpriseDates.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', {
@@ -45,6 +46,7 @@ function renderSearchHook(
       data: Property[];
       unquotedCount?: number;
       pagination?: AccommodationSearchPage['pagination'];
+      expiresAt?: number;
     }>;
     getSurpriseCandidates?: () => SurpriseDateOption[];
     random?: () => number;
@@ -752,4 +754,200 @@ test('surprise search does not declare no availability when its candidate pages 
   );
   assert.equal(hook.result.current.availabilitySearchState, 'error');
   assert.equal(hook.result.current.searchPagination.active, false);
+});
+
+const expiryQuote = (id: string, expiresAt: number): Property => ({
+  ...property,
+  id,
+  calculatedPrice: {
+    nights: 3,
+    dailyRate: 250,
+    basePrice: 750,
+    cleaningFee: 0,
+    serviceFee: 0,
+    totalAmount: 750,
+    currency: 'BRL',
+    expiresAt,
+  },
+});
+const expirySearch = { checkIn: '2027-01-10', checkOut: '2027-01-13', persons: 2 };
+
+test('expires only the affected page and retains delivered cards without automatic queries', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
+  let calls = 0;
+  const hook = renderSearchHook({
+    searchAccommodations: async () => {
+      calls++;
+      return calls === 1
+        ? {
+            total: 1,
+            data: [expiryQuote('first', now + 5000)],
+            expiresAt: now + 5000,
+            pagination: { receivedCount: 12, nextSkip: 12, hasMore: true },
+          }
+        : {
+            total: 1,
+            data: [expiryQuote('second', now + 20000)],
+            expiresAt: now + 20000,
+            pagination: { receivedCount: 1, nextSkip: 13, hasMore: false },
+          };
+    },
+  });
+  try {
+    await act(async () => {
+      await hook.result.current.handleStaysWidgetSearch(expirySearch);
+    });
+    await act(async () => {
+      await hook.result.current.loadMoreSearchResults();
+    });
+    await act(async () => {
+      context.mock.timers.tick(4999);
+    });
+    assert.equal(hook.result.current.availabilitySearchState, 'success');
+    await act(async () => {
+      context.mock.timers.tick(1);
+    });
+    assert.equal(hook.result.current.availabilitySearchState, 'expired');
+    assert.deepEqual(
+      hook.result.current.properties.map((item) => item.id),
+      ['first', 'second'],
+    );
+    assert.equal(getConfirmedPropertyQuote(hook.result.current.properties[0]!), null);
+    assert.ok(getConfirmedPropertyQuote(hook.result.current.properties[1]!));
+    assert.equal(calls, 2);
+    await act(async () => {
+      await hook.result.current.restoreSearchFromUrlRef.current(hook.result.current.filters, {
+        scrollCatalog: false,
+      });
+    });
+    assert.equal(calls, 2);
+    assert.equal(hook.result.current.properties.length, 2);
+  } finally {
+    hook.unmount();
+    context.mock.timers.reset();
+  }
+});
+
+test('same-context revalidation retains cards while pending and after a transient failure', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
+  let calls = 0;
+  let rejectRefresh: ((error: Error) => void) | undefined;
+  const hook = renderSearchHook({
+    searchAccommodations: async () => {
+      calls++;
+      if (calls === 1)
+        return { total: 1, data: [expiryQuote('first', now + 5000)], expiresAt: now + 5000 };
+      return new Promise((_, reject) => {
+        rejectRefresh = reject;
+      });
+    },
+  });
+  try {
+    await act(async () => {
+      await hook.result.current.handleStaysWidgetSearch(expirySearch);
+    });
+    await act(async () => {
+      context.mock.timers.tick(5000);
+    });
+    let pending: Promise<void> | undefined;
+    await act(async () => {
+      pending = hook.result.current.retryLastSearch();
+    });
+    assert.equal(hook.result.current.availabilitySearchState, 'refreshing');
+    assert.equal(hook.result.current.properties[0]?.id, 'first');
+    await act(async () => {
+      rejectRefresh!(new Error('temporary failure'));
+      await pending;
+    });
+    assert.equal(hook.result.current.availabilitySearchState, 'error');
+    assert.equal(hook.result.current.properties[0]?.id, 'first');
+    assert.equal(getConfirmedPropertyQuote(hook.result.current.properties[0]!), null);
+  } finally {
+    hook.unmount();
+    context.mock.timers.reset();
+  }
+});
+
+test('an old search deadline cannot expire a new context', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
+  const hook = renderSearchHook({
+    searchAccommodations: async (params) => ({
+      total: 1,
+      data: [
+        expiryQuote(
+          params.guests === 2 ? 'old' : 'new',
+          now + (params.guests === 2 ? 5000 : 20000),
+        ),
+      ],
+      expiresAt: now + (params.guests === 2 ? 5000 : 20000),
+    }),
+  });
+  try {
+    await act(async () => {
+      await hook.result.current.handleStaysWidgetSearch(expirySearch);
+    });
+    await act(async () => {
+      context.mock.timers.tick(4000);
+    });
+    await act(async () => {
+      await hook.result.current.handleStaysWidgetSearch({ ...expirySearch, persons: 3 });
+    });
+    await act(async () => {
+      context.mock.timers.tick(1000);
+    });
+    assert.equal(hook.result.current.availabilitySearchState, 'success');
+    assert.equal(hook.result.current.properties[0]?.id, 'new');
+    assert.ok(getConfirmedPropertyQuote(hook.result.current.properties[0]!));
+  } finally {
+    hook.unmount();
+    context.mock.timers.reset();
+  }
+});
+
+test('an expired continuation response does not consume its ids before a successful retry', async (context) => {
+  const now = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now });
+  let calls = 0;
+  const hook = renderSearchHook({
+    searchAccommodations: async () => {
+      calls++;
+      if (calls === 1)
+        return {
+          total: 1,
+          data: [expiryQuote('first', now + 20000)],
+          expiresAt: now + 20000,
+          pagination: { receivedCount: 12, nextSkip: 12, hasMore: true },
+        };
+      return {
+        total: 1,
+        data: [expiryQuote('second', now + 20000)],
+        expiresAt: calls === 2 ? now - 1 : now + 20000,
+        pagination: { receivedCount: 1, nextSkip: 13, hasMore: false },
+      };
+    },
+  });
+  try {
+    await act(async () => {
+      await hook.result.current.handleStaysWidgetSearch(expirySearch);
+    });
+    await act(async () => {
+      await hook.result.current.loadMoreSearchResults();
+    });
+    assert.equal(hook.result.current.searchPagination.error, true);
+    assert.equal(hook.result.current.properties.length, 1);
+    await act(async () => {
+      await hook.result.current.loadMoreSearchResults();
+    });
+    assert.deepEqual(
+      hook.result.current.properties.map((item) => item.id),
+      ['first', 'second'],
+    );
+    assert.equal(hook.result.current.searchPagination.error, false);
+  } finally {
+    hook.unmount();
+    context.mock.timers.reset();
+  }
 });
