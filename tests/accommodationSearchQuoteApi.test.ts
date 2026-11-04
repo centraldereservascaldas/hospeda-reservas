@@ -305,3 +305,50 @@ test('rejects expired or malformed search validity instead of confirming cached 
     await assert.rejects(crcnBackendApi.searchAccommodationsPage(params), /validade|expirou/);
   }
 });
+
+for (const offset of [-3_600_000, 3_600_000]) {
+  test(`uses remaining server validity with a device clock offset of ${offset}ms`, async (context) => {
+    const serverNow = Date.UTC(2026, 10, 3);
+    const deviceNow = serverNow + offset;
+    context.mock.timers.enable({ apis: ['Date'], now: deviceNow });
+    globalThis.fetch = async () => {
+      const result = response([property], {
+        meta: {
+          fetchedAt: new Date(serverNow - 40_000).toISOString(),
+          expiresAt: new Date(serverNow + 5_000).toISOString(),
+        },
+      });
+      result.headers.set('Date', new Date(serverNow).toUTCString());
+      return result;
+    };
+    try {
+      const result = await crcnBackendApi.searchAccommodationsPage(params);
+      assert.equal(result.data.length, 1);
+      assert.ok(result.expiresAt! > deviceNow + 3000);
+      assert.ok(result.expiresAt! <= deviceNow + 4000);
+      assert.equal(result.data[0]?.calculatedPrice?.expiresAt, result.expiresAt);
+    } finally {
+      context.mock.timers.reset();
+    }
+  });
+}
+
+test('rejects a server-expired snapshot even on a slow device clock', async (context) => {
+  const serverNow = Date.UTC(2026, 10, 3);
+  context.mock.timers.enable({ apis: ['Date'], now: serverNow - 3_600_000 });
+  globalThis.fetch = async () => {
+    const result = response([property], {
+      meta: {
+        fetchedAt: new Date(serverNow - 45_000).toISOString(),
+        expiresAt: new Date(serverNow).toISOString(),
+      },
+    });
+    result.headers.set('Date', new Date(serverNow).toUTCString());
+    return result;
+  };
+  try {
+    await assert.rejects(crcnBackendApi.searchAccommodationsPage(params), /expirou/);
+  } finally {
+    context.mock.timers.reset();
+  }
+});

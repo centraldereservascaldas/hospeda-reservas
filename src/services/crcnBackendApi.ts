@@ -70,7 +70,7 @@ export interface SearchAccommodationsParams {
 }
 
 export interface AccommodationSearchPage {
-  /** Original server deadline, never renewed when a cached page is read. */
+  /** Remaining server validity on the browser clock; cache reads never renew it. */
   expiresAt?: number;
   /** Number of usable results in this page, never a global result count. */
   total: number;
@@ -430,7 +430,8 @@ class CrcnBackendApiService {
     requestSignal: AbortSignal,
   ): Promise<AccommodationSearchPage> {
     const { limit, skip } = params;
-    const json: unknown = await withApiRequestTimeout(async (signal) => {
+    const startedAt = performance.now();
+    const { json, serverTime } = await withApiRequestTimeout(async (signal) => {
       const res = await apiFetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -438,7 +439,10 @@ class CrcnBackendApiService {
         signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
+      return {
+        json: (await res.json()) as unknown,
+        serverTime: Date.parse(res.headers.get('Date') || ''),
+      };
     }, requestSignal);
     if (
       !isRecord(json) ||
@@ -491,8 +495,21 @@ class CrcnBackendApiService {
         !Number.isFinite(fetchedAt) ||
         !Number.isFinite(expiresAt) ||
         expiresAt <= fetchedAt ||
-        expiresAt <= Date.now()
+        expiresAt - fetchedAt > 60_000 ||
+        fetchedAt > (Number.isFinite(serverTime) ? serverTime + 1000 : Date.now() + 60_000)
       ) {
+        throw new Error('A cotação da pesquisa expirou. Tente novamente.');
+      }
+      if (Number.isFinite(serverTime)) {
+        // Convert remaining server validity to the device clock, allowing for
+        // HTTP Date precision and the entire round trip without extending it.
+        const remaining = Math.min(
+          expiresAt - fetchedAt,
+          expiresAt - serverTime - 1000 - Math.max(0, performance.now() - startedAt),
+        );
+        expiresAt = Date.now() + remaining;
+      }
+      if (expiresAt <= Date.now()) {
         throw new Error('A cotação da pesquisa expirou. Tente novamente.');
       }
     }

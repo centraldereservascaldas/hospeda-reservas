@@ -1,6 +1,6 @@
 # E7 — Comparação integrada controlada
 
-Status: em execução, sem novo deploy. A primeira comparação identificou regressão de CLS e foi rejeitada. O ajuste ainda precisa da amostra completa e das jornadas de busca/detalhe/interação.
+Status: validação local registrada; verificações do artefato final e runtime pendentes, sem novo deploy. A primeira comparação identificou regressão de CLS e foi rejeitada; as correções e repetições estão registradas abaixo.
 
 ## Versões e método
 
@@ -94,4 +94,15 @@ Ambas responderam 200 com oito resultados e zero sem cotação. Foram duas chama
 
 A comparação equivalente após a publicação, o custo do worker e a medição pública permanecem pendentes. O aquecimento de ofertas continua desligado até calibrar sua parcela de orçamento Stays.
 
-Instrumentos e dados: `sprint-4-e7-jornadas.mjs`, `sprint-4-e7-upstream-probe.php` e [JSON de validação local](sprint-4-e7-validacao-local-2026-11-03.json). A revisão da validade de busca em relação ao relógio do cliente também permanece na auditoria anterior à publicação.
+Instrumentos e dados: `sprint-4-e7-jornadas.mjs`, `sprint-4-e7-upstream-probe.php` e [JSON de validação local](sprint-4-e7-validacao-local-2026-11-03.json). A revisão da validade de busca em relação ao relógio do cliente está registrada na seção seguinte.
+
+
+## Validade conforme o relógio do servidor e cache de vitrines
+
+A busca comparava diretamente o `expiresAt` do servidor com o relógio do dispositivo. Com relógio atrasado, uma página já próxima do vencimento poderia receber até 45 segundos locais adicionais; com relógio adiantado, uma resposta válida poderia ser rejeitada. O cliente agora usa HTTP Date para converter a validade restante ao seu relógio, descontando a precisão de segundos do cabeçalho e o tempo integral da requisição medido com relógio monotônico. Leituras do cache não passam a receber um novo TTL completo. Metadados invertidos, futuros ou com janela superior a 60 segundos são recusados. Respostas legadas sem Date preservam a interpretação anterior do prazo absoluto.
+
+Os testes usam relógios adiantado e atrasado em uma hora, snapshot com cinco segundos restantes e snapshot já vencido no servidor. A página e cada cotação recebem o mesmo limite conservador local. A API JSON e os contratos do backend não foram alterados.
+
+A versão do cache de vitrines passou de v6 para v7, evitando restaurar cotações salvas com a semântica anterior. São mantidas até 60 entradas de no máximo 8.192 caracteres cada; registros antigos, vencidos, malformados, grandes ou com prazo além de 45 segundos são removidos. A limpeza considera somente o namespace das cotações e conserva outros dados da sessão. O prazo não é renovado pela leitura; falhas de armazenamento continuam permitindo a consulta ao backend.
+
+Passaram 560 testes frontend, incluindo 35 direcionados de API/vitrines e os casos novos de limite de armazenamento; lint/TypeScript, build, formatação e diff aprovados. As jornadas devem ser repetidas no artefato compilado com esse ajuste, e os gates devem ser conferidos no SHA final antes da publicação. Medição pública, comparação upstream após entrega e custo do worker permanecem pendentes.

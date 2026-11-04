@@ -512,3 +512,69 @@ test('retains the server deadline when persisting a reused promotional quote', a
     assert.equal(cached.expiresAt, expiresAt);
   }
 });
+
+test('bounds quote storage and removes old, expired, malformed and oversized entries without touching other data', () => {
+  VisibilityObserver.automatic = false;
+  const prefix = 'crcn.home-date-quote.v7.';
+  for (let index = 0; index < 100; index++)
+    window.sessionStorage.setItem(
+      `${prefix}${index}`,
+      JSON.stringify({
+        status: 'unavailable',
+        guests: 2,
+        expiresAt: Date.now() + 30_000,
+        cachedAt: Date.now() - index,
+      }),
+    );
+  for (const [key, value] of Object.entries({
+    'crcn.home-date-quote.v6.legacy': '{}',
+    [`${prefix}expired`]: JSON.stringify({ expiresAt: 1 }),
+    [`${prefix}invalid`]: 'invalid',
+    [`${prefix}large`]: 'x'.repeat(9000),
+  }))
+    window.sessionStorage.setItem(key, value);
+  window.sessionStorage.setItem('other-data', 'preserved');
+  render(
+    React.createElement(SeasonalDateSuggestions, {
+      currency: 'BRL',
+      guestCount: 2,
+      guests: { adults: 2, children: 0, infants: 0, pets: 0 },
+      onSelect: () => {},
+    }),
+  );
+  const keys = Object.keys(window.sessionStorage);
+  assert.equal(keys.filter((key) => key.startsWith(prefix)).length, 60);
+  assert.equal(window.sessionStorage.getItem('crcn.home-date-quote.v6.legacy'), null);
+  assert.equal(window.sessionStorage.getItem(`${prefix}expired`), null);
+  assert.equal(window.sessionStorage.getItem(`${prefix}invalid`), null);
+  assert.equal(window.sessionStorage.getItem(`${prefix}large`), null);
+  assert.equal(window.sessionStorage.getItem('other-data'), 'preserved');
+});
+
+test('does not restore a promotional quote whose expiry exceeds the local validity window', async () => {
+  VisibilityObserver.automatic = false;
+  const { getHomeDiscoveryCollections } = await import('../src/utils/homeDateSuggestions.ts');
+  const suggestion = getHomeDiscoveryCollections()[0]!.suggestions[0]!;
+  const key = `crcn.home-date-quote.v7.${suggestion.id}.${suggestion.checkIn}.${suggestion.checkOut}.2`;
+  window.sessionStorage.setItem(
+    key,
+    JSON.stringify({
+      status: 'ready',
+      guests: 2,
+      total: 123,
+      nightly: 41,
+      propertyTitle: 'Invalid cached property',
+      expiresAt: Date.now() + 3_600_000,
+    }),
+  );
+  render(
+    React.createElement(SeasonalDateSuggestions, {
+      currency: 'BRL',
+      guestCount: 2,
+      guests: { adults: 2, children: 0, infants: 0, pets: 0 },
+      onSelect: () => {},
+    }),
+  );
+  assert.doesNotMatch(document.body.textContent || '', /Invalid cached property/);
+  assert.equal(window.sessionStorage.getItem(key), null);
+});
