@@ -84,3 +84,11 @@ Testes exercitam a fila de banco real: três leituras antigas geram um job, a fi
 Pint, shell syntax e diff passaram. A suíte completa atual passou com 370 testes e 2.564 asserções em 6,9 segundos. O lote ainda não foi publicado. Uma medição read-only do container atual registrou aproximadamente 160 MiB e 0,30% CPU, com cerca de 14 GiB disponíveis no host; não é medição do custo do worker novo.
 
 Permanecem pendentes aquecimento das ofertas/coleções com orçamento do provedor e medição de custo, tratamento contextual de limite do catálogo, imagem validada com cinco programas, integração E6 e comparação E7. Não considerar E5 concluída apenas com a atualização descritiva assíncrona.
+
+## Ajuste do isolamento do teste de fila no PostgreSQL
+
+No SHA `5787299`, os smokes da imagem Linux passaram com cinco programas e o timeout externo. O gate PostgreSQL identificou uma falha no caso de dois disparos de bootstrap: o teste envolvia tudo na transação de `RefreshDatabase`. A tentativa de adquirir um lock já existente abortou essa transação PostgreSQL (`25P02`), impedindo a atualização subsequente do lock. O cenário real de CLI/worker usa commits independentes.
+
+O teste de integração de fila passou a usar `DatabaseTruncation`, com limpeza antes/depois e recriação do banco SQLite em memória quando necessário. Mantém as duas requisições reais e a asserção de um único job. A alternativa de rollback por migration revelou um `down` histórico incompatível com índice no SQLite; nenhuma migration aplicada foi alterada. A limpeza ocorre exclusivamente no banco descartável de teste.
+
+Os sete cenários do arquivo passaram localmente após o ajuste. A suíte completa e o novo gate PostgreSQL devem passar no SHA corrigido antes de considerar essa prova encerrada. Essa alteração não modifica o código de produção.

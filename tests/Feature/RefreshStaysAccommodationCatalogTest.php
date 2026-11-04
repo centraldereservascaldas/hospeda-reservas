@@ -6,7 +6,8 @@ use App\Jobs\RefreshStaysAccommodationCatalog;
 use App\Services\StaysAccommodationCatalog;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Database\Events\QueryExecuted;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -14,7 +15,21 @@ use Tests\TestCase;
 
 class RefreshStaysAccommodationCatalogTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTruncation;
+
+    protected function beforeTruncatingDatabase(): void
+    {
+        $inMemory = config('database.default') === 'sqlite' && config('database.connections.sqlite.database') === ':memory:';
+        if ($inMemory) {
+            RefreshDatabaseState::$migrated = false;
+        }
+        $this->beforeApplicationDestroyed(function () use ($inMemory): void {
+            $this->truncateTablesForAllConnections();
+            if ($inMemory) {
+                RefreshDatabaseState::$migrated = false;
+            }
+        });
+    }
 
     public function test_stale_reads_share_one_job_processed_only_by_the_discovery_worker(): void
     {
