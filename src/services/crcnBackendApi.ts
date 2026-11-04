@@ -1,3 +1,8 @@
+import {
+  readAccommodationCatalogCache,
+  writeAccommodationCatalogCache,
+  updateAccommodationCatalogCache,
+} from '../utils/accommodationCatalogCache';
 import type { Property, Reservation, ReservationCancellationResult } from '../types';
 import type { StaysCalendarDay } from '../utils/staysAvailability';
 import {
@@ -310,8 +315,7 @@ export const getCalendarExpiration = (days: StaysCalendarDay[]): number | undefi
 class CrcnBackendApiService {
   private getCachedResorts(): Array<{ id: string; name: string }> {
     try {
-      const cachedValue: unknown = JSON.parse(localStorage.getItem('hospeda_properties') || '[]');
-      const cached = Array.isArray(cachedValue) ? cachedValue.filter(isProperty) : [];
+      const cached = readAccommodationCatalogCache();
       const byId = new Map<string, string>();
       for (const property of cached) {
         if (property.staysPropertyId && property.complexName?.trim()) {
@@ -372,21 +376,7 @@ class CrcnBackendApiService {
       throw new Error('O catálogo retornou dados inválidos.');
     }
     const accommodations: Property[] = json.data.map(sanitizePropertyMedia);
-    if (accommodations.length > 0) {
-      try {
-        localStorage.setItem('hospeda_properties', JSON.stringify(accommodations));
-        localStorage.setItem('hospeda_properties_source', json.source);
-      } catch (error) {
-        console.warn('Unable to cache the accommodation catalog:', error);
-      }
-    } else {
-      try {
-        localStorage.removeItem('hospeda_properties');
-        localStorage.removeItem('hospeda_properties_source');
-      } catch (error) {
-        console.warn('Unable to clear the accommodation catalog cache:', error);
-      }
-    }
+    writeAccommodationCatalogCache(accommodations, json.source);
     return accommodations;
   }
 
@@ -402,23 +392,7 @@ class CrcnBackendApiService {
         throw new Error('A acomodação retornou dados inválidos.');
       }
       const property = json.data ? sanitizePropertyMedia(json.data) : null;
-      if (property && Array.isArray(property.images)) {
-        try {
-          const cachedValue: unknown = JSON.parse(
-            localStorage.getItem('hospeda_properties') || '[]',
-          );
-          const cached = Array.isArray(cachedValue) ? cachedValue.filter(isProperty) : [];
-          const index = cached.findIndex(
-            (item) => item.id === property.id || item.staysListingId === property.staysListingId,
-          );
-          if (index >= 0) cached[index] = property;
-          else cached.push(property);
-          localStorage.setItem('hospeda_properties', JSON.stringify(cached));
-          localStorage.setItem('hospeda_properties_source', property.dataSource ?? 'stays-live');
-        } catch (error) {
-          console.warn('Unable to persist refreshed accommodation gallery:', error);
-        }
-      }
+      if (property) updateAccommodationCatalogCache(property);
       return property;
     } catch (err) {
       console.warn(`Falling back to local cache for accommodation ${id}:`, err);

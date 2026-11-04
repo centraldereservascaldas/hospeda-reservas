@@ -151,3 +151,12 @@ O catálogo inicial e a busca com datas usam `PropertyCatalogSkeleton`, com oito
 Validação: 35 testes direcionados de catálogo, estado da busca e roteamento passaram; lint/TypeScript, build e diff passaram. Em Chromium local, com movimento reduzido, as larguras 320/360/390/768/1024/1440 px não tiveram overflow, apresentaram respectivamente 1/1/1/3/4/4 colunas, uma mensagem de status e zero elementos focáveis. O cenário renderiza o componente e CSS reais em fixture isolada de Vite; não mede CLS ou LCP da jornada completa.
 
 O smoke de container do SHA `66c808e`, run `41750987083`, concluiu com sucesso, comprovando que o build aceita o filtro de retenção. Os demais gates e a publicação ainda devem ser verificados no SHA final. Permanecem cache local versionado/limitado, auditoria integrada E6, aquecimento E5 e comparação E7.
+
+
+## E6: catálogo local versionado e limitado
+
+O cache descritivo do navegador agora usa metadados de versão e prazo absoluto de 15 minutos. Leituras sem versão, expiradas, com validade futura excessiva, origem simulada ou payload acima de 1.048.576 caracteres são descartadas. A escrita mantém até 100 registros (limite aproximado de 2 MiB em UTF-16), sem alterar a lista completa retornada pela API à tela. As chaves legadas de conteúdo/origem são preservadas para compatibilidade, mas somente metadados válidos permitem sua leitura.
+
+Um utilitário compartilhado atende catálogo, fallback de condomínios, atualização da galeria e sincronização Stays. Atualizar uma galeria preserva o prazo do conjunto existente. Cotações por datas são removidas tanto na escrita quanto na leitura, e erros de quota/acesso ao localStorage não impedem o fluxo com API. Corrigida também a comparação de identidade que poderia coincidir dois IDs Stays ausentes na atualização de um registro.
+
+Validação: 17 testes direcionados passaram; suíte frontend completa com 552 testes, lint/TypeScript, build, formatação e diff aprovados. O prazo e os limites pertencem ao cache descritivo; preços e disponibilidade mantêm validação própria. Ainda falta pausar a renovação do calendário em aba oculta e a auditoria integrada E6/E7. Nenhuma publicação deste incremento.

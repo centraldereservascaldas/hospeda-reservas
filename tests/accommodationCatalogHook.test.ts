@@ -40,6 +40,10 @@ test('uses only synchronized cache, filters stale image URLs, and replaces it wi
     ]),
   );
   localStorage.setItem('hospeda_properties_source', 'stays-live');
+  localStorage.setItem(
+    'hospeda_properties_meta',
+    JSON.stringify({ version: 1, expiresAt: Date.now() + 60_000 }),
+  );
 
   let resolveCatalog!: (items: (typeof liveProperty)[]) => void;
   crcnBackendApi.getAccommodations = () =>
@@ -116,6 +120,10 @@ test('clears synchronized cache when the live API returns an empty catalog', asy
   const originalFetch = globalThis.fetch;
   localStorage.setItem('hospeda_properties', JSON.stringify([STAYS_NET_APARTMENTS[0]!]));
   localStorage.setItem('hospeda_properties_source', 'stays-live');
+  localStorage.setItem(
+    'hospeda_properties_meta',
+    JSON.stringify({ version: 1, expiresAt: Date.now() + 60_000 }),
+  );
   globalThis.fetch = async () =>
     new Response(JSON.stringify({ success: true, source: 'stays-live', data: [] }), {
       status: 200,
@@ -208,6 +216,10 @@ test('shows a stale-data warning for cached listings after API failure, then cle
   const originalWarn = console.warn;
   localStorage.setItem('hospeda_properties', JSON.stringify([STAYS_NET_APARTMENTS[0]!]));
   localStorage.setItem('hospeda_properties_source', 'stays-live');
+  localStorage.setItem(
+    'hospeda_properties_meta',
+    JSON.stringify({ version: 1, expiresAt: Date.now() + 60_000 }),
+  );
   crcnBackendApi.getAccommodations = async () => {
     throw new Error('catalog unavailable');
   };
