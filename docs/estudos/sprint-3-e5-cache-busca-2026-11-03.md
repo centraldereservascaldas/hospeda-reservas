@@ -135,3 +135,10 @@ Validação: 59 testes direcionados de disponibilidade, preço, API e detalhe pa
 ## E6: controles da galeria
 
 A galeria do detalhe passa a renderizar no máximo cinco miniaturas próximas da foto ativa, além das setas, fechar e contador existentes. A navegação circular por setas/teclado continua alcançando todas as fotos. O teste integrado usa 50 fotos e verifica cinco miniaturas no início e no fim, foto ativa, retorno circular e restauração do foco ao fechar. Os 35 testes do detalhe e lint/TypeScript passaram. Este incremento reduz elementos e etapas de Tab; não representa medição de LCP.
+
+
+## E7: retenção de assets com cache de build
+
+A remoção de assets expirados dependia de executar `RUN node merge-static-assets.mjs`, mas Docker podia reutilizar essa camada para entradas idênticas. A publicação passa a usar `no-cache-filters: retained_assets`; os dois smokes usam Buildx com `--no-cache-filter retained_assets`. Apenas esse estágio perde o reaproveitamento. O Dockerfile e o checklist registram o requisito para builds manuais. Referências oficiais consultadas: https://docs.docker.com/build/cache/invalidation/ e https://github.com/docker/build-push-action.
+
+Os oito testes locais de retenção/origem passaram, incluindo prazo herdado sem extensão, remoção de expirados, colisão de conteúdo e origem por digest. Formatação YAML e diff passaram. O host local não tem Docker; a execução dos builds com o filtro deve ser comprovada pelos gates de CI no commit resultante antes de publicar. Essa mudança não comprova por si só a comparação de performance E7.

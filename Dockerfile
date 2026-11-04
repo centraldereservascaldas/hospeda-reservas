@@ -29,6 +29,7 @@ RUN npm run build \
 
 FROM ${PREVIOUS_ASSETS_IMAGE} AS previous_assets
 
+# Always build with --no-cache-filter retained_assets: expiry depends on the current time.
 FROM node:24.22.1-bookworm-slim AS retained_assets
 WORKDIR /assets
 COPY --from=previous_assets /var/www/html/public/assets/ ./previous/

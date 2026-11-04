@@ -127,7 +127,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build container image
-        run: docker build --tag hospeda-reservas:release-smoke .
+        run: docker buildx build --load --no-cache-filter retained_assets --tag hospeda-reservas:release-smoke .
 
       - name: Check application health
         env:
@@ -263,6 +263,8 @@ jobs:
         with:
           context: .
           push: true
+          # Retention depends on wall-clock time even when both asset inputs are unchanged.
+          no-cache-filters: retained_assets
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
           build-args: |
             PREVIOUS_ASSETS_IMAGE=${{ steps.previous-assets.outputs.image }}

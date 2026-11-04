@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build container image
-        run: docker build --tag hospeda-reservas:smoke .
+        run: docker buildx build --load --no-cache-filter retained_assets --tag hospeda-reservas:smoke .
 
       - name: Check healthy and unhealthy readiness
         env:
