@@ -52,7 +52,7 @@ Total estimado: **10,5–20 dias de trabalho**, sem somar itens opcionais abaixo
 | S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 publicadas; CI Docker e smoke público passaram                                   |
 | S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3/fila E4 publicadas; visibilidade E4 validada localmente |
 | S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Em execução no PR #43 (rascunho); cache, worker, aquecimento desativado por padrão e E6 implementados; validação integrada/custo pendentes |
-| S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Planejada                                                        |
+| S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Em execução: medições locais e jornadas registradas; runtime e comparação pública pendentes                                                        |
 
 A goal desta conversa acompanha o plano por sprints. A continuação da goal iniciou a S1 em base isolada; E1/E2 estão implementadas localmente; E2 ainda exige validação do container em CI. Registro: [Sprint 1 E2](estudos/sprint-1-e2-2026-11-03.md). A base isolada de implementação foi preparada a partir da versão remota verificada; no diagnóstico original, o commit publicado observado está 67 commits à frente do HEAD local, além de haver alterações locais pendentes. Preservar esse worktree e revisar a integração do calendário existente, sem substituí-lo em massa. Não associar avanço de sprint a autorização de publicação.
 

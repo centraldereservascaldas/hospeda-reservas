@@ -451,3 +451,41 @@ test('home mounts discovery structure during catalog loading and preserves it wh
   rerender(React.createElement(MainContentRouter, createRouterProps({ filteredProperties: [] })));
   assert.equal(container.querySelector('[aria-label="Coleções de hospedagens"]'), null);
 });
+
+test('pagination keeps keyboard focus while loading and ignores repeated activation', async () => {
+  const { SearchPagination } = await import('../src/components/search/SearchPagination.tsx');
+  let loads = 0;
+  const state = { active: true, hasMore: true, isLoading: false, error: false, loadedCount: 12 };
+  const { getByRole, rerender } = render(
+    React.createElement(SearchPagination, {
+      state,
+      onLoadMore: () => {
+        loads += 1;
+      },
+    }),
+  );
+  const button = getByRole('button', { name: 'Carregar mais' });
+  button.focus();
+  rerender(
+    React.createElement(SearchPagination, {
+      state: { ...state, isLoading: true },
+      onLoadMore: () => {
+        loads += 1;
+      },
+    }),
+  );
+  assert.equal(document.activeElement, button);
+  assert.equal(button.getAttribute('aria-disabled'), 'true');
+  fireEvent.click(button);
+  assert.equal(loads, 0);
+  rerender(
+    React.createElement(SearchPagination, {
+      state,
+      onLoadMore: () => {
+        loads += 1;
+      },
+    }),
+  );
+  fireEvent.click(button);
+  assert.equal(loads, 1);
+});

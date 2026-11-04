@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Sparkles,
   Waves,
@@ -56,12 +56,16 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   const toolbarRowRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
   const pendingCategoryFocusRef = useRef<number | null>(null);
-  const [visibleCategoryCount, setVisibleCategoryCount] = useState(4);
+  const [visibleCategoryCount, setVisibleCategoryCount] = useState(1);
   const [categoryPage, setCategoryPage] = useState(0);
-  const [categoryItemWidth, setCategoryItemWidth] = useState(112);
-  const [categoryGap, setCategoryGap] = useState(12);
+  const [categoryItemWidth, setCategoryItemWidth] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 96 : 112,
+  );
+  const [categoryGap, setCategoryGap] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 8 : 12,
+  );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const toolbarRow = toolbarRowRef.current;
     if (!toolbarRow) return;
 
@@ -158,7 +162,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
           className={`grid w-full items-center gap-2 [@media(max-width:639px)_and_(max-height:400px)]:gap-0 ${isCondominiumView ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_auto]'}`}
         >
           {/* Exibe apenas cartões inteiros; as setas alternam páginas sem cortar rótulos. */}
-          <div className="flex min-w-0 flex-none items-center justify-center justify-self-center gap-2 sm:gap-4">
+          <div className="flex min-w-0 max-w-full flex-none items-center justify-center justify-self-center gap-2 sm:gap-4">
             {categoryPage > 0 && (
               <button
                 type="button"
@@ -171,7 +175,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               </button>
             )}
             <div
-              className="min-w-0 max-w-full flex-none overflow-hidden py-1 [@media(max-width:639px)_and_(max-height:400px)]:py-0"
+              className="min-w-0 max-w-full shrink overflow-hidden py-1 [@media(max-width:639px)_and_(max-height:400px)]:py-0"
               style={{ width: categoryPageWidth }}
             >
               <div

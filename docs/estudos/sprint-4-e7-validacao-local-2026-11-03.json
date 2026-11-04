@@ -1,0 +1,5563 @@
+{
+  "status": "local-validation-complete-runtime-and-public-comparison-pending",
+  "timedFrontendCommit": "4a877506c57162cd2ca62ee69fb1f302a0d292c4",
+  "timingToolsCommit": "806c6b2",
+  "baselineReference": "sprint-4-e7-integracao-inicial-2026-11-03.json#/before",
+  "candidateReference": "sprint-4-e7-integracao-corrigida-2026-11-03.json#/after",
+  "extraDesktop": {
+    "before": [
+      {
+        "id": "desktop-cold-4",
+        "started": "2026-11-04T01:39:35.765Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "cold",
+        "repetition": 4,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20731.60000000149,
+          "ttfbMs": 1.8999999985098839,
+          "dclMs": 720.8999999985099,
+          "loadMs": 721,
+          "fcpMs": 808,
+          "lcp": {
+            "time": 808,
+            "size": 46926,
+            "url": ""
+          },
+          "cls": 0.4574935150150351,
+          "firstVisibleQuoteMs": 2171.10000000149,
+          "firstCatalogCardMs": 1470.6000000014901,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 318.30000000447035,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+              "durationMs": 534.7999999970198,
+              "transferBytes": 134100,
+              "decodedBytes": 459523
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+              "durationMs": 300.70000000298023,
+              "transferBytes": 23228,
+              "decodedBytes": 156351
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/resorts",
+              "durationMs": 452,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/public/legal-pages",
+              "durationMs": 455.69999999552965,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/accommodations",
+              "durationMs": 667.1000000014901,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "durationMs": 163,
+              "transferBytes": 366,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 684.6000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 730.6999999955297,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 773.2000000029802,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 782.1000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 790.6000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 907.8000000044703,
+              "transferBytes": 73886,
+              "decodedBytes": 73586
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1348.6000000014901,
+              "transferBytes": 71203,
+              "decodedBytes": 70903
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 721.3999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 748.2999999970198,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 760.2000000029802,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 769.3000000044703,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 786.3999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1074.8999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1198.8999999985099,
+              "transferBytes": 37246,
+              "decodedBytes": 36946
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 778.8999999985099,
+              "transferBytes": 35853,
+              "decodedBytes": 35553
+            }
+          ],
+          "imageCount": 70,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756375767.5
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-13",
+              "to": "2026-11-15",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-20",
+              "to": "2026-11-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-27",
+              "to": "2026-11-29",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-04",
+              "to": "2026-12-06",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-20",
+              "to": "2026-11-23",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-04-30",
+              "to": "2027-05-03",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-27",
+              "to": "2026-12-31",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-02-05",
+              "to": "2027-02-09",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-31",
+              "to": "2027-01-03",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-19",
+              "to": "2026-11-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 20
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 20
+            }
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3191/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 8,
+        "completedTransferBytes": 838243
+      },
+      {
+        "id": "desktop-warm-4",
+        "started": "2026-11-04T01:39:56.506Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "warm",
+        "repetition": 4,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20175.40000000596,
+          "ttfbMs": 1.7000000029802322,
+          "dclMs": 169.80000000447035,
+          "loadMs": 385.90000000596046,
+          "fcpMs": 316,
+          "lcp": {
+            "time": 316,
+            "size": 46463,
+            "url": ""
+          },
+          "cls": 0.0001355263275592946,
+          "firstVisibleQuoteMs": 271,
+          "firstCatalogCardMs": 270.70000000298023,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 217.89999999850988,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 459523
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 156351
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/resorts",
+              "durationMs": 455.90000000596046,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 986.8999999985099,
+              "transferBytes": 73886,
+              "decodedBytes": 73586
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 989.5,
+              "transferBytes": 71203,
+              "decodedBytes": 70903
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/public/legal-pages",
+              "durationMs": 458.30000000447035,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/accommodations",
+              "durationMs": 1145.7999999970198,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 866.7000000029802,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1120.6000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1130.2999999970198,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1378.8999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1543.7999999970198,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 586.8999999985099,
+              "transferBytes": 37246,
+              "decodedBytes": 36946
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 704.2999999970198,
+              "transferBytes": 35853,
+              "decodedBytes": 35553
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 596.5,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 606.1000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            }
+          ],
+          "imageCount": 70,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756396508.4
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-01-12",
+              "to": "2027-01-16",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-31",
+              "to": "2027-01-03",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-07-12",
+              "to": "2027-07-16",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-13",
+              "to": "2026-11-16",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-04-30",
+              "to": "2027-05-03",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 20
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 20
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-13",
+              "to": "2026-11-16",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-04-30",
+              "to": "2027-05-03",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3191/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 10,
+        "completedTransferBytes": 561590
+      },
+      {
+        "id": "desktop-cold-5",
+        "started": "2026-11-04T01:40:16.741Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "cold",
+        "repetition": 5,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20742,
+          "ttfbMs": 1.1999999955296516,
+          "dclMs": 734.6000000014901,
+          "loadMs": 734.6000000014901,
+          "fcpMs": 820,
+          "lcp": {
+            "time": 820,
+            "size": 46926,
+            "url": ""
+          },
+          "cls": 0.4501808053185113,
+          "firstVisibleQuoteMs": 2174.2999999970198,
+          "firstCatalogCardMs": 1473.7999999970198,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 317.20000000298023,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+              "durationMs": 533.6000000014901,
+              "transferBytes": 134100,
+              "decodedBytes": 459523
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+              "durationMs": 299.6000000014901,
+              "transferBytes": 23228,
+              "decodedBytes": 156351
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/resorts",
+              "durationMs": 454.70000000298023,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/public/legal-pages",
+              "durationMs": 458.20000000298023,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/accommodations",
+              "durationMs": 670.3999999985099,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "durationMs": 162.69999999552965,
+              "transferBytes": 366,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 680.8999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 749.3999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 775.3999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 787.7000000029802,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 797,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 910.6999999955297,
+              "transferBytes": 73886,
+              "decodedBytes": 73586
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1345.5999999940395,
+              "transferBytes": 71203,
+              "decodedBytes": 70903
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 724.3999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 745.8999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 761.1000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 769.5,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 787.7999999970198,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1063.5,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1199.6000000014901,
+              "transferBytes": 37246,
+              "decodedBytes": 36946
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 784.6999999955297,
+              "transferBytes": 35853,
+              "decodedBytes": 35553
+            }
+          ],
+          "imageCount": 70,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756416742.2
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-13",
+              "to": "2026-11-15",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-20",
+              "to": "2026-11-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-27",
+              "to": "2026-11-29",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-04",
+              "to": "2026-12-06",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-20",
+              "to": "2026-11-23",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-19",
+              "to": "2026-11-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-09-03",
+              "to": "2027-09-06",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-05-26",
+              "to": "2027-05-29",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-03-25",
+              "to": "2027-03-28",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-02-05",
+              "to": "2027-02-09",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 20
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 20
+            }
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3191/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 8,
+        "completedTransferBytes": 838227
+      },
+      {
+        "id": "desktop-warm-5",
+        "started": "2026-11-04T01:40:37.491Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "warm",
+        "repetition": 5,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20179.29999999702,
+          "ttfbMs": 1.8999999985098839,
+          "dclMs": 173.20000000298023,
+          "loadMs": 382,
+          "fcpMs": 324,
+          "lcp": {
+            "time": 324,
+            "size": 46463,
+            "url": ""
+          },
+          "cls": 0.0001355263275592946,
+          "firstVisibleQuoteMs": 272.1000000014901,
+          "firstCatalogCardMs": 271.8999999985099,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 212.10000000149012,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 459523
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 156351
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/resorts",
+              "durationMs": 454.40000000596046,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 991.2999999970198,
+              "transferBytes": 73886,
+              "decodedBytes": 73586
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 994.1000000014901,
+              "transferBytes": 71203,
+              "decodedBytes": 70903
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/public/legal-pages",
+              "durationMs": 457.8999999985099,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/accommodations",
+              "durationMs": 1144.1000000014901,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 859,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1125.8999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1135,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1374.6999999955297,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 592.7999999970198,
+              "transferBytes": 37246,
+              "decodedBytes": 36946
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 600,
+              "transferBytes": 35853,
+              "decodedBytes": 35553
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 514.1999999955297,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            }
+          ],
+          "imageCount": 70,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756437493.8
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-04-19",
+              "to": "2027-04-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-24",
+              "to": "2026-12-27",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-07-12",
+              "to": "2027-07-16",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-10-08",
+              "to": "2027-10-11",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 20
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 20
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-10-08",
+              "to": "2027-10-11",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3191/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 9,
+        "completedTransferBytes": 502004
+      },
+      {
+        "id": "desktop-cold-6",
+        "started": "2026-11-04T01:40:57.730Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "cold",
+        "repetition": 6,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20739.80000000447,
+          "ttfbMs": 1.3000000044703484,
+          "dclMs": 732.1000000014901,
+          "loadMs": 732.1000000014901,
+          "fcpMs": 816,
+          "lcp": {
+            "time": 816,
+            "size": 46926,
+            "url": ""
+          },
+          "cls": 0.4574935150150351,
+          "firstVisibleQuoteMs": 2275.7000000029802,
+          "firstCatalogCardMs": 1479.8999999985099,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 322.19999999552965,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+              "durationMs": 538,
+              "transferBytes": 134100,
+              "decodedBytes": 459523
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+              "durationMs": 304.1000000014901,
+              "transferBytes": 23228,
+              "decodedBytes": 156351
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/resorts",
+              "durationMs": 453.5,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/public/legal-pages",
+              "durationMs": 457.3999999985099,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/accommodations",
+              "durationMs": 669.6000000014901,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "durationMs": 159.5,
+              "transferBytes": 366,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 711.5,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 743.9000000059605,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 785.7000000029802,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 794.7000000029802,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 803.6000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 917.3000000044703,
+              "transferBytes": 73886,
+              "decodedBytes": 73586
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1474.8999999985099,
+              "transferBytes": 71203,
+              "decodedBytes": 70903
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 735.8999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 761.6999999955297,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 774.2999999970198,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 782.5,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 801,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1191.2000000029802,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1220.4000000059605,
+              "transferBytes": 37246,
+              "decodedBytes": 36946
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 683,
+              "transferBytes": 35853,
+              "decodedBytes": 35553
+            }
+          ],
+          "imageCount": 70,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756457730.9
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-13",
+              "to": "2026-11-15",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-20",
+              "to": "2026-11-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-27",
+              "to": "2026-11-29",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-04",
+              "to": "2026-12-06",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-20",
+              "to": "2026-11-23",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-27",
+              "to": "2026-12-31",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-04-30",
+              "to": "2027-05-03",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-04-19",
+              "to": "2027-04-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-10-08",
+              "to": "2027-10-11",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-13",
+              "to": "2026-11-16",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 20
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 20
+            }
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3191/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 8,
+        "completedTransferBytes": 838227
+      },
+      {
+        "id": "desktop-warm-6",
+        "started": "2026-11-04T01:41:18.476Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "warm",
+        "repetition": 6,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20178.60000000149,
+          "ttfbMs": 2.5,
+          "dclMs": 173.19999999552965,
+          "loadMs": 382.6000000014901,
+          "fcpMs": 320,
+          "lcp": {
+            "time": 320,
+            "size": 46463,
+            "url": ""
+          },
+          "cls": 0.0001355263275592946,
+          "firstVisibleQuoteMs": 273.79999999701977,
+          "firstCatalogCardMs": 273.3999999985099,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 212.60000000149012,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 459523
+            },
+            {
+              "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 156351
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/resorts",
+              "durationMs": 454.29999999701977,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 984.8000000044703,
+              "transferBytes": 73886,
+              "decodedBytes": 73586
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 982.7999999970198,
+              "transferBytes": 71203,
+              "decodedBytes": 70903
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/public/legal-pages",
+              "durationMs": 460.09999999403954,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/accommodations",
+              "durationMs": 1144.1000000014901,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 846.3000000044703,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1116,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1125.7000000029802,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 1365.6000000014901,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 580,
+              "transferBytes": 35853,
+              "decodedBytes": 35553
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 597.3999999985099,
+              "transferBytes": 37246,
+              "decodedBytes": 36946
+            },
+            {
+              "url": "http://127.0.0.1:3191/api/search",
+              "durationMs": 516.4000000059605,
+              "transferBytes": 29900,
+              "decodedBytes": 29600
+            }
+          ],
+          "imageCount": 70,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3191/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756478478.6
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-19",
+              "to": "2026-11-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-03-25",
+              "to": "2027-03-28",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2027-07-12",
+              "to": "2027-07-16",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-27",
+              "to": "2026-12-31",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "limit": 20,
+              "skip": 20
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 20,
+              "skip": 20
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "method": "POST",
+            "params": {
+              "from": "2026-12-27",
+              "to": "2026-12-31",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3191/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-DpIL7EHW.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/assets/index-D18d1lBg.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3191/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3191/api/search",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 9,
+        "completedTransferBytes": 502036
+      }
+    ],
+    "after": [
+      {
+        "id": "desktop-cold-4",
+        "started": "2026-11-04T01:41:39.073Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "cold",
+        "repetition": 4,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20765.70000000298,
+          "ttfbMs": 1.3999999985098839,
+          "dclMs": 755.3000000044703,
+          "loadMs": 755.3999999985099,
+          "fcpMs": 852,
+          "lcp": {
+            "time": 852,
+            "size": 46926,
+            "url": ""
+          },
+          "cls": 0.05687452261312151,
+          "firstVisibleQuoteMs": 1474.8999999985099,
+          "firstCatalogCardMs": 1675,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 323.59999999403954,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+              "durationMs": 551.8999999985099,
+              "transferBytes": 140595,
+              "decodedBytes": 479478
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+              "durationMs": 305.70000000298023,
+              "transferBytes": 23288,
+              "decodedBytes": 156595
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/resorts",
+              "durationMs": 455.5,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/public/legal-pages",
+              "durationMs": 457.1000000014901,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/accommodations",
+              "durationMs": 790,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 628.1000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 648.6000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 553.3999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "durationMs": 157.79999999701977,
+              "transferBytes": 366,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 557.1999999955297,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 515.3000000044703,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            }
+          ],
+          "imageCount": 60,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "eager"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756499075.5
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-13",
+              "to": "2026-11-15",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-20",
+              "to": "2026-11-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-27",
+              "to": "2026-11-29",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-12-04",
+              "to": "2026-12-06",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3192/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 5,
+        "completedTransferBytes": 448263
+      },
+      {
+        "id": "desktop-warm-4",
+        "started": "2026-11-04T01:41:59.851Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "warm",
+        "repetition": 4,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20182,
+          "ttfbMs": 1.7000000029802322,
+          "dclMs": 175.80000000447035,
+          "loadMs": 387.80000000447035,
+          "fcpMs": 324,
+          "lcp": {
+            "time": 324,
+            "size": 46463,
+            "url": ""
+          },
+          "cls": 0.00018393783329680765,
+          "firstVisibleQuoteMs": 275.20000000298023,
+          "firstCatalogCardMs": 274.8999999985099,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 215.29999999701977,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 479478
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 156595
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/resorts",
+              "durationMs": 453.3999999985099,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/public/legal-pages",
+              "durationMs": 457.1000000014901,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/accommodations",
+              "durationMs": 669.5,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            }
+          ],
+          "imageCount": 60,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "eager"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756519853.8
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "method": "GET"
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3192/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 3,
+        "completedTransferBytes": 135270
+      },
+      {
+        "id": "desktop-cold-5",
+        "started": "2026-11-04T01:42:20.103Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "cold",
+        "repetition": 5,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20748.70000000298,
+          "ttfbMs": 1.1000000014901161,
+          "dclMs": 744.4000000059605,
+          "loadMs": 744.4000000059605,
+          "fcpMs": 840,
+          "lcp": {
+            "time": 840,
+            "size": 46926,
+            "url": ""
+          },
+          "cls": 0.05687452261312151,
+          "firstVisibleQuoteMs": 1472.3000000044703,
+          "firstCatalogCardMs": 1673.7000000029802,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 315.70000000298023,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+              "durationMs": 543.2999999970198,
+              "transferBytes": 140595,
+              "decodedBytes": 479478
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+              "durationMs": 296.69999999552965,
+              "transferBytes": 23288,
+              "decodedBytes": 156595
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/resorts",
+              "durationMs": 457.6000000014901,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/public/legal-pages",
+              "durationMs": 460.1000000014901,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/accommodations",
+              "durationMs": 792.3999999985099,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 629.6000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 647.5999999940395,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 542,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "durationMs": 158.70000000298023,
+              "transferBytes": 366,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 554.6000000014901,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 524.3999999985099,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            }
+          ],
+          "imageCount": 60,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "eager"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756540104.6
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-13",
+              "to": "2026-11-15",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-20",
+              "to": "2026-11-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-27",
+              "to": "2026-11-29",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-12-04",
+              "to": "2026-12-06",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3192/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 5,
+        "completedTransferBytes": 448263
+      },
+      {
+        "id": "desktop-warm-5",
+        "started": "2026-11-04T01:42:40.856Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "warm",
+        "repetition": 5,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20171.70000000298,
+          "ttfbMs": 1.5,
+          "dclMs": 165.60000000149012,
+          "loadMs": 377.8999999985099,
+          "fcpMs": 316,
+          "lcp": {
+            "time": 316,
+            "size": 46463,
+            "url": ""
+          },
+          "cls": 0.00018393783329680765,
+          "firstVisibleQuoteMs": 266.6000000014901,
+          "firstCatalogCardMs": 266.30000000447035,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 213.30000000447035,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 479478
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 156595
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/resorts",
+              "durationMs": 456.79999999701977,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/public/legal-pages",
+              "durationMs": 459.8999999985099,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/accommodations",
+              "durationMs": 672.6999999955297,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            }
+          ],
+          "imageCount": 60,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "eager"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756560857.4
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "method": "GET"
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3192/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 3,
+        "completedTransferBytes": 135270
+      },
+      {
+        "id": "desktop-cold-6",
+        "started": "2026-11-04T01:43:01.081Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "cold",
+        "repetition": 6,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20756.69999999553,
+          "ttfbMs": 1.1999999955296516,
+          "dclMs": 748.2999999970198,
+          "loadMs": 748.2999999970198,
+          "fcpMs": 844,
+          "lcp": {
+            "time": 844,
+            "size": 46926,
+            "url": ""
+          },
+          "cls": 0.05687452261312151,
+          "firstVisibleQuoteMs": 1466.6000000014901,
+          "firstCatalogCardMs": 1666.5,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 324.29999999701977,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+              "durationMs": 553.2000000029802,
+              "transferBytes": 140595,
+              "decodedBytes": 479478
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+              "durationMs": 306.29999999701977,
+              "transferBytes": 23288,
+              "decodedBytes": 156595
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/resorts",
+              "durationMs": 453.70000000298023,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/public/legal-pages",
+              "durationMs": 457.3999999985099,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/accommodations",
+              "durationMs": 789.7999999970198,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 626.9000000059605,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 645,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 545,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "durationMs": 155.69999999552965,
+              "transferBytes": 366,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 554.7999999970198,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/search",
+              "durationMs": 521.5,
+              "transferBytes": 29884,
+              "decodedBytes": 29584
+            }
+          ],
+          "imageCount": 60,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "eager"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756581082.6
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-13",
+              "to": "2026-11-15",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-20",
+              "to": "2026-11-22",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-11-27",
+              "to": "2026-11-29",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "method": "POST",
+            "params": {
+              "purpose": "discovery",
+              "from": "2026-12-04",
+              "to": "2026-12-06",
+              "guests": 1,
+              "limit": 8,
+              "skip": 0
+            }
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3192/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 5,
+        "completedTransferBytes": 448263
+      },
+      {
+        "id": "desktop-warm-6",
+        "started": "2026-11-04T01:43:21.847Z",
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "cache": "warm",
+        "repetition": 6,
+        "browser": "156.0.8078.4",
+        "navigationError": null,
+        "data": {
+          "observedUntilMs": 20181.79999999702,
+          "ttfbMs": 2.1999999955296516,
+          "dclMs": 176,
+          "loadMs": 390.6000000014901,
+          "fcpMs": 324,
+          "lcp": {
+            "time": 324,
+            "size": 46463,
+            "url": ""
+          },
+          "cls": 0.00018393783329680765,
+          "firstVisibleQuoteMs": 275.69999999552965,
+          "firstCatalogCardMs": 275.5,
+          "resources": [
+            {
+              "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+              "durationMs": 218,
+              "transferBytes": 27572,
+              "decodedBytes": 27272
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 479478
+            },
+            {
+              "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 156595
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "durationMs": 0,
+              "transferBytes": 0,
+              "decodedBytes": 66
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/resorts",
+              "durationMs": 455,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/public/legal-pages",
+              "durationMs": 458.29999999701977,
+              "transferBytes": 326,
+              "decodedBytes": 26
+            },
+            {
+              "url": "http://127.0.0.1:3192/api/accommodations",
+              "durationMs": 669.8000000044703,
+              "transferBytes": 106458,
+              "decodedBytes": 106158
+            }
+          ],
+          "imageCount": 60,
+          "articleCount": 30,
+          "overflow": false,
+          "assets": [
+            "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+          ],
+          "firstImages": [
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "eager"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            },
+            {
+              "url": "http://127.0.0.1:3192/__fixture-image.svg",
+              "width": 232,
+              "naturalWidth": 640,
+              "loading": "lazy"
+            }
+          ],
+          "timeOrigin": 1793756601849.8
+        },
+        "requests": [
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "method": "GET"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "method": "GET"
+          }
+        ],
+        "responses": [
+          {
+            "url": "http://127.0.0.1:3192/",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "status": 200,
+            "cache": "public, max-age=31536000, immutable"
+          },
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "status": 200,
+            "cache": "no-store"
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "status": 200,
+            "cache": "no-store"
+          }
+        ],
+        "failures": [],
+        "maxConcurrentApi": 3,
+        "completedTransferBytes": 135270
+      }
+    ]
+  },
+  "search": {
+    "before": [
+      {
+        "repetition": 1,
+        "started": "2026-11-04T01:36:08.043Z",
+        "data": {
+          "observedUntilMs": 20760.70000000298,
+          "firstQuotedCardMs": 2273,
+          "cards": [
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            }
+          ],
+          "assets": [
+            "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+          ]
+        },
+        "requests": [
+          {
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 2,
+            "destination": "",
+            "propertyId": "",
+            "limit": 20,
+            "skip": 0
+          },
+          {
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 2,
+            "destination": "",
+            "propertyId": "",
+            "limit": 20,
+            "skip": 20
+          }
+        ],
+        "responses": [
+          {
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 2,
+              "destination": "",
+              "propertyId": "",
+              "limit": 20,
+              "skip": 0
+            },
+            "status": 200,
+            "count": 20,
+            "quoted": 20
+          },
+          {
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 2,
+              "destination": "",
+              "propertyId": "",
+              "limit": 20,
+              "skip": 20
+            },
+            "status": 200,
+            "count": 10,
+            "quoted": 10
+          }
+        ],
+        "interactions": [
+          {
+            "attempt": 1,
+            "skipped": "button not found"
+          }
+        ]
+      },
+      {
+        "repetition": 2,
+        "started": "2026-11-04T01:36:28.889Z",
+        "data": {
+          "observedUntilMs": 20755.19999999553,
+          "firstQuotedCardMs": 2273.1999999955297,
+          "cards": [
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            }
+          ],
+          "assets": [
+            "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+          ]
+        },
+        "requests": [
+          {
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 2,
+            "destination": "",
+            "propertyId": "",
+            "limit": 20,
+            "skip": 0
+          },
+          {
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 2,
+            "destination": "",
+            "propertyId": "",
+            "limit": 20,
+            "skip": 20
+          }
+        ],
+        "responses": [
+          {
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 2,
+              "destination": "",
+              "propertyId": "",
+              "limit": 20,
+              "skip": 0
+            },
+            "status": 200,
+            "count": 20,
+            "quoted": 20
+          },
+          {
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 2,
+              "destination": "",
+              "propertyId": "",
+              "limit": 20,
+              "skip": 20
+            },
+            "status": 200,
+            "count": 10,
+            "quoted": 10
+          }
+        ],
+        "interactions": [
+          {
+            "attempt": 1,
+            "skipped": "button not found"
+          }
+        ]
+      },
+      {
+        "repetition": 3,
+        "started": "2026-11-04T01:36:49.739Z",
+        "data": {
+          "observedUntilMs": 20760.30000000447,
+          "firstQuotedCardMs": 2270,
+          "cards": [
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            }
+          ],
+          "assets": [
+            "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+          ]
+        },
+        "requests": [
+          {
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 2,
+            "destination": "",
+            "propertyId": "",
+            "limit": 20,
+            "skip": 0
+          },
+          {
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 2,
+            "destination": "",
+            "propertyId": "",
+            "limit": 20,
+            "skip": 20
+          }
+        ],
+        "responses": [
+          {
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 2,
+              "destination": "",
+              "propertyId": "",
+              "limit": 20,
+              "skip": 0
+            },
+            "status": 200,
+            "count": 20,
+            "quoted": 20
+          },
+          {
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 2,
+              "destination": "",
+              "propertyId": "",
+              "limit": 20,
+              "skip": 20
+            },
+            "status": 200,
+            "count": 10,
+            "quoted": 10
+          }
+        ],
+        "interactions": [
+          {
+            "attempt": 1,
+            "skipped": "button not found"
+          }
+        ]
+      }
+    ],
+    "after": [
+      {
+        "repetition": 1,
+        "started": "2026-11-04T01:37:10.944Z",
+        "data": {
+          "observedUntilMs": 20776.20000000298,
+          "firstQuotedCardMs": 1609.2999999970198,
+          "cards": [
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            }
+          ],
+          "assets": [
+            "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+          ]
+        },
+        "requests": [
+          {
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 2,
+            "destination": "",
+            "propertyId": "",
+            "limit": 12,
+            "skip": 0
+          }
+        ],
+        "responses": [
+          {
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 2,
+              "destination": "",
+              "propertyId": "",
+              "limit": 12,
+              "skip": 0
+            },
+            "status": 200,
+            "count": 12,
+            "quoted": 12
+          }
+        ],
+        "interactions": [
+          {
+            "attempt": 1,
+            "skipped": "button not found"
+          }
+        ]
+      },
+      {
+        "repetition": 2,
+        "started": "2026-11-04T01:37:31.803Z",
+        "data": {
+          "observedUntilMs": 20770.89999999851,
+          "firstQuotedCardMs": 1597.8999999985099,
+          "cards": [
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            }
+          ],
+          "assets": [
+            "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+          ]
+        },
+        "requests": [
+          {
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 2,
+            "destination": "",
+            "propertyId": "",
+            "limit": 12,
+            "skip": 0
+          }
+        ],
+        "responses": [
+          {
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 2,
+              "destination": "",
+              "propertyId": "",
+              "limit": 12,
+              "skip": 0
+            },
+            "status": 200,
+            "count": 12,
+            "quoted": 12
+          }
+        ],
+        "interactions": [
+          {
+            "attempt": 1,
+            "skipped": "button not found"
+          }
+        ]
+      },
+      {
+        "repetition": 3,
+        "started": "2026-11-04T01:37:52.659Z",
+        "data": {
+          "observedUntilMs": 20771.59999999404,
+          "firstQuotedCardMs": 1603.3999999985099,
+          "cards": [
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            },
+            {
+              "quoted": true,
+              "available": true
+            }
+          ],
+          "assets": [
+            "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+          ]
+        },
+        "requests": [
+          {
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 2,
+            "destination": "",
+            "propertyId": "",
+            "limit": 12,
+            "skip": 0
+          }
+        ],
+        "responses": [
+          {
+            "params": {
+              "from": "2026-11-06",
+              "to": "2026-11-08",
+              "guests": 2,
+              "destination": "",
+              "propertyId": "",
+              "limit": 12,
+              "skip": 0
+            },
+            "status": 200,
+            "count": 12,
+            "quoted": 12
+          }
+        ],
+        "interactions": [
+          {
+            "attempt": 1,
+            "skipped": "button not found"
+          }
+        ]
+      }
+    ]
+  },
+  "interaction": {
+    "before": [
+      {
+        "profile": {
+          "name": "mobile",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "deviceScaleFactor": 2,
+          "isMobile": true,
+          "hasTouch": true,
+          "cpu": 4
+        },
+        "interactions": [
+          {
+            "attempt": 1,
+            "events": [
+              {
+                "id": 9514,
+                "type": "pointerdown",
+                "duration": 32,
+                "start": 12832.79999999702
+              },
+              {
+                "id": 9514,
+                "type": "pointerup",
+                "duration": 32,
+                "start": 12833
+              },
+              {
+                "id": 9514,
+                "type": "click",
+                "duration": 32,
+                "start": 12833
+              },
+              {
+                "id": 9521,
+                "type": "keydown",
+                "duration": 32,
+                "start": 14193
+              },
+              {
+                "id": 9521,
+                "type": "keyup",
+                "duration": 24,
+                "start": 14214.89999999851
+              }
+            ],
+            "maxEventDurationMs": 32
+          },
+          {
+            "attempt": 2,
+            "events": [
+              {
+                "id": 9528,
+                "type": "pointerdown",
+                "duration": 40,
+                "start": 14754.79999999702
+              },
+              {
+                "id": 9528,
+                "type": "pointerup",
+                "duration": 40,
+                "start": 14754.89999999851
+              },
+              {
+                "id": 9528,
+                "type": "click",
+                "duration": 40,
+                "start": 14754.89999999851
+              },
+              {
+                "id": 9535,
+                "type": "keydown",
+                "duration": 32,
+                "start": 15290.39999999851
+              },
+              {
+                "id": 9535,
+                "type": "keyup",
+                "duration": 16,
+                "start": 15308.39999999851
+              }
+            ],
+            "maxEventDurationMs": 40
+          },
+          {
+            "attempt": 3,
+            "events": [
+              {
+                "id": 9542,
+                "type": "pointerdown",
+                "duration": 40,
+                "start": 15836.60000000149
+              },
+              {
+                "id": 9542,
+                "type": "pointerup",
+                "duration": 40,
+                "start": 15836.60000000149
+              },
+              {
+                "id": 9542,
+                "type": "click",
+                "duration": 40,
+                "start": 15836.60000000149
+              },
+              {
+                "id": 9549,
+                "type": "keydown",
+                "duration": 24,
+                "start": 16368.89999999851
+              }
+            ],
+            "maxEventDurationMs": 40
+          }
+        ],
+        "assets": [
+          "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+        ]
+      },
+      {
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "interactions": [
+          {
+            "attempt": 1,
+            "events": [
+              {
+                "id": 6173,
+                "type": "pointerdown",
+                "duration": 64,
+                "start": 12799.5
+              },
+              {
+                "id": 6173,
+                "type": "pointerup",
+                "duration": 64,
+                "start": 12799.5
+              },
+              {
+                "id": 6173,
+                "type": "click",
+                "duration": 64,
+                "start": 12799.5
+              },
+              {
+                "id": 6180,
+                "type": "keydown",
+                "duration": 40,
+                "start": 14114.20000000298
+              },
+              {
+                "id": 6180,
+                "type": "keyup",
+                "duration": 40,
+                "start": 14118.90000000596
+              }
+            ],
+            "maxEventDurationMs": 64
+          },
+          {
+            "attempt": 2,
+            "events": [
+              {
+                "id": 6187,
+                "type": "pointerdown",
+                "duration": 56,
+                "start": 14666.60000000149
+              },
+              {
+                "id": 6187,
+                "type": "pointerup",
+                "duration": 48,
+                "start": 14666.70000000298
+              },
+              {
+                "id": 6187,
+                "type": "click",
+                "duration": 48,
+                "start": 14666.70000000298
+              },
+              {
+                "id": 6194,
+                "type": "keydown",
+                "duration": 72,
+                "start": 15182.5
+              },
+              {
+                "id": 6194,
+                "type": "keyup",
+                "duration": 64,
+                "start": 15186.90000000596
+              }
+            ],
+            "maxEventDurationMs": 72
+          },
+          {
+            "attempt": 3,
+            "events": [
+              {
+                "id": 6201,
+                "type": "pointerdown",
+                "duration": 56,
+                "start": 15733.20000000298
+              },
+              {
+                "id": 6201,
+                "type": "pointerup",
+                "duration": 56,
+                "start": 15733.20000000298
+              },
+              {
+                "id": 6201,
+                "type": "click",
+                "duration": 56,
+                "start": 15733.20000000298
+              },
+              {
+                "id": 6208,
+                "type": "keydown",
+                "duration": 32,
+                "start": 16249.5
+              },
+              {
+                "id": 6208,
+                "type": "keyup",
+                "duration": 24,
+                "start": 16253.40000000596
+              }
+            ],
+            "maxEventDurationMs": 56
+          }
+        ],
+        "assets": [
+          "http://127.0.0.1:3191/assets/index-DpIL7EHW.js"
+        ]
+      }
+    ],
+    "after": [
+      {
+        "profile": {
+          "name": "mobile",
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "deviceScaleFactor": 2,
+          "isMobile": true,
+          "hasTouch": true,
+          "cpu": 4
+        },
+        "interactions": [
+          {
+            "attempt": 1,
+            "events": [
+              {
+                "id": 8426,
+                "type": "pointerdown",
+                "duration": 16,
+                "start": 12844.40000000596
+              },
+              {
+                "id": 8426,
+                "type": "pointerup",
+                "duration": 16,
+                "start": 12844.5
+              },
+              {
+                "id": 8426,
+                "type": "click",
+                "duration": 16,
+                "start": 12844.5
+              },
+              {
+                "id": 8433,
+                "type": "keydown",
+                "duration": 24,
+                "start": 14163.90000000596
+              },
+              {
+                "id": 8433,
+                "type": "keyup",
+                "duration": 16,
+                "start": 14177.60000000149
+              }
+            ],
+            "maxEventDurationMs": 24
+          },
+          {
+            "attempt": 2,
+            "events": [
+              {
+                "id": 8440,
+                "type": "pointerdown",
+                "duration": 32,
+                "start": 14702.90000000596
+              },
+              {
+                "id": 8440,
+                "type": "pointerup",
+                "duration": 32,
+                "start": 14702.90000000596
+              },
+              {
+                "id": 8440,
+                "type": "click",
+                "duration": 32,
+                "start": 14702.90000000596
+              },
+              {
+                "id": 8447,
+                "type": "keydown",
+                "duration": 24,
+                "start": 15231.80000000447
+              },
+              {
+                "id": 8447,
+                "type": "keyup",
+                "duration": 16,
+                "start": 15243
+              }
+            ],
+            "maxEventDurationMs": 32
+          },
+          {
+            "attempt": 3,
+            "events": [
+              {
+                "id": 8454,
+                "type": "pointerdown",
+                "duration": 32,
+                "start": 15770
+              },
+              {
+                "id": 8454,
+                "type": "pointerup",
+                "duration": 32,
+                "start": 15770
+              },
+              {
+                "id": 8454,
+                "type": "click",
+                "duration": 32,
+                "start": 15770
+              },
+              {
+                "id": 8461,
+                "type": "keydown",
+                "duration": 24,
+                "start": 16298.70000000298
+              }
+            ],
+            "maxEventDurationMs": 32
+          }
+        ],
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ]
+      },
+      {
+        "profile": {
+          "name": "desktop",
+          "viewport": {
+            "width": 1365,
+            "height": 900
+          },
+          "deviceScaleFactor": 1,
+          "isMobile": false,
+          "hasTouch": false,
+          "cpu": 1
+        },
+        "interactions": [
+          {
+            "attempt": 1,
+            "events": [
+              {
+                "id": 8080,
+                "type": "pointerdown",
+                "duration": 64,
+                "start": 12802.70000000298
+              },
+              {
+                "id": 8080,
+                "type": "pointerup",
+                "duration": 64,
+                "start": 12802.70000000298
+              },
+              {
+                "id": 8080,
+                "type": "click",
+                "duration": 64,
+                "start": 12802.70000000298
+              },
+              {
+                "id": 8087,
+                "type": "keydown",
+                "duration": 96,
+                "start": 14108.60000000149
+              },
+              {
+                "id": 8087,
+                "type": "keyup",
+                "duration": 96,
+                "start": 14112.10000000149
+              }
+            ],
+            "maxEventDurationMs": 96
+          },
+          {
+            "attempt": 2,
+            "events": [
+              {
+                "id": 8094,
+                "type": "pointerdown",
+                "duration": 64,
+                "start": 14652.40000000596
+              },
+              {
+                "id": 8094,
+                "type": "pointerup",
+                "duration": 64,
+                "start": 14652.5
+              },
+              {
+                "id": 8094,
+                "type": "click",
+                "duration": 64,
+                "start": 14652.5
+              },
+              {
+                "id": 8101,
+                "type": "keydown",
+                "duration": 80,
+                "start": 15167.70000000298
+              },
+              {
+                "id": 8101,
+                "type": "keyup",
+                "duration": 80,
+                "start": 15170.90000000596
+              }
+            ],
+            "maxEventDurationMs": 80
+          },
+          {
+            "attempt": 3,
+            "events": [
+              {
+                "id": 8108,
+                "type": "pointerdown",
+                "duration": 64,
+                "start": 15702.10000000149
+              },
+              {
+                "id": 8108,
+                "type": "pointerup",
+                "duration": 64,
+                "start": 15702.10000000149
+              },
+              {
+                "id": 8108,
+                "type": "click",
+                "duration": 64,
+                "start": 15702.10000000149
+              },
+              {
+                "id": 8115,
+                "type": "keydown",
+                "duration": 88,
+                "start": 16215.60000000149
+              },
+              {
+                "id": 8115,
+                "type": "keyup",
+                "duration": 80,
+                "start": 16218.70000000298
+              }
+            ],
+            "maxEventDurationMs": 88
+          }
+        ],
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ]
+      }
+    ]
+  },
+  "journeys": [
+    {
+      "profile": {
+        "name": "small",
+        "width": 320,
+        "height": 844
+      },
+      "status": "passed",
+      "bookingActionEnabled": true,
+      "returnedCards": 24,
+      "scrollDifference": 0,
+      "searchRequestsAfterReturn": 2,
+      "empty": true,
+      "errorRetry": true,
+      "paginationRetry": true,
+      "pageErrors": [],
+      "posts": [
+        "/api/search",
+        "/api/search",
+        "/api/price",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search"
+      ]
+    },
+    {
+      "profile": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844
+      },
+      "status": "passed",
+      "bookingActionEnabled": true,
+      "returnedCards": 24,
+      "scrollDifference": 0,
+      "searchRequestsAfterReturn": 2,
+      "empty": true,
+      "errorRetry": true,
+      "paginationRetry": true,
+      "pageErrors": [],
+      "posts": [
+        "/api/search",
+        "/api/search",
+        "/api/price",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search"
+      ]
+    },
+    {
+      "profile": {
+        "name": "landscape",
+        "width": 844,
+        "height": 390
+      },
+      "status": "passed",
+      "bookingActionEnabled": true,
+      "returnedCards": 24,
+      "scrollDifference": 0,
+      "searchRequestsAfterReturn": 2,
+      "empty": true,
+      "errorRetry": true,
+      "paginationRetry": true,
+      "pageErrors": [],
+      "posts": [
+        "/api/search",
+        "/api/search",
+        "/api/price",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search"
+      ]
+    },
+    {
+      "profile": {
+        "name": "desktop",
+        "width": 1365,
+        "height": 900
+      },
+      "status": "passed",
+      "bookingActionEnabled": true,
+      "returnedCards": 24,
+      "scrollDifference": 0,
+      "searchRequestsAfterReturn": 2,
+      "empty": true,
+      "errorRetry": true,
+      "paginationRetry": true,
+      "pageErrors": [],
+      "posts": [
+        "/api/search",
+        "/api/search",
+        "/api/price",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search",
+        "/api/search"
+      ]
+    }
+  ],
+  "journeySourceSha256": {
+    "src/components/search/CategoryBar.tsx": "bd6f164ffa5a16bdf63935c4cc8c84d9b0c231358a1424413475e6fb7902b50f",
+    "src/components/search/SearchPagination.tsx": "eb1029b9fa035f7d20da157cb9f011611c5becc9b61ed4aac95580cdf7c9e701",
+    "docs/estudos/sprint-4-e7-fixture.mjs": "b95e33e6991c59928322de23e878cce729839abaa2318e57a4da464c950fbaf1",
+    "docs/estudos/sprint-4-e7-jornadas.mjs": "25345148ee356a896e18355b4213e7e63d3c77d39a980f65ed88381216a35dfd"
+  },
+  "runtimeBefore": {
+    "applicationCommit": "9518dc35c9f44ad7554f6a2ae7c17e6a105988c1",
+    "container": "8fb6b098a47c",
+    "execution": "Separate CLI PHP process per API request, application kernel, web user, no CDN/Apache network timing",
+    "maxExternalRequestsPerProbe": 6,
+    "samples": [
+      {
+        "status": 200,
+        "bootstrapMs": 206.29,
+        "durationMs": 3136.07,
+        "upstreamRequests": 2,
+        "deniedRequests": 0,
+        "resultCount": 8,
+        "unquotedCount": 0,
+        "expiresAt": null,
+        "peakPhpAllocatedBytes": 29360128,
+        "reportedAt": "2026-11-04T01:44:03+00:00"
+      },
+      {
+        "status": 200,
+        "bootstrapMs": 237.91,
+        "durationMs": 1357.32,
+        "upstreamRequests": 2,
+        "deniedRequests": 0,
+        "resultCount": 8,
+        "unquotedCount": 0,
+        "expiresAt": null,
+        "peakPhpAllocatedBytes": 29360128,
+        "reportedAt": "2026-11-04T01:44:32+00:00"
+      }
+    ]
+  }
+}

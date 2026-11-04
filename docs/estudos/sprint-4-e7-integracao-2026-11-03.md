@@ -64,3 +64,34 @@ O deslocamento principal foi eliminado, e os tempos da home ficaram dentro do li
 O script da home passa a aceitar `CRCN_PROFILE=desktop` e `CRCN_REPETITION_START=4` para essa repetição adicional, sem alterar os observadores ou as três repetições padrão. Use diretórios de saída separados e execute sequencialmente. Busca e interações estão em execução; jornadas, custo do worker, publicação e medição pública continuam pendentes.
 
 Dados da home corrigida: [JSON](sprint-4-e7-integracao-corrigida-2026-11-03.json). Esses resultados continuam sendo de fixture, não p75 real.
+
+
+## Repetições adicionais, busca e interações
+
+Com seis amostras por cenário desktop, a montagem do catálogo frio passou de mediana 1.480,05 ms (faixa 1.470,6–1.489,5; MAD 4,95) para 1.672,4 ms (1.666,5–1.675,0; MAD 1,85). A diferença de +192,35 ms permaneceu abaixo do limiar inicial de investigação de 200 ms, mesmo após repetir o cenário próximo desse limite. É um custo observado, não um ganho: a primeira vitrine passou a aparecer antes e a não empurrar a lista, enquanto a lista abaixo da dobra demorou um pouco mais. Não se declara significância estatística com seis amostras.
+
+No desktop frio agregado, LCP passou de 818 para 844 ms, CLS de 0,45749 para 0,05687 e primeiro preço da vitrine de 2.172 para 1.471 ms. Permanecem as ressalvas de imagem fictícia e janela limitada; a comparação pública ainda é necessária para avaliar o LCP do artefato entregue.
+
+A busca datada teve três repetições mobile por braço: primeiro cartão cotado de mediana 2.273 para 1.603 ms; duas consultas/30 cartões no código E0, uma consulta/12 cartões na primeira página do candidato. A paginação posterior é validada na jornada, sem tratar 12 cartões como busca global concluída.
+
+Abertura/fechamento do diálogo de busca, três ciclos na mesma página por dispositivo: mobile [32,40,40] → [24,32,32] ms; desktop [64,72,56] → [96,80,88] ms. O desktop ficou mais lento nessa pequena amostra, dentro do limiar de duração definido na E0 e abaixo de 200 ms; os valores não são INP p75 nem representam todas as interações.
+
+## Jornada e ajustes de acessibilidade encontrados
+
+Em Chromium com movimento reduzido, passaram os cenários 320×844, 390×844, 844×390 e 1365×900: carregar mais por Enter, manter foco durante carregamento, abrir a 13ª acomodação, obter calendário/cotação válidos, abrir/fechar a galeria por teclado e voltar aos mesmos 24 cartões. A diferença de scroll foi zero nos quatro perfis e o retorno não fez nova busca: continuaram duas consultas. O botão de continuar a reserva estava habilitado com os dados fictícios, mas não foi acionado.
+
+Lista vazia, erro/retry da busca e erro/retry da próxima página também passaram, preservando os resultados existentes quando cabível. Não houve overflow horizontal nos pontos verificados nem erros de página. Os únicos POSTs foram busca e cotação na fixture; não se criaram pedidos, reservas ou pagamentos.
+
+A jornada revelou perda de foco ao desabilitar nativamente “Carregar mais” durante a consulta. O botão usa `aria-disabled` nesse intervalo e bloqueia novas ativações no handler, preservando o foco. O fim definitivo continua desabilitado. Outro caso revelou largura inicial de desktop na barra de categorias ao voltar do detalhe; ela passa a começar com um cartão, dimensões responsivas, medida em layout effect e limite de largura no trilho. O trilho respeita a largura da coluna disponível, e a correção foi validada nos quatro perfis.
+
+Passaram 37 testes direcionados de busca/roteamento, depois 15 do roteador com o caso de ativação repetida e 20 de categorias/roteador com o ajuste de largura; lint/TypeScript e build passaram. A suíte completa do lote passou com 555 testes frontend; formatação, Pint e diff também passaram. As medições de tempo anteriores identificam explicitamente seu commit; os ajustes da jornada exigem gates no novo SHA e verificação do artefato final.
+
+## Consumo upstream no runtime anterior
+
+O container `8fb6b098a47c` estava saudável e executava `9518dc35c9f44ad7554f6a2ae7c17e6a105988c1`. Foram feitas duas leituras públicas de busca, uma por processo PHP independente, como usuário web, pelo kernel da aplicação. Cada execução tinha teto de seis chamadas externas e prazo externo de 45 segundos; um middleware permitia somente os endpoints de consulta necessários. Não foram alterados código/configuração ou dados comerciais. Os caches normais da aplicação podem ser usados por essas leituras.
+
+Ambas responderam 200 com oito resultados e zero sem cotação. Foram duas chamadas Stays na primeira leitura e duas na repetida, sem bloqueios pelo teto do probe. Tempos do handler: 3.136 e 1.357 ms; bootstrap: 206 e 238 ms; pico de memória alocada PHP: 28 MiB em cada processo. A variação de duração não é atribuída a cache, pois as duas leituras consultaram o provedor. Esses números excluem trânsito público/CDN/Apache e não medem o worker. O carimbo `reportedAt` corresponde ao término do probe.
+
+A comparação equivalente após a publicação, o custo do worker e a medição pública permanecem pendentes. O aquecimento de ofertas continua desligado até calibrar sua parcela de orçamento Stays.
+
+Instrumentos e dados: `sprint-4-e7-jornadas.mjs`, `sprint-4-e7-upstream-probe.php` e [JSON de validação local](sprint-4-e7-validacao-local-2026-11-03.json). A revisão da validade de busca em relação ao relógio do cliente também permanece na auditoria anterior à publicação.

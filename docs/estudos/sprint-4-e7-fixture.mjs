@@ -37,6 +37,10 @@ for (const [port, input] of [
         for await (const chunk of request) raw += chunk;
         const params = raw ? JSON.parse(raw) : {};
         let result = { success: true, data: [] };
+        let status = 200;
+        const scenario = new URL(request.headers.referer || url.origin).searchParams.get(
+          '__fixture',
+        );
         if (url.pathname === '/api/accommodations')
           result = { ...result, source: 'stays-live', data: properties };
         if (/^\/api\/accommodations\/[^/]+$/.test(url.pathname))
@@ -48,11 +52,60 @@ for (const [port, input] of [
                 ),
               ) || null,
           };
+        if (/^\/api\/accommodations\/[^/]+\/calendar$/.test(url.pathname)) {
+          const from = url.searchParams.get('from');
+          const to = url.searchParams.get('to');
+          const days = [];
+          for (
+            let date = Date.parse(`${from}T00:00:00Z`);
+            date <= Date.parse(`${to}T00:00:00Z`);
+            date += 86_400_000
+          ) {
+            days.push({
+              date: new Date(date).toISOString().slice(0, 10),
+              avail: 1,
+              prices: [{ minStay: 1, _mcval: { BRL: 250 } }],
+            });
+          }
+          result = {
+            success: true,
+            source: 'stays-live',
+            data: days,
+            meta: { expiresAt: new Date(Date.now() + 45_000).toISOString() },
+          };
+        }
+        if (url.pathname === '/api/price') {
+          const nights = Math.round((Date.parse(params.to) - Date.parse(params.from)) / 86_400_000);
+          result = {
+            success: true,
+            listingId: params.listingIds[0],
+            staysListingId: params.listingIds[0],
+            nights,
+            dailyRate: 250,
+            baseTotal: 250 * nights,
+            cleaningFee: 0,
+            serviceFee: 0,
+            discount: 0,
+            total: 250 * nights,
+            currency: 'BRL',
+            source: 'stays-live',
+            fees: [],
+            feesIncluded: true,
+            cleaningIncluded: true,
+            breakdown: {
+              dailyRateText: '',
+              cleaningFeeText: '',
+              serviceFeeText: '',
+              totalText: '',
+            },
+          };
+        }
         if (url.pathname === '/api/search') {
           const limit = params.limit ?? 20;
           const skip = params.skip ?? 0;
           const nights = Math.round((Date.parse(params.to) - Date.parse(params.from)) / 86_400_000);
-          const data = properties.slice(skip, skip + limit).map((property) => ({
+          const availableProperties = scenario === 'empty' ? [] : properties;
+          const data = availableProperties.slice(skip, skip + limit).map((property) => ({
             ...property,
             ...(params.from && params.to
               ? {
@@ -80,7 +133,7 @@ for (const [port, input] of [
             pagination: {
               receivedCount: data.length,
               nextSkip: skip + data.length,
-              hasMore: skip + data.length < properties.length,
+              hasMore: skip + data.length < availableProperties.length,
             },
             ...(params.from && params.to
               ? {
@@ -92,8 +145,20 @@ for (const [port, input] of [
               : {}),
           };
         }
+        if (
+          url.pathname === '/api/search' &&
+          (scenario === 'search-error' ||
+            (scenario === 'pagination-error' && (params.skip ?? 0) > 0))
+        ) {
+          status = 503;
+          result = {
+            success: false,
+            code: 'availability_unavailable',
+            message: 'Não foi possível confirmar a disponibilidade agora.',
+          };
+        }
         setTimeout(() => {
-          response.writeHead(200, {
+          response.writeHead(status, {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
           });

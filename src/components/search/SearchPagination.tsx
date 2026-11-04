@@ -26,8 +26,11 @@ export function SearchPagination({ state, onLoadMore }: SearchPaginationProps) {
       )}
       <button
         type="button"
-        disabled={state.isLoading || !state.hasMore}
-        onClick={onLoadMore}
+        disabled={!state.hasMore}
+        aria-disabled={state.isLoading || !state.hasMore}
+        onClick={() => {
+          if (!state.isLoading && state.hasMore) onLoadMore();
+        }}
         className="min-h-11 rounded-full border border-neutral-300 bg-white px-6 py-3 text-sm font-bold text-neutral-900 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-default disabled:text-neutral-500"
       >
         {state.isLoading
