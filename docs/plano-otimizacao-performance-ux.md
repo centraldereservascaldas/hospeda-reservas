@@ -1,6 +1,6 @@
 # Plano de otimização de performance e experiência
 
-Data: 03/11/2026. Status: E0 com baseline registrado; E1–E3 e a base da fila E4 publicadas no commit `84155ab`. O complemento de visibilidade E4 foi publicado em `2a57035` e validado no domínio público ([evidências](estudos/publicacao-visibilidade-2026-11-03.md)); E5/E6 foram publicadas em `55dbd14`; A renovação foi validada em `72c3388`; a comparação E7 identificou latência no limite do cache e geometria de vitrines, corrigidas localmente. [Registro](estudos/sprint-4-e7-margem-geometria-2026-11-04.md). Aquecimento de ofertas desativado/cota e observabilidade real permanecem pendentes. [Comparação pública E7](estudos/publicacao-cache-e7-2026-11-04.md). [Registro da primeira publicação](estudos/publicacao-performance-2026-11-03.md).
+Atualizado em 04/11/2026. **Escopo E0–E7 implementado, publicado e verificado.** Release funcional final `1d3c80d`, após as entregas incrementais. [Relatório final, comparação e limites](estudos/entrega-e0-e7-2026-11-04.md). Aquecimento de ofertas está implementado/testado e permanece desligado até definir a cota; observabilidade contínua e p75 real são acompanhamento operacional. O primeiro preço da home mobile fria não teve ganho comprovado; a busca explícita, LCP mobile, estabilidade e volume melhoraram nas amostras. Registros anteriores são checkpoints históricos.
 
 Registro da Sprint 0: [versão publicada, método e resultados da E0](estudos/baseline-performance-e0-2026-11-03.md). Telemetria de backend e p75 real permanecem pendentes, explicitados no registro.
 
@@ -8,7 +8,7 @@ Registro da Sprint 0: [versão publicada, método e resultados da E0](estudos/ba
 
 Reduzir o tempo até o primeiro resultado útil, as consultas à Stays e o trabalho de renderização, mantendo disponibilidade e preços corretos. Entregar melhorias em etapas independentes e mensuráveis, sem alterar a autorização da compra ou os contratos existentes durante a transição.
 
-A goal ativa autoriza a implementação local por sprints. Commits locais por progresso e publicação incremental foram solicitados em 03/11/2026. Cada publicação depende dos gates, integração da main atual e conferência do alvo/rollback. Mudanças de infraestrutura fora do deploy continuam dependendo de solicitação explícita. Preservar as alterações preexistentes no worktree `codex/calendario-responsivo-cache` e o backend legado.
+A execução do plano foi autorizada por sprints. Commits locais por progresso e publicação incremental foram solicitados em 03/11/2026. Cada publicação depende dos gates, integração da main atual e conferência do alvo/rollback. Mudanças de infraestrutura fora do deploy continuam dependendo de solicitação explícita. Preservar as alterações preexistentes no worktree `codex/calendario-responsivo-cache` e o backend legado.
 
 ## Evidências e incertezas
 
@@ -46,15 +46,15 @@ Total estimado: **10,5–20 dias de trabalho**, sem somar itens opcionais abaixo
 
 ## Execução por sprints
 
-| Sprint | Escopo  | Esforço estimado | Saída verificável                                                   | Estado                                                           |
-| ------ | ------- | ---------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| S0     | E0      | 0,5–1 dia        | Artefato identificado, amostras e instrumentos reproduzíveis        | Baseline de laboratório concluído; observabilidade real pendente |
-| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 publicadas; CI Docker e smoke público passaram                                   |
-| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3/fila E4 publicadas; visibilidade E4 validada localmente |
-| S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Publicada no PR #43; cache quente confirmado e worker medido; renovação validada; margem útil do cache e geometria em validação, aquecimento desligado até conhecer cota |
-| S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Comparações local/pública e jornadas registradas; renovação validada; regressão de primeiro preço mobile e CLS investigados/corrigidos localmente; nova publicação/validação pendentes                                                        |
+| Sprint | Escopo  | Esforço estimado | Saída verificável                                                   | Estado                                                                                                                       |
+| ------ | ------- | ---------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| S0     | E0      | 0,5–1 dia        | Artefato identificado, amostras e instrumentos reproduzíveis        | Baseline de laboratório concluído; observabilidade real pendente                                                             |
+| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 publicadas; CI Docker e smoke público passaram                                                                         |
+| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3/E4 publicadas; visibilidade validada no domínio público                                                                   |
+| S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Publicada e validada em 1d3c80d; cache/renovação/geometria conferidos; aquecimento implementado e desligado até definir cota |
+| S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Concluída: 24 navegações e seis buscas no artefato final; sem regressão acima dos limiares E0, com limitações explícitas     |
 
-A goal desta conversa acompanha o plano por sprints. A continuação da goal iniciou a S1 em base isolada; E1/E2 estão implementadas localmente; E2 ainda exige validação do container em CI. Registro: [Sprint 1 E2](estudos/sprint-1-e2-2026-11-03.md). A base isolada de implementação foi preparada a partir da versão remota verificada; no diagnóstico original, o commit publicado observado está 67 commits à frente do HEAD local, além de haver alterações locais pendentes. Preservar esse worktree e revisar a integração do calendário existente, sem substituí-lo em massa. Não associar avanço de sprint a autorização de publicação.
+As implementações e publicações foram feitas em base isolada, preservando o worktree preexistente `codex/calendario-responsivo-cache` e o backend legado. Os registros de cada sprint conservam o estado observado em sua data; o relatório final acima é a referência do fechamento. Calendário agregado, nova hierarquia da home e perfil Android permanecem opcionais, fora da entrega core.
 
 ## E0 — Alinhar versões e medir
 
@@ -115,7 +115,7 @@ Progresso local em 03/11/2026: serviço e interface de página única integrados
 
 ## E4 — Fila por página/seção
 
-Progresso: fila publicada; gate por IntersectionObserver/fallback, páginas limitadas por data/área, cancelamento por visibilidade e reutilização de cotações validados localmente. A entrega usa demandas visíveis e não antecipa seções distantes. A publicação do complemento ainda está pendente; ver [registro da E4](estudos/sprint-2-e4-2026-11-03.md).
+Progresso: fila publicada; gate por IntersectionObserver/fallback, páginas limitadas por data/área, cancelamento por visibilidade e reutilização de cotações validados localmente. A entrega usa demandas visíveis e não antecipa seções distantes. O complemento foi publicado em `2a57035` e validado no domínio público; ver [registro da E4](estudos/sprint-2-e4-2026-11-03.md) e [publicação](estudos/publicacao-visibilidade-2026-11-03.md).
 
 **Trabalho:** usar um agendador compartilhado no frontend. Unidade de trabalho: página de resultados ou seção de ofertas, sem consulta de disponibilidade por cartão. Iniciar com duas requisições de dados concorrentes; priorizar ação explícita sobre antecipação. Acionar `IntersectionObserver` perto da próxima área, considerando também a rolagem horizontal das vitrines.
 
