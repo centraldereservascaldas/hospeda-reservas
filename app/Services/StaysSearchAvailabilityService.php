@@ -32,7 +32,7 @@ class StaysSearchAvailabilityService
                 $this->account(), $this->cache()->get($this->generationKey(), 'initial'), $context, $input['destination'] ?? '', 'BRL',
             ], JSON_THROW_ON_ERROR));
             $cached = $this->cache()->get($key);
-            if (is_array($cached)) {
+            if ($this->isReusable($cached)) {
                 return $cached;
             }
 
@@ -42,7 +42,7 @@ class StaysSearchAvailabilityService
 
             return $this->cache()->lock($key.':lock', max(30, (int) config('services.stays.timeout', 10) + 15))->block(3, function () use ($key, $context, $beforeRequest): ?array {
                 $cached = $this->cache()->get($key);
-                if (is_array($cached)) {
+                if ($this->isReusable($cached)) {
                     return $cached;
                 }
                 if ($this->coolingDown()) {
@@ -85,6 +85,13 @@ class StaysSearchAvailabilityService
 
             return null;
         }
+    }
+
+    private function isReusable(mixed $cached): bool
+    {
+        $expiresAt = is_array($cached) ? ($cached['meta']['expiresAt'] ?? null) : null;
+
+        return is_string($expiresAt) && strtotime($expiresAt) > now()->timestamp;
     }
 
     public function invalidate(): void

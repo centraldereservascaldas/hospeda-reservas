@@ -184,3 +184,12 @@ A ativação exige `STAYS_OFFER_WARMUP_ENABLED=true` e `STAYS_OFFER_WARMUP_DAILY
 Treze testes novos (53 asserções) verificam inatividade, limites de contexto, cache quente, orçamento por chamada/dia/janela móvel, resposta parcial, 429, troca de conta, unicidade e recuperação do estado em banco após recriar conexões. A mesma prova de banco entra no gate PostgreSQL; localmente usa SQLite descartável. O cenário de duas chamadas produziu cotação R$500 reaproveitada pela busca seguinte sem nova chamada. São fakes controlados, sem prova de latência pública ou custo real do worker.
 
 Validações frontend: 33 cenários direcionados e suíte completa de 553 testes; lint/TypeScript, build e formatação aprovados. Pint e diff passaram. A suíte backend final passou com 396 testes e 2.682 asserções. Os gates do SHA resultante ainda devem ser conferidos antes da publicação. Permanecem ativação conforme cota, medição do worker em runtime e comparação integrada E6/E7. Nenhum deploy ou chamada real a Stays/reserva/pagamento neste incremento.
+
+
+## Auditoria E7: expiração do payload antes do TTL arredondado
+
+Todos os gates do SHA `1428413` passaram no run `41752701700`; PostgreSQL executou 38 testes/177 asserções, sem warnings. Publicação e deploy foram ignorados por se tratar de PR.
+
+A revisão da implementação instalada do cache identificou uma diferença de precisão: o TTL com DateTime é arredondado para cima, enquanto o `expiresAt` serializado não inclui frações de segundo. Uma entrada poderia permanecer no store por uma fração de segundo além da validade informada ao navegador. O serviço agora verifica a validade do payload em ambos os pontos de leitura, inclusive depois de obter o lock, antes de reutilizá-lo. Essa checagem não renova o prazo.
+
+Um teste com relógio fracionário e latência simulada de 5,5 segundos reproduz o intervalo de arredondamento e exige recomputação. Passaram 26 testes direcionados de cache/aquecimento (108 asserções), Pint e diff. A comparação frontend E7 usa os mesmos artefatos já construídos; este ajuste é exclusivo do backend. A medição controlada ainda está em andamento e não comprova desempenho público.

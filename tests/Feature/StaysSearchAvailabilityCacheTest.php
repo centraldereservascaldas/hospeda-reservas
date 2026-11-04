@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Services\StaysCalendarService;
 use App\Services\StaysSearchAvailabilityService;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -29,6 +30,23 @@ class StaysSearchAvailabilityCacheTest extends TestCase
         $this->travel(26)->seconds();
         $fresh = $service->search($this->context());
         $this->assertNotSame($first['meta']['expiresAt'], $fresh['meta']['expiresAt']);
+        Http::assertSentCount(2);
+    }
+
+    public function test_payload_deadline_wins_when_cache_ttl_rounding_retains_the_snapshot_longer(): void
+    {
+        $this->travelTo(now()->startOfSecond()->addMilliseconds(800));
+        Http::preventStrayRequests();
+        Http::fake(function () {
+            $this->travelTo(now()->addMilliseconds(5500));
+
+            return Http::response([]);
+        });
+        $service = app(StaysSearchAvailabilityService::class);
+        $first = $service->search($this->context());
+        $this->travelTo(CarbonImmutable::parse($first['meta']['expiresAt'])->addMilliseconds(100));
+        $second = $service->search($this->context());
+        $this->assertNotSame($first['meta']['expiresAt'], $second['meta']['expiresAt']);
         Http::assertSentCount(2);
     }
 
