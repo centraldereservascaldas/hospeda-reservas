@@ -160,3 +160,12 @@ O cache descritivo do navegador agora usa metadados de versão e prazo absoluto 
 Um utilitário compartilhado atende catálogo, fallback de condomínios, atualização da galeria e sincronização Stays. Atualizar uma galeria preserva o prazo do conjunto existente. Cotações por datas são removidas tanto na escrita quanto na leitura, e erros de quota/acesso ao localStorage não impedem o fluxo com API. Corrigida também a comparação de identidade que poderia coincidir dois IDs Stays ausentes na atualização de um registro.
 
 Validação: 17 testes direcionados passaram; suíte frontend completa com 552 testes, lint/TypeScript, build, formatação e diff aprovados. O prazo e os limites pertencem ao cache descritivo; preços e disponibilidade mantêm validação própria. Ainda falta pausar a renovação do calendário em aba oculta e a auditoria integrada E6/E7. Nenhuma publicação deste incremento.
+
+
+## E6: pausa de renovação de calendário em aba oculta
+
+A expiração sempre invalida a confirmação do calendário, mas a renovação automática só é solicitada com a aba visível. O snapshot continua na tela. Ao retomar depois do vencimento, uma única consulta é iniciada, mesmo com eventos de visibilidade repetidos; retomar antes do vencimento não consulta. Desmontagem remove timer e listener.
+
+O teste com relógio controlado mantém 91 dias na tela, simula dois minutos em aba oculta sem chamada extra, volta à aba e verifica apenas uma renovação e recuperação da confirmação. O teste de mudança de contexto também verifica que novas fotos/descrição do mesmo imóvel não consultam novamente preço ou calendário, mas mudar hóspedes/imóvel continua invalidando o contexto correspondente.
+
+Os 17 testes do hook, lint/TypeScript, formatação e diff passaram. A suíte completa de 552 testes e build passou no incremento imediatamente anterior; o novo comportamento exige ainda CI e auditoria de jornada antes de considerar E6 validada integralmente. Aquecimento E5, comparação E7 e nova publicação permanecem pendentes.

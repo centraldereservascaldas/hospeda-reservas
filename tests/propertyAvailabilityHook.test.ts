@@ -210,9 +210,14 @@ test('property availability hides stale calendar and quote while guest or proper
     },
   });
 
-  crcnBackendApi.getAccommodationCalendar = async (listingId) =>
-    listingId === firstListingId ? calendar : secondPropertyCalendar;
+  let calendarRequests = 0;
+  let priceRequests = 0;
+  crcnBackendApi.getAccommodationCalendar = async (listingId) => {
+    calendarRequests += 1;
+    return listingId === firstListingId ? calendar : secondPropertyCalendar;
+  };
   crcnBackendApi.calculatePrice = async (request) => {
+    priceRequests += 1;
     if (request.listingId === firstListingId && request.guests === 2) {
       return makeQuote(firstListingId, 850);
     }
@@ -256,6 +261,21 @@ test('property availability hides stale calendar and quote while guest or proper
       assert.equal(readState().staysPrice?.total, 850);
     });
 
+    await act(async () => {
+      rerender(
+        React.createElement(Probe, {
+          property: {
+            ...firstProperty,
+            description: 'Descrição atualizada',
+            images: ['https://example.com/new.jpg'],
+          },
+          guests: 2,
+        }),
+      );
+    });
+    assert.equal(priceRequests, 1, 'descriptive updates must not repeat the same quote');
+    assert.equal(calendarRequests, 1, 'descriptive updates must not repeat the same calendar');
+    assert.equal(readState().staysPrice?.total, 850);
     rerender(React.createElement(Probe, { property: firstProperty, guests: 3 }));
     assert.equal(readState().staysPrice, null);
     assert.equal(readState().isCalculatingPrice, true);
@@ -867,6 +887,93 @@ test('detail quote expires without polling and renews only on explicit retry', a
   } finally {
     cleanup();
     crcnBackendApi.calculatePrice = original;
+    context.mock.timers.reset();
+  }
+});
+
+test('hidden calendar expiry preserves days and waits for one visible refresh', async (context) => {
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.UTC(2026, 10, 3) });
+  const originalFetch = globalThis.fetch;
+  const originalVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+  let visibility = 'visible';
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
+  const days = Array.from({ length: 91 }, (_, offset) => ({
+    date: new Date(Date.UTC(2026, 11, 19 + offset)).toISOString().slice(0, 10),
+    avail: 1,
+  }));
+  let requests = 0;
+  let resolveRefresh!: (response: Response) => void;
+  globalThis.fetch = async () => {
+    requests += 1;
+    if (requests > 1)
+      return new Promise<Response>((resolve) => {
+        resolveRefresh = resolve;
+      });
+    return new Response(
+      JSON.stringify({ data: days, meta: { expiresAt: new Date(Date.now() + 80).toISOString() } }),
+      { status: 200 },
+    );
+  };
+  let state!: ReturnType<typeof usePropertyAvailability>;
+  function Probe() {
+    state = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn: '',
+      checkOut: '',
+      guests: 2,
+      todayIso: '2026-12-19',
+    });
+    return null;
+  }
+  const setVisibility = async (value: string) => {
+    await act(async () => {
+      visibility = value;
+      document.dispatchEvent(new dom.window.Event('visibilitychange'));
+    });
+  };
+  try {
+    await act(async () => {
+      render(React.createElement(Probe));
+    });
+    assert.equal(state.calendarAvailable, true);
+    await setVisibility('hidden');
+    await act(async () => {
+      context.mock.timers.tick(79);
+    });
+    await setVisibility('visible');
+    assert.equal(requests, 1, 'a fresh calendar needs no visibility refresh');
+    await setVisibility('hidden');
+    await act(async () => {
+      context.mock.timers.tick(120_000);
+    });
+    assert.equal(state.calendarAvailable, false);
+    assert.equal(state.calendarDays.length, 91);
+    assert.equal(requests, 1, 'expired hidden calendar must not poll');
+    await setVisibility('visible');
+    await setVisibility('visible');
+    assert.equal(requests, 2);
+    assert.equal(state.isRefreshingCalendar, true);
+    assert.equal(state.calendarDays.length, 91);
+    await act(async () => {
+      resolveRefresh(
+        new Response(
+          JSON.stringify({
+            data: days,
+            meta: { expiresAt: new Date(Date.now() + 45_000).toISOString() },
+          }),
+          { status: 200 },
+        ),
+      );
+    });
+    assert.equal(state.calendarAvailable, true);
+    cleanup();
+    await setVisibility('visible');
+    assert.equal(requests, 2);
+  } finally {
+    cleanup();
+    globalThis.fetch = originalFetch;
+    if (originalVisibility) Object.defineProperty(document, 'visibilityState', originalVisibility);
+    else Reflect.deleteProperty(document, 'visibilityState');
     context.mock.timers.reset();
   }
 });
