@@ -6,6 +6,7 @@ use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingStaysAction;
+use App\Services\Payments\CieloDirectConfiguration;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
@@ -113,13 +114,13 @@ class DirectStaysPaymentService
     private function ensureStaysPaymentRecorded(DirectBookingOrder $order, DirectBookingPaymentAttempt $attempt): array
     {
         $paymentType = config('direct-booking.stays_payment_type');
-        $providerId = config('direct-booking.stays_payment_provider_id');
+        $providerId = $this->paymentProviderId($attempt);
         if (! in_array($paymentType, ['credit', 'debit'], true) || ! is_string($providerId) || trim($providerId) === '') {
             return $this->attention($order, 'stays_payment_mapping_unconfigured', 'O tipo e o provedor do lançamento financeiro Stays ainda não foram aprovados e configurados.');
         }
 
         $gateway = match ($attempt->gateway_provider) {
-            'cielo' => ['marker' => 'CIELO', 'name' => 'CRCN Cielo'],
+            'cielo', 'cielo_sandbox' => ['marker' => 'CIELO', 'name' => 'CRCN Cielo'],
             'cielo_checkout' => ['marker' => 'CIELO_CHECKOUT', 'name' => 'CRCN Checkout Cielo'],
             default => ['marker' => 'MP', 'name' => 'CRCN Mercado Pago'],
         };
@@ -128,13 +129,19 @@ class DirectStaysPaymentService
             ? $marker
             : 'CRCN_DIRECT_ORDER:'.$order->id.':MP:'.$attempt->gateway_payment_id;
         $paidAt = $attempt->paid_at?->toDateString() ?? now()->toDateString();
+        $paymentName = $gateway['name'];
+        if (CieloDirectConfiguration::isProvider($attempt->gateway_provider) && $attempt->payment_method === 'pix') {
+            $paymentName = 'Pix API Cielo';
+        } elseif (CieloDirectConfiguration::isProvider($attempt->gateway_provider) && $attempt->payment_method === 'card' && $attempt->installments >= 1 && $attempt->installments <= 6) {
+            $paymentName = 'Cartão API Cielo '.$attempt->installments.'x';
+        }
         $payload = [
             'type' => $paymentType,
             '_f_val' => (float) ($attempt->base_amount ?? $attempt->amount),
             'status' => 'completed',
             'expirationDate' => $attempt->expires_at?->toDateString() ?? $paidAt,
             'paymentDate' => $paidAt,
-            'name' => $gateway['name'],
+            'name' => $paymentName,
             'desc' => $marker,
         ];
         $payload['_idpaymentProvider'] = trim($providerId);
@@ -347,11 +354,35 @@ class DirectStaysPaymentService
         $paymentAmountCents = MoneyAmount::toCents($payment['_f_val'] ?? null);
         $attemptAmountCents = MoneyAmount::toCents($attempt->base_amount ?? $attempt->amount);
 
+        $knownProviderIds = array_filter([
+            $this->paymentProviderId($attempt),
+            config('direct-booking.stays_payment_provider_id'),
+            ...$attempt->order->staysActions()->whereIn('action_type', ['register_payment', 'register_pending_payment'])->get()->map(fn ($action) => $action->request_snapshot['_idpaymentProvider'] ?? null)->all(),
+        ], fn ($id): bool => is_string($id) && trim($id) !== '');
+
         return $paymentAmountCents !== null
             && $attemptAmountCents !== null
             && $paymentAmountCents === $attemptAmountCents
             && ($payment['type'] ?? null) === config('direct-booking.stays_payment_type')
-            && (string) ($payment['_idpaymentProvider'] ?? '') === (string) config('direct-booking.stays_payment_provider_id');
+            && in_array((string) ($payment['_idpaymentProvider'] ?? ''), $knownProviderIds, true);
+    }
+
+    private function paymentProviderId(DirectBookingPaymentAttempt $attempt): mixed
+    {
+        if (CieloDirectConfiguration::isProvider($attempt->gateway_provider)) {
+            $specific = match ($attempt->payment_method) {
+                'pix' => config('direct-booking.stays_cielo_pix_provider_id'),
+                'card' => $attempt->installments >= 1 && $attempt->installments <= 6
+                    ? config('direct-booking.stays_cielo_card_provider_ids.'.$attempt->installments)
+                    : null,
+                default => null,
+            };
+            if (is_string($specific) && trim($specific) !== '') {
+                return trim($specific);
+            }
+        }
+
+        return config('direct-booking.stays_payment_provider_id');
     }
 
     /** @param array<string, mixed> $reservation */

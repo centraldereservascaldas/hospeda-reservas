@@ -18,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -154,11 +155,13 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         ]);
     }
 
-    public function test_cielo_sandbox_checkout_confirms_stays_once_after_captured_payment(): void
+    #[DataProvider('cieloInstallmentOptions')]
+    public function test_cielo_sandbox_checkout_confirms_stays_once_after_captured_payment(int $installments): void
     {
         $this->configureCheckout();
         $this->bindSyntheticApprovedCatalog();
         $this->configureCieloSandbox();
+        config(['direct-booking.stays_cielo_card_provider_ids.'.$installments => 'new-cielo-card-'.$installments.'x']);
         Http::preventStrayRequests();
         Mail::fake();
         $gatewayStatus = 'approved';
@@ -173,6 +176,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             'X-Checkout-Resume-Token' => $checkout->json('resume.token'),
         ];
         $payload = [...$this->cardPayload(),
+            'installments' => $installments,
             'paymentMethodId' => 'cielo_credit_card',
             'token' => getenv('CIELO_TEST_APPROVED_TOKEN') ?: '123e4567-e89b-12d3-a456-426614174000',
         ];
@@ -194,6 +198,10 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->assertSame(1, $this->recordedRequests('/1/sales/', 'POST'));
         $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations', 'POST'));
         $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1/payments', 'POST'));
+        Http::assertSent(fn (ClientRequest $request): bool => $request->method() === 'POST'
+            && str_ends_with(parse_url($request->url(), PHP_URL_PATH), '/reservation-journey-1/payments')
+            && $request['_idpaymentProvider'] === 'new-cielo-card-'.$installments.'x'
+            && $request['name'] === 'Cartão API Cielo '.$installments.'x');
         $this->assertSame(1, $this->recordedRequests('/external/v1/booking/reservations/reservation-journey-1', 'PATCH'));
 
         $email = DirectBookingEmail::query()->sole();
@@ -202,6 +210,11 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->getJson('/api/checkout/'.$reference, $headers)->assertOk()
             ->assertJsonPath('order.reservationConfirmed', true)
             ->assertJsonPath('payment.attempt.status', 'approved');
+    }
+
+    public static function cieloInstallmentOptions(): array
+    {
+        return [[1], [2], [3], [4], [5], [6]];
     }
 
     public function test_cielo_card_fraud_review_waits_and_accepted_capture_confirms_stays_only_once(): void
@@ -361,6 +374,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->configureCheckout();
         $this->bindSyntheticApprovedCatalog();
         $this->configureCieloSandbox();
+        config(['direct-booking.stays_cielo_pix_provider_id' => 'new-cielo-pix']);
         config([
             'direct-booking.send_confirmation_email' => false,
             'services.cielo.pix_enabled' => true,
@@ -394,6 +408,10 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->assertSame(DirectBookingOrderStatus::Confirmado, $order->status);
         $this->assertSame('booked', $order->reservation_status);
         $this->assertSame(1, $order->staysActions()->where('action_type', 'register_payment')->where('status', 'succeeded')->count());
+        Http::assertSent(fn (ClientRequest $request): bool => $request->method() === 'POST'
+            && str_ends_with(parse_url($request->url(), PHP_URL_PATH), '/reservation-journey-1/payments')
+            && $request['_idpaymentProvider'] === 'new-cielo-pix'
+            && $request['name'] === 'Pix API Cielo');
         $this->assertDatabaseCount('direct_booking_payment_webhooks', 0);
         $this->assertDatabaseCount('direct_booking_emails', 0);
         Mail::assertNothingOutgoing();
