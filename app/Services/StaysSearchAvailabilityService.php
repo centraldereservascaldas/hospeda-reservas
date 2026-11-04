@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Closure;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\QueryException;
@@ -17,7 +18,7 @@ class StaysSearchAvailabilityService
      * @param  array{from: string, to: string, guests?: int, propertyId?: string, cities?: list<string>, destination?: string, limit?: int, skip?: int}  $input
      * @return array{items: list<array<string, mixed>>, unquotedCount: int, receivedCount: int, meta: array{fetchedAt: string, expiresAt: string}}|null
      */
-    public function search(array $input): ?array
+    public function search(array $input, ?Closure $beforeRequest = null): ?array
     {
         try {
             $cities = array_values(array_unique($input['cities'] ?? []));
@@ -39,12 +40,15 @@ class StaysSearchAvailabilityService
                 return null;
             }
 
-            return $this->cache()->lock($key.':lock', max(30, (int) config('services.stays.timeout', 10) + 15))->block(3, function () use ($key, $context): ?array {
+            return $this->cache()->lock($key.':lock', max(30, (int) config('services.stays.timeout', 10) + 15))->block(3, function () use ($key, $context, $beforeRequest): ?array {
                 $cached = $this->cache()->get($key);
                 if (is_array($cached)) {
                     return $cached;
                 }
                 if ($this->coolingDown()) {
+                    return null;
+                }
+                if ($beforeRequest !== null && ! $beforeRequest()) {
                     return null;
                 }
                 $fetchedAt = now();
@@ -61,7 +65,7 @@ class StaysSearchAvailabilityService
                 if (! is_array($live) || ! array_is_list($live) || array_filter($live, 'is_array') !== $live || count($live) > $context['limit']) {
                     return null;
                 }
-                $resolved = $this->quotes->resolve($live, $context['from'], $context['to'], $context['guests']);
+                $resolved = $this->quotes->resolve($live, $context['from'], $context['to'], $context['guests'], $beforeRequest);
                 if (isset($resolved['rateLimit'])) {
                     $this->pauseAfterRateLimit($resolved['rateLimit']['retryAfter']);
                 }

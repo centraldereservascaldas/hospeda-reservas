@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Closure;
 use DateTimeImmutable;
 
 class StaysSearchQuoteService
@@ -12,7 +13,7 @@ class StaysSearchQuoteService
      * @param  list<array<string, mixed>>  $listings
      * @return array{items: list<array<string, mixed>>, unquotedCount: int, rateLimit?: array{retryAfter: ?string}}
      */
-    public function resolve(array $listings, string $from, string $to, int $guests): array
+    public function resolve(array $listings, string $from, string $to, int $guests, ?Closure $beforeRequest = null): array
     {
         $listings = array_values(array_filter($listings, static fn (array $listing): bool => ($listing['isBookable'] ?? null) !== false
             && (! isset($listing['_i_maxGuests']) || ! is_numeric($listing['_i_maxGuests']) || (float) $listing['_i_maxGuests'] >= $guests)));
@@ -34,7 +35,7 @@ class StaysSearchQuoteService
 
         $calculated = [];
         $rateLimit = null;
-        if ($missingIds !== []) {
+        if ($missingIds !== [] && ($beforeRequest === null || $beforeRequest())) {
             $httpResponse = $this->stays->request('POST', '/booking/calculate-price', payload: [
                 'listingIds' => array_values(array_unique($missingIds)),
                 'from' => $from,

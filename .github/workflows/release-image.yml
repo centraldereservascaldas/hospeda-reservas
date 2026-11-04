@@ -118,7 +118,7 @@ jobs:
         run: php artisan test --compact tests/Feature/GatewayProviderMigrationTest.php
 
       - name: Verify PostgreSQL search cache locking and pruning
-        run: php artisan test --compact --display-warnings --fail-on-warning tests/Feature/StaysSearchConcurrencyTest.php tests/Feature/PruneStaysSearchCacheTest.php tests/Feature/RefreshStaysAccommodationCatalogTest.php tests/Feature/StaysContentReadCacheTest.php
+        run: php artisan test --compact --display-warnings --fail-on-warning tests/Feature/StaysSearchConcurrencyTest.php tests/Feature/PruneStaysSearchCacheTest.php tests/Feature/RefreshStaysAccommodationCatalogTest.php tests/Feature/StaysContentReadCacheTest.php tests/Feature/StaysOfferWarmupTest.php
 
   container-smoke:
     runs-on: ubuntu-latest

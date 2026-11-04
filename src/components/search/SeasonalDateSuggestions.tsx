@@ -236,6 +236,7 @@ export function SeasonalDateSuggestions({
       void crcnBackendApi
         .searchAccommodationsPage(
           {
+            purpose: 'discovery',
             from: suggestion.checkIn,
             to: suggestion.checkOut,
             guests: guestCount,
@@ -345,6 +346,7 @@ export function SeasonalDateSuggestions({
     void crcnBackendApi
       .searchAccommodationsPage(
         {
+          purpose: 'discovery',
           from: catalogPeriod.checkIn,
           to: catalogPeriod.checkOut,
           guests: guestCount,

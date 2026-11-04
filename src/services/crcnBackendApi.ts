@@ -58,6 +58,7 @@ async function withApiRequestTimeout<T>(
 }
 
 export interface SearchAccommodationsParams {
+  purpose?: 'search' | 'discovery';
   from?: string;
   to?: string;
   guests?: number;

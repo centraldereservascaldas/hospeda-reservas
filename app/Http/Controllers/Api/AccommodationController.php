@@ -11,6 +11,7 @@ use App\Services\StaysCalendarService;
 use App\Services\StaysContentRateLimited;
 use App\Services\StaysContentReadCache;
 use App\Services\StaysExternalApiClient;
+use App\Services\StaysOfferWarmup;
 use App\Services\StaysSearchAvailabilityService;
 use App\Services\StaysSimulator;
 use Illuminate\Http\JsonResponse;
@@ -113,7 +114,7 @@ class AccommodationController extends Controller
         return response()->json(['success' => true, 'data' => $existing]);
     }
 
-    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchAvailabilityService $availabilityService): JsonResponse
+    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchAvailabilityService $availabilityService, StaysOfferWarmup $warmup): JsonResponse
     {
         $input = $request->validated();
         $from = $input['from'] ?? null;
@@ -163,6 +164,9 @@ class AccommodationController extends Controller
                 return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Não foi possível confirmar a disponibilidade agora. Tente novamente.'], 503);
             }
 
+            if ($resolved['unquotedCount'] === 0) {
+                $warmup->remember($input);
+            }
             $catalog = $this->catalog();
             $mapped = array_map(function (array $listing) use ($catalog): array {
                 $property = $this->mapper->map($listing, $catalog);

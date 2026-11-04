@@ -50,6 +50,8 @@ return [
         'timeout' => (int) env('STAYS_TIMEOUT', 10),
         'content_cache_store' => env('STAYS_CONTENT_CACHE_STORE', 'database'),
         'search_cache_store' => env('STAYS_SEARCH_CACHE_STORE', 'database'),
+        'offer_warmup_enabled' => (bool) env('STAYS_OFFER_WARMUP_ENABLED', false),
+        'offer_warmup_daily_requests' => (int) env('STAYS_OFFER_WARMUP_DAILY_REQUESTS', 0),
         'search_cache_ttl' => (int) env('STAYS_SEARCH_CACHE_TTL', 45),
         'calendar_cache_ttl' => (int) env('STAYS_CALENDAR_CACHE_TTL', 45),
     ],

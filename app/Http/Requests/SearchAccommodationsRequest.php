@@ -23,6 +23,7 @@ class SearchAccommodationsRequest extends FormRequest
             'cities' => ['nullable', 'array', 'max:10'],
             'cities.*' => ['string', 'max:160', 'distinct'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'purpose' => ['nullable', 'in:search,discovery'],
             'skip' => ['nullable', 'integer', 'min:0'],
         ];
     }
