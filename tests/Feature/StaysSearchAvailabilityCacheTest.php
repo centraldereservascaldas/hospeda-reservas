@@ -182,6 +182,88 @@ class StaysSearchAvailabilityCacheTest extends TestCase
         return ['invalid header' => ['not-a-date', 15], 'natural language is not a retry date' => ['tomorrow', 15], 'zero delay' => ['0', 1], 'maximum delay' => ['999999999', 86400]];
     }
 
+    public function test_refreshes_nearly_expired_cache_without_waiting_for_the_payload_deadline(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        Http::preventStrayRequests();
+        Http::fake(['https://stays.test/external/v1/booking/search-listings' => Http::response([])]);
+        $service = app(StaysSearchAvailabilityService::class);
+        $first = $service->search($this->context());
+        $this->travel(39)->seconds();
+        $this->assertSame($first, $service->search($this->context()));
+        Http::assertSentCount(1);
+        $this->travel(1)->seconds();
+        $fresh = $service->search($this->context());
+        $this->assertNotSame($first['meta']['fetchedAt'], $fresh['meta']['fetchedAt']);
+        $this->assertSame(now()->toIso8601String(), $fresh['meta']['fetchedAt']);
+        $this->assertSame(now()->addSeconds(45)->toIso8601String(), $fresh['meta']['expiresAt']);
+        $this->assertSame($fresh, $service->search($this->context()));
+        Http::assertSentCount(2);
+    }
+
+    #[DataProvider('shortCacheLifetimes')]
+    public function test_short_configured_ttl_keeps_cache_hits_until_absolute_expiry(int $seconds): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        config(['services.stays.search_cache_ttl' => $seconds]);
+        Http::preventStrayRequests();
+        Http::fake(['https://stays.test/external/v1/booking/search-listings' => Http::response([])]);
+        $service = app(StaysSearchAvailabilityService::class);
+        $first = $service->search($this->context());
+        $this->assertSame($first, $service->search($this->context()));
+        Http::assertSentCount(1);
+        $this->travel($seconds)->seconds();
+        $this->assertNotSame($first, $service->search($this->context()));
+        Http::assertSentCount(2);
+    }
+
+    /** @return array<string, array{int}> */
+    public static function shortCacheLifetimes(): array
+    {
+        return ['one second' => [1], 'two seconds' => [2], 'five seconds' => [5]];
+    }
+
+    public function test_rate_limit_during_early_refresh_keeps_still_valid_snapshot_without_new_requests(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        Http::preventStrayRequests();
+        Http::fake(['https://stays.test/external/v1/booking/search-listings' => Http::sequence()
+            ->push([])->push([], 429, ['Retry-After' => '30'])]);
+        $service = app(StaysSearchAvailabilityService::class);
+        $first = $service->search($this->context());
+        $this->travel(40)->seconds();
+        $this->assertSame($first, $service->search($this->context()));
+        $this->travel(2)->seconds();
+        $this->assertSame($first, $service->search($this->context()));
+        $this->travel(3)->seconds();
+        $this->assertNull($service->search($this->context()));
+        Http::assertSentCount(2);
+    }
+
+    public function test_near_expiry_recomputation_still_requires_the_external_request_budget(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        Http::preventStrayRequests();
+        Http::fake(['https://stays.test/external/v1/booking/search-listings' => Http::response([])]);
+        $service = app(StaysSearchAvailabilityService::class);
+        $service->search($this->context());
+        $this->travel(39)->seconds();
+        $checks = 0;
+        $deny = function () use (&$checks): bool {
+            $checks++;
+
+            return false;
+        };
+        $this->assertIsArray($service->search($this->context(), $deny));
+        $this->assertSame(0, $checks);
+        $this->travel(1)->seconds();
+        $this->assertNull($service->search($this->context(), $deny));
+        $this->assertSame(1, $checks);
+        Http::assertSentCount(1);
+        $this->assertIsArray($service->search($this->context()));
+        Http::assertSentCount(2);
+    }
+
     /** @return array{from: string, to: string, guests: int, limit: int} */
     private function context(): array
     {
