@@ -223,6 +223,46 @@ class StaysSearchAvailabilityCacheTest extends TestCase
         return ['one second' => [1], 'two seconds' => [2], 'five seconds' => [5]];
     }
 
+    #[DataProvider('shortCacheReuseMargins')]
+    public function test_short_ttl_margin_does_not_discard_most_of_its_valid_lifetime(int $ttl, int $margin): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        config(['services.stays.search_cache_ttl' => $ttl]);
+        Http::preventStrayRequests();
+        Http::fake(['https://stays.test/external/v1/booking/search-listings' => Http::response([])]);
+        $service = app(StaysSearchAvailabilityService::class);
+        $first = $service->search($this->context());
+        $this->travel($ttl - $margin - 1)->seconds();
+        $this->assertSame($first, $service->search($this->context()));
+        Http::assertSentCount(1);
+        $this->travel(1)->seconds();
+        $this->assertNotSame($first, $service->search($this->context()));
+        Http::assertSentCount(2);
+    }
+
+    /** @return array<string, array{int, int}> */
+    public static function shortCacheReuseMargins(): array
+    {
+        return ['six second ttl' => [6, 1], 'ten second ttl' => [10, 2]];
+    }
+
+    public function test_early_refresh_failure_is_not_cached_as_an_empty_success(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        Http::preventStrayRequests();
+        Http::fake(['https://stays.test/external/v1/booking/search-listings' => Http::sequence()
+            ->push([])->push([], 503)->push([])]);
+        $service = app(StaysSearchAvailabilityService::class);
+        $first = $service->search($this->context());
+        $this->travel(40)->seconds();
+        $this->assertNull($service->search($this->context()));
+        $this->travel(1)->seconds();
+        $fresh = $service->search($this->context());
+        $this->assertNotSame($first['meta']['expiresAt'], $fresh['meta']['expiresAt']);
+        $this->assertSame(now()->toIso8601String(), $fresh['meta']['fetchedAt']);
+        Http::assertSentCount(3);
+    }
+
     public function test_rate_limit_during_early_refresh_keeps_still_valid_snapshot_without_new_requests(): void
     {
         $this->travelTo(now()->startOfSecond());

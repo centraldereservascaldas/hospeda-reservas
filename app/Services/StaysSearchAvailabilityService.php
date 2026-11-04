@@ -12,7 +12,7 @@ use RuntimeException;
 
 class StaysSearchAvailabilityService
 {
-    private const MINIMUM_CACHE_VALIDITY_SECONDS = 5;
+    private const MAXIMUM_CACHE_REUSE_MARGIN_SECONDS = 5;
 
     public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysSearchQuoteService $quotes, private readonly StaysContentReadCache $contentReads) {}
 
@@ -93,8 +93,9 @@ class StaysSearchAvailabilityService
     {
         $expiresAt = is_array($cached) ? ($cached['meta']['expiresAt'] ?? null) : null;
 
-        $minimumRemaining = ! $allowNearExpiry && $this->cacheTtl() > self::MINIMUM_CACHE_VALIDITY_SECONDS
-            ? self::MINIMUM_CACHE_VALIDITY_SECONDS
+        $ttl = $this->cacheTtl();
+        $minimumRemaining = ! $allowNearExpiry && $ttl > self::MAXIMUM_CACHE_REUSE_MARGIN_SECONDS
+            ? min(self::MAXIMUM_CACHE_REUSE_MARGIN_SECONDS, intdiv($ttl, 5))
             : 0;
 
         return is_string($expiresAt) && strtotime($expiresAt) > now()->timestamp + $minimumRemaining;
