@@ -111,8 +111,14 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Prepare test environment file
+        run: cp .env.example .env
+
       - name: Run PostgreSQL migration compatibility test
         run: php artisan test --compact tests/Feature/GatewayProviderMigrationTest.php
+
+      - name: Verify PostgreSQL search cache locking and pruning
+        run: php artisan test --compact --display-warnings --fail-on-warning tests/Feature/StaysSearchConcurrencyTest.php tests/Feature/PruneStaysSearchCacheTest.php tests/Feature/RefreshStaysAccommodationCatalogTest.php tests/Feature/StaysContentReadCacheTest.php tests/Feature/StaysOfferWarmupTest.php
 
   container-smoke:
     runs-on: ubuntu-latest
@@ -121,7 +127,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build container image
-        run: docker build --tag hospeda-reservas:release-smoke .
+        run: docker buildx build --load --no-cache-filter retained_assets --tag hospeda-reservas:release-smoke .
 
       - name: Check application health
         env:
@@ -154,8 +160,8 @@ jobs:
 
           docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
           docker exec "$CONTAINER_NAME" sh docker/check-static-assets.sh
-          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-release-supervisor.txt
-          test "$(grep -c RUNNING /tmp/hospeda-release-supervisor.txt)" -eq 4
+          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler discovery | tee /tmp/hospeda-release-supervisor.txt
+          test "$(grep -c RUNNING /tmp/hospeda-release-supervisor.txt)" -eq 5
 
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
@@ -257,6 +263,8 @@ jobs:
         with:
           context: .
           push: true
+          # Retention depends on wall-clock time even when both asset inputs are unchanged.
+          no-cache-filters: retained_assets
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
           build-args: |
             PREVIOUS_ASSETS_IMAGE=${{ steps.previous-assets.outputs.image }}
@@ -301,8 +309,8 @@ jobs:
 
           docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
           docker exec "$CONTAINER_NAME" sh docker/check-static-assets.sh
-          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-published-supervisor.txt
-          test "$(grep -c RUNNING /tmp/hospeda-published-supervisor.txt)" -eq 4
+          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler discovery | tee /tmp/hospeda-published-supervisor.txt
+          test "$(grep -c RUNNING /tmp/hospeda-published-supervisor.txt)" -eq 5
 
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'

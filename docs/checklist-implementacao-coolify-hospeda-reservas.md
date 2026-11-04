@@ -97,3 +97,10 @@ Estas recomendações aplicam-se quando o checkout e as rotinas assíncronas for
 - Confirme tabelas `jobs` e `failed_jobs`, atividade nos logs e recuperação após restart do container.
 
 O catálogo e as integrações podem funcionar sem habilitar o checkout. A configuração desses processos não habilita, por si só, pagamento real. Para estado funcional da jornada, limites e validações pendentes, consulte a [especificação do checkout](especificacao-checkout-pagamentos-proprios.md), o [fluxo Stays](stays-checkout-flow.md) e o [runbook do piloto](checkout-80-20-pilot-runbook.md).
+
+
+## Retenção de assets em builds repetidos
+
+O estágio `retained_assets` avalia os prazos absolutos do manifesto usando o relógio do build. Sempre execute esse estágio sem cache, inclusive ao reconstruir o mesmo commit com as mesmas imagens: `docker buildx build --load --no-cache-filter retained_assets --tag hospeda-reservas:local .`. Para publicação, o workflow `release-image.yml` usa `no-cache-filters: retained_assets` em `docker/build-push-action`. Os smokes usam o mesmo filtro. Os demais estágios continuam elegíveis para cache.
+
+O filtro impede que uma camada antiga pule a remoção de assets já expirados. Não altera o prazo dos assets herdados nem habilita limpeza de arquivos da versão atual. Referências: [invalidação seletiva do Docker](https://docs.docker.com/build/cache/invalidation/) e [inputs oficiais da action](https://github.com/docker/build-push-action).

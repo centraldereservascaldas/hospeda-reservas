@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { CalculatedPriceResponse } from '../src/services/crcnBackendApi.ts';
 import {
   calculatePropertyPricing,
+  isConfirmedPropertyQuote,
   getPropertyFeeAmount,
   getPropertyFeeLabel,
 } from '../src/utils/propertyPricing.ts';
@@ -108,4 +109,10 @@ test('formats PMS fee labels and falls back to BRL amounts', () => {
   };
   assert.equal(getPropertyFeeLabel(fee), 'Taxa municipal');
   assert.equal(getPropertyFeeAmount(fee, 'USD'), 25);
+});
+
+test('an expired detail quote cannot confirm pricing or authorize booking', () => {
+  assert.equal(isConfirmedPropertyQuote(quote({ expiresAt: Date.now() - 1 })), false);
+  assert.equal(isConfirmedPropertyQuote(quote({ expiresAt: Number.NaN })), false);
+  assert.equal(isConfirmedPropertyQuote(quote({ expiresAt: Date.now() + 5000 })), true);
 });

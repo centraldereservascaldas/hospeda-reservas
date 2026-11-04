@@ -9,6 +9,7 @@ const browser = await chromium.launch({
 });
 const output = process.env.CRCN_BASELINE_OUTPUT || '/tmp/crcn-e0-baseline';
 fs.mkdirSync(output, { recursive: true });
+const target = process.env.CRCN_BASELINE_URL || 'https://www.centraldereservascaldas.com/';
 const results = [];
 for (let repetition = 1; repetition <= 3; repetition++) {
   const context = await browser.newContext({
@@ -20,6 +21,39 @@ for (let repetition = 1; repetition <= 3; repetition++) {
     timezoneId: 'America/Sao_Paulo',
   });
   const page = await context.newPage();
+  if (process.env.CRCN_BASELINE_FIXTURE === 'true') {
+    await page.addInitScript(() => {
+      const substitute = (value) =>
+        /^https?:\/\//.test(value) && new URL(value).origin !== location.origin
+          ? new URL('/__fixture-image.svg', location.href).href
+          : value;
+      const originalAttribute = HTMLImageElement.prototype.setAttribute;
+      HTMLImageElement.prototype.setAttribute = function (name, value) {
+        const attribute = name.toLowerCase();
+        return originalAttribute.call(
+          this,
+          name,
+          attribute === 'src'
+            ? substitute(String(value))
+            : attribute === 'srcset'
+              ? '/__fixture-image.svg 640w'
+              : value,
+        );
+      };
+      for (const name of ['src', 'srcset']) {
+        const original = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, name);
+        Object.defineProperty(HTMLImageElement.prototype, name, {
+          ...original,
+          set(value) {
+            original.set.call(
+              this,
+              name === 'src' ? substitute(String(value)) : '/__fixture-image.svg 640w',
+            );
+          },
+        });
+      }
+    });
+  }
   const cdp = await context.newCDPSession(page);
   await cdp.send('Network.enable');
   await cdp.send('Network.emulateNetworkConditions', {
@@ -77,10 +111,10 @@ for (let repetition = 1; repetition <= 3; repetition++) {
           .catch(() => {}),
       );
   });
-  await page.goto(
-    'https://www.centraldereservascaldas.com/?from=2026-11-06&to=2026-11-08&guests=2',
-    { waitUntil: 'domcontentloaded', timeout: 45000 },
-  );
+  await page.goto(new URL('?from=2026-11-06&to=2026-11-08&guests=2', target).href, {
+    waitUntil: 'domcontentloaded',
+    timeout: 45000,
+  });
   await page.waitForTimeout(20000);
   await Promise.allSettled(pending);
   const data = await page.evaluate(() => ({

@@ -170,18 +170,26 @@ export function MainContentRouter({
 }: MainContentRouterProps) {
   const isCompletedSearch =
     availabilitySearchState === 'success' || availabilitySearchState === 'partial';
+  const hasPreservedSearchResults =
+    hasAvailableSearchResults &&
+    (availabilitySearchState === 'expired' ||
+      availabilitySearchState === 'refreshing' ||
+      availabilitySearchState === 'error');
+  const hasSearchSnapshot = isCompletedSearch || hasPreservedSearchResults;
   const shouldShowAvailabilityState =
     !isCondominiumView ||
     availabilitySearchState === 'loading' ||
+    availabilitySearchState === 'refreshing' ||
+    availabilitySearchState === 'expired' ||
     availabilitySearchState === 'error' ||
     availabilitySearchState === 'invalid-dates' ||
     (isCompletedSearch && filteredProperties.length === 0) ||
     Boolean(searchPagination?.hasMore && filteredProperties.length === 0);
   const hasConfirmedSearchAvailability =
-    isCompletedSearch && Boolean(filters.checkIn && filters.checkOut);
-  const visibleCatalogStatus: PropertyCatalogStatus = hasConfirmedSearchAvailability
-    ? 'ready'
-    : catalogStatus;
+    hasSearchSnapshot &&
+    availabilitySearchState !== 'error' &&
+    Boolean(filters.checkIn && filters.checkOut);
+  const visibleCatalogStatus: PropertyCatalogStatus = hasSearchSnapshot ? 'ready' : catalogStatus;
   const searchGuestCount = countOccupancyGuests(filters.guests);
 
   const availabilitySearchStateView = (
@@ -317,7 +325,7 @@ export function MainContentRouter({
             availabilitySearchState === 'idle' &&
             !filters.checkIn &&
             !filters.checkOut &&
-            filteredProperties.length > 0 &&
+            (catalogStatus === 'loading' || filteredProperties.length > 0) &&
             !filteredProperties.some((property) => property.simulatedData) && (
               <SeasonalDateSuggestions
                 currency={currency}
@@ -340,7 +348,7 @@ export function MainContentRouter({
           />
 
           <div id="stays-apartments-catalog" className="scroll-mt-24">
-            {isCondominiumView && !shouldShowAvailabilityState ? (
+            {isCondominiumView && (!shouldShowAvailabilityState || hasPreservedSearchResults) ? (
               <>
                 {availabilitySearchStateView}
                 {(filteredProperties.length > 0 || !hasAvailableSearchResults) && (
@@ -356,29 +364,31 @@ export function MainContentRouter({
 
             {!isCondominiumView &&
               (availabilitySearchState === 'idle' ||
-                (isCompletedSearch && filteredProperties.length > 0)) &&
+                (hasSearchSnapshot && filteredProperties.length > 0)) &&
               !(searchPagination?.hasMore && filteredProperties.length === 0) &&
               (viewMode === 'grid' ? (
-                <PropertyCatalogGrid
-                  prioritizeFirstImage={Boolean(filters.checkIn && filters.checkOut)}
-                  status={visibleCatalogStatus}
-                  properties={filteredProperties}
-                  currency={currency}
-                  savedPropertyIds={savedPropertyIds}
-                  showTotalWithTaxes={showTotalWithTaxes}
-                  hasSearchDates={Boolean(filters.checkIn && filters.checkOut)}
-                  availabilityConfirmed={hasConfirmedSearchAvailability}
-                  hasAvailableSearchResults={hasAvailableSearchResults}
-                  searchGuestCount={searchGuestCount}
-                  isRefreshingCatalog={!hasConfirmedSearchAvailability && catalogLoading}
-                  onRetryCatalog={onRetryCatalog}
-                  onToggleSave={onToggleSave}
-                  onSelectProperty={onSelectProperty}
-                  onResetFilters={onResetFilters}
-                  onClearCatalogFilters={onClearCatalogFilters}
-                />
+                <div aria-busy={availabilitySearchState === 'refreshing'}>
+                  <PropertyCatalogGrid
+                    prioritizeFirstImage={Boolean(filters.checkIn && filters.checkOut)}
+                    status={visibleCatalogStatus}
+                    properties={filteredProperties}
+                    currency={currency}
+                    savedPropertyIds={savedPropertyIds}
+                    showTotalWithTaxes={showTotalWithTaxes}
+                    hasSearchDates={Boolean(filters.checkIn && filters.checkOut)}
+                    availabilityConfirmed={hasConfirmedSearchAvailability}
+                    hasAvailableSearchResults={hasAvailableSearchResults}
+                    searchGuestCount={searchGuestCount}
+                    isRefreshingCatalog={!hasConfirmedSearchAvailability && catalogLoading}
+                    onRetryCatalog={onRetryCatalog}
+                    onToggleSave={onToggleSave}
+                    onSelectProperty={onSelectProperty}
+                    onResetFilters={onResetFilters}
+                    onClearCatalogFilters={onClearCatalogFilters}
+                  />
+                </div>
               ) : (
-                <div>
+                <div aria-busy={availabilitySearchState === 'refreshing'}>
                   <CatalogLoadNotice
                     status={visibleCatalogStatus}
                     isRefreshing={!hasConfirmedSearchAvailability && catalogLoading}

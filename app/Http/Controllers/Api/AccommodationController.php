@@ -5,49 +5,36 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SearchAccommodationsRequest;
 use App\Http\Resources\AccommodationSearchResource;
+use App\Services\StaysAccommodationCatalog;
+use App\Services\StaysAccommodationMapper;
 use App\Services\StaysCalendarService;
-use App\Services\StaysDiscoveryCatalog;
+use App\Services\StaysContentRateLimited;
+use App\Services\StaysContentReadCache;
 use App\Services\StaysExternalApiClient;
-use App\Services\StaysSearchQuoteService;
+use App\Services\StaysOfferWarmup;
+use App\Services\StaysSearchAvailabilityService;
 use App\Services\StaysSimulator;
-use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-use RuntimeException;
 
 class AccommodationController extends Controller
 {
-    private const LIVE_CATALOG_CACHE_KEY = 'stays.live-accommodation-catalog.v1';
-
-    private const LIVE_CATALOG_CACHE_TTL_SECONDS = 300;
-
-    private const LIVE_CATALOG_LOCK_LEASE_SECONDS = 2100;
-
-    private const LIVE_CATALOG_LOCK_WAIT_SECONDS = 15;
-
-    /** @var array<string, string> */
-    private array $amenityNameDictionary = [];
-
-    private bool $amenityNameDictionaryLoaded = false;
-
-    /** @var array<string, array<string, mixed>> */
-    private array $staysPropertiesById = [];
-
-    private bool $staysPropertyCatalogLoaded = false;
-
-    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysDiscoveryCatalog $discovery) {}
+    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysAccommodationMapper $mapper, private readonly StaysAccommodationCatalog $accommodationCatalog, private readonly StaysContentReadCache $contentReads) {}
 
     public function resorts(): JsonResponse
     {
-        $properties = $this->stays->get('/content/properties', ['status' => 'active', 'limit' => 100, 'skip' => 0]);
+        try {
+            $properties = $this->contentReads->get('/content/properties', ['status' => 'active', 'limit' => 100, 'skip' => 0]);
+        } catch (StaysContentRateLimited) {
+            $properties = null;
+        }
         if ($properties === null) {
             return response()->json(['success' => false, 'source' => 'unavailable', 'data' => []], 503);
         }
 
         $resorts = collect($properties)->map(fn (array $item): array => [
             'id' => (string) ($item['_id'] ?? $item['id'] ?? ''),
-            'name' => $this->localized($item['_mstitle'] ?? null) ?: ($item['internalName'] ?? ''),
+            'name' => $this->mapper->localized($item['_mstitle'] ?? null) ?: ($item['internalName'] ?? ''),
         ])->filter(fn (array $item): bool => $item['id'] !== '' && trim($item['name']) !== '')
             ->unique('id')->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();
 
@@ -71,22 +58,8 @@ class AccommodationController extends Controller
             return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
         }
 
-        try {
-            $catalog = Cache::get(self::LIVE_CATALOG_CACHE_KEY);
-            if (! is_array($catalog)) {
-                $catalog = Cache::lock(self::LIVE_CATALOG_CACHE_KEY.':lock', self::LIVE_CATALOG_LOCK_LEASE_SECONDS)
-                    ->block(self::LIVE_CATALOG_LOCK_WAIT_SECONDS, fn (): array => Cache::remember(self::LIVE_CATALOG_CACHE_KEY, self::LIVE_CATALOG_CACHE_TTL_SECONDS, function () use ($fallback): array {
-                        $listings = $this->stays->activeListings();
-                        if ($listings === null) {
-                            throw new RuntimeException('Stays returned an unavailable accommodation catalog.');
-                        }
-
-                        $mapped = array_map(fn (array $listing): array => $this->mapListing($listing, $fallback), $listings);
-
-                        return ['success' => true, 'source' => 'stays-live', 'count' => count($mapped), 'data' => $mapped];
-                    }));
-            }
-        } catch (RuntimeException|LockTimeoutException) {
+        $catalog = $this->accommodationCatalog->get();
+        if ($catalog === null) {
             return response()->json([
                 'success' => false,
                 'source' => 'unavailable',
@@ -121,7 +94,7 @@ class AccommodationController extends Controller
             return response()->json(['success' => false, 'message' => 'Acomodação não encontrada na base Stays.'], 404);
         }
         if ($hasValidDetail) {
-            $existing = $this->mapListing($detail, $fallback);
+            $existing = $this->mapper->map($detail, $fallback);
         } elseif (app()->isProduction()) {
             return response()->json(['success' => false, 'message' => 'Acomodação indisponível na Stays.'], 503);
         }
@@ -141,7 +114,7 @@ class AccommodationController extends Controller
         return response()->json(['success' => true, 'data' => $existing]);
     }
 
-    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchQuoteService $quoteService): JsonResponse
+    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchAvailabilityService $availabilityService, StaysOfferWarmup $warmup): JsonResponse
     {
         $input = $request->validated();
         $from = $input['from'] ?? null;
@@ -186,20 +159,17 @@ class AccommodationController extends Controller
             return response()->json(['success' => true, 'total' => $total, 'from' => $from, 'to' => $to, 'guests' => $guests, 'data' => $data, 'source' => 'stays-simulated']);
         }
         if ($from && $to) {
-            $live = $this->stays->post('/booking/search-listings', array_filter([
-                'from' => $from, 'to' => $to, 'guests' => $guests, 'isBookable' => true,
-                'properties' => isset($input['propertyId']) ? [$input['propertyId']] : null,
-                'cities' => $input['cities'] ?? null, 'limit' => $limit, 'skip' => $skip,
-            ], fn ($value): bool => $value !== null));
-            if (! is_array($live) || ! array_is_list($live)
-                || array_filter($live, 'is_array') !== $live || count($live) > $limit) {
+            $resolved = $availabilityService->search($input);
+            if ($resolved === null) {
                 return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Não foi possível confirmar a disponibilidade agora. Tente novamente.'], 503);
             }
 
-            $resolved = $quoteService->resolve($live, $from, $to, $guests);
+            if ($resolved['unquotedCount'] === 0) {
+                $warmup->remember($input);
+            }
             $catalog = $this->catalog();
             $mapped = array_map(function (array $listing) use ($catalog): array {
-                $property = $this->mapListing($listing, $catalog);
+                $property = $this->mapper->map($listing, $catalog);
                 $property['calculatedPrice'] = $listing['calculatedPrice'];
                 $property['pricePerNight'] = $listing['calculatedPrice']['dailyRate'];
 
@@ -211,11 +181,12 @@ class AccommodationController extends Controller
                 'from' => $from,
                 'to' => $to,
                 'guests' => $guests,
+                'meta' => $resolved['meta'],
                 'unquotedCount' => $resolved['unquotedCount'],
                 'pagination' => [
-                    'receivedCount' => count($live),
-                    'nextSkip' => $skip + count($live),
-                    'hasMore' => count($live) === $limit,
+                    'receivedCount' => $resolved['receivedCount'],
+                    'nextSkip' => $skip + $resolved['receivedCount'],
+                    'hasMore' => $resolved['receivedCount'] === $limit,
                 ],
             ]))->response();
         }
@@ -303,7 +274,7 @@ class AccommodationController extends Controller
         $property = collect($this->catalog())->first(fn (array $item): bool => ($item['id'] ?? null) === $id || ($item['staysListingId'] ?? null) === $id);
         if ($property === null) {
             $detail = $this->stays->get('/content/listings/'.rawurlencode($id));
-            $property = $detail ? $this->mapListing($detail, $this->catalog()) : null;
+            $property = $detail ? $this->mapper->map($detail, $this->catalog()) : null;
         }
         if ($property === null) {
             return response()->json(['success' => false, 'message' => 'Acomodação não encontrada.'], 404);
@@ -321,7 +292,7 @@ class AccommodationController extends Controller
         $catalog = $this->catalog();
         $live = $this->stays->get('/content/listings', ['limit' => 50, 'skip' => 0, 'status' => 'active']);
         if (is_array($live) && $live !== []) {
-            return response()->json(array_map(fn (array $item): array => $this->listingPayload($this->mapListing($item, $catalog)), $live));
+            return response()->json(array_map(fn (array $item): array => $this->listingPayload($this->mapper->map($item, $catalog)), $live));
         }
 
         if (app()->isProduction()) {
@@ -337,7 +308,7 @@ class AccommodationController extends Controller
         $item = collect($catalog)->first(fn (array $property): bool => ($property['id'] ?? null) === $id || ($property['staysListingId'] ?? null) === $id);
         $detail = $this->stays->get('/content/listings/'.rawurlencode($id));
         if (is_array($detail)) {
-            $item = $this->mapListing($detail, $catalog);
+            $item = $this->mapper->map($detail, $catalog);
         } elseif (app()->isProduction()) {
             return response()->json(['error' => 'Anúncio Stays indisponível'], 503);
         }
@@ -405,209 +376,7 @@ class AccommodationController extends Controller
 
     private function catalog(): array
     {
-        return json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
-    }
-
-    private function localized(mixed $value): string
-    {
-        if (is_string($value)) {
-            return $value;
-        }
-        if (is_array($value)) {
-            return (string) ($value['pt_BR'] ?? $value['pt-BR'] ?? $value['pt'] ?? reset($value) ?: '');
-        }
-
-        return '';
-    }
-
-    /** @return array<int, string> */
-    private function mapAmenityNames(mixed $amenities): array
-    {
-        if (! is_array($amenities)) {
-            return [];
-        }
-
-        return collect($amenities)
-            ->map(function (mixed $amenity): ?string {
-                if (is_string($amenity)) {
-                    return trim($amenity) !== '' ? trim($amenity) : null;
-                }
-                if (! is_array($amenity)) {
-                    return null;
-                }
-
-                $name = $this->localized($amenity['_mstitle'] ?? null) ?: (string) ($amenity['name'] ?? '');
-                if (trim($name) !== '') {
-                    return trim($name);
-                }
-
-                $id = (string) ($amenity['_id'] ?? $amenity['id'] ?? '');
-
-                return $id !== '' ? ($this->amenityNameDictionary()[$id] ?? null) : null;
-            })
-            ->filter(fn (?string $name): bool => $name !== null && $name !== '')
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    /** @return array<string, string> */
-    private function amenityNameDictionary(): array
-    {
-        if ($this->amenityNameDictionaryLoaded) {
-            return $this->amenityNameDictionary;
-        }
-
-        $this->amenityNameDictionaryLoaded = true;
-        foreach (['/translation/listing-amenities', '/translation/property-amenities'] as $endpoint) {
-            $amenities = $this->stays->get($endpoint);
-            foreach (is_array($amenities) ? $amenities : [] as $amenity) {
-                if (! is_array($amenity)) {
-                    continue;
-                }
-
-                $id = (string) ($amenity['_id'] ?? '');
-                $name = $this->localized($amenity['_mstitle'] ?? null);
-                if ($id !== '' && trim($name) !== '') {
-                    $this->amenityNameDictionary[$id] = trim($name);
-                }
-            }
-        }
-
-        return $this->amenityNameDictionary;
-    }
-
-    /** @return array<string, mixed> */
-    private function staysPropertyById(string $propertyId): array
-    {
-        if ($propertyId === '') {
-            return [];
-        }
-
-        if (! $this->staysPropertyCatalogLoaded) {
-            $this->staysPropertyCatalogLoaded = true;
-            for ($skip = 0; $skip < 5000; $skip += 100) {
-                $page = $this->stays->get('/content/properties', [
-                    'limit' => 100,
-                    'skip' => $skip,
-                    'status' => 'active',
-                ]);
-                if (! is_array($page)) {
-                    break;
-                }
-
-                foreach ($page as $property) {
-                    if (! is_array($property)) {
-                        continue;
-                    }
-
-                    foreach ([(string) ($property['_id'] ?? ''), (string) ($property['id'] ?? '')] as $id) {
-                        if ($id !== '') {
-                            $this->staysPropertiesById[$id] = $property;
-                        }
-                    }
-                }
-
-                if (count($page) < 100) {
-                    break;
-                }
-            }
-        }
-
-        return $this->staysPropertiesById[$propertyId] ?? [];
-    }
-
-    private function mapListing(array $listing, array $catalog): array
-    {
-        $id = (string) ($listing['id'] ?? $listing['code'] ?? $listing['_id'] ?? '');
-        $listingIds = array_values(array_filter([
-            (string) ($listing['id'] ?? ''),
-            (string) ($listing['code'] ?? ''),
-            (string) ($listing['_id'] ?? ''),
-        ]));
-        $existing = collect($catalog)->first(function (array $item) use ($listingIds): bool {
-            $catalogIds = array_filter([
-                $item['id'] ?? null,
-                $item['staysListingId'] ?? null,
-                $item['staysListingObjectId'] ?? null,
-            ], 'is_string');
-
-            return array_intersect($listingIds, $catalogIds) !== [];
-        }) ?? [];
-        $hasMatchingCatalogEntry = $existing !== [] && ($existing['staysListingId'] ?? null) === ($listing['id'] ?? $listing['code'] ?? null);
-        if (! $hasMatchingCatalogEntry) {
-            $existing = [];
-        }
-        $location = $existing['location'] ?? [];
-        $address = $listing['address'] ?? [];
-        $latLng = $listing['latLng'] ?? [];
-        $subtype = strtolower((string) ($listing['subtype'] ?? ''));
-        $propertyType = match ($subtype) {
-            'private_room', 'private-room', 'room' => 'private_room',
-            'cabin' => 'cabin',
-            'villa' => 'villa',
-            default => 'entire_place',
-        };
-        $gallery = collect($listing['_t_imagesMeta'] ?? [])->map(fn ($image) => is_array($image) ? ($image['url'] ?? $image['src'] ?? null) : $image);
-        $images = collect([$listing['_t_mainImageMeta']['url'] ?? null, ...$gallery->all(), ...($listing['images'] ?? [])])
-            ->filter(fn ($image): bool => is_string($image) && $image !== '')
-            ->unique()->values()->all();
-        $listingAmenities = $this->mapAmenityNames($listing['amenities'] ?? []);
-        if ($listingAmenities === [] && $hasMatchingCatalogEntry) {
-            $listingAmenities = $existing['listingAmenities'] ?? [];
-        }
-        $propertyAmenityItems = $listing['propertyAmenities'] ?? [];
-        if ($propertyAmenityItems === []) {
-            $propertyAmenityItems = $this->staysPropertyById((string) ($listing['_idproperty'] ?? ''))['amenities'] ?? [];
-        }
-        $propertyAmenities = $this->mapAmenityNames($propertyAmenityItems);
-        if ($propertyAmenities === [] && $hasMatchingCatalogEntry) {
-            $propertyAmenities = $existing['propertyAmenities'] ?? [];
-        }
-        $amenities = collect([
-            ...($hasMatchingCatalogEntry ? ($existing['amenities'] ?? []) : []),
-            ...$listingAmenities,
-            ...$propertyAmenities,
-        ])->filter(fn ($amenity): bool => is_string($amenity) && trim($amenity) !== '')
-            ->unique()->values()->all();
-
-        $snapshot = $this->discovery->snapshot();
-        $complex = $snapshot['properties'][(string) ($listing['_idproperty'] ?? '')] ?? null;
-        $publicListing = $snapshot['listings'][(string) ($listing['id'] ?? $id)] ?? null;
-
-        $mappedProperty = array_replace_recursive($existing, [
-            'id' => $id, 'staysListingId' => (string) ($listing['id'] ?? $listing['code'] ?? $id), 'staysListingObjectId' => (string) ($listing['_id'] ?? ''), 'staysPropertyId' => (string) ($listing['_idproperty'] ?? ''), 'staysSynced' => true,
-            'publicPagePath' => $publicListing !== null ? $this->discovery->listingPath($publicListing) : '',
-            'title' => $this->localized($listing['_mstitle'] ?? null) ?: ($listing['internalName'] ?? 'Apartamento Central de Reservas'),
-            'subtitle' => $this->localized($listing['_t_typeMeta']['_mstitle'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['subtitle'] ?? '') : ''),
-            'description' => strip_tags($this->localized($listing['_msdesc'] ?? $listing['description'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['description'] ?? '') : '')),
-            'complexName' => $complex['name'] ?? ($hasMatchingCatalogEntry ? ($existing['complexName'] ?? '') : ''),
-            'complexPageUrl' => $complex !== null && ($complex['listingIds'] ?? []) !== [] ? $this->discovery->propertyPath($complex) : '',
-            'complexDescription' => $complex['description'] ?? ($hasMatchingCatalogEntry ? ($existing['complexDescription'] ?? '') : ''),
-            'complexImages' => $complex['images'] ?? ($hasMatchingCatalogEntry ? ($existing['complexImages'] ?? []) : []),
-            'category' => (string) (collect($listing['listingCategories'] ?? [])->first() ?? 'accommodation'),
-            'propertyType' => $propertyType,
-            'location' => [
-                'city' => $address['city'] ?? $location['city'] ?? '', 'state' => $address['state'] ?? $address['stateCode'] ?? $location['state'] ?? '',
-                'country' => ($address['countryCode'] ?? null) === 'BR' ? 'Brasil' : ($location['country'] ?? ''), 'neighborhood' => $address['region'] ?? $address['neighborhood'] ?? $location['neighborhood'] ?? '',
-                'address' => trim(implode(', ', array_filter([$address['street'] ?? null, $address['streetNumber'] ?? null]))), 'lat' => $latLng['_f_lat'] ?? $latLng['lat'] ?? $location['lat'] ?? 0, 'lng' => $latLng['_f_lng'] ?? $latLng['lng'] ?? $location['lng'] ?? 0,
-            ],
-            'pricePerNight' => $listing['dailyRate'] ?? $listing['price'] ?? 0,
-            'cleaningFee' => $listing['cleaningFee'] ?? 0, 'serviceFeeRate' => 0,
-            'rating' => 0, 'reviewCount' => 0, 'isSuperhost' => false, 'isGuestFavorite' => false,
-            'instantBook' => $listing['instantBooking'] ?? false,
-            'images' => $images, 'bedrooms' => $listing['_i_rooms'] ?? 0,
-            'beds' => $listing['_i_beds'] ?? 0, 'bathrooms' => $listing['_f_bathrooms'] ?? 0,
-            'maxGuests' => max(1, (int) ($listing['_i_maxGuests'] ?? 1)),
-            'listingAmenities' => $listingAmenities, 'propertyAmenities' => $propertyAmenities,
-            'amenities' => $amenities, 'highlights' => [], 'sleepingArrangements' => [], 'rules' => [], 'host' => ['name' => '', 'avatar' => '', 'joinedYear' => 0, 'isSuperhost' => false, 'responseTime' => '', 'responseRate' => '', 'bio' => ''], 'reviews' => [],
-        ]);
-
-        $mappedProperty['listingAmenities'] = $listingAmenities;
-        $mappedProperty['propertyAmenities'] = $propertyAmenities;
-        $mappedProperty['amenities'] = $amenities;
-
-        return $mappedProperty;
+        return $this->accommodationCatalog->fallback();
     }
 
     private function listingPayload(array $property): array

@@ -1,3 +1,4 @@
+import { writeAccommodationCatalogCache } from '../utils/accommodationCatalogCache';
 import {
   Property,
   StaysConfig,
@@ -306,8 +307,7 @@ class StaysApiService {
       const syncedAt = new Date().toISOString();
 
       if (live) {
-        localStorage.setItem('hospeda_properties', JSON.stringify(listings));
-        localStorage.setItem('hospeda_properties_source', 'stays-live');
+        writeAccommodationCatalogCache(listings, 'stays-live');
       }
 
       this.saveConfig({

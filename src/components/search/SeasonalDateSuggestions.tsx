@@ -40,6 +40,50 @@ interface SuggestionQuote {
 }
 
 const EMPTY_PROPERTIES: Property[] = [];
+const QUOTE_CACHE_NAMESPACE = 'crcn.home-date-quote.';
+const QUOTE_CACHE_PREFIX = `${QUOTE_CACHE_NAMESPACE}v7.`;
+const QUOTE_TTL_MS = 45_000;
+const MAX_CACHED_QUOTES = 60;
+const MAX_CACHED_QUOTE_LENGTH = 8192;
+
+function pruneQuoteCache(limit = MAX_CACHED_QUOTES): void {
+  try {
+    const retained: Array<{ key: string; cachedAt: number }> = [];
+    for (let index = window.sessionStorage.length - 1; index >= 0; index--) {
+      const key = window.sessionStorage.key(index);
+      if (!key?.startsWith(QUOTE_CACHE_NAMESPACE)) continue;
+      const raw = window.sessionStorage.getItem(key);
+      let cached: unknown = null;
+      if (key.startsWith(QUOTE_CACHE_PREFIX) && raw && raw.length <= MAX_CACHED_QUOTE_LENGTH) {
+        try {
+          cached = JSON.parse(raw);
+        } catch {
+          /* Invalid entries are removed below. */
+        }
+      }
+      if (
+        !isRecord(cached) ||
+        typeof cached.expiresAt !== 'number' ||
+        !Number.isFinite(cached.expiresAt) ||
+        cached.expiresAt <= Date.now() ||
+        cached.expiresAt > Date.now() + QUOTE_TTL_MS
+      ) {
+        window.sessionStorage.removeItem(key);
+      } else
+        retained.push({
+          key,
+          cachedAt:
+            typeof cached.cachedAt === 'number' && Number.isFinite(cached.cachedAt)
+              ? cached.cachedAt
+              : 0,
+        });
+    }
+    retained.sort((a, b) => b.cachedAt - a.cachedAt);
+    for (const entry of retained.slice(limit)) window.sessionStorage.removeItem(entry.key);
+  } catch {
+    /* Storage failures do not prevent live queries. */
+  }
+}
 
 const formatPeriod = (suggestion: HomeDateSuggestion) => {
   const checkIn = new Date(`${suggestion.checkIn}T12:00:00`);
@@ -57,7 +101,7 @@ const getNights = (suggestion: HomeDateSuggestion) =>
   );
 
 const cacheKey = (suggestionId: string, suggestion: HomeDateSuggestion, guestCount: number) =>
-  `crcn.home-date-quote.v6.${suggestionId}.${suggestion.checkIn}.${suggestion.checkOut}.${guestCount}`;
+  `${QUOTE_CACHE_PREFIX}${suggestionId}.${suggestion.checkIn}.${suggestion.checkOut}.${guestCount}`;
 
 function readCachedQuote(
   suggestionId: string,
@@ -66,14 +110,15 @@ function readCachedQuote(
 ): SuggestionQuote | null {
   try {
     const raw = window.sessionStorage.getItem(cacheKey(suggestionId, suggestion, guestCount));
-    if (!raw) return null;
+    if (!raw || raw.length > MAX_CACHED_QUOTE_LENGTH) return null;
     const cached: unknown = JSON.parse(raw);
     if (
       !isRecord(cached) ||
       cached.guests !== guestCount ||
       typeof cached.expiresAt !== 'number' ||
       !Number.isFinite(cached.expiresAt) ||
-      cached.expiresAt <= Date.now()
+      cached.expiresAt <= Date.now() ||
+      cached.expiresAt > Date.now() + QUOTE_TTL_MS
     )
       return null;
     if (cached.status !== 'ready' && cached.status !== 'unavailable') return null;
@@ -115,10 +160,11 @@ function writeCachedQuote(
 ) {
   if (quote.status === 'error') return;
   try {
-    window.sessionStorage.setItem(
-      cacheKey(suggestionId, suggestion, guestCount),
-      JSON.stringify({ ...quote, cachedAt: Date.now() }),
-    );
+    pruneQuoteCache(MAX_CACHED_QUOTES - 1);
+    const cached = JSON.stringify({ ...quote, cachedAt: Date.now() });
+    if (cached.length <= MAX_CACHED_QUOTE_LENGTH) {
+      window.sessionStorage.setItem(cacheKey(suggestionId, suggestion, guestCount), cached);
+    }
   } catch {
     // The suggestions still work when storage is unavailable.
   }
@@ -136,6 +182,9 @@ export function SeasonalDateSuggestions({
   fallbackProperties = EMPTY_PROPERTIES,
   onSelect,
 }: SeasonalDateSuggestionsProps) {
+  useEffect(() => {
+    pruneQuoteCache();
+  }, []);
   const [collections] = useState(() => getHomeDiscoveryCollections());
   const suggestions = useMemo(
     () => collections.flatMap((collection) => collection.suggestions),
@@ -236,6 +285,7 @@ export function SeasonalDateSuggestions({
       void crcnBackendApi
         .searchAccommodationsPage(
           {
+            purpose: 'discovery',
             from: suggestion.checkIn,
             to: suggestion.checkOut,
             guests: guestCount,
@@ -277,7 +327,7 @@ export function SeasonalDateSuggestions({
                   status:
                     result.unquotedCount > 0 || result.pagination.hasMore ? 'error' : 'unavailable',
                 };
-            quote.expiresAt = Date.now() + 45_000;
+            quote.expiresAt = Math.min(result.expiresAt ?? Infinity, Date.now() + QUOTE_TTL_MS);
             quote.guests = guestCount;
             writeCachedQuote(item.id, item, guestCount, quote);
             next[item.id] = quote;
@@ -345,6 +395,7 @@ export function SeasonalDateSuggestions({
     void crcnBackendApi
       .searchAccommodationsPage(
         {
+          purpose: 'discovery',
           from: catalogPeriod.checkIn,
           to: catalogPeriod.checkOut,
           guests: guestCount,
@@ -366,7 +417,10 @@ export function SeasonalDateSuggestions({
             });
         });
         setCatalogQuotes(next);
-        catalogCacheRef.current = { guests: guestCount, expiresAt: Date.now() + 45_000 };
+        catalogCacheRef.current = {
+          guests: guestCount,
+          expiresAt: Math.min(result.expiresAt ?? Infinity, Date.now() + QUOTE_TTL_MS),
+        };
         setCatalogExpiresAt(catalogCacheRef.current.expiresAt);
         setCatalogQuoteGuests(guestCount);
       })

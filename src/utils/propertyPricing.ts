@@ -15,6 +15,8 @@ export function isConfirmedPropertyQuote(
     quote?.success &&
     (quote.source === 'stays-live' || quote.source === 'stays-simulated') &&
     quote.currency === 'BRL' &&
+    (quote.expiresAt === undefined ||
+      (Number.isFinite(quote.expiresAt) && quote.expiresAt > Date.now())) &&
     Number.isFinite(quote.total) &&
     quote.total > 0 &&
     Number.isFinite(quote.dailyRate) &&

@@ -1,4 +1,5 @@
-import { CalendarDays, LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
+import { PropertyCatalogSkeleton } from '../property/PropertyCatalogSkeleton';
+import { CalendarDays, RefreshCw, Search, TriangleAlert } from 'lucide-react';
 import type { AvailabilitySearchState as AvailabilitySearchStateValue } from '../../hooks/useAccommodationSearch';
 
 interface AvailabilitySearchStateProps {
@@ -47,6 +48,53 @@ export function AvailabilitySearchState({
   const dateRange = formatDateRange(checkIn, checkOut);
   const guestLabel = `${guests} ${guests === 1 ? 'hóspede' : 'hóspedes'}`;
   const searchContext = dateRange ? `${dateRange} · ${guestLabel}` : guestLabel;
+
+  if (state === 'expired' || state === 'refreshing') {
+    const refreshing = state === 'refreshing';
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+      >
+        <p>
+          {refreshing
+            ? 'Atualizando preços e disponibilidade…'
+            : 'A consulta anterior perdeu a validade. Atualize para confirmar preços e disponibilidade.'}
+        </p>
+        {!refreshing && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-2 min-h-11 rounded-lg px-3 font-bold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+          >
+            Atualizar disponibilidade
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (state === 'error' && hasResults) {
+    return (
+      <div
+        role="alert"
+        className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+      >
+        <p>
+          Não foi possível atualizar a consulta. Tente novamente para confirmar preços e
+          disponibilidade.
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-2 min-h-11 rounded-lg px-3 font-bold underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+        >
+          Tentar atualizar novamente
+        </button>
+      </div>
+    );
+  }
 
   if (state === 'partial') {
     return (
@@ -114,23 +162,14 @@ export function AvailabilitySearchState({
 
   if (state === 'loading') {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="mx-auto flex max-w-xl flex-col items-center gap-3 px-5 py-16 text-center"
-      >
-        <LoaderCircle aria-hidden="true" className="h-8 w-8 animate-spin text-orange-700" />
-        <div className="space-y-1">
-          <h2 className="text-base font-bold text-neutral-900">
-            {dateRange ? 'Verificando disponibilidade…' : 'Buscando acomodações…'}
-          </h2>
-          <p className="text-sm text-neutral-600">
-            {dateRange
-              ? `Estamos verificando opções para ${searchContext}.`
-              : 'Estamos atualizando a lista. Disponibilidade e preço dependem do período escolhido.'}
-          </p>
-        </div>
-      </div>
+      <PropertyCatalogSkeleton
+        message={dateRange ? 'Verificando disponibilidade…' : 'Buscando acomodações…'}
+        description={
+          dateRange
+            ? `Estamos verificando opções para ${searchContext}.`
+            : 'Estamos atualizando a lista. Disponibilidade e preço dependem do período escolhido.'
+        }
+      />
     );
   }
 

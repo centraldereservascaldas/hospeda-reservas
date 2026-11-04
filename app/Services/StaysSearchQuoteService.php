@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Closure;
 use DateTimeImmutable;
 
 class StaysSearchQuoteService
@@ -10,9 +11,9 @@ class StaysSearchQuoteService
 
     /**
      * @param  list<array<string, mixed>>  $listings
-     * @return array{items: list<array<string, mixed>>, unquotedCount: int}
+     * @return array{items: list<array<string, mixed>>, unquotedCount: int, rateLimit?: array{retryAfter: ?string}}
      */
-    public function resolve(array $listings, string $from, string $to, int $guests): array
+    public function resolve(array $listings, string $from, string $to, int $guests, ?Closure $beforeRequest = null): array
     {
         $listings = array_values(array_filter($listings, static fn (array $listing): bool => ($listing['isBookable'] ?? null) !== false
             && (! isset($listing['_i_maxGuests']) || ! is_numeric($listing['_i_maxGuests']) || (float) $listing['_i_maxGuests'] >= $guests)));
@@ -33,13 +34,18 @@ class StaysSearchQuoteService
         }
 
         $calculated = [];
-        if ($missingIds !== []) {
-            $response = $this->stays->post('/booking/calculate-price', [
+        $rateLimit = null;
+        if ($missingIds !== [] && ($beforeRequest === null || $beforeRequest())) {
+            $httpResponse = $this->stays->request('POST', '/booking/calculate-price', payload: [
                 'listingIds' => array_values(array_unique($missingIds)),
                 'from' => $from,
                 'to' => $to,
                 'guests' => $guests,
             ], timeout: 5);
+            if ($httpResponse?->status() === 429) {
+                $rateLimit = ['retryAfter' => $httpResponse->header('Retry-After')];
+            }
+            $response = $httpResponse?->successful() ? $httpResponse->json() : null;
             if (is_array($response) && array_is_list($response)) {
                 $calculated = $response;
             }
@@ -67,7 +73,7 @@ class StaysSearchQuoteService
             $items[] = $listing;
         }
 
-        return ['items' => $items, 'unquotedCount' => $unquotedCount];
+        return ['items' => $items, 'unquotedCount' => $unquotedCount, ...($rateLimit === null ? [] : ['rateLimit' => $rateLimit])];
     }
 
     /**

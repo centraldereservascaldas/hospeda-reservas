@@ -51,9 +51,9 @@ class StaysExternalApiClient
         }
     }
 
-    public function get(string $endpoint, array $query = []): ?array
+    public function get(string $endpoint, array $query = [], ?int $timeout = null): ?array
     {
-        $response = $this->request('GET', $endpoint, $query);
+        $response = $this->request('GET', $endpoint, $query, timeout: $timeout);
 
         return $response?->successful() && is_array($response->json()) ? $response->json() : null;
     }
@@ -61,7 +61,7 @@ class StaysExternalApiClient
     /**
      * @return array<int, array<string, mixed>>|null
      */
-    public function activeListings(): ?array
+    public function activeListings(?float $deadline = null): ?array
     {
         if (! $this->isConfigured()) {
             return null;
@@ -69,11 +69,16 @@ class StaysExternalApiClient
 
         $listings = [];
         for ($page = 0; $page < 100; $page++) {
-            $batch = $this->get('/content/listings', [
-                'limit' => 50,
-                'skip' => $page * 50,
-                'status' => 'active',
-            ]);
+            if ($deadline !== null && microtime(true) >= $deadline) {
+                return null;
+            }
+            $response = $this->request('GET', '/content/listings', [
+                'limit' => 50, 'skip' => $page * 50, 'status' => 'active',
+            ], timeout: $deadline === null ? null : max(1, min(10, (int) ceil($deadline - microtime(true)))));
+            if ($deadline !== null && $response?->status() === 429) {
+                throw StaysContentRateLimited::fromHeader($response->header('Retry-After'));
+            }
+            $batch = $response?->successful() ? $response->json() : null;
             if (! is_array($batch)
                 || ! array_is_list($batch)
                 || array_filter($batch, static fn (mixed $listing): bool => is_array($listing)) !== $batch) {

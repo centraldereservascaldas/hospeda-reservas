@@ -226,14 +226,21 @@ export function usePropertyAvailability({
 
   useEffect(() => {
     if (calendarExpiresAt === null) return;
-    const timeout = window.setTimeout(
-      () => {
-        setCalendarAvailable(false);
+    let refreshRequested = false;
+    const checkExpiration = () => {
+      if (calendarExpiresAt > Date.now()) return;
+      setCalendarAvailable(false);
+      if (document.visibilityState !== 'hidden' && !refreshRequested) {
+        refreshRequested = true;
         setCalendarRefreshToken((token) => token + 1);
-      },
-      Math.max(0, calendarExpiresAt - Date.now()),
-    );
-    return () => window.clearTimeout(timeout);
+      }
+    };
+    const timeout = window.setTimeout(checkExpiration, Math.max(0, calendarExpiresAt - Date.now()));
+    document.addEventListener('visibilitychange', checkExpiration);
+    return () => {
+      window.clearTimeout(timeout);
+      document.removeEventListener('visibilitychange', checkExpiration);
+    };
   }, [calendarExpiresAt]);
 
   const loadCalendarThrough = useCallback(

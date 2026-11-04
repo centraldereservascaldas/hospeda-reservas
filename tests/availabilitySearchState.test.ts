@@ -183,3 +183,19 @@ test('partial results explain the quote failure and offer a retry without claimi
   screen.getByRole('button', { name: 'Tentar consultar novamente' }).click();
   assert.equal(retries, 1);
 });
+
+test('offers revalidation for expired results instead of announcing no availability', () => {
+  render(
+    React.createElement(AvailabilitySearchState, {
+      state: 'expired',
+      checkIn: '2027-01-10',
+      checkOut: '2027-01-13',
+      hasResults: true,
+      hasAvailableResults: true,
+      onRetry: () => {},
+    }),
+  );
+  assert.ok(screen.getByRole('button', { name: 'Atualizar disponibilidade' }));
+  assert.match(screen.getByRole('status').textContent || '', /perdeu a validade/);
+  assert.doesNotMatch(document.body.textContent || '', /Nenhuma acomodação/);
+});

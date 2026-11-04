@@ -27,13 +27,20 @@ const profiles = [
     cpu: 1,
   },
 ];
+const target = process.env.CRCN_BASELINE_URL || 'https://www.centraldereservascaldas.com/';
 const results = [];
 const safeUrl = (s) => {
   const u = new URL(s);
   return u.origin + u.pathname;
 };
-for (const profile of profiles) {
-  for (let repetition = 1; repetition <= 3; repetition++) {
+const selectedProfiles = profiles.filter(
+  (profile) => !process.env.CRCN_PROFILE || profile.name === process.env.CRCN_PROFILE,
+);
+const firstRepetition = Number(process.env.CRCN_REPETITION_START || 1);
+if (!selectedProfiles.length || !Number.isSafeInteger(firstRepetition) || firstRepetition < 1)
+  throw new Error('Invalid profile or repetition start.');
+for (const profile of selectedProfiles) {
+  for (let repetition = firstRepetition; repetition < firstRepetition + 3; repetition++) {
     const { name, cpu, ...options } = profile;
     const context = await browser.newContext({
       ...options,
@@ -41,6 +48,39 @@ for (const profile of profiles) {
       timezoneId: 'America/Sao_Paulo',
     });
     const page = await context.newPage();
+    if (process.env.CRCN_BASELINE_FIXTURE === 'true') {
+      await page.addInitScript(() => {
+        const substitute = (value) =>
+          /^https?:\/\//.test(value) && new URL(value).origin !== location.origin
+            ? new URL('/__fixture-image.svg', location.href).href
+            : value;
+        const originalAttribute = HTMLImageElement.prototype.setAttribute;
+        HTMLImageElement.prototype.setAttribute = function (name, value) {
+          const attribute = name.toLowerCase();
+          return originalAttribute.call(
+            this,
+            name,
+            attribute === 'src'
+              ? substitute(String(value))
+              : attribute === 'srcset'
+                ? '/__fixture-image.svg 640w'
+                : value,
+          );
+        };
+        for (const name of ['src', 'srcset']) {
+          const original = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, name);
+          Object.defineProperty(HTMLImageElement.prototype, name, {
+            ...original,
+            set(value) {
+              original.set.call(
+                this,
+                name === 'src' ? substitute(String(value)) : '/__fixture-image.svg 640w',
+              );
+            },
+          });
+        }
+      });
+    }
     await page.addInitScript(() => {
       window.__baseline = {
         lcp: [],
@@ -153,7 +193,7 @@ for (const profile of profiles) {
       const started = new Date().toISOString();
       let navigationError = null;
       try {
-        await page.goto('https://www.centraldereservascaldas.com/', {
+        await page.goto(target, {
           waitUntil: 'domcontentloaded',
           timeout: 45000,
         });

@@ -49,6 +49,9 @@ export const PropertyGalleryDialog: React.FC<PropertyGalleryDialogProps> = ({
 
   if (!isOpen || images.length === 0) return null;
 
+  const firstThumbnail = Math.max(0, Math.min(activePhotoIndex - 2, images.length - 5));
+  const thumbnails = images.slice(firstThumbnail, firstThumbnail + 5);
+
   return createPortal(
     <div
       ref={dialogRef}
@@ -138,18 +141,21 @@ export const PropertyGalleryDialog: React.FC<PropertyGalleryDialogProps> = ({
 
       {images.length > 1 && (
         <div className="absolute inset-x-0 bottom-0 z-10 flex justify-start gap-2 overflow-x-auto bg-white/90 px-4 pb-4 pt-2 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur-xl sm:justify-center sm:pb-5">
-          {images.map((image, index) => (
-            <button
-              key={`${image}-${index}`}
-              type="button"
-              aria-label={`Abrir foto ${index + 1}`}
-              aria-current={index === activePhotoIndex}
-              onClick={() => setActivePhotoIndex(index)}
-              className={`h-12 w-16 shrink-0 overflow-hidden rounded-md border-2 transition sm:h-14 sm:w-20 ${index === activePhotoIndex ? 'border-neutral-900 opacity-100' : 'border-transparent opacity-60 hover:opacity-100'}`}
-            >
-              <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
-            </button>
-          ))}
+          {thumbnails.map((image, offset) => {
+            const index = firstThumbnail + offset;
+            return (
+              <button
+                key={`${image}-${index}`}
+                type="button"
+                aria-label={`Abrir foto ${index + 1}`}
+                aria-current={index === activePhotoIndex}
+                onClick={() => setActivePhotoIndex(index)}
+                className={`h-12 w-16 shrink-0 overflow-hidden rounded-md border-2 transition sm:h-14 sm:w-20 ${index === activePhotoIndex ? 'border-neutral-900 opacity-100' : 'border-transparent opacity-60 hover:opacity-100'}`}
+              >
+                <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
+              </button>
+            );
+          })}
         </div>
       )}
     </div>,

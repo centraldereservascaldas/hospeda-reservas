@@ -2,39 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Property } from '../types';
 import { crcnBackendApi } from '../services/crcnBackendApi';
-import { isProperty } from '../utils/apiValidation';
-import { sanitizePropertyMedia } from '../utils/propertyMedia';
-
-function readCachedProperties(): Property[] {
-  try {
-    const saved = localStorage.getItem('hospeda_properties');
-    if (!saved) return [];
-    const parsed: unknown = JSON.parse(saved);
-    if (!Array.isArray(parsed)) return [];
-
-    // Remove synthetic demo IDs and use persisted listing data only when it
-    // was last synchronized from the live Stays-backed catalogue.
-    const cleaned = parsed
-      .filter(isProperty)
-      .filter((property) => !property.id.startsWith('prop-'))
-      .map(sanitizePropertyMedia);
-    if (
-      cleaned.length === 0 ||
-      localStorage.getItem('hospeda_properties_source') !== 'stays-live'
-    ) {
-      return [];
-    }
-
-    // Refresh galleries from the backend on startup instead of trusting stale
-    // cached image lists.
-    return cleaned;
-  } catch {
-    return [];
-  }
-}
+import { readAccommodationCatalogCache } from '../utils/accommodationCatalogCache';
 
 export function useAccommodationCatalog() {
-  const [properties, setCatalogProperties] = useState<Property[]>(readCachedProperties);
+  const [properties, setCatalogProperties] = useState<Property[]>(readAccommodationCatalogCache);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogLoadError, setCatalogLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);

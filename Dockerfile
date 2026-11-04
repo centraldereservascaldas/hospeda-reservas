@@ -29,6 +29,7 @@ RUN npm run build \
 
 FROM ${PREVIOUS_ASSETS_IMAGE} AS previous_assets
 
+# Always build with --no-cache-filter retained_assets: expiry depends on the current time.
 FROM node:24.22.1-bookworm-slim AS retained_assets
 WORKDIR /assets
 COPY --from=previous_assets /var/www/html/public/assets/ ./previous/
@@ -91,7 +92,7 @@ EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD test -f /tmp/hospeda-migrations-ready \
-        && test "$(supervisorctl status apache migrations queue scheduler 2>/dev/null | grep -c RUNNING)" -eq 4 \
+        && test "$(supervisorctl status apache migrations queue scheduler discovery 2>/dev/null | grep -c RUNNING)" -eq 5 \
         && curl --fail --silent http://127.0.0.1/api/ready >/dev/null
 
 CMD ["/usr/bin/supervisord", "--nodaemon", "--configuration", "/etc/supervisor/supervisord.conf"]

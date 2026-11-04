@@ -303,7 +303,8 @@ const isCalculatedPrice = (value: unknown): value is NonNullable<Property['calcu
   isNonNegativeNumber(value.serviceFee) &&
   isNonNegativeNumber(value.totalAmount) &&
   typeof value.currency === 'string' &&
-  (value.fees === undefined || Array.isArray(value.fees));
+  (value.fees === undefined || Array.isArray(value.fees)) &&
+  (value.expiresAt === undefined || (isFiniteNumber(value.expiresAt) && value.expiresAt > 0));
 
 export const isProperty = (value: unknown): value is Property => {
   if (!isRecord(value) || !isRecord(value.location) || !isRecord(value.host)) return false;

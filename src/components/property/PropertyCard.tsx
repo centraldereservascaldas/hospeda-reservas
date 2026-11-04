@@ -113,6 +113,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   };
 
   const displayPrice = getPropertyDisplayPrice(property, hasSearchDates, showTotalWithTaxes);
+  const hasConfirmedAvailability = availabilityConfirmed && displayPrice.kind === 'quote';
 
   return (
     <article className="group relative flex flex-col cursor-pointer transition-transform duration-200 p-2 sm:p-2.5 rounded-3xl liquid-glass border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-xl hover:-translate-y-1 transition-all">
@@ -121,7 +122,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         data-property-detail-trigger={property.id}
         onClick={handlePropertyDetailClick}
         aria-label={`Ver detalhes de ${displayTitle}`}
-        aria-describedby={`${priceDescriptionId}${availabilityConfirmed ? ` ${availabilityDescriptionId}` : ''}`}
+        aria-describedby={`${priceDescriptionId}${hasConfirmedAvailability ? ` ${availabilityDescriptionId}` : ''}`}
         className="absolute inset-0 z-0 rounded-3xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-600"
         style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
         onTouchStart={handlePhotoTouchStart}
@@ -278,7 +279,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             {property.location.city} • {property.location.state}
           </p>
 
-          {availabilityConfirmed && (
+          {hasConfirmedAvailability && (
             <p
               id={availabilityDescriptionId}
               className="mt-1 inline-flex items-center gap-1 text-caption font-bold text-emerald-800"

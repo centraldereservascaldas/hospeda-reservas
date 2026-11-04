@@ -115,6 +115,7 @@ class StaysCalendarService
     public function invalidate(string $listingId): void
     {
         Cache::forever($this->generationKey($listingId), (string) Str::uuid());
+        app(StaysSearchAvailabilityService::class)->invalidate();
     }
 
     private function generationKey(string $listingId): string

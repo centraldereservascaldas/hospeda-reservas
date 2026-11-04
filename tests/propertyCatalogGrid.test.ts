@@ -44,6 +44,11 @@ test('announces catalog loading and errors using status and alert roles', () => 
     React.createElement(PropertyCatalogGrid, { ...commonProps, status: 'loading' }),
   );
   assert.match(screen.getByRole('status').textContent || '', /Carregando acomodações/);
+  const busy = screen.getByRole('status').closest('[aria-busy="true"]');
+  assert.ok(busy);
+  assert.equal(busy.querySelectorAll('a, button, input, [tabindex]').length, 0);
+  assert.equal(busy.querySelectorAll('[aria-hidden="true"] > div').length, 8);
+  assert.equal(busy.querySelectorAll('article, img').length, 0);
 
   rerender(React.createElement(PropertyCatalogGrid, { ...commonProps, status: 'error' }));
   assert.ok(screen.getByRole('alert'));
@@ -346,4 +351,31 @@ test('exposes a crawlable property link and preserves modified-click navigation'
   assert.equal(selected, 0);
   assert.equal(fireEvent.click(link), false);
   assert.equal(selected, 1);
+});
+
+test('expired search quotes do not display a current total or availability badge', () => {
+  const property = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    calculatedPrice: {
+      nights: 2,
+      dailyRate: 250,
+      basePrice: 500,
+      cleaningFee: 0,
+      serviceFee: 0,
+      totalAmount: 500,
+      currency: 'BRL',
+      expiresAt: 1,
+    },
+  };
+  render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [property],
+      hasSearchDates: true,
+      availabilityConfirmed: true,
+    }),
+  );
+  assert.ok(screen.getByText('Cotação expirada; atualize a disponibilidade'));
+  assert.equal(screen.queryByText(/Disponível nas datas selecionadas/), null);
 });

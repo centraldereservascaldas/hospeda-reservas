@@ -1,3 +1,8 @@
+import {
+  readAccommodationCatalogCache,
+  writeAccommodationCatalogCache,
+  updateAccommodationCatalogCache,
+} from '../utils/accommodationCatalogCache';
 import type { Property, Reservation, ReservationCancellationResult } from '../types';
 import type { StaysCalendarDay } from '../utils/staysAvailability';
 import {
@@ -53,6 +58,7 @@ async function withApiRequestTimeout<T>(
 }
 
 export interface SearchAccommodationsParams {
+  purpose?: 'search' | 'discovery';
   from?: string;
   to?: string;
   guests?: number;
@@ -64,6 +70,8 @@ export interface SearchAccommodationsParams {
 }
 
 export interface AccommodationSearchPage {
+  /** Remaining server validity on the browser clock; cache reads never renew it. */
+  expiresAt?: number;
   /** Number of usable results in this page, never a global result count. */
   total: number;
   data: Property[];
@@ -76,6 +84,7 @@ export interface AccommodationSearchPage {
 }
 
 export interface CalculatedPriceResponse {
+  expiresAt?: number;
   success: boolean;
   listingId: string;
   staysListingId?: string;
@@ -307,8 +316,7 @@ export const getCalendarExpiration = (days: StaysCalendarDay[]): number | undefi
 class CrcnBackendApiService {
   private getCachedResorts(): Array<{ id: string; name: string }> {
     try {
-      const cachedValue: unknown = JSON.parse(localStorage.getItem('hospeda_properties') || '[]');
-      const cached = Array.isArray(cachedValue) ? cachedValue.filter(isProperty) : [];
+      const cached = readAccommodationCatalogCache();
       const byId = new Map<string, string>();
       for (const property of cached) {
         if (property.staysPropertyId && property.complexName?.trim()) {
@@ -369,21 +377,7 @@ class CrcnBackendApiService {
       throw new Error('O catálogo retornou dados inválidos.');
     }
     const accommodations: Property[] = json.data.map(sanitizePropertyMedia);
-    if (accommodations.length > 0) {
-      try {
-        localStorage.setItem('hospeda_properties', JSON.stringify(accommodations));
-        localStorage.setItem('hospeda_properties_source', json.source);
-      } catch (error) {
-        console.warn('Unable to cache the accommodation catalog:', error);
-      }
-    } else {
-      try {
-        localStorage.removeItem('hospeda_properties');
-        localStorage.removeItem('hospeda_properties_source');
-      } catch (error) {
-        console.warn('Unable to clear the accommodation catalog cache:', error);
-      }
-    }
+    writeAccommodationCatalogCache(accommodations, json.source);
     return accommodations;
   }
 
@@ -399,23 +393,7 @@ class CrcnBackendApiService {
         throw new Error('A acomodação retornou dados inválidos.');
       }
       const property = json.data ? sanitizePropertyMedia(json.data) : null;
-      if (property && Array.isArray(property.images)) {
-        try {
-          const cachedValue: unknown = JSON.parse(
-            localStorage.getItem('hospeda_properties') || '[]',
-          );
-          const cached = Array.isArray(cachedValue) ? cachedValue.filter(isProperty) : [];
-          const index = cached.findIndex(
-            (item) => item.id === property.id || item.staysListingId === property.staysListingId,
-          );
-          if (index >= 0) cached[index] = property;
-          else cached.push(property);
-          localStorage.setItem('hospeda_properties', JSON.stringify(cached));
-          localStorage.setItem('hospeda_properties_source', property.dataSource ?? 'stays-live');
-        } catch (error) {
-          console.warn('Unable to persist refreshed accommodation gallery:', error);
-        }
-      }
+      if (property) updateAccommodationCatalogCache(property);
       return property;
     } catch (err) {
       console.warn(`Falling back to local cache for accommodation ${id}:`, err);
@@ -452,7 +430,8 @@ class CrcnBackendApiService {
     requestSignal: AbortSignal,
   ): Promise<AccommodationSearchPage> {
     const { limit, skip } = params;
-    const json: unknown = await withApiRequestTimeout(async (signal) => {
+    const startedAt = performance.now();
+    const { json, serverTime } = await withApiRequestTimeout(async (signal) => {
       const res = await apiFetch('/api/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -460,7 +439,10 @@ class CrcnBackendApiService {
         signal,
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
+      return {
+        json: (await res.json()) as unknown,
+        serverTime: Date.parse(res.headers.get('Date') || ''),
+      };
     }, requestSignal);
     if (
       !isRecord(json) ||
@@ -498,6 +480,39 @@ class CrcnBackendApiService {
     ) {
       throw new Error('A paginação da pesquisa retornou dados inválidos.');
     }
+    let expiresAt: number | undefined;
+    if (json.meta !== undefined) {
+      if (
+        !isRecord(json.meta) ||
+        typeof json.meta.fetchedAt !== 'string' ||
+        typeof json.meta.expiresAt !== 'string'
+      ) {
+        throw new Error('A pesquisa retornou uma validade inválida.');
+      }
+      const fetchedAt = Date.parse(json.meta.fetchedAt);
+      expiresAt = Date.parse(json.meta.expiresAt);
+      if (
+        !Number.isFinite(fetchedAt) ||
+        !Number.isFinite(expiresAt) ||
+        expiresAt <= fetchedAt ||
+        expiresAt - fetchedAt > 60_000 ||
+        fetchedAt > (Number.isFinite(serverTime) ? serverTime + 1000 : Date.now() + 60_000)
+      ) {
+        throw new Error('A cotação da pesquisa expirou. Tente novamente.');
+      }
+      if (Number.isFinite(serverTime)) {
+        // Convert remaining server validity to the device clock, allowing for
+        // HTTP Date precision and the entire round trip without extending it.
+        const remaining = Math.min(
+          expiresAt - fetchedAt,
+          expiresAt - serverTime - 1000 - Math.max(0, performance.now() - startedAt),
+        );
+        expiresAt = Date.now() + remaining;
+      }
+      if (expiresAt <= Date.now()) {
+        throw new Error('A cotação da pesquisa expirou. Tente novamente.');
+      }
+    }
     const requestedNights =
       params.from && params.to
         ? Math.round(
@@ -505,6 +520,8 @@ class CrcnBackendApiService {
               86_400_000,
           )
         : null;
+    const quoteDeadline =
+      requestedNights === null ? undefined : Math.min(expiresAt ?? Infinity, Date.now() + 45_000);
     let unquotedCount = pageUnquoted;
     const properties = new Map<string, Property>();
     for (const item of json.data) {
@@ -514,10 +531,24 @@ class CrcnBackendApiService {
         unquotedCount += 1;
         continue;
       }
-      properties.set(property.id, property);
+      properties.set(
+        property.id,
+        quote && quoteDeadline !== undefined
+          ? {
+              ...property,
+              calculatedPrice: {
+                ...quote,
+                expiresAt: Math.min(quote.expiresAt ?? Infinity, quoteDeadline),
+              },
+            }
+          : property,
+      );
     }
+    if (quoteDeadline !== undefined && quoteDeadline <= Date.now())
+      throw new Error('A cotação da pesquisa expirou. Tente novamente.');
     const data = [...properties.values()];
     return {
+      ...(expiresAt === undefined ? {} : { expiresAt }),
       total: data.length,
       data,
       unquotedCount,

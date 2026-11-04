@@ -1,5 +1,10 @@
 <?php
 
+use App\Jobs\RefreshStaysAccommodationCatalog;
+use App\Jobs\WarmStaysOffers;
+use App\Services\StaysAccommodationCatalog;
+use App\Services\StaysExternalApiClient;
+use App\Services\StaysOfferWarmup;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -12,4 +17,14 @@ Schedule::command('direct-booking:recover-reservations')->everyMinute()->without
 Schedule::command('direct-booking:recover-confirmation-emails')->everyMinute()->withoutOverlapping(5)->onOneServer();
 Schedule::command('direct-booking:prune-expired-resume-tokens')->dailyAt('03:30')->withoutOverlapping(10);
 
-Schedule::command('stays:sync-discovery')->hourly()->withoutOverlapping(120)->onOneServer();
+Schedule::command('stays:sync-discovery')->hourly()->withoutOverlapping(120)->onOneServer()->runInBackground();
+
+Schedule::command('stays:prune-search-cache')->everyFiveMinutes()->withoutOverlapping(5)->runInBackground();
+
+Schedule::job(new RefreshStaysAccommodationCatalog(app(StaysAccommodationCatalog::class)->key()))
+    ->everyFiveMinutes()
+    ->when(fn (): bool => app(StaysExternalApiClient::class)->isConfigured());
+
+Schedule::job(new WarmStaysOffers(app(StaysOfferWarmup::class)->key()))
+    ->everyMinute()
+    ->when(fn (): bool => app(StaysOfferWarmup::class)->enabled());

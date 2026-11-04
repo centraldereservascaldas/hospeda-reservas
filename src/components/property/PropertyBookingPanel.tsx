@@ -84,6 +84,7 @@ export function PropertyBookingPanel({
   suppressMobileBookingAction,
 }: PropertyBookingPanelProps) {
   const hasConfirmedLivePrice = isConfirmedPropertyQuote(staysPrice);
+  const quoteExpired = staysPrice?.expiresAt !== undefined && staysPrice.expiresAt <= Date.now();
   const canProceedWithBooking = Boolean(
     hasExplicitDateSelection &&
     selectedRangeAvailable &&
@@ -127,9 +128,11 @@ export function PropertyBookingPanel({
                   ? 'Disponibilidade confirmada; consultando cotação...'
                   : priceRequestFailed
                     ? 'Não foi possível consultar o preço. Tente novamente.'
-                    : hasConfirmedLivePrice
-                      ? 'Disponibilidade e valores atualizados'
-                      : 'Disponibilidade confirmada; cotação ainda não confirmada';
+                    : quoteExpired
+                      ? 'A cotação expirou. Atualize o preço para continuar.'
+                      : hasConfirmedLivePrice
+                        ? 'Disponibilidade e valores atualizados'
+                        : 'Disponibilidade confirmada; cotação ainda não confirmada';
 
   return (
     <div className="property-booking-panel bg-white/70 backdrop-blur-2xl rounded-3xl p-6 border border-white/90 shadow-[0_16px_40px_-10px_rgba(0,0,0,0.1)] space-y-4 [@media(max-height:400px)]:p-3 [@media(max-height:400px)]:space-y-3">
@@ -148,9 +151,11 @@ export function PropertyBookingPanel({
                 ? 'Consultando preço...'
                 : priceRequestFailed
                   ? 'Falha ao consultar preço'
-                  : staysPrice
-                    ? 'Preço indisponível'
-                    : 'Preço não confirmado'}
+                  : quoteExpired
+                    ? 'Cotação expirada'
+                    : staysPrice
+                      ? 'Preço indisponível'
+                      : 'Preço não confirmado'}
             </span>
           ) : property.pricePerNight > 0 ? (
             <div>
