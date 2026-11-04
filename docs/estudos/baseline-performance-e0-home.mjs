@@ -33,8 +33,14 @@ const safeUrl = (s) => {
   const u = new URL(s);
   return u.origin + u.pathname;
 };
-for (const profile of profiles) {
-  for (let repetition = 1; repetition <= 3; repetition++) {
+const selectedProfiles = profiles.filter(
+  (profile) => !process.env.CRCN_PROFILE || profile.name === process.env.CRCN_PROFILE,
+);
+const firstRepetition = Number(process.env.CRCN_REPETITION_START || 1);
+if (!selectedProfiles.length || !Number.isSafeInteger(firstRepetition) || firstRepetition < 1)
+  throw new Error('Invalid profile or repetition start.');
+for (const profile of selectedProfiles) {
+  for (let repetition = firstRepetition; repetition < firstRepetition + 3; repetition++) {
     const { name, cpu, ...options } = profile;
     const context = await browser.newContext({
       ...options,

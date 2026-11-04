@@ -46,3 +46,21 @@ CRCN_BASELINE_URL=http://127.0.0.1:3192/ CRCN_BASELINE_FIXTURE=true CRCN_BASELIN
 Execute os braços sequencialmente, sem builds/testes concorrentes. O diagnóstico está em `sprint-4-e7-layout.mjs`. Os cenários de busca e interação usam os respectivos scripts da E0 com as mesmas variáveis.
 
 Dados iniciais e fontes dos shifts: [JSON](sprint-4-e7-integracao-inicial-2026-11-03.json). Pendências: repetição após correção, busca/interação, jornadas afetadas, medição do worker, cota para ativar aquecimento e comparação pública após entrega validada. p75 real permanece não aferido.
+
+
+## Home corrigida — primeira amostra completa
+
+O commit `4a87750` passou em todos os gates do run `41754598492`, incluindo frontend, backend, PostgreSQL e container. As 12 navegações após o ajuste usam o mesmo método da comparação inicial.
+
+| Cenário | LCP antes → corrigido (ms) | CLS antes → corrigido | Primeiro preço antes → corrigido (ms) | Buscas antes → corrigido | Bytes antes → corrigido |
+| --- | --- | --- | --- | --- | --- |
+| Mobile frio | 884 → 928 | 0,570 → 0,00064 | 2.458 → 1.673 | 15 → 2 | 838.227 → 358.908 |
+| Mobile quente | 436 → 404 | 0 → 0 | 344 → 361 | 11 → 0 | 561.590 → 135.270 |
+| Desktop frio | 820 → 844 | 0,457 → 0,05687 | 2.169 → 1.470 | 15 → 5 | 838.243 → 448.263 |
+| Desktop quente | 316 → 324 | 0,00014 → 0,00018 | 270 → 274 | 11 → 0 | 561.574 → 135.270 |
+
+O deslocamento principal foi eliminado, e os tempos da home ficaram dentro do limiar de investigação da E0. O sinal de montagem do primeiro cartão do catálogo abaixo da dobra, porém, passou de aproximadamente 1.484 para 1.671 ms no desktop frio (+187 ms), próximo do limiar de 200 ms. Serão executadas mais três repetições desktop em cada braço antes da avaliação final. O preço da primeira vitrine aparece antes; os dois sinais medem conteúdo diferente e não serão usados para esconder a espera do catálogo.
+
+O script da home passa a aceitar `CRCN_PROFILE=desktop` e `CRCN_REPETITION_START=4` para essa repetição adicional, sem alterar os observadores ou as três repetições padrão. Use diretórios de saída separados e execute sequencialmente. Busca e interações estão em execução; jornadas, custo do worker, publicação e medição pública continuam pendentes.
+
+Dados da home corrigida: [JSON](sprint-4-e7-integracao-corrigida-2026-11-03.json). Esses resultados continuam sendo de fixture, não p75 real.

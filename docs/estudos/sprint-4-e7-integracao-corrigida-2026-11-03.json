@@ -1,0 +1,2603 @@
+{
+  "status": "home-sample-complete-other-scenarios-pending",
+  "applicationCommit": "4a877506c57162cd2ca62ee69fb1f302a0d292c4",
+  "instrumentationCommit": "4a877506c57162cd2ca62ee69fb1f302a0d292c4",
+  "beforeReference": "sprint-4-e7-integracao-inicial-2026-11-03.json#/before",
+  "after": [
+    {
+      "id": "mobile-cold-1",
+      "started": "2026-11-04T01:31:26.325Z",
+      "profile": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 2,
+        "isMobile": true,
+        "hasTouch": true,
+        "cpu": 4
+      },
+      "cache": "cold",
+      "repetition": 1,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20773.09999999404,
+        "ttfbMs": 1.3999999985098839,
+        "dclMs": 763.3999999985099,
+        "loadMs": 763.3999999985099,
+        "fcpMs": 928,
+        "lcp": {
+          "time": 928,
+          "size": 51666,
+          "url": ""
+        },
+        "cls": 0.0006432258213172521,
+        "firstVisibleQuoteMs": 1673.2999999970198,
+        "firstCatalogCardMs": 1829.5999999940395,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 315.8999999985099,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 296.80000000447035,
+            "transferBytes": 23288,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 542.9000000059605,
+            "transferBytes": 140595,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 450.90000000596046,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 454.59999999403954,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 786.5,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 641.5,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 653.8999999985099,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 159.59999999403954,
+            "transferBytes": 366,
+            "decodedBytes": 66
+          }
+        ],
+        "imageCount": 57,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793755886327.3
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-13",
+            "to": "2026-11-15",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 5,
+      "completedTransferBytes": 358908
+    },
+    {
+      "id": "mobile-warm-1",
+      "started": "2026-11-04T01:31:47.106Z",
+      "profile": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 2,
+        "isMobile": true,
+        "hasTouch": true,
+        "cpu": 4
+      },
+      "cache": "warm",
+      "repetition": 1,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20188.19999999553,
+        "ttfbMs": 1.1999999955296516,
+        "dclMs": 183.60000000149012,
+        "loadMs": 414.79999999701977,
+        "fcpMs": 404,
+        "lcp": {
+          "time": 404,
+          "size": 50388,
+          "url": ""
+        },
+        "cls": 0,
+        "firstVisibleQuoteMs": 361,
+        "firstCatalogCardMs": 359.19999999552965,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 213.5,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 66
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 453.80000000447035,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 456.6000000014901,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 667.4000000059605,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          }
+        ],
+        "imageCount": 57,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793755907109.9
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 3,
+      "completedTransferBytes": 135270
+    },
+    {
+      "id": "mobile-cold-2",
+      "started": "2026-11-04T01:32:07.340Z",
+      "profile": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 2,
+        "isMobile": true,
+        "hasTouch": true,
+        "cpu": 4
+      },
+      "cache": "cold",
+      "repetition": 2,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20773.19999999553,
+        "ttfbMs": 1.1999999955296516,
+        "dclMs": 764.7999999970198,
+        "loadMs": 764.7999999970198,
+        "fcpMs": 928,
+        "lcp": {
+          "time": 928,
+          "size": 51666,
+          "url": ""
+        },
+        "cls": 0.0006432258213172521,
+        "firstVisibleQuoteMs": 1673.1000000014901,
+        "firstCatalogCardMs": 1828.6999999955297,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 316.6000000014901,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 543.6999999955297,
+            "transferBytes": 140595,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 297.69999999552965,
+            "transferBytes": 23288,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 453.5,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 455,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 787.1000000014901,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 623.5,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 640.8000000044703,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 159.40000000596046,
+            "transferBytes": 366,
+            "decodedBytes": 66
+          }
+        ],
+        "imageCount": 57,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793755927341
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-13",
+            "to": "2026-11-15",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 5,
+      "completedTransferBytes": 358908
+    },
+    {
+      "id": "mobile-warm-2",
+      "started": "2026-11-04T01:32:28.120Z",
+      "profile": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 2,
+        "isMobile": true,
+        "hasTouch": true,
+        "cpu": 4
+      },
+      "cache": "warm",
+      "repetition": 2,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20189.39999999851,
+        "ttfbMs": 1.1000000014901161,
+        "dclMs": 184.20000000298023,
+        "loadMs": 409,
+        "fcpMs": 400,
+        "lcp": {
+          "time": 400,
+          "size": 50388,
+          "url": ""
+        },
+        "cls": 0,
+        "firstVisibleQuoteMs": 357.79999999701977,
+        "firstCatalogCardMs": 356.8999999985099,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 216.39999999850988,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 66
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 452,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 455.09999999403954,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 666.8999999985099,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          }
+        ],
+        "imageCount": 57,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793755948121.5
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 3,
+      "completedTransferBytes": 135270
+    },
+    {
+      "id": "mobile-cold-3",
+      "started": "2026-11-04T01:32:48.352Z",
+      "profile": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 2,
+        "isMobile": true,
+        "hasTouch": true,
+        "cpu": 4
+      },
+      "cache": "cold",
+      "repetition": 3,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20769.20000000298,
+        "ttfbMs": 1.1000000014901161,
+        "dclMs": 763.3999999985099,
+        "loadMs": 763.3999999985099,
+        "fcpMs": 924,
+        "lcp": {
+          "time": 924,
+          "size": 51666,
+          "url": ""
+        },
+        "cls": 0.0006432258213172521,
+        "firstVisibleQuoteMs": 1672.3000000044703,
+        "firstCatalogCardMs": 1822.6000000014901,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 314.8999999985099,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 543.2000000029802,
+            "transferBytes": 140595,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 297.5,
+            "transferBytes": 23288,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 452.29999999701977,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 453,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 783.6999999955297,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 624.5,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 643.5,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 161.60000000149012,
+            "transferBytes": 366,
+            "decodedBytes": 66
+          }
+        ],
+        "imageCount": 57,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793755968353.5
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-13",
+            "to": "2026-11-15",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 5,
+      "completedTransferBytes": 358908
+    },
+    {
+      "id": "mobile-warm-3",
+      "started": "2026-11-04T01:33:09.127Z",
+      "profile": {
+        "name": "mobile",
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "deviceScaleFactor": 2,
+        "isMobile": true,
+        "hasTouch": true,
+        "cpu": 4
+      },
+      "cache": "warm",
+      "repetition": 3,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20275.5,
+        "ttfbMs": 1.1999999955296516,
+        "dclMs": 271.79999999701977,
+        "loadMs": 501.79999999701977,
+        "fcpMs": 492,
+        "lcp": {
+          "time": 492,
+          "size": 50388,
+          "url": ""
+        },
+        "cls": 0,
+        "firstVisibleQuoteMs": 448.3999999985099,
+        "firstCatalogCardMs": 446.79999999701977,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 217.59999999403954,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 66
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 455,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 457.30000000447035,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 669.1999999955297,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          }
+        ],
+        "imageCount": 57,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 270,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793755989129
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 3,
+      "completedTransferBytes": 135270
+    },
+    {
+      "id": "desktop-cold-1",
+      "started": "2026-11-04T01:33:29.446Z",
+      "profile": {
+        "name": "desktop",
+        "viewport": {
+          "width": 1365,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "isMobile": false,
+        "hasTouch": false,
+        "cpu": 1
+      },
+      "cache": "cold",
+      "repetition": 1,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20757.10000000149,
+        "ttfbMs": 1.3000000044703484,
+        "dclMs": 750.3000000044703,
+        "loadMs": 750.3000000044703,
+        "fcpMs": 844,
+        "lcp": {
+          "time": 844,
+          "size": 46926,
+          "url": ""
+        },
+        "cls": 0.05687452261312151,
+        "firstVisibleQuoteMs": 1469.7000000029802,
+        "firstCatalogCardMs": 1671.3000000044703,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 323,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 551.7000000029802,
+            "transferBytes": 140595,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 305.29999999701977,
+            "transferBytes": 23288,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 454,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 457.59999999403954,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 789.6000000014901,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 624,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 642,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 544.5,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 154.89999999850988,
+            "transferBytes": 366,
+            "decodedBytes": 66
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 554,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 521.5,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          }
+        ],
+        "imageCount": 60,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793756009447.7
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-13",
+            "to": "2026-11-15",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-20",
+            "to": "2026-11-22",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-27",
+            "to": "2026-11-29",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-12-04",
+            "to": "2026-12-06",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 5,
+      "completedTransferBytes": 448263
+    },
+    {
+      "id": "desktop-warm-1",
+      "started": "2026-11-04T01:33:50.210Z",
+      "profile": {
+        "name": "desktop",
+        "viewport": {
+          "width": 1365,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "isMobile": false,
+        "hasTouch": false,
+        "cpu": 1
+      },
+      "cache": "warm",
+      "repetition": 1,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20179.5,
+        "ttfbMs": 2,
+        "dclMs": 174,
+        "loadMs": 387,
+        "fcpMs": 324,
+        "lcp": {
+          "time": 324,
+          "size": 46463,
+          "url": ""
+        },
+        "cls": 0.00018393783329680765,
+        "firstVisibleQuoteMs": 274.3999999985099,
+        "firstCatalogCardMs": 274.20000000298023,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 216.19999999552965,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 66
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 455,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 458.69999999552965,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 671.0999999940395,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          }
+        ],
+        "imageCount": 60,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793756030212.3
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 3,
+      "completedTransferBytes": 135270
+    },
+    {
+      "id": "desktop-cold-2",
+      "started": "2026-11-04T01:34:10.447Z",
+      "profile": {
+        "name": "desktop",
+        "viewport": {
+          "width": 1365,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "isMobile": false,
+        "hasTouch": false,
+        "cpu": 1
+      },
+      "cache": "cold",
+      "repetition": 2,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20760.79999999702,
+        "ttfbMs": 1.1999999955296516,
+        "dclMs": 754.2999999970198,
+        "loadMs": 754.2999999970198,
+        "fcpMs": 848,
+        "lcp": {
+          "time": 848,
+          "size": 46926,
+          "url": ""
+        },
+        "cls": 0.055426098509752345,
+        "firstVisibleQuoteMs": 1477.8999999985099,
+        "firstCatalogCardMs": 1673.5,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 326.79999999701977,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 555.3000000044703,
+            "transferBytes": 140595,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 309.79999999701977,
+            "transferBytes": 23288,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 455.1000000014901,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 458.09999999403954,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 790.5,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 643.3999999985099,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 654.3999999985099,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 565.7000000029802,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 161.10000000149012,
+            "transferBytes": 366,
+            "decodedBytes": 66
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 566.7999999970198,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 511.3999999985099,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          }
+        ],
+        "imageCount": 60,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793756050448.2
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-13",
+            "to": "2026-11-15",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-20",
+            "to": "2026-11-22",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-27",
+            "to": "2026-11-29",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-12-04",
+            "to": "2026-12-06",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 5,
+      "completedTransferBytes": 448263
+    },
+    {
+      "id": "desktop-warm-2",
+      "started": "2026-11-04T01:34:31.213Z",
+      "profile": {
+        "name": "desktop",
+        "viewport": {
+          "width": 1365,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "isMobile": false,
+        "hasTouch": false,
+        "cpu": 1
+      },
+      "cache": "warm",
+      "repetition": 2,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20181.29999999702,
+        "ttfbMs": 2.0999999940395355,
+        "dclMs": 175.29999999701977,
+        "loadMs": 385.79999999701977,
+        "fcpMs": 324,
+        "lcp": {
+          "time": 324,
+          "size": 46463,
+          "url": ""
+        },
+        "cls": 0.00018393783329680765,
+        "firstVisibleQuoteMs": 275.19999999552965,
+        "firstCatalogCardMs": 274.8999999985099,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 214,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 66
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 456.29999999701977,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 459,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 672.2999999970198,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          }
+        ],
+        "imageCount": 60,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793756071215.9
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 3,
+      "completedTransferBytes": 135270
+    },
+    {
+      "id": "desktop-cold-3",
+      "started": "2026-11-04T01:34:51.454Z",
+      "profile": {
+        "name": "desktop",
+        "viewport": {
+          "width": 1365,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "isMobile": false,
+        "hasTouch": false,
+        "cpu": 1
+      },
+      "cache": "cold",
+      "repetition": 3,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20753.69999999553,
+        "ttfbMs": 1.1999999955296516,
+        "dclMs": 746.2999999970198,
+        "loadMs": 746.2999999970198,
+        "fcpMs": 840,
+        "lcp": {
+          "time": 840,
+          "size": 46926,
+          "url": ""
+        },
+        "cls": 0.05687452261312151,
+        "firstVisibleQuoteMs": 1468.2999999970198,
+        "firstCatalogCardMs": 1670,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 322.40000000596046,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 304,
+            "transferBytes": 23288,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 550.0999999940395,
+            "transferBytes": 140595,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 456.3999999985099,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 458.3999999985099,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 790.8999999985099,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 628.5,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 645.5,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 544.8000000044703,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 155.29999999701977,
+            "transferBytes": 366,
+            "decodedBytes": 66
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 554.6000000014901,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/search",
+            "durationMs": 517.6999999955297,
+            "transferBytes": 29884,
+            "decodedBytes": 29584
+          }
+        ],
+        "imageCount": 60,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793756091455
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-06",
+            "to": "2026-11-08",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-13",
+            "to": "2026-11-15",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-20",
+            "to": "2026-11-22",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-11-27",
+            "to": "2026-11-29",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "method": "POST",
+          "params": {
+            "purpose": "discovery",
+            "from": "2026-12-04",
+            "to": "2026-12-06",
+            "guests": 1,
+            "limit": 8,
+            "skip": 0
+          }
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/search",
+          "status": 200,
+          "cache": "no-store"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 5,
+      "completedTransferBytes": 448263
+    },
+    {
+      "id": "desktop-warm-3",
+      "started": "2026-11-04T01:35:12.214Z",
+      "profile": {
+        "name": "desktop",
+        "viewport": {
+          "width": 1365,
+          "height": 900
+        },
+        "deviceScaleFactor": 1,
+        "isMobile": false,
+        "hasTouch": false,
+        "cpu": 1
+      },
+      "cache": "warm",
+      "repetition": 3,
+      "browser": "156.0.8078.4",
+      "navigationError": null,
+      "data": {
+        "observedUntilMs": 20177.10000000149,
+        "ttfbMs": 2.2999999970197678,
+        "dclMs": 171.39999999850988,
+        "loadMs": 384.6000000014901,
+        "fcpMs": 320,
+        "lcp": {
+          "time": 320,
+          "size": 46463,
+          "url": ""
+        },
+        "cls": 0.00018393783329680765,
+        "firstVisibleQuoteMs": 271.6000000014901,
+        "firstCatalogCardMs": 271.29999999701977,
+        "resources": [
+          {
+            "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+            "durationMs": 216.39999999850988,
+            "transferBytes": 27572,
+            "decodedBytes": 27272
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 479478
+          },
+          {
+            "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 156595
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "durationMs": 0,
+            "transferBytes": 0,
+            "decodedBytes": 66
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/resorts",
+            "durationMs": 455.29999999701977,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/public/legal-pages",
+            "durationMs": 458.20000000298023,
+            "transferBytes": 326,
+            "decodedBytes": 26
+          },
+          {
+            "url": "http://127.0.0.1:3192/api/accommodations",
+            "durationMs": 671.6999999955297,
+            "transferBytes": 106458,
+            "decodedBytes": 106158
+          }
+        ],
+        "imageCount": 60,
+        "articleCount": 30,
+        "overflow": false,
+        "assets": [
+          "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js"
+        ],
+        "firstImages": [
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "eager"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          },
+          {
+            "url": "http://127.0.0.1:3192/__fixture-image.svg",
+            "width": 232,
+            "naturalWidth": 640,
+            "loading": "lazy"
+          }
+        ],
+        "timeOrigin": 1793756112215.8
+      },
+      "requests": [
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "method": "GET"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "method": "GET"
+        }
+      ],
+      "responses": [
+        {
+          "url": "http://127.0.0.1:3192/",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-CqDiwgKJ.js",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/assets/index-N3SSg32W.css",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/__fixture-image.svg",
+          "status": 200,
+          "cache": "public, max-age=31536000, immutable"
+        },
+        {
+          "url": "http://127.0.0.1:3192/fonts/plus-jakarta-sans-latin.woff2",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/resorts",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/public/legal-pages",
+          "status": 200,
+          "cache": "no-store"
+        },
+        {
+          "url": "http://127.0.0.1:3192/api/accommodations",
+          "status": 200,
+          "cache": "no-store"
+        }
+      ],
+      "failures": [],
+      "maxConcurrentApi": 3,
+      "completedTransferBytes": 135270
+    }
+  ]
+}
