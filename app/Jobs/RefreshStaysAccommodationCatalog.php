@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Services\StaysAccommodationCatalog;
+use App\Services\StaysContentRateLimited;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Cache\Repository;
@@ -21,7 +22,7 @@ class RefreshStaysAccommodationCatalog implements ShouldBeUnique, ShouldQueue
 
     public int $timeout = 45;
 
-    public int $uniqueFor = 600;
+    public int $uniqueFor = 86460;
 
     public bool $failOnTimeout = true;
 
@@ -51,6 +52,10 @@ class RefreshStaysAccommodationCatalog implements ShouldBeUnique, ShouldQueue
         if ($this->catalogKey !== $catalog->key() || ! $stays->isConfigured()) {
             return;
         }
-        $catalog->refresh(background: true);
+        try {
+            $catalog->refresh(background: true);
+        } catch (StaysContentRateLimited $limited) {
+            $this->release($limited->retryAfterSeconds);
+        }
     }
 }

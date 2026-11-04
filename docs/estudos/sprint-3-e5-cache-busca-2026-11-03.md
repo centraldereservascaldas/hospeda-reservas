@@ -92,3 +92,19 @@ No SHA `5787299`, os smokes da imagem Linux passaram com cinco programas e o tim
 O teste de integração de fila passou a usar `DatabaseTruncation`, com limpeza antes/depois e recriação do banco SQLite em memória quando necessário. Mantém as duas requisições reais e a asserção de um único job. A alternativa de rollback por migration revelou um `down` histórico incompatível com índice no SQLite; nenhuma migration aplicada foi alterada. A limpeza ocorre exclusivamente no banco descartável de teste.
 
 Os sete cenários do arquivo passaram localmente após o ajuste. A suíte completa e o novo gate PostgreSQL devem passar no SHA corrigido antes de considerar essa prova encerrada. Essa alteração não modifica o código de produção.
+
+## Conteúdo auxiliar compartilhado e pausa de leitura pública
+
+O SHA `726e5dd` passou em todos os gates; o PostgreSQL executou 13 testes/64 asserções sem warnings, incluindo a fila real após o ajuste de isolamento. O lote seguinte acrescenta os pontos abaixo e exige nova execução dos gates.
+
+A revisão do caminho de busca identificou chamadas Stays adicionais ao mapear comodidades e condomínios, mesmo quando a cotação estava no cache. `StaysContentReadCache` compartilha essas listas por cinco minutos no store de conteúdo, por conta/base, endpoint e parâmetros ordenados. O cache aceita somente os três endpoints públicos auxiliares usados pelo mapper. Respostas malformadas e falhas não viram lista vazia válida; listas vazias válidas são reutilizadas. O payload armazenado contém somente identificadores, nomes e comodidades necessários, sem galerias ou campos de proprietário não usados pelo mapper.
+
+A atualização completa do catálogo força a leitura nova dos auxiliares, preservando a semântica do snapshot de 24 horas. O endpoint de condomínios também utiliza a página de propriedades compartilhada. A busca comum aproveita os auxiliares válidos e conserva o prazo original da cotação.
+
+Teste de integração com store de banco e controller recriado: a primeira busca com preço, condomínio e traduções fez quatro chamadas externas; a segunda fez zero chamadas adicionais, preservando o total de R$750 e a comodidade esperada. O cenário usa HTTP fake controlado: não é medição de latência pública ou Web Vitals.
+
+HTTP 429 no catálogo ou nos auxiliares agora produz pausa compartilhada com os cache misses de busca pública. Cotações e metadados ainda válidos continuam disponíveis. Retry-After aceita segundos/data HTTP; pausas menores não reduzem a maior pausa existente. O job de catálogo é reagendado pelo prazo indicado e mantém unicidade suficiente para uma pausa de até 24 horas. Um teste de fila real verificou uma pausa de uma hora, ausência de consulta antecipada e recuperação posterior com uma única tarefa. Operações privadas de checkout/pagamento não passaram a usar esse cache ou coordenador.
+
+Validação local final: 383 testes backend e 2.629 asserções aprovados; 40 cenários direcionados de conteúdo/API/catálogo passaram, além dos testes de rate limit e worker. Pint e diff passaram. O gate PostgreSQL passa a incluir os novos testes de cache auxiliar.
+
+Uma leitura operacional GET de um anúncio ativo, limitada a um item e timeout de três segundos, retornou 200 sem cabeçalhos de cota. O corpo não foi registrado. A documentação local também não informa a cota da conta; a pergunta ficou pendente com o usuário. Aquecimento automático de ofertas/coleções, orçamento e medição do provedor continuam pendentes, junto de E6/E7. Nenhuma alteração deste lote foi publicada.

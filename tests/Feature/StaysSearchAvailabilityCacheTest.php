@@ -161,7 +161,7 @@ class StaysSearchAvailabilityCacheTest extends TestCase
     /** @return array<string, array{string, int}> */
     public static function retryAfterDelays(): array
     {
-        return ['invalid header' => ['not-a-date', 15], 'zero delay' => ['0', 1], 'maximum delay' => ['999999999', 86400]];
+        return ['invalid header' => ['not-a-date', 15], 'natural language is not a retry date' => ['tomorrow', 15], 'zero delay' => ['0', 1], 'maximum delay' => ['999999999', 86400]];
     }
 
     /** @return array{from: string, to: string, guests: int, limit: int} */

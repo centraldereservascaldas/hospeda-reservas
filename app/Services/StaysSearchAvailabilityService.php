@@ -11,7 +11,7 @@ use RuntimeException;
 
 class StaysSearchAvailabilityService
 {
-    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysSearchQuoteService $quotes) {}
+    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysSearchQuoteService $quotes, private readonly StaysContentReadCache $contentReads) {}
 
     /**
      * @param  array{from: string, to: string, guests?: int, propertyId?: string, cities?: list<string>, destination?: string, limit?: int, skip?: int}  $input
@@ -94,16 +94,14 @@ class StaysSearchAvailabilityService
 
     private function pauseAfterRateLimit(?string $retryAfter): void
     {
-        $until = is_string($retryAfter) ? strtotime($retryAfter) : false;
-        $seconds = is_string($retryAfter) && ctype_digit($retryAfter)
-            ? (int) $retryAfter
-            : ($until === false ? 15 : $until - now()->timestamp);
-        $this->cache()->put($this->cooldownKey(), true, max(1, min(86400, $seconds)));
+        $limited = StaysContentRateLimited::fromHeader($retryAfter);
+        $this->cache()->put($this->cooldownKey(), true, $limited->retryAfterSeconds);
+        $this->contentReads->pause($limited);
     }
 
     private function coolingDown(): bool
     {
-        return $this->cache()->get($this->cooldownKey()) === true;
+        return $this->cache()->get($this->cooldownKey()) === true || $this->contentReads->remainingCooldown() > 0;
     }
 
     private function cooldownKey(): string

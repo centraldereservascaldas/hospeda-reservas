@@ -72,11 +72,13 @@ class StaysExternalApiClient
             if ($deadline !== null && microtime(true) >= $deadline) {
                 return null;
             }
-            $batch = $this->get('/content/listings', [
-                'limit' => 50,
-                'skip' => $page * 50,
-                'status' => 'active',
+            $response = $this->request('GET', '/content/listings', [
+                'limit' => 50, 'skip' => $page * 50, 'status' => 'active',
             ], timeout: $deadline === null ? null : max(1, min(10, (int) ceil($deadline - microtime(true)))));
+            if ($deadline !== null && $response?->status() === 429) {
+                throw StaysContentRateLimited::fromHeader($response->header('Retry-After'));
+            }
+            $batch = $response?->successful() ? $response->json() : null;
             if (! is_array($batch)
                 || ! array_is_list($batch)
                 || array_filter($batch, static fn (mixed $listing): bool => is_array($listing)) !== $batch) {

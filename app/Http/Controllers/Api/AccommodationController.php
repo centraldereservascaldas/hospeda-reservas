@@ -8,6 +8,8 @@ use App\Http\Resources\AccommodationSearchResource;
 use App\Services\StaysAccommodationCatalog;
 use App\Services\StaysAccommodationMapper;
 use App\Services\StaysCalendarService;
+use App\Services\StaysContentRateLimited;
+use App\Services\StaysContentReadCache;
 use App\Services\StaysExternalApiClient;
 use App\Services\StaysSearchAvailabilityService;
 use App\Services\StaysSimulator;
@@ -16,11 +18,15 @@ use Illuminate\Http\Request;
 
 class AccommodationController extends Controller
 {
-    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysAccommodationMapper $mapper, private readonly StaysAccommodationCatalog $accommodationCatalog) {}
+    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysAccommodationMapper $mapper, private readonly StaysAccommodationCatalog $accommodationCatalog, private readonly StaysContentReadCache $contentReads) {}
 
     public function resorts(): JsonResponse
     {
-        $properties = $this->stays->get('/content/properties', ['status' => 'active', 'limit' => 100, 'skip' => 0]);
+        try {
+            $properties = $this->contentReads->get('/content/properties', ['status' => 'active', 'limit' => 100, 'skip' => 0]);
+        } catch (StaysContentRateLimited) {
+            $properties = null;
+        }
         if ($properties === null) {
             return response()->json(['success' => false, 'source' => 'unavailable', 'data' => []], 503);
         }

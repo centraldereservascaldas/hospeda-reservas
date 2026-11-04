@@ -14,7 +14,7 @@ class StaysAccommodationCatalog
 
     private const RETENTION_SECONDS = 86400;
 
-    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysAccommodationMapper $mapper) {}
+    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysAccommodationMapper $mapper, private readonly StaysContentReadCache $contentReads) {}
 
     /** @return array{success: bool, source: string, count: int, data: list<array<string, mixed>>}|null */
     public function get(): ?array
@@ -52,7 +52,13 @@ class StaysAccommodationCatalog
                 return $snapshot['response'];
             }
             $deadline = microtime(true) + max(1, min(30, $budgetSeconds));
-            $listings = $this->stays->activeListings($deadline);
+            $this->contentReads->assertAvailable();
+            try {
+                $listings = $this->stays->activeListings($deadline);
+            } catch (StaysContentRateLimited $limited) {
+                $this->contentReads->pause($limited);
+                throw $limited;
+            }
             if ($listings === null || microtime(true) >= $deadline) {
                 throw new RuntimeException('The accommodation catalog could not be refreshed.');
             }

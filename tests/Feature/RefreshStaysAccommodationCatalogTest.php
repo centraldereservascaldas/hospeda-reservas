@@ -109,6 +109,30 @@ class RefreshStaysAccommodationCatalogTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_rate_limited_refresh_is_delayed_and_remains_unique_until_retry_after(): void
+    {
+        $this->freezeTime();
+        config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret', 'services.stays.content_cache_store' => 'database']);
+        Http::preventStrayRequests();
+        Http::fake(['*content/listings*' => Http::sequence()->push([], 429, ['Retry-After' => '3600'])->push([])]);
+        $this->artisan('stays:queue-catalog-refresh')->assertSuccessful();
+        $this->artisan('queue:work', ['connection' => 'database', '--queue' => 'discovery', '--once' => true, '--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+        $this->assertDatabaseCount('jobs', 1);
+        $this->assertDatabaseHas('jobs', ['queue' => 'discovery', 'available_at' => now()->timestamp + 3600]);
+        Http::assertSentCount(1);
+        $this->travel(601)->seconds();
+        $this->artisan('stays:queue-catalog-refresh')->assertSuccessful();
+        $this->assertDatabaseCount('jobs', 1);
+        $this->getJson('/api/accommodations')->assertServiceUnavailable();
+        Http::assertSentCount(1);
+        $this->travel(3000)->seconds();
+        $this->artisan('queue:work', ['connection' => 'database', '--queue' => 'discovery', '--once' => true, '--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+        $this->assertDatabaseCount('jobs', 0);
+        $this->assertDatabaseCount('failed_jobs', 0);
+        $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data', []);
+        Http::assertSentCount(2);
+    }
+
     public function test_job_from_another_account_is_discarded_without_upstream_queries(): void
     {
         config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);

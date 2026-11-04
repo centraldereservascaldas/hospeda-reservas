@@ -16,8 +16,6 @@ class StaysAccommodationMapper
 
     private bool $staysPropertyCatalogLoaded = false;
 
-    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysDiscoveryCatalog $discovery) {}
-
     private bool $requireCompleteMetadata = false;
 
     private ?float $deadline = null;
@@ -26,6 +24,8 @@ class StaysAccommodationMapper
     private ?array $discoverySnapshot = null;
 
     private bool $discoverySnapshotLoaded = false;
+
+    public function __construct(private readonly StaysDiscoveryCatalog $discovery, private readonly StaysContentReadCache $contentReads) {}
 
     public function reset(): void
     {
@@ -55,7 +55,15 @@ class StaysAccommodationMapper
         }
         $timeout = $this->deadline === null ? null : max(1, min(10, (int) ceil($this->deadline - microtime(true))));
 
-        return $this->stays->get($endpoint, $query, timeout: $timeout);
+        try {
+            return $this->contentReads->get($endpoint, $query, timeout: $timeout, forceRefresh: $this->requireCompleteMetadata);
+        } catch (StaysContentRateLimited $limited) {
+            if ($this->requireCompleteMetadata) {
+                throw $limited;
+            }
+
+            return null;
+        }
     }
 
     public function localized(mixed $value): string
