@@ -807,3 +807,66 @@ test('an older extension cannot overwrite a refreshed snapshot for the same list
     crcnBackendApi.getAccommodationCalendar = original;
   }
 });
+
+test('detail quote expires without polling and renews only on explicit retry', async (context) => {
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.UTC(2026, 10, 3) });
+  const { usePropertyQuote } = await import('../src/components/property/usePropertyQuote.ts');
+  const { isConfirmedPropertyQuote } = await import('../src/utils/propertyPricing.ts');
+  const original = crcnBackendApi.calculatePrice;
+  let calls = 0;
+  crcnBackendApi.calculatePrice = async () => {
+    calls += 1;
+    return {
+      success: true,
+      listingId: 'expiry-detail',
+      nights: 2,
+      dailyRate: 250,
+      baseTotal: 500,
+      cleaningFee: 0,
+      serviceFee: 0,
+      discount: 0,
+      total: 500,
+      currency: 'BRL',
+      source: 'stays-live',
+      breakdown: { dailyRateText: '', cleaningFeeText: '', serviceFeeText: '', totalText: '' },
+    };
+  };
+  function Probe() {
+    const result = usePropertyQuote({
+      listingId: 'expiry-detail',
+      checkIn: '2027-01-10',
+      checkOut: '2027-01-12',
+      guests: 2,
+    });
+    return React.createElement(
+      'button',
+      { onClick: result.retryPrice },
+      String(isConfirmedPropertyQuote(result.staysPrice)),
+    );
+  }
+  try {
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(React.createElement(Probe));
+    });
+    assert.equal(view.container.textContent, 'true');
+    await act(async () => {
+      context.mock.timers.tick(44_999);
+    });
+    assert.equal(view.container.textContent, 'true');
+    await act(async () => {
+      context.mock.timers.tick(1);
+    });
+    assert.equal(view.container.textContent, 'false');
+    assert.equal(calls, 1);
+    await act(async () => {
+      view.getByRole('button').click();
+    });
+    assert.equal(view.container.textContent, 'true');
+    assert.equal(calls, 2);
+  } finally {
+    cleanup();
+    crcnBackendApi.calculatePrice = original;
+    context.mock.timers.reset();
+  }
+});

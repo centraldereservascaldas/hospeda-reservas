@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { afterEach } from 'node:test';
 import { JSDOM } from 'jsdom';
+import type { ComponentProps } from 'react';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
@@ -961,8 +962,9 @@ test('booking callback requires live price and an available selected range', asy
   const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
   const originalCalculatePrice = crcnBackendApi.calculatePrice;
   const property = STAYS_NET_APARTMENTS[0]!;
-  const onStartBooking = (bookingData: unknown) => submittedBookings.push(bookingData);
-  const submittedBookings: unknown[] = [];
+  type BookingData = Parameters<ComponentProps<typeof PropertyDetailModal>['onStartBooking']>[0];
+  const submittedBookings: BookingData[] = [];
+  const onStartBooking = (bookingData: BookingData) => submittedBookings.push(bookingData);
   const calendar = Array.from({ length: 5 }, (_, index) => ({
     date: `2026-11-${String(11 + index).padStart(2, '0')}`,
     avail: 1,
@@ -1023,8 +1025,10 @@ test('booking callback requires live price and an available selected range', asy
       cleaningFee: 150,
       serviceFee: 0,
       discount: 0,
-      quote: liveQuote,
+      quote: { ...liveQuote, expiresAt: submittedBookings[0]!.quote.expiresAt },
     });
+    assert.ok(submittedBookings[0]!.quote.expiresAt! > Date.now());
+    assert.ok(submittedBookings[0]!.quote.expiresAt! <= Date.now() + 45_000);
 
     crcnBackendApi.calculatePrice = async () => ({ ...liveQuote, success: false });
     cleanup();

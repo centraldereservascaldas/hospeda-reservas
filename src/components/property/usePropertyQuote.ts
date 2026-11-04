@@ -24,17 +24,42 @@ export function usePropertyQuote({ listingId, checkIn, checkOut, guests }: Prope
       return;
     }
     let current = true;
+    let expirationTimer: ReturnType<typeof setTimeout> | undefined;
+    let expiresAt: number | undefined;
+    const expire = () => {
+      if (current && expiresAt !== undefined && expiresAt <= Date.now()) {
+        setState((previous) => ({
+          ...previous,
+          quote: previous.quote ? { ...previous.quote } : null,
+        }));
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') expire();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     setState({ contextKey, quote: null, loading: true, failed: false });
     crcnBackendApi
       .calculatePrice({ listingId, from: checkIn, to: checkOut, guests })
       .then((quote) => {
-        if (current) setState({ contextKey, quote, loading: false, failed: false });
+        if (!current) return;
+        expiresAt = quote ? Math.min(quote.expiresAt ?? Infinity, Date.now() + 45_000) : undefined;
+        setState({
+          contextKey,
+          quote: quote ? { ...quote, expiresAt } : null,
+          loading: false,
+          failed: false,
+        });
+        if (expiresAt !== undefined)
+          expirationTimer = setTimeout(expire, Math.max(1, expiresAt - Date.now()));
       })
       .catch(() => {
         if (current) setState({ contextKey, quote: null, loading: false, failed: true });
       });
     return () => {
       current = false;
+      if (expirationTimer !== undefined) clearTimeout(expirationTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [listingId, checkIn, checkOut, guests, contextKey, retryToken]);
   const isCurrent = state.contextKey === contextKey;

@@ -121,3 +121,12 @@ Os resultados permanecem na tela durante a atualização explícita e após falh
 Testes direcionados cobrem prazos independentes, ausência de chamadas automáticas, retorno do detalhe, troca de contexto, falha na renovação, recuperação da paginação e remoção do selo/preço expirado. A validade da cotação própria do detalhe e os demais critérios de E6 ainda precisam de revisão; este lote não encerra E6 ou E5.
 
 Validação deste incremento: 544 testes frontend aprovados, lint/TypeScript, build e formatação aprovados. Os 83 testes direcionados de busca, paginação, cards, mapa, filtros e roteamento também passaram. Nenhuma alteração de backend neste incremento.
+
+
+## E6: validade da cotação no detalhe
+
+O detalhe já separava a identidade do contexto (anúncio, datas e hóspedes) do objeto descritivo. Faltava limitar a vida da cotação recebida. O hook agora adiciona prazo absoluto de até 45 segundos, respeitando um prazo menor informado na resposta. Ao vencer, o temporizador local provoca a atualização visual; retomar a aba também confere a validade. Não há nova consulta automática. O calendário e o restante do detalhe permanecem montados.
+
+O validador de preço compartilhado rejeita cotações expiradas ou com prazo inválido, inclusive na ação de continuar a reserva. O painel mostra “Cotação expirada” e oferece a tentativa de cotação existente. Alterar contexto/desmontar remove timer e listener, e descarta respostas atrasadas como antes. O prazo acompanha a cotação passada ao checkout; o servidor continua responsável por validar a operação.
+
+Validação: 59 testes direcionados de disponibilidade, preço, API e detalhe passaram; 35 testes do detalhe foram repetidos após ajustar a tipagem explícita do callback. Lint/TypeScript, build, formatação e diff passaram. Não houve chamadas reais de reserva/pagamento nem deploy neste incremento. Permanecem os demais critérios de E6, o aquecimento de ofertas E5 e a comparação integrada E7.

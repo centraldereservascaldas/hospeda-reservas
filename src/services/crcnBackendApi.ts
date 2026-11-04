@@ -78,6 +78,7 @@ export interface AccommodationSearchPage {
 }
 
 export interface CalculatedPriceResponse {
+  expiresAt?: number;
   success: boolean;
   listingId: string;
   staysListingId?: string;
