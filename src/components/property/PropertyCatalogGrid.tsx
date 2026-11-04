@@ -1,3 +1,4 @@
+import { PropertyCatalogSkeleton } from './PropertyCatalogSkeleton';
 import { useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
 import type { Currency, Property } from '../../types';
@@ -62,7 +63,7 @@ export function PropertyCatalogGrid({
   });
 
   if (status === 'loading') {
-    return <CatalogLoadNotice status="loading" isRefreshing={false} onRetry={onRetryCatalog} />;
+    return <PropertyCatalogSkeleton />;
   }
 
   if (status === 'error') {

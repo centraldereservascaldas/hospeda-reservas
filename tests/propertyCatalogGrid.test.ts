@@ -44,6 +44,11 @@ test('announces catalog loading and errors using status and alert roles', () => 
     React.createElement(PropertyCatalogGrid, { ...commonProps, status: 'loading' }),
   );
   assert.match(screen.getByRole('status').textContent || '', /Carregando acomodações/);
+  const busy = screen.getByRole('status').closest('[aria-busy="true"]');
+  assert.ok(busy);
+  assert.equal(busy.querySelectorAll('a, button, input, [tabindex]').length, 0);
+  assert.equal(busy.querySelectorAll('[aria-hidden="true"] > div').length, 8);
+  assert.equal(busy.querySelectorAll('article, img').length, 0);
 
   rerender(React.createElement(PropertyCatalogGrid, { ...commonProps, status: 'error' }));
   assert.ok(screen.getByRole('alert'));

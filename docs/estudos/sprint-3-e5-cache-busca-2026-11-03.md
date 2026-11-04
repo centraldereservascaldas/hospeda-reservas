@@ -142,3 +142,12 @@ A galeria do detalhe passa a renderizar no máximo cinco miniaturas próximas da
 A remoção de assets expirados dependia de executar `RUN node merge-static-assets.mjs`, mas Docker podia reutilizar essa camada para entradas idênticas. A publicação passa a usar `no-cache-filters: retained_assets`; os dois smokes usam Buildx com `--no-cache-filter retained_assets`. Apenas esse estágio perde o reaproveitamento. O Dockerfile e o checklist registram o requisito para builds manuais. Referências oficiais consultadas: https://docs.docker.com/build/cache/invalidation/ e https://github.com/docker/build-push-action.
 
 Os oito testes locais de retenção/origem passaram, incluindo prazo herdado sem extensão, remoção de expirados, colisão de conteúdo e origem por digest. Formatação YAML e diff passaram. O host local não tem Docker; a execução dos builds com o filtro deve ser comprovada pelos gates de CI no commit resultante antes de publicar. Essa mudança não comprova por si só a comparação de performance E7.
+
+
+## E6: carregamento com geometria do catálogo
+
+O catálogo inicial e a busca com datas usam `PropertyCatalogSkeleton`, com oito placeholders não interativos, imagem 4:3 e as mesmas colunas responsivas do grid. A região possui `aria-busy=true` e uma mensagem agregada `role=status`; os placeholders ficam em `aria-hidden`, sem links, botões, imagens de anúncios ou tabindex. Não há animação, inclusive com movimento reduzido. Atualizações com resultados preservados continuam usando os cartões existentes.
+
+Validação: 35 testes direcionados de catálogo, estado da busca e roteamento passaram; lint/TypeScript, build e diff passaram. Em Chromium local, com movimento reduzido, as larguras 320/360/390/768/1024/1440 px não tiveram overflow, apresentaram respectivamente 1/1/1/3/4/4 colunas, uma mensagem de status e zero elementos focáveis. O cenário renderiza o componente e CSS reais em fixture isolada de Vite; não mede CLS ou LCP da jornada completa.
+
+O smoke de container do SHA `66c808e`, run `41750987083`, concluiu com sucesso, comprovando que o build aceita o filtro de retenção. Os demais gates e a publicação ainda devem ser verificados no SHA final. Permanecem cache local versionado/limitado, auditoria integrada E6, aquecimento E5 e comparação E7.

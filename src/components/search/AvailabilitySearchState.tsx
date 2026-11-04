@@ -1,4 +1,5 @@
-import { CalendarDays, LoaderCircle, RefreshCw, Search, TriangleAlert } from 'lucide-react';
+import { PropertyCatalogSkeleton } from '../property/PropertyCatalogSkeleton';
+import { CalendarDays, RefreshCw, Search, TriangleAlert } from 'lucide-react';
 import type { AvailabilitySearchState as AvailabilitySearchStateValue } from '../../hooks/useAccommodationSearch';
 
 interface AvailabilitySearchStateProps {
@@ -161,23 +162,14 @@ export function AvailabilitySearchState({
 
   if (state === 'loading') {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="mx-auto flex max-w-xl flex-col items-center gap-3 px-5 py-16 text-center"
-      >
-        <LoaderCircle aria-hidden="true" className="h-8 w-8 animate-spin text-orange-700" />
-        <div className="space-y-1">
-          <h2 className="text-base font-bold text-neutral-900">
-            {dateRange ? 'Verificando disponibilidade…' : 'Buscando acomodações…'}
-          </h2>
-          <p className="text-sm text-neutral-600">
-            {dateRange
-              ? `Estamos verificando opções para ${searchContext}.`
-              : 'Estamos atualizando a lista. Disponibilidade e preço dependem do período escolhido.'}
-          </p>
-        </div>
-      </div>
+      <PropertyCatalogSkeleton
+        message={dateRange ? 'Verificando disponibilidade…' : 'Buscando acomodações…'}
+        description={
+          dateRange
+            ? `Estamos verificando opções para ${searchContext}.`
+            : 'Estamos atualizando a lista. Disponibilidade e preço dependem do período escolhido.'
+        }
+      />
     );
   }
 
