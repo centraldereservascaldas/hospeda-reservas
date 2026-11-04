@@ -49,3 +49,14 @@ Passaram 24 testes direcionados, incluindo recuperação com um segundo restante
 - Repetir o cenário desktop quente próximo ao limiar de duração e registrar o artefato final.
 - Confirmar cota da conta Stays antes de ativar aquecimento e medir seu custo ativo.
 - LCP mobile continua acima de 2,5 s nesta mediana de laboratório; metas p75 reais de LCP/INP/CLS continuam não aferidas.
+
+
+## Publicação da retentativa e ajuste da janela útil
+
+O PR #44 foi integrado em `02edfd17003f6c3f0cc800fc4e98a2fc139a78a6`; run `41806252700` passou nos seis jobs, incluindo publicação e deploy. Container `edc5aeb98748` saudável, cinco processos RUNNING, health/ready públicos com sucesso. Imagem `ghcr.io/centraldereservascaldas/hospeda-reservas@sha256:8b1b3e3e6c72a7dde510fd80a16cc157c6dd4a93eaa417d58eae82100c43547a`. JS público `/assets/index-zsoM3WEu.js`, SHA-256 `deea6cc6432205e0387d3b679009ea9dc68a0d7ef6158e74c4b5948bf0ee0cd9`, idêntico ao container. CI frontend: 564 testes.
+
+A repetição pública mostrou uma segunda condição: em `09:39:56`, a atualização recebeu o snapshot com expiresAt `09:39:58`. A validade local conservadora ainda era positiva por uma fração de segundo, então não ocorreu retentativa. Os preços reapareceram brevemente e, seis segundos depois, a página estava novamente expirada, com 12 cartões preservados e sem erro JavaScript ou botão de erro. Esse resultado não aprova a experiência de atualização.
+
+O novo ajuste inclui na retentativa respostas com até dois segundos de validade local utilizável. A espera pelo prazo do servidor tem teto de quatro segundos, mantendo uma única repetição e o cancelamento. Não altera validade comercial nem habilita polling. Passaram 26 testes direcionados, incluindo snapshots com um, dois e três segundos restantes e o teto de espera atualizado; lint/TypeScript e build passaram. No navegador da fixture, os cenários com dois e três segundos na resposta de atualização preservaram 12 cartões, retiraram preços ao expirar, fizeram uma retentativa e continuaram com 12 preços confirmados seis segundos após a renovação. Publicação deste ajuste e verificação pública ainda pendentes. [Dados do limite de validade](sprint-4-e7-janela-validade-2026-11-04.json).
+
+Medição adicional do worker anterior: diferença de CPU do processo supervisor discovery e filhos já recolhidos em `/proc/13/stat`, com CLK_TCK, foi 4,240 segundos em 30,730 segundos de parede, aproximadamente 13,80% de um núcleo. Filhos ainda vivos nos extremos não entram no total, logo é aproximação; inclui trabalhos de descoberta ocorridos no intervalo e não é custo separado por job. O processo continuava RUNNING. Próxima otimização a avaliar em lote separado: diminuir inicializações PHP enquanto a fila está ociosa, preservando o timeout externo por tentativa e a separação da fila financeira.

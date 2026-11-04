@@ -511,25 +511,24 @@ class CrcnBackendApiService {
         );
         expiresAt = Date.now() + remaining;
       }
+      if (retryExpiredSnapshot && Number.isFinite(serverTime) && expiresAt - Date.now() <= 2000) {
+        // Avoid returning a snapshot that expires during or immediately after refresh.
+        requestSignal.throwIfAborted();
+        const delay = Math.min(4000, Math.max(0, serverExpiresAt - serverTime));
+        await new Promise<void>((resolve, reject) => {
+          const abort = () => {
+            globalThis.clearTimeout(timer);
+            reject(requestSignal.reason);
+          };
+          const timer = globalThis.setTimeout(() => {
+            requestSignal.removeEventListener('abort', abort);
+            resolve();
+          }, delay);
+          requestSignal.addEventListener('abort', abort, { once: true });
+        });
+        return this.fetchAccommodationSearchPage(params, requestSignal, false);
+      }
       if (expiresAt <= Date.now()) {
-        if (retryExpiredSnapshot && Number.isFinite(serverTime)) {
-          // A snapshot can expire in transit or just before an explicit refresh.
-          // Give the shared cache a bounded chance to expire, then retry once.
-          requestSignal.throwIfAborted();
-          const delay = Math.min(2000, Math.max(0, serverExpiresAt - serverTime));
-          await new Promise<void>((resolve, reject) => {
-            const abort = () => {
-              globalThis.clearTimeout(timer);
-              reject(requestSignal.reason);
-            };
-            const timer = globalThis.setTimeout(() => {
-              requestSignal.removeEventListener('abort', abort);
-              resolve();
-            }, delay);
-            requestSignal.addEventListener('abort', abort, { once: true });
-          });
-          return this.fetchAccommodationSearchPage(params, requestSignal, false);
-        }
         throw new Error('A cotação da pesquisa expirou. Tente novamente.');
       }
     }
