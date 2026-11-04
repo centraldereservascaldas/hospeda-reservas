@@ -118,7 +118,7 @@ jobs:
         run: php artisan test --compact tests/Feature/GatewayProviderMigrationTest.php
 
       - name: Verify PostgreSQL search cache locking and pruning
-        run: php artisan test --compact --display-warnings --fail-on-warning tests/Feature/StaysSearchConcurrencyTest.php tests/Feature/PruneStaysSearchCacheTest.php
+        run: php artisan test --compact --display-warnings --fail-on-warning tests/Feature/StaysSearchConcurrencyTest.php tests/Feature/PruneStaysSearchCacheTest.php tests/Feature/RefreshStaysAccommodationCatalogTest.php
 
   container-smoke:
     runs-on: ubuntu-latest
@@ -160,8 +160,8 @@ jobs:
 
           docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
           docker exec "$CONTAINER_NAME" sh docker/check-static-assets.sh
-          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-release-supervisor.txt
-          test "$(grep -c RUNNING /tmp/hospeda-release-supervisor.txt)" -eq 4
+          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler discovery | tee /tmp/hospeda-release-supervisor.txt
+          test "$(grep -c RUNNING /tmp/hospeda-release-supervisor.txt)" -eq 5
 
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'
@@ -307,8 +307,8 @@ jobs:
 
           docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
           docker exec "$CONTAINER_NAME" sh docker/check-static-assets.sh
-          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-published-supervisor.txt
-          test "$(grep -c RUNNING /tmp/hospeda-published-supervisor.txt)" -eq 4
+          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler discovery | tee /tmp/hospeda-published-supervisor.txt
+          test "$(grep -c RUNNING /tmp/hospeda-published-supervisor.txt)" -eq 5
 
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'

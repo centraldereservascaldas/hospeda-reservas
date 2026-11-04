@@ -66,3 +66,21 @@ O formato JSON do catálogo e as rotas existentes foram preservados. Os prazos e
 363 testes backend passaram após a mudança; 47 cenários direcionados cobriram API/catálogo/cotações. Pint e diff passaram.
 
 A execução `e657898` revelou os seis avisos do gate PostgreSQL: ausência do arquivo `.env` no checkout de CI, reportada pelo Dotenv. As 27 asserções foram executadas. O job agora copia somente `.env.example` para `.env`, mantendo as variáveis de teste do runner, e usa `--fail-on-warning` no gate de cache. Ainda aguardar a execução sem avisos antes de encerrar essa pendência.
+
+## Atualização descritiva em fila separada — implementação local
+
+`RefreshStaysAccommodationCatalog` é único por chave de conta/base e usa o store compartilhado de conteúdo para o lock de unicidade. Tem duas tentativas, backoff de 15/60 segundos e é encaminhado explicitamente a `database/discovery`. O scheduler o solicita a cada cinco minutos quando Stays está configurada; o worker solicita uma atualização também ao iniciar. A versão válida do catálogo passa a ser devolvida imediatamente durante a renovação.
+
+O job tem orçamento cooperativo de 30 segundos para leitura/mapeamento, com timeouts HTTP limitados ao saldo e verificação antes de publicar o snapshot. O caminho frio HTTP tem orçamento de 12 segundos. Um marcador de aquecimento de 60 segundos evita que chamadas frias concorram com o trabalho em fundo; ele não remove conteúdo válido. Locks de atualização duram 60 segundos. Jobs de outra conta são descartados sem consulta externa.
+
+O container passa a ter o programa Supervisor `discovery`, com um único processo na fila homônima e `nice 10`. A fila `default` e seus workers financeiros permanecem com sua configuração anterior. A sincronização horária de conteúdo roda em processo de fundo para não segurar o scheduler. O snapshot de descoberta passa ao store compartilhado de conteúdo, e o mapper o lê uma vez por lote, inclusive quando ausente.
+
+Leitura operacional em 03/11/2026: runtime atual sem extensão `pcntl`; portanto, o timeout Laravel sozinho não garante término. O script usa o `timeout` GNU 9.1 já presente na imagem, uma execução de worker por tentativa, limite externo de 50 segundos e SIGKILL após mais cinco. Não adiciona dependências. O limite fica abaixo do lock de 60 e do `retry_after=90` verificado em produção. `--timeout=45` continua configurado para runtimes que suportem sinais. Interrupção deixa apenas trabalho público idempotente para retry; nenhum job de pagamento entra nesse worker.
+
+Health checks e smoke do container/imagem agora exigem cinco programas saudáveis. O smoke executa ainda um processo descartável que precisa ser interrompido com status 124, provando a disponibilidade do mecanismo externo. A validação da imagem depende do novo CI: Docker não está disponível neste host local.
+
+Testes exercitam a fila de banco real: três leituras antigas geram um job, a fila default não o consome e discovery atualiza o catálogo. Cobrem bootstrap único, ausência de configuração, descarte de conta divergente, prazo de leitura vencido, bloqueio de concorrência fria e uma leitura do snapshot por lote. Os testes relevantes foram acrescentados ao gate PostgreSQL sem warnings.
+
+Pint, shell syntax e diff passaram. A suíte completa atual passou com 370 testes e 2.564 asserções em 6,9 segundos. O lote ainda não foi publicado. Uma medição read-only do container atual registrou aproximadamente 160 MiB e 0,30% CPU, com cerca de 14 GiB disponíveis no host; não é medição do custo do worker novo.
+
+Permanecem pendentes aquecimento das ofertas/coleções com orçamento do provedor e medição de custo, tratamento contextual de limite do catálogo, imagem validada com cinco programas, integração E6 e comparação E7. Não considerar E5 concluída apenas com a atualização descritiva assíncrona.

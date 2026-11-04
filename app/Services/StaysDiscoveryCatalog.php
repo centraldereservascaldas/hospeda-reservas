@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Sleep;
@@ -18,9 +19,14 @@ class StaysDiscoveryCatalog
     /** @return array{syncedAt: string, properties: array, listings: array}|null */
     public function snapshot(): ?array
     {
-        $value = Cache::get($this->key());
+        $value = $this->cache()->get($this->key());
 
         return is_array($value) ? $value : null;
+    }
+
+    private function cache(): Repository
+    {
+        return Cache::store((string) config('services.stays.content_cache_store', 'database'));
     }
 
     public function key(): string
@@ -31,7 +37,7 @@ class StaysDiscoveryCatalog
     /** @return array{syncedAt: string, properties: array, listings: array} */
     public function sync(): array
     {
-        return Cache::lock($this->key().':lock', 3600)->block(1, function (): array {
+        return $this->cache()->lock($this->key().':lock', 3600)->block(1, function (): array {
             $this->deadline = microtime(true) + 900;
             if (! $this->stays->isConfigured()) {
                 throw new RuntimeException('Integração Stays não configurada.');
@@ -83,7 +89,7 @@ class StaysDiscoveryCatalog
             ksort($listings);
             $properties = $this->assignPropertySlugs($properties);
             $snapshot = ['syncedAt' => now()->toIso8601String(), 'properties' => $properties, 'listings' => $listings];
-            Cache::put($this->key(), $snapshot, 86400);
+            $this->cache()->put($this->key(), $snapshot, 86400);
 
             return $snapshot;
         });

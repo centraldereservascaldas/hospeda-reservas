@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RefreshStaysAccommodationCatalog;
 use App\Services\StaysAccommodationCatalog;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use RuntimeException;
 use Tests\TestCase;
 
 class StaysAccommodationCatalogTest extends TestCase
@@ -17,6 +20,7 @@ class StaysAccommodationCatalogTest extends TestCase
     public function test_transient_refresh_failure_keeps_last_complete_catalog_but_not_after_retention_expires(): void
     {
         $this->freezeTime();
+        Queue::fake([RefreshStaysAccommodationCatalog::class]);
         Http::preventStrayRequests();
         Http::fake(['*content/listings*' => Http::sequence()
             ->push([['id' => 'listing', '_mstitle' => ['pt_BR' => 'Confirmado']]])
@@ -24,6 +28,8 @@ class StaysAccommodationCatalogTest extends TestCase
         $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Confirmado');
         $this->travel(301)->seconds();
         $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Confirmado');
+        Http::assertSentCount(1);
+        $this->assertRefreshFails(app(StaysAccommodationCatalog::class));
         $this->travel(86100)->seconds();
         $this->getJson('/api/accommodations')->assertServiceUnavailable()->assertJsonPath('data', []);
         Http::assertSentCount(3);
@@ -32,11 +38,13 @@ class StaysAccommodationCatalogTest extends TestCase
     public function test_valid_empty_catalog_replaces_previous_content_instead_of_preserving_deleted_listings(): void
     {
         $this->freezeTime();
+        Queue::fake([RefreshStaysAccommodationCatalog::class]);
         Http::preventStrayRequests();
         Http::fake(['*content/listings*' => Http::sequence()
             ->push([['id' => 'listing']])->push([])]);
         $this->getJson('/api/accommodations')->assertOk()->assertJsonCount(1, 'data');
         $this->travel(301)->seconds();
+        app(StaysAccommodationCatalog::class)->refresh();
         $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data', []);
         Http::assertSentCount(2);
     }
@@ -55,6 +63,7 @@ class StaysAccommodationCatalogTest extends TestCase
     public function test_incomplete_amenity_refresh_does_not_replace_last_complete_snapshot(): void
     {
         $this->freezeTime();
+        Queue::fake([RefreshStaysAccommodationCatalog::class]);
         Http::preventStrayRequests();
         Http::fake([
             '*content/listings*' => Http::sequence()
@@ -66,6 +75,20 @@ class StaysAccommodationCatalogTest extends TestCase
         $this->assertSame('Completo', $catalog->get()['data'][0]['title']);
         $this->travel(301)->seconds();
         $this->assertSame('Completo', $catalog->get()['data'][0]['title']);
+        $this->assertRefreshFails($catalog);
+        $this->assertSame('Completo', $catalog->get()['data'][0]['title']);
         Http::assertSentCount(3);
+    }
+
+    private function assertRefreshFails(StaysAccommodationCatalog $catalog): void
+    {
+        try {
+            $catalog->refresh();
+        } catch (RuntimeException) {
+            $this->addToAssertionCount(1);
+
+            return;
+        }
+        $this->fail('An incomplete refresh must fail without replacing the snapshot.');
     }
 }

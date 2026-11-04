@@ -20,12 +20,42 @@ class StaysAccommodationMapper
 
     private bool $requireCompleteMetadata = false;
 
+    private ?float $deadline = null;
+
+    /** @var array<string, mixed>|null */
+    private ?array $discoverySnapshot = null;
+
+    private bool $discoverySnapshotLoaded = false;
+
     public function reset(): void
     {
         $this->amenityNameDictionary = [];
         $this->amenityNameDictionaryLoaded = false;
         $this->staysPropertiesById = [];
         $this->staysPropertyCatalogLoaded = false;
+        $this->discoverySnapshot = null;
+        $this->discoverySnapshotLoaded = false;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function discoverySnapshot(): ?array
+    {
+        if (! $this->discoverySnapshotLoaded) {
+            $this->discoverySnapshot = $this->discovery->snapshot();
+            $this->discoverySnapshotLoaded = true;
+        }
+
+        return $this->discoverySnapshot;
+    }
+
+    private function read(string $endpoint, array $query = []): ?array
+    {
+        if ($this->deadline !== null && microtime(true) >= $this->deadline) {
+            throw new RuntimeException('The catalog refresh time budget was exceeded.');
+        }
+        $timeout = $this->deadline === null ? null : max(1, min(10, (int) ceil($this->deadline - microtime(true))));
+
+        return $this->stays->get($endpoint, $query, timeout: $timeout);
     }
 
     public function localized(mixed $value): string
@@ -80,7 +110,7 @@ class StaysAccommodationMapper
 
         $this->amenityNameDictionaryLoaded = true;
         foreach (['/translation/listing-amenities', '/translation/property-amenities'] as $endpoint) {
-            $amenities = $this->stays->get($endpoint);
+            $amenities = $this->read($endpoint);
             if ($this->requireCompleteMetadata && (! is_array($amenities) || ! array_is_list($amenities))) {
                 throw new RuntimeException('Accommodation amenity metadata is unavailable.');
             }
@@ -110,7 +140,7 @@ class StaysAccommodationMapper
         if (! $this->staysPropertyCatalogLoaded) {
             $this->staysPropertyCatalogLoaded = true;
             for ($skip = 0; $skip < 5000; $skip += 100) {
-                $page = $this->stays->get('/content/properties', [
+                $page = $this->read('/content/properties', [
                     'limit' => 100,
                     'skip' => $skip,
                     'status' => 'active',
@@ -143,9 +173,10 @@ class StaysAccommodationMapper
         return $this->staysPropertiesById[$propertyId] ?? [];
     }
 
-    public function map(array $listing, array $catalog, bool $requireCompleteMetadata = false): array
+    public function map(array $listing, array $catalog, bool $requireCompleteMetadata = false, ?float $deadline = null): array
     {
         $this->requireCompleteMetadata = $requireCompleteMetadata;
+        $this->deadline = $deadline;
         $id = (string) ($listing['id'] ?? $listing['code'] ?? $listing['_id'] ?? '');
         $listingIds = array_values(array_filter([
             (string) ($listing['id'] ?? ''),
@@ -198,7 +229,7 @@ class StaysAccommodationMapper
         ])->filter(fn ($amenity): bool => is_string($amenity) && trim($amenity) !== '')
             ->unique()->values()->all();
 
-        $snapshot = $this->discovery->snapshot();
+        $snapshot = $this->discoverySnapshot();
         $complex = $snapshot['properties'][(string) ($listing['_idproperty'] ?? '')] ?? null;
         $publicListing = $snapshot['listings'][(string) ($listing['id'] ?? $id)] ?? null;
 

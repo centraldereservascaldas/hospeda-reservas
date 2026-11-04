@@ -50,8 +50,12 @@ jobs:
 
           docker exec "$CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready
           docker exec "$CONTAINER_NAME" sh docker/check-static-assets.sh
-          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler | tee /tmp/hospeda-supervisor.txt
-          test "$(grep -c RUNNING /tmp/hospeda-supervisor.txt)" -eq 4
+          docker exec "$CONTAINER_NAME" supervisorctl status apache migrations queue scheduler discovery | tee /tmp/hospeda-supervisor.txt
+          test "$(grep -c RUNNING /tmp/hospeda-supervisor.txt)" -eq 5
+
+          deadline_status=0
+          docker exec "$CONTAINER_NAME" timeout --signal=TERM --kill-after=1s 1s sleep 5 || deadline_status=$?
+          test "$deadline_status" -eq 124
 
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/health | grep --fixed-strings '"success":true'
           curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8080/api/ready | grep --fixed-strings '"success":true'

@@ -91,7 +91,7 @@ EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD test -f /tmp/hospeda-migrations-ready \
-        && test "$(supervisorctl status apache migrations queue scheduler 2>/dev/null | grep -c RUNNING)" -eq 4 \
+        && test "$(supervisorctl status apache migrations queue scheduler discovery 2>/dev/null | grep -c RUNNING)" -eq 5 \
         && curl --fail --silent http://127.0.0.1/api/ready >/dev/null
 
 CMD ["/usr/bin/supervisord", "--nodaemon", "--configuration", "/etc/supervisor/supervisord.conf"]

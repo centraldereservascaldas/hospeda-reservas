@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RefreshStaysAccommodationCatalog;
 use App\Services\StaysAccommodationCatalog;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class AccommodationApiTest extends TestCase
@@ -64,6 +66,7 @@ class AccommodationApiTest extends TestCase
 
     public function test_live_catalog_is_shared_across_requests_until_cache_expiration(): void
     {
+        Queue::fake([RefreshStaysAccommodationCatalog::class]);
         app()->instance('env', 'production');
         config(['services.stays.client_id' => 'client', 'services.stays.client_secret' => 'secret']);
         Carbon::setTestNow(now());
@@ -81,6 +84,10 @@ class AccommodationApiTest extends TestCase
         Http::assertSentCount(1);
 
         Carbon::setTestNow(now()->addSeconds(301));
+        $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Primeira versão');
+        Http::assertSentCount(1);
+        Queue::assertPushed(RefreshStaysAccommodationCatalog::class);
+        app(StaysAccommodationCatalog::class)->refresh();
         $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.title', 'Versão atualizada');
         Http::assertSentCount(2);
 
