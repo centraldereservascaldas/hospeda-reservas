@@ -130,3 +130,8 @@ O detalhe já separava a identidade do contexto (anúncio, datas e hóspedes) do
 O validador de preço compartilhado rejeita cotações expiradas ou com prazo inválido, inclusive na ação de continuar a reserva. O painel mostra “Cotação expirada” e oferece a tentativa de cotação existente. Alterar contexto/desmontar remove timer e listener, e descarta respostas atrasadas como antes. O prazo acompanha a cotação passada ao checkout; o servidor continua responsável por validar a operação.
 
 Validação: 59 testes direcionados de disponibilidade, preço, API e detalhe passaram; 35 testes do detalhe foram repetidos após ajustar a tipagem explícita do callback. Lint/TypeScript, build, formatação e diff passaram. Não houve chamadas reais de reserva/pagamento nem deploy neste incremento. Permanecem os demais critérios de E6, o aquecimento de ofertas E5 e a comparação integrada E7.
+
+
+## E6: controles da galeria
+
+A galeria do detalhe passa a renderizar no máximo cinco miniaturas próximas da foto ativa, além das setas, fechar e contador existentes. A navegação circular por setas/teclado continua alcançando todas as fotos. O teste integrado usa 50 fotos e verifica cinco miniaturas no início e no fim, foto ativa, retorno circular e restauração do foco ao fechar. Os 35 testes do detalhe e lint/TypeScript passaram. Este incremento reduz elementos e etapas de Tab; não representa medição de LCP.

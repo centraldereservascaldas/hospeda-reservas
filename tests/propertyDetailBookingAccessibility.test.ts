@@ -1539,7 +1539,11 @@ test('photo gallery supports keyboard navigation and returns focus to its opener
   crcnBackendApi.getAccommodationCalendar = async () => [];
   crcnBackendApi.calculatePrice = async () => null;
   try {
-    const property = STAYS_NET_APARTMENTS[0]!;
+    const baseProperty = STAYS_NET_APARTMENTS[0]!;
+    const property = {
+      ...baseProperty,
+      images: Array.from({ length: 50 }, (_, index) => `${baseProperty.images[0]}#photo-${index}`),
+    };
     const { container, getByRole } = render(
       React.createElement(PropertyDetailModal, {
         property,
@@ -1577,7 +1581,16 @@ test('photo gallery supports keyboard navigation and returns focus to its opener
     );
     assert.ok(galleryDialog);
     assert.equal(galleryDialog.getAttribute('role'), 'dialog');
-    assert.match(galleryDialog.textContent || '', /1 de \d+ fotos/);
+    assert.match(galleryDialog.textContent || '', /1 de 50 fotos/);
+    assert.equal(galleryDialog.querySelectorAll('button[aria-label^="Abrir foto"]').length, 5);
+    fireEvent.click(getByRole('button', { name: 'Foto anterior' }));
+    assert.match(galleryDialog.textContent || '', /50 de 50 fotos/);
+    assert.equal(galleryDialog.querySelectorAll('button[aria-label^="Abrir foto"]').length, 5);
+    assert.equal(
+      getByRole('button', { name: 'Abrir foto 50' }).getAttribute('aria-current'),
+      'true',
+    );
+    fireEvent.click(getByRole('button', { name: 'Próxima foto' }));
     fireEvent.click(getByRole('button', { name: 'Próxima foto' }));
     assert.match(galleryDialog.textContent || '', /2 de \d+ fotos/);
 
