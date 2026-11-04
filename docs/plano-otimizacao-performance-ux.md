@@ -1,6 +1,6 @@
 # Plano de otimização de performance e experiência
 
-Atualizado em 04/11/2026. **Escopo E0–E7 implementado, publicado e verificado.** Release funcional final `1d3c80d`, após as entregas incrementais. [Relatório final, comparação e limites](estudos/entrega-e0-e7-2026-11-04.md). Aquecimento de ofertas está implementado/testado e permanece desligado até definir a cota; observabilidade contínua e p75 real são acompanhamento operacional. O primeiro preço da home mobile fria não teve ganho comprovado; a busca explícita, LCP mobile, estabilidade e volume melhoraram nas amostras. Registros anteriores são checkpoints históricos.
+Atualizado em 04/11/2026. **E0–E6 publicadas; validação E7 em conclusão.** Release funcional final `1d3c80d`, após as entregas incrementais. [Relatório final, comparação e limites](estudos/entrega-e0-e7-2026-11-04.md). Aquecimento de ofertas está implementado/testado e permanece desligado até definir a cota; observabilidade contínua e p75 real são acompanhamento operacional. O primeiro preço da home mobile fria não teve ganho comprovado; a busca explícita, LCP mobile, estabilidade e volume melhoraram nas amostras. Registros anteriores são checkpoints históricos.
 
 Registro da Sprint 0: [versão publicada, método e resultados da E0](estudos/baseline-performance-e0-2026-11-03.md). Telemetria de backend e p75 real permanecem pendentes, explicitados no registro.
 
@@ -46,13 +46,13 @@ Total estimado: **10,5–20 dias de trabalho**, sem somar itens opcionais abaixo
 
 ## Execução por sprints
 
-| Sprint | Escopo  | Esforço estimado | Saída verificável                                                   | Estado                                                                                                                       |
-| ------ | ------- | ---------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| S0     | E0      | 0,5–1 dia        | Artefato identificado, amostras e instrumentos reproduzíveis        | Baseline de laboratório concluído; observabilidade real pendente                                                             |
-| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 publicadas; CI Docker e smoke público passaram                                                                         |
-| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3/E4 publicadas; visibilidade validada no domínio público                                                                   |
-| S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Publicada e validada em 1d3c80d; cache/renovação/geometria conferidos; aquecimento implementado e desligado até definir cota |
-| S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Concluída: 24 navegações e seis buscas no artefato final; sem regressão acima dos limiares E0, com limitações explícitas     |
+| Sprint | Escopo  | Esforço estimado | Saída verificável                                                   | Estado                                                                                                                                  |
+| ------ | ------- | ---------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| S0     | E0      | 0,5–1 dia        | Artefato identificado, amostras e instrumentos reproduzíveis        | Baseline de laboratório concluído; observabilidade real pendente                                                                        |
+| S1     | E1 + E2 | 2,5–5 dias       | Ofertas consistentes, imagem principal e cache de assets corrigidos | E1/E2 publicadas; CI Docker e smoke público passaram                                                                                    |
+| S2     | E3 + E4 | 3,5–6 dias       | Primeira página independente, fila, deduplicação e cancelamento     | E3/E4 publicadas; visibilidade validada no domínio público                                                                              |
+| S3     | E5 + E6 | 3–6 dias         | Cache compartilhado, vitrines progressivas e continuidade visual    | Publicada e validada em 1d3c80d; cache/renovação/geometria conferidos; aquecimento implementado e desligado até definir cota            |
+| S4     | E7      | 1–2 dias         | Comparação integrada, regressões verificadas e proposta de entrega  | Em validação: ganhos de busca/CLS/volume confirmados; montagem pública do catálogo frio acima do limiar, origem/cliente em investigação |
 
 As implementações e publicações foram feitas em base isolada, preservando o worktree preexistente `codex/calendario-responsivo-cache` e o backend legado. Os registros de cada sprint conservam o estado observado em sua data; o relatório final acima é a referência do fechamento. Calendário agregado, nova hierarquia da home e perfil Android permanecem opcionais, fora da entrega core.
 
