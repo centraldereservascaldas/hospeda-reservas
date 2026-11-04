@@ -325,7 +325,7 @@ export function MainContentRouter({
             availabilitySearchState === 'idle' &&
             !filters.checkIn &&
             !filters.checkOut &&
-            filteredProperties.length > 0 &&
+            (catalogStatus === 'loading' || filteredProperties.length > 0) &&
             !filteredProperties.some((property) => property.simulatedData) && (
               <SeasonalDateSuggestions
                 currency={currency}

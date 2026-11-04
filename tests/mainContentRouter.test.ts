@@ -428,3 +428,26 @@ test('continuation errors retain the catalog and offer a dedicated retry', () =>
   fireEvent.click(getByRole('button', { name: 'Tentar carregar mais' }));
   assert.equal(loads, 1);
 });
+
+test('home mounts discovery structure during catalog loading and preserves it when data arrives', () => {
+  const { container, rerender } = render(
+    React.createElement(
+      MainContentRouter,
+      createRouterProps({
+        catalogStatus: 'loading',
+        catalogLoading: true,
+        filteredProperties: [],
+      }),
+    ),
+  );
+  const collections = container.querySelector('[aria-label="Coleções de hospedagens"]');
+  assert.ok(
+    collections,
+    'the dated collections must reserve their position before the catalog arrives',
+  );
+  assert.ok(container.querySelector('[aria-busy="true"]'));
+  rerender(React.createElement(MainContentRouter, createRouterProps()));
+  assert.equal(container.querySelector('[aria-label="Coleções de hospedagens"]'), collections);
+  rerender(React.createElement(MainContentRouter, createRouterProps({ filteredProperties: [] })));
+  assert.equal(container.querySelector('[aria-label="Coleções de hospedagens"]'), null);
+});
