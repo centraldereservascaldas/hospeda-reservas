@@ -41,12 +41,22 @@ for (const [port, input] of [
         const scenario = new URL(request.headers.referer || url.origin).searchParams.get(
           '__fixture',
         );
+        const contextualProperties =
+          scenario === 'long-location'
+            ? properties.map((property, index) => ({
+                ...property,
+                complexName:
+                  index % 2 === 0
+                    ? 'Complexo teste'
+                    : 'Condomínio teste com um nome público bastante comprido para o cartão',
+              }))
+            : properties;
         if (url.pathname === '/api/accommodations')
-          result = { ...result, source: 'stays-live', data: properties };
+          result = { ...result, source: 'stays-live', data: contextualProperties };
         if (/^\/api\/accommodations\/[^/]+$/.test(url.pathname))
           result = {
             data:
-              properties.find((p) =>
+              contextualProperties.find((p) =>
                 [p.id, p.staysListingId].includes(
                   decodeURIComponent(url.pathname.split('/').at(-1)),
                 ),
@@ -104,7 +114,7 @@ for (const [port, input] of [
           const limit = params.limit ?? 20;
           const skip = params.skip ?? 0;
           const nights = Math.round((Date.parse(params.to) - Date.parse(params.from)) / 86_400_000);
-          const availableProperties = scenario === 'empty' ? [] : properties;
+          const availableProperties = scenario === 'empty' ? [] : contextualProperties;
           const data = availableProperties.slice(skip, skip + limit).map((property) => ({
             ...property,
             ...(params.from && params.to

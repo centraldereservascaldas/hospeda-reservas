@@ -18,35 +18,37 @@ try {
     timezoneId: 'America/Sao_Paulo',
   });
   const page = await context.newPage();
-  await page.addInitScript(() => {
-    const substitute = (value) =>
-      /^https?:\/\//.test(value) && new URL(value).origin !== location.origin
-        ? new URL('/__fixture-image.svg', location.href).href
-        : value;
-    const originalAttribute = HTMLImageElement.prototype.setAttribute;
-    HTMLImageElement.prototype.setAttribute = function (name, value) {
-      const attribute = name.toLowerCase();
-      return originalAttribute.call(
-        this,
-        name,
-        attribute === 'src'
-          ? substitute(String(value))
-          : attribute === 'srcset'
-            ? '/__fixture-image.svg 640w'
-            : value,
-      );
-    };
-    for (const name of ['src', 'srcset']) {
-      const original = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, name);
-      Object.defineProperty(HTMLImageElement.prototype, name, {
-        ...original,
-        set(value) {
-          original.set.call(
-            this,
-            name === 'src' ? substitute(String(value)) : '/__fixture-image.svg 640w',
-          );
-        },
-      });
+  await page.addInitScript((fixture) => {
+    if (fixture) {
+      const substitute = (value) =>
+        /^https?:\/\//.test(value) && new URL(value).origin !== location.origin
+          ? new URL('/__fixture-image.svg', location.href).href
+          : value;
+      const originalAttribute = HTMLImageElement.prototype.setAttribute;
+      HTMLImageElement.prototype.setAttribute = function (name, value) {
+        const attribute = name.toLowerCase();
+        return originalAttribute.call(
+          this,
+          name,
+          attribute === 'src'
+            ? substitute(String(value))
+            : attribute === 'srcset'
+              ? '/__fixture-image.svg 640w'
+              : value,
+        );
+      };
+      for (const name of ['src', 'srcset']) {
+        const original = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, name);
+        Object.defineProperty(HTMLImageElement.prototype, name, {
+          ...original,
+          set(value) {
+            original.set.call(
+              this,
+              name === 'src' ? substitute(String(value)) : '/__fixture-image.svg 640w',
+            );
+          },
+        });
+      }
     }
     window.__shifts = [];
     new PerformanceObserver((list) => {
@@ -66,7 +68,7 @@ try {
         });
       }
     }).observe({ type: 'layout-shift', buffered: true });
-  });
+  }, process.env.CRCN_BASELINE_FIXTURE === 'true');
   const cdp = await context.newCDPSession(page);
   await cdp.send('Network.enable');
   await cdp.send('Network.emulateNetworkConditions', {
@@ -81,7 +83,7 @@ try {
     waitUntil: 'domcontentloaded',
   });
   await page.screenshot({ path: `${output}/initial.png` });
-  await page.waitForTimeout(6000);
+  await page.waitForTimeout(Number(process.env.CRCN_LAYOUT_WAIT_MS || 6000));
   await page.screenshot({ path: `${output}/loaded.png` });
   const shifts = await page.evaluate(() => window.__shifts);
   fs.writeFileSync(`${output}/shifts.json`, JSON.stringify(shifts, null, 2));
