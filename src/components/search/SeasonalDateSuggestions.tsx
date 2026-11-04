@@ -637,33 +637,35 @@ export function SeasonalDateSuggestions({
 
                   <span className="mt-3 flex items-start justify-between gap-2 px-0.5">
                     <span className="min-w-0">
-                      <span className="line-clamp-1 block text-sm font-extrabold text-neutral-950">
+                      <span className="line-clamp-1 text-sm font-extrabold text-neutral-950">
                         {quote.status === 'ready' ? quote.propertyTitle : suggestion.label}
                       </span>
-                      <span className="mt-0.5 line-clamp-1 block text-xs font-medium text-neutral-600">
+                      <span className="mt-0.5 line-clamp-1 text-xs font-medium text-neutral-600">
                         {quote.status === 'ready' ? quote.propertyLocation : 'Sugestão de viagem'} ·{' '}
                         {nights} {nights === 1 ? 'noite' : 'noites'} · {guestCount}{' '}
                         {guestCount === 1 ? 'hóspede' : 'hóspedes'}
                       </span>
-                      {quote.status === 'loading' ? (
-                        <span className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500">
-                          <LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
-                          Consultando preço…
-                        </span>
-                      ) : quote.status === 'ready' && quote.total ? (
-                        <span className="mt-1.5 block text-xs text-neutral-700">
-                          <strong className="text-sm text-neutral-950">
-                            {formatCurrency(quote.total, currency)}
-                          </strong>{' '}
-                          total
-                        </span>
-                      ) : (
-                        <span className="mt-1.5 block text-xs font-bold text-neutral-700">
-                          {quote.status === 'error'
-                            ? 'Consulta indisponível. Tente buscar.'
-                            : 'Explore opções para estas datas'}
-                        </span>
-                      )}
+                      <span className="mt-1.5 block h-10 text-xs leading-5">
+                        {quote.status === 'loading' ? (
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-neutral-500">
+                            <LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
+                            Consultando preço…
+                          </span>
+                        ) : quote.status === 'ready' && quote.total ? (
+                          <span className="line-clamp-2 text-neutral-700">
+                            <strong className="text-sm leading-5 text-neutral-950">
+                              {formatCurrency(quote.total, currency)}
+                            </strong>{' '}
+                            total
+                          </span>
+                        ) : (
+                          <span className="line-clamp-2 font-bold text-neutral-700">
+                            {quote.status === 'error'
+                              ? 'Consulta indisponível. Tente buscar.'
+                              : 'Explore opções para estas datas'}
+                          </span>
+                        )}
+                      </span>
                     </span>
                     <ArrowRight
                       aria-hidden="true"

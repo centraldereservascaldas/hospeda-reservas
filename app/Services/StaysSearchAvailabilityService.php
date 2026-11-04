@@ -12,6 +12,8 @@ use RuntimeException;
 
 class StaysSearchAvailabilityService
 {
+    private const MAXIMUM_CACHE_REUSE_MARGIN_SECONDS = 5;
+
     public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysSearchQuoteService $quotes, private readonly StaysContentReadCache $contentReads) {}
 
     /**
@@ -37,7 +39,7 @@ class StaysSearchAvailabilityService
             }
 
             if ($this->coolingDown()) {
-                return null;
+                return $this->isReusable($cached, allowNearExpiry: true) ? $cached : null;
             }
 
             return $this->cache()->lock($key.':lock', max(30, (int) config('services.stays.timeout', 10) + 15))->block(3, function () use ($key, $context, $beforeRequest): ?array {
@@ -46,20 +48,20 @@ class StaysSearchAvailabilityService
                     return $cached;
                 }
                 if ($this->coolingDown()) {
-                    return null;
+                    return $this->isReusable($cached, allowNearExpiry: true) ? $cached : null;
                 }
                 if ($beforeRequest !== null && ! $beforeRequest()) {
                     return null;
                 }
                 $fetchedAt = now();
-                $expiresAt = $fetchedAt->copy()->addSeconds(max(1, min(60, (int) config('services.stays.search_cache_ttl', 45))));
+                $expiresAt = $fetchedAt->copy()->addSeconds($this->cacheTtl());
                 $response = $this->stays->request('POST', '/booking/search-listings', payload: array_filter([
                     ...$context, 'isBookable' => true,
                 ], static fn (mixed $value): bool => $value !== null));
                 if ($response?->status() === 429) {
                     $this->pauseAfterRateLimit($response->header('Retry-After'));
 
-                    return null;
+                    return $this->isReusable($cached, allowNearExpiry: true) ? $cached : null;
                 }
                 $live = $response?->successful() ? $response->json() : null;
                 if (! is_array($live) || ! array_is_list($live) || array_filter($live, 'is_array') !== $live || count($live) > $context['limit']) {
@@ -87,11 +89,21 @@ class StaysSearchAvailabilityService
         }
     }
 
-    private function isReusable(mixed $cached): bool
+    private function isReusable(mixed $cached, bool $allowNearExpiry = false): bool
     {
         $expiresAt = is_array($cached) ? ($cached['meta']['expiresAt'] ?? null) : null;
 
-        return is_string($expiresAt) && strtotime($expiresAt) > now()->timestamp;
+        $ttl = $this->cacheTtl();
+        $minimumRemaining = ! $allowNearExpiry && $ttl > self::MAXIMUM_CACHE_REUSE_MARGIN_SECONDS
+            ? min(self::MAXIMUM_CACHE_REUSE_MARGIN_SECONDS, intdiv($ttl, 5))
+            : 0;
+
+        return is_string($expiresAt) && strtotime($expiresAt) > now()->timestamp + $minimumRemaining;
+    }
+
+    private function cacheTtl(): int
+    {
+        return max(1, min(60, (int) config('services.stays.search_cache_ttl', 45)));
     }
 
     public function invalidate(): void
