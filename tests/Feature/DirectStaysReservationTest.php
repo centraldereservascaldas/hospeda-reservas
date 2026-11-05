@@ -19,6 +19,55 @@ class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    #[DataProvider('duplicateClientCases')]
+    public function test_duplicate_stays_client_is_reused_only_after_confirming_exact_identity(string $mode, bool $ready): void
+    {
+        config([
+            'services.stays.base_url' => 'https://stays.test/external/v1',
+            'services.stays.client_id' => 'test-client',
+            'services.stays.client_secret' => 'test-secret',
+        ]);
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        $order->update(['stays_client_id' => null]);
+        $id = '6a3e847be2dd9f1b7508abcd';
+        Http::preventStrayRequests();
+        Http::fake(function (ClientRequest $request) use ($mode, $id) {
+            $path = parse_url($request->url(), PHP_URL_PATH);
+            if ($request->method() === 'GET' && str_ends_with($path, '/booking/clients')) {
+                return Http::response([], 200);
+            }
+            if ($request->method() === 'POST' && str_ends_with($path, '/booking/clients')) {
+                return Http::response(['metadata' => ['_idclient' => $mode === 'invalid_id' ? '../invalid' : $id]], 409);
+            }
+            if ($request->method() === 'GET' && str_ends_with($path, '/booking/clients/'.$id)) {
+                if ($mode === 'unavailable') {
+                    return Http::response([], 503);
+                }
+
+                return Http::response(['_id' => $mode === 'different_id' ? 'other' : $id, 'email' => $mode === 'different_email' ? 'other@example.test' : 'TEST@example.test']);
+            }
+            $this->fail('Unexpected Stays request.');
+        });
+
+        $result = (fn () => $this->resolveClient($order))->call(app(DirectStaysReservationService::class));
+        $this->assertSame($ready, $result['ready']);
+        $this->assertSame($ready ? 'client_ready' : 'stays_client_conflict_unverified', $result['code']);
+        $this->assertSame($ready ? $id : '', $result['clientId']);
+        $this->assertSame($ready ? 'succeeded' : 'attention_required', $order->staysActions()->where('action_type', 'create_client')->sole()->status);
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+    }
+
+    public static function duplicateClientCases(): array
+    {
+        return [
+            'matching email and id' => ['match', true],
+            'different email' => ['different_email', false],
+            'different id' => ['different_id', false],
+            'invalid id' => ['invalid_id', false],
+            'lookup unavailable' => ['unavailable', false],
+        ];
+    }
+
     public function test_reservation_total_must_match_quote_even_when_expected_and_hosting_subtotals_differ(): void
     {
         $order = $this->order(DirectBookingOrderStatus::Cotado);
@@ -119,6 +168,37 @@ class DirectStaysReservationTest extends TestCase
             'cache.default' => 'array',
         ]);
         Http::preventStrayRequests();
+    }
+
+    public function test_checkout_creates_reservation_after_stays_returns_duplicate_client_conflict(): void
+    {
+        $this->approvedTerms();
+        $clientId = '6a3e847be2dd9f1b7508abcd';
+        Http::preventStrayRequests();
+        Http::fake(function (ClientRequest $request) use ($clientId) {
+            if ($response = $this->checkoutStaysResponse($request)) {
+                return $response;
+            }
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+            if ($request->method() === 'GET' && str_ends_with($path, '/booking/clients')) {
+                return Http::response([]);
+            }
+            if ($request->method() === 'POST' && str_ends_with($path, '/booking/clients')) {
+                return Http::response(['metadata' => ['_idclient' => $clientId]], 409);
+            }
+            if ($request->method() === 'GET' && str_ends_with($path, '/booking/clients/'.$clientId)) {
+                return Http::response(['_id' => $clientId, 'email' => 'checkout@example.test']);
+            }
+            if ($request->method() === 'POST' && str_ends_with($path, '/booking/reservations')) {
+                return Http::response($this->reservationFrom($request->data(), 'reservation-conflict'), 201);
+            }
+
+            return Http::response([], 404);
+        });
+        $this->postJson('/api/checkout', $this->checkoutPayload(), ['Idempotency-Key' => 'duplicate-client-checkout-001'])
+            ->assertCreated()->assertJsonPath('order.status', 'pre_reservado');
+        $this->assertSame($clientId, DirectBookingOrder::query()->sole()->stays_client_id);
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
     }
 
     public function test_checkout_creates_and_persists_reserved_and_resume_contract_with_payment_readiness(): void

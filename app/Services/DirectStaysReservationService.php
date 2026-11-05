@@ -471,6 +471,25 @@ class DirectStaysReservationService
             }
         }
 
+        if ($response?->status() === 409) {
+            $conflictClientId = $response->json('metadata._idclient');
+            if (is_string($conflictClientId) && preg_match('/^[a-f0-9]{24}$/iD', $conflictClientId)) {
+                $existing = $this->stays->get('/booking/clients/'.rawurlencode($conflictClientId));
+                if (is_array($existing)
+                    && $this->clientId($existing) === $conflictClientId
+                    && is_string($existing['email'] ?? null)
+                    && mb_strtolower(trim($existing['email'])) === mb_strtolower(trim($order->guest_email))) {
+                    $this->markActionSucceeded($action, $conflictClientId, ['_id' => $conflictClientId]);
+
+                    return ['ready' => true, 'clientId' => $conflictClientId, 'code' => 'client_ready', 'message' => ''];
+                }
+            }
+
+            $this->markAttention($action, $order, 'stays_client_conflict_unverified', 'A Stays indicou um cadastro existente, mas não foi possível confirmar a identidade. Nenhuma reserva foi iniciada.');
+
+            return ['ready' => false, 'clientId' => '', 'code' => 'stays_client_conflict_unverified', 'message' => 'O cadastro existente não pôde ser confirmado. Nenhuma reserva foi iniciada.'];
+        }
+
         if ($response !== null && $response->clientError() && $response->status() !== 408 && $response->status() !== 429) {
             $action->forceFill(['status' => 'failed', 'error_code' => 'stays_client_rejected', 'error_message' => 'A Stays rejeitou a criação do cliente.'])->save();
 
