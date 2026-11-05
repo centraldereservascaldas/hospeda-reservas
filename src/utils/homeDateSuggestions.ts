@@ -6,6 +6,7 @@ export interface HomeDateSuggestion {
   label: string;
   eyebrow: string;
   kind: 'weekend' | 'event' | 'holiday' | 'high-season';
+  petFriendlyOnly?: boolean;
 }
 
 export interface HomeDiscoveryCollection {
@@ -109,6 +110,7 @@ export function getHomeDiscoveryCollections(
       label: 'Fim de semana com seu pet',
       eyebrow: 'CONSULTE PETS',
       kind: 'weekend' as const,
+      petFriendlyOnly: true,
       propertyIndex: index,
     };
   });
@@ -150,7 +152,7 @@ export function getHomeDiscoveryCollections(
       eyebrow: 'VIAJE COM TODA A FAMÍLIA',
       title: 'Hospedagens para viajar com seu pet',
       description:
-        'Escolha o fim de semana e consulte a aceitação do pet antes de concluir a reserva.',
+        'Apartamentos com aceitação de pets confirmada para você escolher as datas da viagem.',
       suggestions: petWeekends,
       includePet: true,
     },

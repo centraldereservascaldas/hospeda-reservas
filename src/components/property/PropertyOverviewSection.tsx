@@ -53,6 +53,9 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
   const descriptionBlocks = formatPropertyDescription(property.description)
     .split(/\n\n+/)
     .filter(Boolean);
+  const complexDescriptionBlocks = property.complexDescription
+    ? formatPropertyDescription(property.complexDescription).split(/\n\n+/).filter(Boolean)
+    : [];
   const propertyDetails = [
     property.bedrooms > 0
       ? `${property.bedrooms} ${property.bedrooms === 1 ? 'quarto' : 'quartos'}`
@@ -150,14 +153,18 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
         </div>
       )}
 
-      {property.complexDescription?.trim() && (
+      {complexDescriptionBlocks.length > 0 && (
         <div className="pt-6">
           <h3 className="text-lg font-bold text-neutral-900 mb-3">
             Sobre o condomínio{property.complexName ? ` ${property.complexName}` : ''}
           </h3>
-          <p className="text-sm text-neutral-700 leading-relaxed whitespace-pre-line">
-            {property.complexDescription}
-          </p>
+          <div className="space-y-3 text-sm text-neutral-700 leading-relaxed">
+            {complexDescriptionBlocks.map((block, index) => (
+              <p key={`${block}-${index}`} className="whitespace-pre-line">
+                {block}
+              </p>
+            ))}
+          </div>
         </div>
       )}
 

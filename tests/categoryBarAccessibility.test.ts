@@ -58,30 +58,28 @@ test('mobile category cards show compact labels beside icons and keep a full-hei
   const { getByRole } = renderCategoryBar();
   const category = getByRole('button', { name: 'Todas as hospedagens' });
   const iconSurface = category.querySelector('div.relative');
-  const label = category.querySelector('span.w-full');
+  const label = category.querySelector('span.flex-1.items-center');
+  const labelText = label?.querySelector('span.w-full');
 
-  assert.match(category.className, /gap-0/);
+  assert.match(category.className, /flex-row/);
+  assert.match(category.className, /gap-2/);
   assert.match(category.className, /min-h-16/);
   assert.match(category.className, /h-16/);
-  assert.match(category.className, /flex-col/);
-  assert.match(category.className, /sm:flex-row/);
   assert.match(category.className, /sm:h-14/);
-  assert.match(category.className, /sm:w-28 sm:min-w-28/);
+  assert.match(category.className, /sm:w-36 sm:min-w-36/);
   assert.match(category.className, /max-height:400px/);
   assert.match(category.className, /h-12/);
   assert.match(category.className, /min-h-12/);
-  assert.match(category.className, /sm:gap-0/);
-  assert.match(category.className, /sm:py-1/);
-  assert.match(category.className, /sm:px-0/);
-  assert.match(iconSurface?.className ?? '', /h-6 w-6/);
-  assert.match(iconSurface?.className ?? '', /sm:h-6 sm:w-6/);
-  assert.match(iconSurface?.querySelector('svg')?.getAttribute('class') ?? '', /w-4 h-4/);
+  assert.match(category.className, /gap-2/);
+  assert.match(category.className, /sm:px-2/);
+  assert.match(iconSurface?.className ?? '', /h-10 w-10/);
+  assert.match(iconSurface?.className ?? '', /sm:h-10 sm:w-10/);
+  assert.match(iconSurface?.querySelector('svg')?.getAttribute('class') ?? '', /w-5 h-5/);
   assert.match(label?.className ?? '', /flex-1/);
-  assert.doesNotMatch(label?.className ?? '', /\bhidden\b/);
-  assert.match(label?.textContent ?? '', /Todas as hospedagens/);
-  assert.match(label?.className ?? '', /sm:flex-1/);
-  assert.match(label?.querySelector('span')?.className ?? '', /text-caption/);
-  assert.match(label?.querySelector('span')?.className ?? '', /leading-3/);
+  assert.doesNotMatch(labelText?.className ?? '', /\bhidden\b/);
+  assert.match(labelText?.textContent ?? '', /Todas as hospedagens/);
+  assert.match(labelText?.className ?? '', /text-caption/);
+  assert.match(labelText?.className ?? '', /leading-tight/);
 });
 
 test('category, filter, map, and price controls expose visible keyboard focus styles', () => {

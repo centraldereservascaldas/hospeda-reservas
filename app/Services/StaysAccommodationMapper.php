@@ -222,9 +222,26 @@ class StaysAccommodationMapper
         if ($listingAmenities === [] && $hasMatchingCatalogEntry) {
             $listingAmenities = $existing['listingAmenities'] ?? [];
         }
+        $snapshot = $this->discoverySnapshot();
+        $complex = $snapshot['properties'][(string) ($listing['_idproperty'] ?? '')] ?? null;
+        $publicListing = $snapshot['listings'][(string) ($listing['id'] ?? $id)] ?? null;
+        $listingPropertyMeta = $listing['_t_propertyMeta'] ?? $listing['property'] ?? [];
+        if (! is_array($listingPropertyMeta)) {
+            $listingPropertyMeta = [];
+        }
         $propertyAmenityItems = $listing['propertyAmenities'] ?? [];
+        $needsPropertyMetadata = $propertyAmenityItems === []
+            || (($complex['name'] ?? '') === ''
+                && ($listingPropertyMeta['_mstitle'] ?? $listingPropertyMeta['name'] ?? '') === ''
+                && ($existing['complexName'] ?? '') === '')
+            || (($complex['description'] ?? '') === ''
+                && ($listingPropertyMeta['_msdesc'] ?? $listingPropertyMeta['description'] ?? '') === ''
+                && ($existing['complexDescription'] ?? '') === '');
+        $staysProperty = $needsPropertyMetadata
+            ? $this->staysPropertyById((string) ($listing['_idproperty'] ?? ''))
+            : [];
         if ($propertyAmenityItems === []) {
-            $propertyAmenityItems = $this->staysPropertyById((string) ($listing['_idproperty'] ?? ''))['amenities'] ?? [];
+            $propertyAmenityItems = $staysProperty['amenities'] ?? [];
         }
         $propertyAmenities = $this->mapAmenityNames($propertyAmenityItems);
         if ($propertyAmenities === [] && $hasMatchingCatalogEntry) {
@@ -237,9 +254,15 @@ class StaysAccommodationMapper
         ])->filter(fn ($amenity): bool => is_string($amenity) && trim($amenity) !== '')
             ->unique()->values()->all();
 
-        $snapshot = $this->discoverySnapshot();
-        $complex = $snapshot['properties'][(string) ($listing['_idproperty'] ?? '')] ?? null;
-        $publicListing = $snapshot['listings'][(string) ($listing['id'] ?? $id)] ?? null;
+        $complexName = ($complex['name'] ?? '')
+            ?: $this->localized($listingPropertyMeta['_mstitle'] ?? null)
+            ?: ($listingPropertyMeta['name'] ?? '')
+            ?: $this->localized($staysProperty['_mstitle'] ?? null)
+            ?: ($hasMatchingCatalogEntry ? ($existing['complexName'] ?? '') : '');
+        $complexDescription = ($complex['description'] ?? '')
+            ?: $this->localized($listingPropertyMeta['_msdesc'] ?? $listingPropertyMeta['description'] ?? null)
+            ?: $this->localized($staysProperty['_msdesc'] ?? null)
+            ?: ($hasMatchingCatalogEntry ? ($existing['complexDescription'] ?? '') : '');
 
         $mappedProperty = array_replace_recursive($existing, [
             'id' => $id, 'staysListingId' => (string) ($listing['id'] ?? $listing['code'] ?? $id), 'staysListingObjectId' => (string) ($listing['_id'] ?? ''), 'staysPropertyId' => (string) ($listing['_idproperty'] ?? ''), 'staysSynced' => true,
@@ -247,9 +270,9 @@ class StaysAccommodationMapper
             'title' => $this->localized($listing['_mstitle'] ?? null) ?: ($listing['internalName'] ?? 'Apartamento Central de Reservas'),
             'subtitle' => $this->localized($listing['_t_typeMeta']['_mstitle'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['subtitle'] ?? '') : ''),
             'description' => strip_tags($this->localized($listing['_msdesc'] ?? $listing['description'] ?? null) ?: ($hasMatchingCatalogEntry ? ($existing['description'] ?? '') : '')),
-            'complexName' => $complex['name'] ?? ($hasMatchingCatalogEntry ? ($existing['complexName'] ?? '') : ''),
+            'complexName' => $complexName,
             'complexPageUrl' => $complex !== null && ($complex['listingIds'] ?? []) !== [] ? $this->discovery->propertyPath($complex) : '',
-            'complexDescription' => $complex['description'] ?? ($hasMatchingCatalogEntry ? ($existing['complexDescription'] ?? '') : ''),
+            'complexDescription' => $complexDescription,
             'complexImages' => $complex['images'] ?? ($hasMatchingCatalogEntry ? ($existing['complexImages'] ?? []) : []),
             'category' => (string) (collect($listing['listingCategories'] ?? [])->first() ?? 'accommodation'),
             'propertyType' => $propertyType,
