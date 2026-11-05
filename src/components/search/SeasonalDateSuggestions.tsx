@@ -615,12 +615,18 @@ export function SeasonalDateSuggestions({
         const petSuggestions = collection.includePet
           ? collection.suggestions.filter((suggestion) => {
               const quote = quotes[suggestion.id];
-              return (
+              const confirmedPetFriendlyQuote =
                 quote?.status === 'ready' &&
                 (quote.petFriendlyConfirmed === true ||
                   (quote.featuredProperty !== undefined &&
-                    matchesPropertyCategory(quote.featuredProperty, 'pet_friendly')))
-              );
+                    matchesPropertyCategory(quote.featuredProperty, 'pet_friendly')));
+              const awaitingPetConfirmation =
+                !quote ||
+                quote.status === 'idle' ||
+                quote.status === 'loading' ||
+                quote.status === 'error';
+
+              return confirmedPetFriendlyQuote || awaitingPetConfirmation;
             })
           : collection.suggestions;
         const petLookupPending = collection.suggestions.some((suggestion) => {
@@ -667,7 +673,13 @@ export function SeasonalDateSuggestions({
                     pets: Math.max(1, guests?.pets ?? 0),
                   }
                 : guests;
-              const petStatus = collection.includePet ? 'Aceita pet' : suggestion.eyebrow;
+              const petStatus = collection.includePet
+                ? quote.status === 'ready'
+                  ? 'Aceita pet'
+                  : quote.status === 'error'
+                    ? 'Tente novamente'
+                    : 'Confirmando pets'
+                : suggestion.eyebrow;
               const imageBadge =
                 collection.id === 'holidays'
                   ? suggestion.label.replace(/^Feriado:\s*/i, '')

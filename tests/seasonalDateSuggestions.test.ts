@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { afterEach } from 'node:test';
 import { JSDOM } from 'jsdom';
+import type { ComponentProps } from 'react';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
 Object.assign(globalThis, {
@@ -26,6 +27,19 @@ import type {
 import type { ScheduledRequestOptions } from '../src/services/requestScheduler.ts';
 
 const originalSearch = crcnBackendApi.searchAccommodationsPage;
+
+function createSeasonalDateSuggestionsElement(
+  props: Partial<ComponentProps<typeof SeasonalDateSuggestions>> = {},
+) {
+  return React.createElement(SeasonalDateSuggestions, {
+    currency: 'BRL',
+    guestCount: 1,
+    guests: { adults: 1, children: 0, infants: 0, pets: 0 },
+    onSelect: () => {},
+    onOpenProperty: () => {},
+    ...props,
+  });
+}
 
 function mockSearch(
   search: (
@@ -99,6 +113,7 @@ test('shows date suggestions with real quoted totals and applies the selected pe
     data: [
       {
         ...STAYS_NET_APARTMENTS[0]!,
+        category: 'pet_friendly',
         calculatedPrice: {
           nights: 2,
           dailyRate: 600,
@@ -114,11 +129,14 @@ test('shows date suggestions with real quoted totals and applies the selected pe
   const selections: Array<{ checkIn: string; checkOut: string }> = [];
 
   render(
-    React.createElement(SeasonalDateSuggestions, {
+    createSeasonalDateSuggestionsElement({
       currency: 'BRL',
       guestCount: 2,
       guests: { adults: 2, children: 0, infants: 0, pets: 0 },
       onSelect: (params) => {
+        selections.push({ checkIn: params.checkIn, checkOut: params.checkOut });
+      },
+      onOpenProperty: (_property, params) => {
         selections.push({ checkIn: params.checkIn, checkOut: params.checkOut });
       },
     }),
@@ -142,7 +160,7 @@ test('keeps a consultation failure separate from no availability and never cache
     throw new Error('offline');
   });
   render(
-    React.createElement(SeasonalDateSuggestions, {
+    createSeasonalDateSuggestionsElement({
       currency: 'BRL',
       guestCount: 2,
       guests: { adults: 2, children: 0, infants: 0, pets: 0 },
@@ -159,6 +177,7 @@ test('keeps a consultation failure separate from no availability and never cache
 test('does not use a neighbouring apartment quote for another unit of the same condominium', async () => {
   const unitA = {
     ...STAYS_NET_APARTMENTS[0]!,
+    category: 'pet_friendly',
     id: 'unit-a',
     title: 'Apartamento A',
     staysListingId: 'unit-a',
@@ -186,7 +205,7 @@ test('does not use a neighbouring apartment quote for another unit of the same c
       : [unitB],
   }));
   render(
-    React.createElement(SeasonalDateSuggestions, {
+    createSeasonalDateSuggestionsElement({
       currency: 'BRL',
       guestCount: 2,
       guests: { adults: 2, children: 0, infants: 0, pets: 0 },
@@ -211,6 +230,7 @@ test('hides quotes from a previous occupancy while the new search is pending', a
       data: [
         {
           ...STAYS_NET_APARTMENTS[0]!,
+          category: 'pet_friendly',
           calculatedPrice: {
             nights:
               params.from && params.to
@@ -233,10 +253,10 @@ test('hides quotes from a previous occupancy while the new search is pending', a
     guests: { adults: 2, children: 0, infants: 0, pets: 0 },
     onSelect: () => {},
   };
-  const view = render(React.createElement(SeasonalDateSuggestions, props));
+  const view = render(createSeasonalDateSuggestionsElement(props));
   await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
   view.rerender(
-    React.createElement(SeasonalDateSuggestions, {
+    createSeasonalDateSuggestionsElement({
       ...props,
       guestCount: 3,
       guests: { ...props.guests, adults: 3 },
@@ -252,6 +272,7 @@ test('does not restore an expired price as a confirmed offer on the next visit',
     data: [
       {
         ...STAYS_NET_APARTMENTS[0]!,
+        category: 'pet_friendly',
         calculatedPrice: {
           nights:
             params.from && params.to
@@ -273,14 +294,14 @@ test('does not restore an expired price as a confirmed offer on the next visit',
     guests: { adults: 2, children: 0, infants: 0, pets: 0 },
     onSelect: () => {},
   };
-  const view = render(React.createElement(SeasonalDateSuggestions, props));
+  const view = render(createSeasonalDateSuggestionsElement(props));
   await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
   view.unmount();
   try {
     const expiredNow = now() + 46_000;
     Date.now = () => expiredNow;
     mockSearch(async () => new Promise(() => {}));
-    render(React.createElement(SeasonalDateSuggestions, props));
+    render(createSeasonalDateSuggestionsElement(props));
     assert.doesNotMatch(document.body.textContent || '', /R\$ 500/);
   } finally {
     Date.now = now;
@@ -293,6 +314,7 @@ test('prioritizes only the first collection cover and supplies responsive image 
     data: [
       {
         ...STAYS_NET_APARTMENTS[0]!,
+        category: 'pet_friendly',
         images: ['https://crcn.stays.net/image/6a356fe93db977efbea5a948'],
         calculatedPrice: {
           nights:
@@ -310,7 +332,7 @@ test('prioritizes only the first collection cover and supplies responsive image 
     ],
   }));
   render(
-    React.createElement(SeasonalDateSuggestions, {
+    createSeasonalDateSuggestionsElement({
       currency: 'BRL',
       guestCount: 2,
       guests: { adults: 2, children: 0, infants: 0, pets: 0 },
@@ -336,7 +358,7 @@ test('detaches every promotional query when its collection unmounts', async () =
     );
   });
   const rendered = render(
-    React.createElement(SeasonalDateSuggestions, {
+    createSeasonalDateSuggestionsElement({
       currency: 'BRL',
       guestCount: 2,
       guests: { adults: 2, children: 0, infants: 0, pets: 0 },
@@ -361,6 +383,7 @@ const quoteResult = (total = 500) => ({
   data: [
     {
       ...STAYS_NET_APARTMENTS[0]!,
+      category: 'pet_friendly',
       calculatedPrice: {
         nights: 2,
         dailyRate: total / 2,
@@ -381,7 +404,7 @@ test('queries only visible dates, groups equal dates and defers the thematic cat
     calls.push(params);
     return quoteResult();
   });
-  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  render(createSeasonalDateSuggestionsElement(discoveryProps));
   assert.equal(calls.length, 0);
   act(() => VisibilityObserver.show('pet-weekend-1', true));
   await waitFor(() => assert.equal(calls.length, 1));
@@ -408,7 +431,7 @@ test('leaving a date aborts its query and discards a late quote before a fresh r
     (_params, options) =>
       new Promise((resolve) => pending.push({ signal: options!.signal!, resolve })),
   );
-  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  render(createSeasonalDateSuggestionsElement(discoveryProps));
   act(() => VisibilityObserver.show('pet-weekend-1', true));
   await waitFor(() => assert.equal(pending.length, 1));
   act(() => VisibilityObserver.show('pet-weekend-1', false));
@@ -428,7 +451,7 @@ test('visibility re-entry reuses fresh quotes instead of querying the same date 
     calls++;
     return quoteResult();
   });
-  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  render(createSeasonalDateSuggestionsElement(discoveryProps));
   act(() => VisibilityObserver.show('pet-weekend-1', true));
   await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
   act(() => VisibilityObserver.show('pet-weekend-1', false));
@@ -450,13 +473,13 @@ test('guest changes cancel active visible work and can restore a still-valid pri
         pending.push({ guests: params.guests!, signal: options!.signal!, resolve }),
       ),
   );
-  const rendered = render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  const rendered = render(createSeasonalDateSuggestionsElement(discoveryProps));
   act(() => VisibilityObserver.show('pet-weekend-1', true));
   await waitFor(() => assert.equal(pending.length, 1));
   await act(async () => pending[0]!.resolve(quoteResult(500)));
   await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
   rendered.rerender(
-    React.createElement(SeasonalDateSuggestions, {
+    createSeasonalDateSuggestionsElement({
       ...discoveryProps,
       guestCount: 3,
       guests: { ...discoveryProps.guests, adults: 3 },
@@ -466,7 +489,7 @@ test('guest changes cancel active visible work and can restore a still-valid pri
   assert.equal(pending[0]!.signal.aborted, true);
   assert.equal(pending[1]!.guests, 3);
   assert.doesNotMatch(document.body.textContent || '', /R\$ 500/);
-  rendered.rerender(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  rendered.rerender(createSeasonalDateSuggestionsElement(discoveryProps));
   await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
   assert.equal(pending[1]!.signal.aborted, true);
   assert.equal(pending.length, 2);
@@ -486,7 +509,7 @@ test('does not cache an incomplete empty page as no availability and permits a v
         }
       : quoteResult();
   });
-  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  render(createSeasonalDateSuggestionsElement(discoveryProps));
   act(() => VisibilityObserver.show('pet-weekend-1', true));
   await waitFor(() =>
     assert.ok(screen.getAllByText('Consulta indisponível. Tente buscar.').length > 0),
@@ -502,7 +525,7 @@ test('retains the server deadline when persisting a reused promotional quote', a
   VisibilityObserver.automatic = false;
   const expiresAt = Date.now() + 5_000;
   mockSearch(async () => ({ ...quoteResult(), expiresAt }));
-  render(React.createElement(SeasonalDateSuggestions, discoveryProps));
+  render(createSeasonalDateSuggestionsElement(discoveryProps));
   act(() => VisibilityObserver.show('pet-weekend-1', true));
   await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
   assert.ok(window.sessionStorage.length > 0);
@@ -515,7 +538,7 @@ test('retains the server deadline when persisting a reused promotional quote', a
 
 test('bounds quote storage and removes old, expired, malformed and oversized entries without touching other data', () => {
   VisibilityObserver.automatic = false;
-  const prefix = 'crcn.home-date-quote.v7.';
+  const prefix = 'crcn.home-date-quote.v8.';
   for (let index = 0; index < 100; index++)
     window.sessionStorage.setItem(
       `${prefix}${index}`,
@@ -535,7 +558,7 @@ test('bounds quote storage and removes old, expired, malformed and oversized ent
     window.sessionStorage.setItem(key, value);
   window.sessionStorage.setItem('other-data', 'preserved');
   render(
-    React.createElement(SeasonalDateSuggestions, {
+    createSeasonalDateSuggestionsElement({
       currency: 'BRL',
       guestCount: 2,
       guests: { adults: 2, children: 0, infants: 0, pets: 0 },
@@ -555,7 +578,7 @@ test('does not restore a promotional quote whose expiry exceeds the local validi
   VisibilityObserver.automatic = false;
   const { getHomeDiscoveryCollections } = await import('../src/utils/homeDateSuggestions.ts');
   const suggestion = getHomeDiscoveryCollections()[0]!.suggestions[0]!;
-  const key = `crcn.home-date-quote.v7.${suggestion.id}.${suggestion.checkIn}.${suggestion.checkOut}.2`;
+  const key = `crcn.home-date-quote.v8.${suggestion.id}.${suggestion.checkIn}.${suggestion.checkOut}.2`;
   window.sessionStorage.setItem(
     key,
     JSON.stringify({
@@ -568,7 +591,7 @@ test('does not restore a promotional quote whose expiry exceeds the local validi
     }),
   );
   render(
-    React.createElement(SeasonalDateSuggestions, {
+    createSeasonalDateSuggestionsElement({
       currency: 'BRL',
       guestCount: 2,
       guests: { adults: 2, children: 0, infants: 0, pets: 0 },

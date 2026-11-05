@@ -66,6 +66,7 @@ function createRouterProps(overrides: Record<string, unknown> = {}) {
     onClearCatalogFilters: () => {},
     onOpenSearch: () => {},
     onSearchInApp: () => {},
+    onOpenSuggestedProperty: () => {},
     onOpenAssistant: () => {},
     onSelectCondominium: () => {},
     onToggleSave: () => {},

@@ -195,6 +195,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
                       key={cat.id}
                       data-category-index={index}
                       onClick={() => onSelectCategory(cat.id)}
+                      aria-label={cat.label}
                       aria-pressed={isSelected}
                       aria-hidden={!isVisible}
                       tabIndex={isVisible ? 0 : -1}
