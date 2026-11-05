@@ -58,7 +58,8 @@ test('mobile category cards show compact labels beside icons and keep a full-hei
   const { getByRole } = renderCategoryBar();
   const category = getByRole('button', { name: 'Todas as hospedagens' });
   const iconSurface = category.querySelector('div.relative');
-  const label = category.querySelector('span.w-full');
+  const label = category.querySelector('span.flex-1.items-center');
+  const labelText = label?.querySelector('span.w-full');
 
   assert.match(category.className, /flex-row/);
   assert.match(category.className, /gap-2/);
@@ -75,11 +76,10 @@ test('mobile category cards show compact labels beside icons and keep a full-hei
   assert.match(iconSurface?.className ?? '', /sm:h-10 sm:w-10/);
   assert.match(iconSurface?.querySelector('svg')?.getAttribute('class') ?? '', /w-5 h-5/);
   assert.match(label?.className ?? '', /flex-1/);
-  assert.doesNotMatch(label?.className ?? '', /\bhidden\b/);
-  assert.match(label?.textContent ?? '', /Todas as hospedagens/);
-  assert.match(label?.className ?? '', /flex-1/);
-  assert.match(label?.querySelector('span')?.className ?? '', /text-caption/);
-  assert.match(label?.querySelector('span')?.className ?? '', /leading-tight/);
+  assert.doesNotMatch(labelText?.className ?? '', /\bhidden\b/);
+  assert.match(labelText?.textContent ?? '', /Todas as hospedagens/);
+  assert.match(labelText?.className ?? '', /text-caption/);
+  assert.match(labelText?.className ?? '', /leading-tight/);
 });
 
 test('category, filter, map, and price controls expose visible keyboard focus styles', () => {
