@@ -26,6 +26,7 @@ import {
 } from '../../utils/checkoutSubmissionStorage';
 import { emitConfirmedPurchase } from '../../utils/measurementEvents';
 import { formatCurrency } from '../../utils/formatters';
+import { formatBrazilianPhone } from '../../utils/checkoutInputFormatting';
 import { countOccupancyGuests } from '../../utils/guestCounts';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import {
@@ -607,8 +608,13 @@ export function SinglePageCheckout({
                         name="guestPhone"
                         type="tel"
                         autoComplete="tel"
-                        value={guest.phone}
-                        onChange={(event) => setGuest({ ...guest, phone: event.target.value })}
+                        value={formatBrazilianPhone(guest.phone)}
+                        onChange={(event) =>
+                          setGuest({
+                            ...guest,
+                            phone: event.target.value.replace(/\D/g, '').slice(0, 11),
+                          })
+                        }
                         className={fieldClass}
                       />
                     </label>

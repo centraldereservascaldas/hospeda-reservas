@@ -133,7 +133,7 @@ async function fill(view: ReturnType<typeof setup>) {
   fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
   for (const [label, value] of [
     ['Número do cartão', '4111111111111111'],
-    ['Validade (MM/AAAA)', '12/2030'],
+    ['Validade (MM/AA)', '12/30'],
     ['Código de segurança', '123'],
     ['CPF ou CNPJ do titular', '12345678909'],
   ]) {

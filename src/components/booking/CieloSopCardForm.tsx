@@ -13,6 +13,11 @@ import { loadCieloSopSdk } from '../../services/cieloSopSdk';
 import type { CieloSopEnvironment } from '../../services/cieloSopSdk';
 import { clearCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
 import { emitFunnelEvent } from '../../utils/measurementEvents';
+import {
+  formatBrazilianDocument,
+  formatCardExpiration,
+  formatCardNumber,
+} from '../../utils/checkoutInputFormatting';
 
 interface CieloSopCardFormProps {
   reference: string;
@@ -302,6 +307,20 @@ export function CieloSopCardForm({
       }
       return;
     }
+    if (!selectedPricing) {
+      setError(
+        'O pagamento com cartão exige parcelas de no mínimo R$ 5,00. Escolha Pix ou fale com o atendimento.',
+      );
+      return;
+    }
+    const expirationInput = formRef.current?.querySelector<HTMLInputElement>(
+      '.bp-sop-cardexpirationdate',
+    );
+    const expirationDigits = expirationInput?.value.replace(/\D/g, '') ?? '';
+    if (!/^(0[1-9]|1[0-2])\d{2}$/.test(expirationDigits)) {
+      setError('Informe a validade do cartão no formato MM/AA.');
+      return;
+    }
     if (
       formState !== 'ready' ||
       isSubmitting ||
@@ -358,32 +377,44 @@ export function CieloSopCardForm({
     }, 30_000);
 
     try {
-      window.bpSop_silentOrderPost!({
-        accessToken: accessTokenRef.current!,
-        environment: paymentEnvironment,
-        language: 'pt',
-        enableTokenize: false,
-        onSuccess: (response) => {
-          if (!mountedRef.current || !submittingRef.current) return;
-          finishTokenization();
-          const token = response.PaymentToken;
-          if (!token || !paymentTokenPattern.test(token)) {
-            setError('A Cielo não retornou o token temporário necessário para o pagamento.');
-            return;
-          }
-          void submitPaymentToken(token);
-        },
-        onError: () => {
-          if (!mountedRef.current || !submittingRef.current) return;
-          finishTokenization();
-          setError('A Cielo não conseguiu validar o cartão. Confira os dados e tente novamente.');
-        },
-        onInvalid: () => {
-          if (!mountedRef.current || !submittingRef.current) return;
-          finishTokenization();
-          setError('Confira os dados do cartão indicados e tente novamente.');
-        },
-      });
+      const cardInput = formRef.current?.querySelector<HTMLInputElement>('.bp-sop-cardnumber');
+      const displayedCard = cardInput?.value;
+      const displayedExpiration = expirationInput?.value;
+      if (cardInput) cardInput.value = cardInput.value.replace(/\D/g, '');
+      if (expirationInput)
+        expirationInput.value = `${expirationDigits.slice(0, 2)}/20${expirationDigits.slice(2)}`;
+      try {
+        window.bpSop_silentOrderPost!({
+          accessToken: accessTokenRef.current!,
+          environment: paymentEnvironment,
+          language: 'pt',
+          enableTokenize: false,
+          onSuccess: (response) => {
+            if (!mountedRef.current || !submittingRef.current) return;
+            finishTokenization();
+            const token = response.PaymentToken;
+            if (!token || !paymentTokenPattern.test(token)) {
+              setError('A Cielo não retornou o token temporário necessário para o pagamento.');
+              return;
+            }
+            void submitPaymentToken(token);
+          },
+          onError: () => {
+            if (!mountedRef.current || !submittingRef.current) return;
+            finishTokenization();
+            setError('A Cielo não conseguiu validar o cartão. Confira os dados e tente novamente.');
+          },
+          onInvalid: () => {
+            if (!mountedRef.current || !submittingRef.current) return;
+            finishTokenization();
+            setError('Confira os dados do cartão indicados e tente novamente.');
+          },
+        });
+      } finally {
+        if (cardInput && displayedCard !== undefined) cardInput.value = displayedCard;
+        if (expirationInput && displayedExpiration !== undefined)
+          expirationInput.value = displayedExpiration;
+      }
     } catch {
       finishTokenization();
       setError('Não foi possível iniciar a validação segura do cartão. Tente novamente.');
@@ -438,17 +469,25 @@ export function CieloSopCardForm({
               autoComplete="cc-number"
               required
               inputMode="numeric"
+              maxLength={23}
+              onChange={(event) => {
+                event.currentTarget.value = formatCardNumber(event.currentTarget.value);
+              }}
               className="bp-sop-cardnumber min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
           <label className="space-y-1 text-sm font-semibold text-neutral-800">
-            Validade (MM/AAAA)
+            Validade (MM/AA)
             <input
               disabled={previewOnly}
               autoComplete="cc-exp"
               required
               inputMode="numeric"
-              placeholder="MM/AAAA"
+              placeholder="MM/AA"
+              maxLength={5}
+              onChange={(event) => {
+                event.currentTarget.value = formatCardExpiration(event.currentTarget.value);
+              }}
               className="bp-sop-cardexpirationdate min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
@@ -495,6 +534,9 @@ export function CieloSopCardForm({
               autoComplete="off"
               inputMode="numeric"
               maxLength={18}
+              onChange={(event) => {
+                event.currentTarget.value = formatBrazilianDocument(event.currentTarget.value);
+              }}
               className="min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
@@ -503,10 +545,14 @@ export function CieloSopCardForm({
             <select
               name="installments"
               required
+              disabled={installmentOptions.length === 0}
               value={installments}
               onChange={(event) => setInstallments(Number(event.target.value))}
               className="min-h-11 w-full rounded-xl border border-neutral-400/70 bg-white px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             >
+              {installmentOptions.length === 0 && (
+                <option value={1}>Cartão indisponível para este valor</option>
+              )}
               {installmentOptions.map((option) => (
                 <option key={option.installments} value={option.installments}>
                   {option.label}
@@ -514,15 +560,21 @@ export function CieloSopCardForm({
               ))}
             </select>
             <span className="block text-xs font-normal leading-5 text-neutral-600">
-              Hospedagem {moneyFormatter.format(Number(amount))} + acréscimo do cartão{' '}
-              {selectedPricing
-                ? `${moneyFormatter.format(selectedPricing.feeCents / 100)} (${selectedPricing.ratePercent.toLocaleString('pt-BR')}%)`
-                : 'indisponível'}
-              . Total final{' '}
-              {selectedPricing
-                ? moneyFormatter.format(selectedPricing.totalCents / 100)
-                : 'indisponível'}
-              .
+              {installmentOptions.length === 0 ? (
+                'A parcela mínima no cartão é de R$ 5,00. Escolha Pix ou fale com o atendimento.'
+              ) : (
+                <>
+                  Hospedagem {moneyFormatter.format(Number(amount))} + acréscimo do cartão{' '}
+                  {selectedPricing
+                    ? `${moneyFormatter.format(selectedPricing.feeCents / 100)} (${selectedPricing.ratePercent.toLocaleString('pt-BR')}%)`
+                    : 'indisponível'}
+                  . Total final{' '}
+                  {selectedPricing
+                    ? moneyFormatter.format(selectedPricing.totalCents / 100)
+                    : 'indisponível'}
+                  .
+                </>
+              )}
             </span>
           </label>
         </fieldset>
@@ -549,7 +601,13 @@ export function CieloSopCardForm({
       )}
       <button
         type="submit"
-        disabled={disabled || previewOnly || formState !== 'ready' || isSubmitting}
+        disabled={
+          disabled ||
+          previewOnly ||
+          formState !== 'ready' ||
+          isSubmitting ||
+          (paymentMethod === 'card' && !selectedPricing)
+        }
         className="checkout-payment-submit inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-orange-800 px-5 py-4 text-sm font-bold text-white transition hover:bg-orange-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed"
       >
         {previewOnly

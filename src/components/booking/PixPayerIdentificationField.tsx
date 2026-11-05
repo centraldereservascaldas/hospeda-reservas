@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { formatBrazilianDocument } from '../../utils/checkoutInputFormatting';
 
 export function getPixPayerIdentification(
   value: string,
@@ -25,13 +26,13 @@ export function PixPayerIdentificationField({
       <input
         id={id}
         name="pixPayerDocument"
-        value={value}
+        value={formatBrazilianDocument(value)}
         required
         disabled={disabled}
         inputMode="numeric"
         autoComplete="off"
-        pattern="(?:[0-9]{11}|[0-9]{14})"
-        maxLength={14}
+        pattern="(?:[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}|[0-9]{2}\.[0-9]{3}\.[0-9]{3}/[0-9]{4}-[0-9]{2})"
+        maxLength={18}
         title="Informe os 11 dígitos do CPF ou os 14 dígitos do CNPJ."
         onChange={(event) => onChange(event.target.value.replace(/\D/g, '').slice(0, 14))}
         className="mt-1.5 min-h-12 w-full rounded-xl border border-neutral-400/70 bg-white px-3 text-base outline-none focus-visible:border-orange-700 focus-visible:ring-2 focus-visible:ring-orange-700/20 disabled:bg-neutral-100"
