@@ -60,19 +60,17 @@ test('mobile category cards show compact labels beside icons and keep a full-hei
   const iconSurface = category.querySelector('div.relative');
   const label = category.querySelector('span.w-full');
 
-  assert.match(category.className, /gap-0/);
+  assert.match(category.className, /flex-row/);
+  assert.match(category.className, /gap-2/);
   assert.match(category.className, /min-h-16/);
   assert.match(category.className, /h-16/);
-  assert.match(category.className, /flex-col/);
-  assert.match(category.className, /sm:flex-row/);
   assert.match(category.className, /sm:h-14/);
-  assert.match(category.className, /sm:w-28 sm:min-w-28/);
+  assert.match(category.className, /sm:w-36 sm:min-w-36/);
   assert.match(category.className, /max-height:400px/);
   assert.match(category.className, /h-12/);
   assert.match(category.className, /min-h-12/);
-  assert.match(category.className, /sm:gap-0/);
-  assert.match(category.className, /sm:py-1/);
-  assert.match(category.className, /sm:px-0/);
+  assert.match(category.className, /sm:gap-4/);
+  assert.match(category.className, /sm:px-2/);
   assert.match(iconSurface?.className ?? '', /h-6 w-6/);
   assert.match(iconSurface?.className ?? '', /sm:h-6 sm:w-6/);
   assert.match(iconSurface?.querySelector('svg')?.getAttribute('class') ?? '', /w-4 h-4/);
