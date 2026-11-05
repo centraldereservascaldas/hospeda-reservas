@@ -17,7 +17,6 @@ import type { CondominiumSummary } from '../utils/condominiumCatalog';
 import type { MainView } from './MobileBottomNavigation';
 import type { DirectBookingOrderListItem } from '../services/checkoutApi';
 import type { OwnerAccessStatus } from '../hooks/useAccountWorkspaceData';
-import type { AppOverlayBookingPayload } from '../types/booking';
 import { countOccupancyGuests } from '../utils/guestCounts';
 import { CondominiumDirectory } from './condominium/CondominiumDirectory';
 import { ActiveSearchFilters } from './search/ActiveSearchFilters';
@@ -49,12 +48,6 @@ const OwnerAccessAdminView = React.lazy(() =>
     default: OwnerAccessAdminView,
   })),
 );
-const PropertyDetailPage = React.lazy(() =>
-  import('./property/PropertyDetailModal').then(({ PropertyDetailPage }) => ({
-    default: PropertyDetailPage,
-  })),
-);
-
 type PropertyCatalogStatus = 'loading' | 'error' | 'stale' | 'ready';
 
 interface MainContentRouterProps {
@@ -102,11 +95,14 @@ interface MainContentRouterProps {
   onClearCatalogFilters: () => void;
   onOpenSearch: () => void;
   onSearchInApp: (params: AccommodationWidgetSearchParams) => void | Promise<void>;
+  onOpenSuggestedProperty: (
+    property: Property,
+    params: AccommodationWidgetSearchParams,
+  ) => void;
   onOpenAssistant: () => void;
   onSelectCondominium: (condominium: CondominiumSummary) => void;
   onToggleSave: (propertyId: string) => void;
   onSelectProperty: (property: Property) => void;
-  onStartBooking: (payload: AppOverlayBookingPayload) => void;
   onClosePropertyDetail: () => void;
   onResetFilters: () => void;
   onCancelReservation: (reservationId: string) => Promise<void | ReservationCancellationResult>;
@@ -158,11 +154,11 @@ export function MainContentRouter({
   onClearCatalogFilters,
   onOpenSearch,
   onSearchInApp,
+  onOpenSuggestedProperty,
   onOpenAssistant,
   onSelectCondominium,
   onToggleSave,
   onSelectProperty,
-  onStartBooking,
   onClosePropertyDetail,
   onResetFilters,
   onCancelReservation,
@@ -216,24 +212,8 @@ export function MainContentRouter({
     <main
       ref={catalogFocusRef}
       tabIndex={-1}
-      className={`flex-1 ${selectedProperty ? 'pb-12' : 'pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-12'}`}
+      className="flex-1 pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-12"
     >
-      {selectedProperty && (
-        <LazyFeatureBoundary>
-          <PropertyDetailPage
-            property={selectedProperty}
-            initialCheckIn={filters.checkIn}
-            initialCheckOut={filters.checkOut}
-            initialGuests={filters.guests}
-            onClose={onClosePropertyDetail}
-            currency={currency}
-            isSaved={savedPropertyIds.includes(selectedProperty.id)}
-            onToggleSave={onToggleSave}
-            onStartBooking={onStartBooking}
-          />
-        </LazyFeatureBoundary>
-      )}
-
       {!selectedProperty && propertyRouteStatus === 'loading' && (
         <div
           role="status"
@@ -277,7 +257,7 @@ export function MainContentRouter({
         </section>
       )}
 
-      {!selectedProperty && propertyRouteStatus === 'idle' && currentView === 'explore' && (
+      {propertyRouteStatus === 'idle' && currentView === 'explore' && (
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 [@media(max-height:400px)]:py-0 [@media(max-width:639px)_and_(max-height:400px)]:px-2">
           {filteredProperties.some((property) => property.simulatedData) && (
             <p
@@ -333,6 +313,7 @@ export function MainContentRouter({
                 guestCount={searchGuestCount}
                 fallbackProperties={filteredProperties}
                 onSelect={onSearchInApp}
+                onOpenProperty={onOpenSuggestedProperty}
               />
             )}
 

@@ -25,6 +25,7 @@ interface SeasonalDateSuggestionsProps {
   guestCount: number;
   fallbackProperties?: Property[];
   onSelect: (params: AccommodationWidgetSearchParams) => void | Promise<void>;
+  onOpenProperty: (property: Property, params: AccommodationWidgetSearchParams) => void;
 }
 
 interface SuggestionQuote {
@@ -34,14 +35,17 @@ interface SuggestionQuote {
   guests?: number;
   nightly?: number;
   properties?: number;
+  featuredProperty?: Property;
+  petFriendlyConfirmed?: boolean;
   propertyTitle?: string;
+  propertyDescription?: string;
   propertyImage?: string;
   propertyLocation?: string;
 }
 
 const EMPTY_PROPERTIES: Property[] = [];
 const QUOTE_CACHE_NAMESPACE = 'crcn.home-date-quote.';
-const QUOTE_CACHE_PREFIX = `${QUOTE_CACHE_NAMESPACE}v7.`;
+const QUOTE_CACHE_PREFIX = `${QUOTE_CACHE_NAMESPACE}v8.`;
 const QUOTE_TTL_MS = 45_000;
 const MAX_CACHED_QUOTES = 60;
 const MAX_CACHED_QUOTE_LENGTH = 8192;
@@ -139,7 +143,10 @@ function readCachedQuote(
       guests: guestCount,
       total: typeof cached.total === 'number' ? cached.total : undefined,
       nightly: typeof cached.nightly === 'number' ? cached.nightly : undefined,
+      petFriendlyConfirmed: cached.petFriendlyConfirmed === true,
       propertyTitle: typeof cached.propertyTitle === 'string' ? cached.propertyTitle : undefined,
+      propertyDescription:
+        typeof cached.propertyDescription === 'string' ? cached.propertyDescription : undefined,
       propertyLocation:
         typeof cached.propertyLocation === 'string' ? cached.propertyLocation : undefined,
       propertyImage:
@@ -161,7 +168,7 @@ function writeCachedQuote(
   if (quote.status === 'error') return;
   try {
     pruneQuoteCache(MAX_CACHED_QUOTES - 1);
-    const cached = JSON.stringify({ ...quote, cachedAt: Date.now() });
+    const cached = JSON.stringify({ ...quote, featuredProperty: undefined, cachedAt: Date.now() });
     if (cached.length <= MAX_CACHED_QUOTE_LENGTH) {
       window.sessionStorage.setItem(cacheKey(suggestionId, suggestion, guestCount), cached);
     }
@@ -181,6 +188,7 @@ export function SeasonalDateSuggestions({
   guestCount,
   fallbackProperties = EMPTY_PROPERTIES,
   onSelect,
+  onOpenProperty,
 }: SeasonalDateSuggestionsProps) {
   useEffect(() => {
     pruneQuoteCache();
@@ -311,22 +319,32 @@ export function SeasonalDateSuggestions({
             .sort((first, second) => first.price.totalAmount - second.price.totalAmount);
           const next: Record<string, SuggestionQuote> = {};
           for (const item of group) {
-            const featured = confirmed[(item.propertyIndex ?? 0) % Math.max(confirmed.length, 1)];
+            const eligible = item.petFriendlyOnly
+              ? confirmed.filter(({ property }) =>
+                  matchesPropertyCategory(property, 'pet_friendly'),
+                )
+              : confirmed;
+            const featured = eligible[(item.propertyIndex ?? 0) % Math.max(eligible.length, 1)];
             const quote: SuggestionQuote = featured
               ? {
                   status: 'ready',
                   total: featured.price.totalAmount,
                   nightly: featured.price.dailyRate,
-                  properties: confirmed.length,
+                  properties: eligible.length,
+                  featuredProperty: featured.property,
+                  petFriendlyConfirmed: item.petFriendlyOnly === true,
                   propertyTitle: getPublicPropertyTitle(featured.property.title),
+                  propertyDescription: featured.property.description,
                   propertyImage: featured.property.images[0],
                   propertyLocation:
                     featured.property.complexName || featured.property.location.city,
                 }
-              : {
-                  status:
-                    result.unquotedCount > 0 || result.pagination.hasMore ? 'error' : 'unavailable',
-                };
+                : {
+                    status:
+                      result.unquotedCount > 0 || result.pagination.hasMore
+                        ? 'error'
+                        : 'unavailable',
+                  };
             quote.expiresAt = Math.min(result.expiresAt ?? Infinity, Date.now() + QUOTE_TTL_MS);
             quote.guests = guestCount;
             writeCachedQuote(item.id, item, guestCount, quote);
@@ -466,9 +484,6 @@ export function SeasonalDateSuggestions({
     return () => window.clearTimeout(timer);
   }, [catalogExpiresAt]);
 
-  const petFriendlyProperties = fallbackProperties.filter((property) =>
-    matchesPropertyCategory(property, 'pet_friendly'),
-  );
   const catalogSourceProperties = [
     ...categoryMetadataProperties,
     ...catalogSearchProperties,
@@ -515,14 +530,6 @@ export function SeasonalDateSuggestions({
       badge: 'PARQUE INCLUSO',
     },
     {
-      id: 'hot-tub',
-      categoryId: 'hot_tub',
-      eyebrow: 'RELAXE DE VERDADE',
-      title: 'Com hidromassagem',
-      description: 'Hospedagens com hidromassagem, ofurô ou jacuzzi informados no anúncio.',
-      badge: 'HIDROMASSAGEM',
-    },
-    {
       id: 'beverages',
       categoryId: 'beverages_allowed',
       eyebrow: 'MAIS LIBERDADE NO LAZER',
@@ -539,13 +546,92 @@ export function SeasonalDateSuggestions({
     }))
     .filter((collection) => collection.properties.length > 0);
 
+  const openDateSuggestion = async (
+    suggestion: HomeDateSuggestion & { id: string; propertyIndex?: number },
+    quote: SuggestionQuote,
+    selectedGuests: AccommodationWidgetSearchParams['guests'],
+  ) => {
+    const params: AccommodationWidgetSearchParams = {
+      checkIn: suggestion.checkIn,
+      checkOut: suggestion.checkOut,
+      persons: guestCount,
+      guests: selectedGuests,
+    };
+    let property: Property | undefined = quote.featuredProperty;
+
+    if (!property) {
+      try {
+        const result = await crcnBackendApi.searchAccommodationsPage(
+          {
+            purpose: 'discovery',
+            from: suggestion.checkIn,
+            to: suggestion.checkOut,
+            guests: guestCount,
+            limit: 8,
+          },
+          { priority: 'visible' },
+        );
+        const confirmed = result.data
+          .map((candidate) => ({
+            property: candidate,
+            price: confirmedQuote(candidate, getNights(suggestion)),
+          }))
+          .filter(
+            (
+              item,
+            ): item is {
+              property: Property;
+              price: NonNullable<ReturnType<typeof confirmedQuote>>;
+            } => Boolean(item.price),
+          )
+          .filter(({ property: candidate }) =>
+            !suggestion.petFriendlyOnly ||
+            matchesPropertyCategory(candidate, 'pet_friendly'),
+          )
+          .sort((first, second) => first.price.totalAmount - second.price.totalAmount);
+        property = confirmed[(suggestion.propertyIndex ?? 0) % Math.max(confirmed.length, 1)]
+          ?.property;
+      } catch {
+        property = undefined;
+      }
+    }
+
+    if (property) {
+      onOpenProperty(property, params);
+      return;
+    }
+
+    if (suggestion.petFriendlyOnly) return;
+    await onSelect(params);
+  };
+
   return (
     <div
       ref={rootRef}
       aria-label="Coleções de hospedagens"
       className="mb-8 space-y-8 sm:mb-11 sm:space-y-10"
     >
-      {collections.map((collection, collectionIndex) => (
+      {collections.map((collection, collectionIndex) => {
+        const petSuggestions = collection.includePet
+          ? collection.suggestions.filter((suggestion) => {
+              const quote = quotes[suggestion.id];
+              return (
+                quote?.status === 'ready' &&
+                (quote.petFriendlyConfirmed === true ||
+                  (quote.featuredProperty !== undefined &&
+                    matchesPropertyCategory(quote.featuredProperty, 'pet_friendly')))
+              );
+            })
+          : collection.suggestions;
+        const petLookupPending = collection.suggestions.some((suggestion) => {
+          const quote = quotes[suggestion.id];
+          return !quote || quote.status === 'idle' || quote.status === 'loading';
+        });
+        const petLookupFailed = collection.suggestions.some(
+          (suggestion) => quotes[suggestion.id]?.status === 'error',
+        );
+
+        return (
         <section key={collection.id} aria-labelledby={`${collection.id}-title`}>
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
@@ -565,8 +651,9 @@ export function SeasonalDateSuggestions({
             </div>
           </div>
 
+          {petSuggestions.length > 0 && (
           <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-5">
-            {collection.suggestions.map((suggestion, suggestionIndex) => {
+            {petSuggestions.map((suggestion, suggestionIndex) => {
               const quote =
                 quotes[suggestion.id]?.guests === guestCount
                   ? quotes[suggestion.id]!
@@ -580,26 +667,23 @@ export function SeasonalDateSuggestions({
                     pets: Math.max(1, guests?.pets ?? 0),
                   }
                 : guests;
-              const petStatus = collection.includePet
-                ? petFriendlyProperties.some(
-                    (property) => getPublicPropertyTitle(property.title) === quote.propertyTitle,
-                  )
-                  ? 'Aceita pet'
-                  : 'Consulte pet'
-                : suggestion.eyebrow;
+              const petStatus = collection.includePet ? 'Aceita pet' : suggestion.eyebrow;
+              const imageBadge =
+                collection.id === 'holidays'
+                  ? suggestion.label.replace(/^Feriado:\s*/i, '')
+                  : petStatus;
+              const displayTitle =
+                quote.status === 'ready'
+                  ? quote.propertyTitle
+                  : collection.id === 'holidays'
+                    ? 'Apartamento para o feriado'
+                    : suggestion.label;
               return (
                 <button
                   key={suggestion.id}
                   data-discovery-query={suggestion.id}
                   type="button"
-                  onClick={() =>
-                    void onSelect({
-                      checkIn: suggestion.checkIn,
-                      checkOut: suggestion.checkOut,
-                      persons: guestCount,
-                      guests: selectedGuests,
-                    })
-                  }
+                  onClick={() => void openDateSuggestion(suggestion, quote, selectedGuests)}
                   aria-label={`${suggestion.label}, ${formatPeriod(suggestion)}${quote.status === 'ready' && quote.total ? `, a partir de ${formatCurrency(quote.total, currency)}` : ', consultar disponibilidade'}`}
                   className="group w-[72vw] max-w-[17rem] shrink-0 snap-start rounded-2xl text-left transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700 sm:w-auto sm:max-w-none"
                 >
@@ -628,7 +712,7 @@ export function SeasonalDateSuggestions({
                       </span>
                     )}
                     <span className="absolute left-3 top-3 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-orange-700 shadow-sm backdrop-blur-md">
-                      {petStatus}
+                      {imageBadge}
                     </span>
                     <span className="absolute bottom-3 left-3 rounded-full border border-white/80 bg-neutral-950/72 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-md">
                       {formatPeriod(suggestion)}
@@ -638,13 +722,20 @@ export function SeasonalDateSuggestions({
                   <span className="mt-3 flex items-start justify-between gap-2 px-0.5">
                     <span className="min-w-0">
                       <span className="line-clamp-1 text-sm font-extrabold text-neutral-950">
-                        {quote.status === 'ready' ? quote.propertyTitle : suggestion.label}
+                        {displayTitle}
                       </span>
-                      <span className="mt-0.5 line-clamp-1 text-xs font-medium text-neutral-600">
-                        {quote.status === 'ready' ? quote.propertyLocation : 'Sugestão de viagem'} ·{' '}
-                        {nights} {nights === 1 ? 'noite' : 'noites'} · {guestCount}{' '}
-                        {guestCount === 1 ? 'hóspede' : 'hóspedes'}
-                      </span>
+                      {collection.id === 'holidays' ? (
+                        <span className="mt-0.5 line-clamp-2 text-xs font-medium text-neutral-600">
+                          {quote.propertyDescription ||
+                            'Consulte esta opção de hospedagem para as datas do feriado.'}
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 line-clamp-1 text-xs font-medium text-neutral-600">
+                          {quote.status === 'ready' ? quote.propertyLocation : 'Sugestão de viagem'} ·{' '}
+                          {nights} {nights === 1 ? 'noite' : 'noites'} · {guestCount}{' '}
+                          {guestCount === 1 ? 'hóspede' : 'hóspedes'}
+                        </span>
+                      )}
                       <span className="mt-1.5 block h-10 text-xs leading-5">
                         {quote.status === 'loading' ? (
                           <span className="inline-flex items-center gap-1.5 font-semibold text-neutral-500">
@@ -676,8 +767,19 @@ export function SeasonalDateSuggestions({
               );
             })}
           </div>
+          )}
+          {collection.includePet && petSuggestions.length === 0 && (
+            <p role="status" className="rounded-xl border border-orange-100 bg-white/60 px-4 py-3 text-sm text-neutral-600">
+              {petLookupPending
+                ? 'Buscando hospedagens com aceitação de pets confirmada…'
+                : petLookupFailed
+                  ? 'Não foi possível confirmar hospedagens que aceitam pets agora.'
+                  : 'Não encontramos hospedagens com aceitação de pets confirmada para estas datas.'}
+            </p>
+          )}
         </section>
-      ))}
+        );
+      })}
 
       <div data-discovery-query="catalog" className="min-h-px space-y-8 sm:space-y-10">
         {catalogPeriod &&
@@ -715,16 +817,14 @@ export function SeasonalDateSuggestions({
                     <button
                       key={`${collection.id}-${property.id}`}
                       type="button"
-                      onClick={() =>
-                        void onSelect({
+                      onClick={() => {
+                        onOpenProperty(property, {
                           checkIn: catalogPeriod.checkIn,
                           checkOut: catalogPeriod.checkOut,
                           persons: guestCount,
                           guests,
-                          propertyId:
-                            property.staysPropertyId || property.staysListingId || property.id,
-                        })
-                      }
+                        });
+                      }}
                       aria-label={`${getPublicPropertyTitle(property.title)}, ${collection.title}, ${propertyQuote ? formatPeriod(catalogPeriod) : 'sugestão de hospedagem'}, ${priceLabel}`}
                       className="group w-[72vw] max-w-[17rem] shrink-0 snap-start rounded-2xl text-left transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700 sm:w-auto sm:max-w-none"
                     >

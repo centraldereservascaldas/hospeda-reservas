@@ -12,6 +12,11 @@ const CondominiumDetailModal = React.lazy(() =>
     default: CondominiumDetailModal,
   })),
 );
+const PropertyDetailModal = React.lazy(() =>
+  import('./property/PropertyDetailModal').then(({ PropertyDetailModal }) => ({
+    default: PropertyDetailModal,
+  })),
+);
 const CheckoutEntry = React.lazy(() =>
   import('./booking/CheckoutEntry').then(({ CheckoutEntry }) => ({
     default: CheckoutEntry,
@@ -44,17 +49,23 @@ export interface AppOverlayLayerProps {
   filters: SearchFilters;
   defaultFilters: SearchFilters;
   setFilters: Dispatch<SetStateAction<SearchFilters>>;
+  selectedProperty: Property | null;
   selectedCondominium: CondominiumSummary | null;
   bookingPayload: AppOverlayBookingPayload | null;
   checkoutGuestPrefill: { fullName: string; email: string; phone: string };
   accountModalMode: AccountModalMode;
   accountReturnFocusRef?: RefObject<HTMLButtonElement | null>;
+  catalogFocusRef: RefObject<HTMLElement | null>;
+  savedPropertyIds: string[];
   properties: Property[];
   hasMoreSearchResults?: boolean;
   isSofiaOpen: boolean;
   isSearchOpen: boolean;
   isFilterOpen: boolean;
   isCreateListingOpen: boolean;
+  onClosePropertyDetail: () => void;
+  onStartBooking: (payload: AppOverlayBookingPayload) => void;
+  onToggleSave: (propertyId: string) => void;
   onCloseCondominium: () => void;
   onCloseSofia: () => void;
   onSelectPropertyFromSofia: (property: Property) => void;
@@ -73,17 +84,23 @@ export function AppOverlayLayer({
   filters,
   defaultFilters,
   setFilters,
+  selectedProperty,
   selectedCondominium,
   bookingPayload,
   checkoutGuestPrefill,
   accountModalMode,
   accountReturnFocusRef,
+  catalogFocusRef,
+  savedPropertyIds,
   properties,
   hasMoreSearchResults = false,
   isSofiaOpen,
   isSearchOpen,
   isFilterOpen,
   isCreateListingOpen,
+  onClosePropertyDetail,
+  onStartBooking,
+  onToggleSave,
   onCloseCondominium,
   onCloseSofia,
   onSelectPropertyFromSofia,
@@ -98,6 +115,21 @@ export function AppOverlayLayer({
 }: AppOverlayLayerProps) {
   return (
     <>
+      <DeferredModal active={selectedProperty !== null}>
+        <PropertyDetailModal
+          property={selectedProperty}
+          initialCheckIn={filters.checkIn}
+          initialCheckOut={filters.checkOut}
+          initialGuests={filters.guests}
+          onClose={onClosePropertyDetail}
+          returnFocusRef={catalogFocusRef}
+          currency={currency}
+          isSaved={selectedProperty ? savedPropertyIds.includes(selectedProperty.id) : false}
+          onToggleSave={onToggleSave}
+          onStartBooking={onStartBooking}
+        />
+      </DeferredModal>
+
       <DeferredModal active={selectedCondominium !== null}>
         <CondominiumDetailModal condominium={selectedCondominium} onClose={onCloseCondominium} />
       </DeferredModal>

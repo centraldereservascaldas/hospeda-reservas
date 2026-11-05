@@ -7,7 +7,8 @@ const normalize = (value: unknown): string => String(value || '')
 
 export function matchesPropertyCategory(property: Property, categoryId: string): boolean {
   if (categoryId === 'all') return true;
-  if (normalize(property.category) === normalize(categoryId)) return true;
+  const categoryMatches = normalize(property.category) === normalize(categoryId);
+  if (categoryMatches && categoryId !== 'pet_friendly') return true;
 
   const text = normalize([
     property.title,
@@ -27,9 +28,13 @@ export function matchesPropertyCategory(property: Property, categoryId: string):
     property.location?.address,
   ].filter(Boolean).join(' '));
   const rulesAndDescription = normalize([
+    property.subtitle,
     property.description,
     property.complexDescription,
     ...(property.rules || []),
+    ...(property.amenities || []),
+    ...(property.listingAmenities || []),
+    ...(property.propertyAmenities || []),
     ...(property.highlights || []).flatMap((highlight) => [highlight.title, highlight.description]),
   ].filter(Boolean).join(' '));
 
@@ -54,7 +59,18 @@ export function matchesPropertyCategory(property: Property, categoryId: string):
     case 'family_friendly':
       return Number(property.maxGuests) >= 4;
     case 'pet_friendly':
-      return /aceita animais?|permite animais?|aceita pet|pet friendly/.test(rulesAndDescription);
+      {
+        const explicitlyForbidden =
+          /(?:nao\s+(?:aceita(?:m|mos)?|permite(?:m|mos)?)|nao\s+(?:e|sao)\s+permitid[oa]s?|proibid[oa]s?\s+(?:a\s+)?entrad[ao]).{0,40}(?:animais?|pets?)|(?:animais?|pets?).{0,40}(?:nao\s+(?:(?:sao\s+)?permitid[oa]s?|aceit[oa]s?|permit[oa]s?)|proibid[oa]s?)/.test(
+            rulesAndDescription,
+          );
+        const explicitlyAllowed =
+          /aceita(?:m|mos)?\s+(?:animais?|pets?)|permite(?:m|mos)?\s+(?:animais?|pets?)|pet friendly/.test(
+            rulesAndDescription,
+          );
+
+        return !explicitlyForbidden && (explicitlyAllowed || categoryMatches);
+      }
     case 'hot_tub':
       return /hidromassagem|ofuro|jacuzzi/.test(text);
     default:

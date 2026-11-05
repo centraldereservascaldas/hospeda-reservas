@@ -23,7 +23,7 @@ class StaysContentReadCache
             throw new InvalidArgumentException('Only public accommodation metadata lists may use this cache.');
         }
         ksort($query);
-        $key = 'stays.content-list.v1:'.hash('sha256', json_encode([$this->account(), $endpoint, $query], JSON_THROW_ON_ERROR));
+        $key = 'stays.content-list.v2:'.hash('sha256', json_encode([$this->account(), $endpoint, $query], JSON_THROW_ON_ERROR));
         try {
             $cached = $this->cache()->get($key);
             if (is_array($cached) && ! $forceRefresh) {
@@ -50,8 +50,10 @@ class StaysContentReadCache
                 foreach ($data as $row) {
                     $id = $row['_id'] ?? $row['id'] ?? null;
                     $title = $row['_mstitle'] ?? null;
+                    $description = $row['_msdesc'] ?? null;
                     if (! is_string($id) || trim($id) === ''
                         || ($title !== null && ! is_string($title) && (! is_array($title) || array_filter($title, 'is_string') !== $title))
+                        || ($description !== null && ! is_string($description) && (! is_array($description) || array_filter($description, 'is_string') !== $description))
                         || (isset($row['name']) && ! is_string($row['name']))
                         || (isset($row['internalName']) && ! is_string($row['internalName']))
                         || (isset($row['amenities']) && ! is_array($row['amenities']))) {
@@ -59,7 +61,7 @@ class StaysContentReadCache
                     }
                 }
                 $fields = $endpoint === '/content/properties'
-                    ? ['_id', 'id', '_mstitle', 'internalName', 'amenities']
+                    ? ['_id', 'id', '_mstitle', '_msdesc', 'internalName', 'amenities']
                     : ['_id', 'name', '_mstitle'];
                 $allowed = array_fill_keys($fields, true);
                 $data = array_map(static fn (array $row): array => array_intersect_key($row, $allowed), $data);

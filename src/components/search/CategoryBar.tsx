@@ -59,7 +59,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   const [visibleCategoryCount, setVisibleCategoryCount] = useState(1);
   const [categoryPage, setCategoryPage] = useState(0);
   const [categoryItemWidth, setCategoryItemWidth] = useState(() =>
-    typeof window !== 'undefined' && window.innerWidth < 640 ? 96 : 112,
+    typeof window !== 'undefined' && window.innerWidth < 640 ? 132 : 144,
   );
   const [categoryGap, setCategoryGap] = useState(() =>
     typeof window !== 'undefined' && window.innerWidth < 640 ? 8 : 12,
@@ -72,7 +72,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
     const updateVisibleCount = () => {
       const rowWidth = toolbarRow.clientWidth;
       const actionsWidth = actionsRef.current?.getBoundingClientRect().width ?? 0;
-      const itemWidth = window.innerWidth < 640 ? 96 : 112;
+      const itemWidth = window.innerWidth < 640 ? 132 : 144;
       const gap = window.innerWidth < 640 ? 8 : 12;
       const rowGap = window.innerWidth < 640 ? 8 : 16;
       // Fit complete cards, navigation arrows, and the action controls without stretching empty space.
@@ -120,37 +120,37 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case 'Waves':
-        return <Waves className="w-4 h-4" />;
+        return <Waves className="w-5 h-5" />;
       case 'Home':
-        return <Home className="w-4 h-4" />;
+        return <Home className="w-5 h-5" />;
       case 'Droplets':
-        return <Droplets className="w-4 h-4" />;
+        return <Droplets className="w-5 h-5" />;
       case 'Trees':
-        return <Trees className="w-4 h-4" />;
+        return <Trees className="w-5 h-5" />;
       case 'Mountain':
-        return <Mountain className="w-4 h-4" />;
+        return <Mountain className="w-5 h-5" />;
       case 'Crown':
-        return <Crown className="w-4 h-4" />;
+        return <Crown className="w-5 h-5" />;
       case 'Palmtree':
-        return <Palmtree className="w-4 h-4" />;
+        return <Palmtree className="w-5 h-5" />;
       case 'Landmark':
-        return <Landmark className="w-4 h-4" />;
+        return <Landmark className="w-5 h-5" />;
       case 'Fish':
-        return <Fish className="w-4 h-4" />;
+        return <Fish className="w-5 h-5" />;
       case 'Tent':
-        return <Tent className="w-4 h-4" />;
+        return <Tent className="w-5 h-5" />;
       case 'GlassWater':
-        return <GlassWater className="w-4 h-4" />;
+        return <GlassWater className="w-5 h-5" />;
       case 'MapPin':
-        return <MapPin className="w-4 h-4" />;
+        return <MapPin className="w-5 h-5" />;
       case 'Users':
-        return <Users className="w-4 h-4" />;
+        return <Users className="w-5 h-5" />;
       case 'PawPrint':
-        return <PawPrint className="w-4 h-4" />;
+        return <PawPrint className="w-5 h-5" />;
       case 'Building':
-        return <Building className="w-4 h-4" />;
+        return <Building className="w-5 h-5" />;
       default:
-        return <Sparkles className="w-4 h-4" />;
+        return <Sparkles className="w-5 h-5" />;
     }
   };
 
@@ -198,16 +198,16 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
                       aria-pressed={isSelected}
                       aria-hidden={!isVisible}
                       tabIndex={isVisible ? 0 : -1}
-                      className={`flex h-16 min-h-16 w-24 min-w-24 flex-shrink-0 flex-col items-center justify-center gap-0 overflow-hidden border-b-2 py-1 text-center transition-all duration-300 cursor-pointer group rounded-2xl px-1 sm:h-14 sm:min-h-14 sm:w-28 sm:min-w-28 sm:flex-row sm:gap-0 sm:py-1 sm:text-left sm:px-0 lg:px-0 [@media(max-height:400px)]:py-0 [@media(max-width:639px)_and_(max-height:400px)]:h-12 [@media(max-width:639px)_and_(max-height:400px)]:min-h-12 ${
+                      className={`flex h-16 min-h-16 w-[132px] min-w-[132px] flex-shrink-0 flex-row items-center justify-start gap-2 overflow-hidden rounded-2xl border-2 border-transparent px-2 py-1 text-left transition-all duration-300 cursor-pointer group sm:h-14 sm:min-h-14 sm:w-36 sm:min-w-36 sm:px-2 [@media(max-height:400px)]:py-0 [@media(max-width:639px)_and_(max-height:400px)]:h-12 [@media(max-width:639px)_and_(max-height:400px)]:min-h-12 ${
                         isSelected
-                          ? 'border-orange-500/65 text-neutral-950 font-bold'
-                          : 'border-transparent text-neutral-600 hover:text-neutral-900 hover:border-white/80'
+                          ? 'border-orange-400/70 bg-orange-50/25 text-neutral-950 font-bold shadow-[0_3px_12px_-8px_rgba(234,88,12,0.45)]'
+                          : 'text-neutral-600 hover:border-white/80 hover:text-neutral-900'
                       } focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700`}
                     >
                       <div
-                        className={`relative isolate flex h-6 w-6 flex-none items-center justify-center overflow-hidden rounded-2xl border transition-all duration-300 group-hover:-translate-y-0.5 group-hover:scale-105 sm:h-6 sm:w-6 [@media(max-width:639px)_and_(max-height:400px)]:h-5 [@media(max-width:639px)_and_(max-height:400px)]:w-5 ${
+                        className={`relative isolate flex h-10 w-10 flex-none items-center justify-center overflow-hidden rounded-2xl border transition-all duration-300 group-hover:-translate-y-0.5 group-hover:scale-105 sm:h-10 sm:w-10 [@media(max-width:639px)_and_(max-height:400px)]:h-8 [@media(max-width:639px)_and_(max-height:400px)]:w-8 ${
                           isSelected
-                            ? 'border-white/90 bg-[linear-gradient(145deg,rgba(255,255,255,0.94),rgba(255,247,237,0.62)_48%,rgba(251,146,60,0.20))] text-orange-700 shadow-[0_8px_20px_-9px_rgba(234,88,12,0.55),inset_0_1.5px_1px_rgba(255,255,255,1),inset_0_-1px_1px_rgba(234,88,12,0.12)] ring-1 ring-orange-300/35 backdrop-blur-2xl'
+                            ? 'border-orange-200/80 bg-[linear-gradient(145deg,rgba(255,255,255,0.98),rgba(255,247,237,0.78))] text-orange-700 shadow-[0_0_0_3px_rgba(251,146,60,0.12),0_5px_16px_rgba(234,88,12,0.28),inset_0_1px_1px_rgba(255,255,255,0.95)] ring-1 ring-orange-300/60 backdrop-blur-2xl'
                             : 'border-white/90 bg-[linear-gradient(145deg,rgba(255,255,255,0.88),rgba(255,255,255,0.48))] text-neutral-600 shadow-[0_5px_14px_-8px_rgba(15,23,42,0.32),inset_0_1.5px_1px_rgba(255,255,255,0.98)] backdrop-blur-2xl group-hover:text-orange-700 group-hover:shadow-[0_8px_18px_-9px_rgba(15,23,42,0.3),inset_0_1.5px_1px_rgba(255,255,255,1)]'
                         }`}
                       >
@@ -215,18 +215,12 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
                           aria-hidden="true"
                           className={`pointer-events-none absolute inset-x-1 top-px h-1/2 rounded-t-[15px] bg-gradient-to-b from-white/90 to-white/0 ${isSelected ? 'opacity-100' : 'opacity-75'}`}
                         />
-                        {isSelected && (
-                          <span
-                            aria-hidden="true"
-                            className="pointer-events-none absolute -right-2 -top-3 h-8 w-8 rounded-full bg-orange-300/35 blur-md"
-                          />
-                        )}
                         <span className="relative z-10 transition-transform duration-300 group-hover:scale-105">
                           {getIcon(cat.icon)}
                         </span>
                       </div>
-                      <span className="flex min-h-0 min-w-0 w-full items-center justify-center text-center sm:h-auto sm:flex-1 sm:justify-start sm:text-left [@media(max-width:639px)_and_(max-height:400px)]:h-auto">
-                        <span className="block w-full whitespace-normal text-caption font-semibold [@media(max-width:639px)_and_(max-height:400px)]:leading-3">
+                      <span className="flex min-h-0 min-w-0 flex-1 items-center text-left">
+                        <span className="block w-full whitespace-normal text-caption font-semibold leading-tight">
                           {cat.label}
                         </span>
                       </span>

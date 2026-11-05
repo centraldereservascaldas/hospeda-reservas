@@ -32,6 +32,7 @@ import {
 import { useAccountWorkspaceData } from './hooks/useAccountWorkspaceData';
 import { useSupabaseSession } from './hooks/useSupabaseSession';
 import { useAccommodationSearch } from './hooks/useAccommodationSearch';
+import type { AccommodationWidgetSearchParams } from './hooks/useAccommodationSearch';
 import { useAccountActions } from './hooks/useAccountActions';
 import { useSavedPropertyIds } from './hooks/useSavedPropertyIds';
 import { CHECKOUT_MODAL_HISTORY_ENTRY, useAppOverlayActions } from './hooks/useAppOverlayActions';
@@ -338,6 +339,19 @@ function MarketplaceApp() {
     onSelectProperty: handleSelectProperty,
   });
 
+  const handleOpenSuggestedProperty = (
+    property: Property,
+    params: AccommodationWidgetSearchParams,
+  ) => {
+    setFilters((current) => ({
+      ...current,
+      checkIn: params.checkIn,
+      checkOut: params.checkOut,
+      guests: params.guests ?? current.guests,
+    }));
+    handleSelectProperty(property);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 selection:bg-orange-500/20 selection:text-orange-950">
       {authCallbackNotice && (
@@ -374,7 +388,7 @@ function MarketplaceApp() {
       />
 
       {/* Category Bar & Controls (Visible only on Explore view) */}
-      {currentView === 'explore' && !selectedProperty && (
+      {currentView === 'explore' && (
         <CategoryBar
           availableCategories={availableCategories}
           selectedCategory={filters.category}
@@ -437,11 +451,11 @@ function MarketplaceApp() {
         onClearPropertyRefinements={handleClearPropertyRefinements}
         onClearCatalogFilters={handleClearCatalogFilters}
         onSearchInApp={handleStaysWidgetSearch}
+        onOpenSuggestedProperty={handleOpenSuggestedProperty}
         onOpenAssistant={() => setIsSofiaOpen(true)}
         onSelectCondominium={setSelectedCondominium}
         onToggleSave={toggleSavedProperty}
         onSelectProperty={handleSelectProperty}
-        onStartBooking={handleStartBooking}
         onClosePropertyDetail={handleClosePropertyDetail}
         onResetFilters={handleClearSearchFilters}
         onCancelReservation={handleCancelReservation}
@@ -482,6 +496,7 @@ function MarketplaceApp() {
         filters={filters}
         defaultFilters={defaultFilters}
         setFilters={setFilters}
+        selectedProperty={selectedProperty}
         selectedCondominium={selectedCondominium}
         bookingPayload={bookingPayload}
         checkoutGuestPrefill={{
@@ -497,12 +512,17 @@ function MarketplaceApp() {
         }}
         accountModalMode={accountModalMode}
         accountReturnFocusRef={accountButtonRef}
+        catalogFocusRef={catalogFocusRef}
+        savedPropertyIds={savedPropertyIds}
         properties={properties}
         hasMoreSearchResults={searchPagination.hasMore}
         isSofiaOpen={isSofiaOpen}
         isSearchOpen={isSearchOpen}
         isFilterOpen={isFilterOpen}
         isCreateListingOpen={isCreateListingOpen}
+        onClosePropertyDetail={handleClosePropertyDetail}
+        onStartBooking={handleStartBooking}
+        onToggleSave={toggleSavedProperty}
         onCloseCondominium={() => setSelectedCondominium(null)}
         onCloseSofia={() => setIsSofiaOpen(false)}
         onSelectPropertyFromSofia={handleSelectPropertyFromSofia}
