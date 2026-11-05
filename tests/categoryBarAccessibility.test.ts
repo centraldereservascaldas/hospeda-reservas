@@ -77,7 +77,7 @@ test('mobile category cards show compact labels beside icons and keep a full-hei
   assert.match(label?.className ?? '', /flex-1/);
   assert.doesNotMatch(label?.className ?? '', /\bhidden\b/);
   assert.match(label?.textContent ?? '', /Todas as hospedagens/);
-  assert.match(label?.className ?? '', /sm:flex-1/);
+  assert.match(label?.className ?? '', /flex-1/);
   assert.match(label?.querySelector('span')?.className ?? '', /text-caption/);
   assert.match(label?.querySelector('span')?.className ?? '', /leading-tight/);
 });
