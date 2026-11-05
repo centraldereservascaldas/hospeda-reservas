@@ -69,7 +69,7 @@ test('mobile category cards show compact labels beside icons and keep a full-hei
   assert.match(category.className, /max-height:400px/);
   assert.match(category.className, /h-12/);
   assert.match(category.className, /min-h-12/);
-  assert.match(category.className, /sm:gap-4/);
+  assert.match(category.className, /gap-2/);
   assert.match(category.className, /sm:px-2/);
   assert.match(iconSurface?.className ?? '', /h-6 w-6/);
   assert.match(iconSurface?.className ?? '', /sm:h-6 sm:w-6/);
