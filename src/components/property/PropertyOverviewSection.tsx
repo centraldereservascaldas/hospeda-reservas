@@ -54,9 +54,7 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
     .split(/\n\n+/)
     .filter(Boolean);
   const complexDescriptionBlocks = property.complexDescription
-    ? formatPropertyDescription(property.complexDescription)
-        .split(/\n\n+/)
-        .filter(Boolean)
+    ? formatPropertyDescription(property.complexDescription).split(/\n\n+/).filter(Boolean)
     : [];
   const propertyDetails = [
     property.bedrooms > 0
