@@ -6,6 +6,7 @@ use App\Services\LegalPageRegistry;
 use App\Services\PropertyMetadataResolver;
 use App\Services\PublicPageRegistry;
 use App\Services\StaysDiscoveryCatalog;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -22,8 +23,13 @@ class SpaController extends Controller
         private StaysDiscoveryCatalog $discoveryCatalog,
     ) {}
 
-    public function __invoke(?string $path = null): Response
+    public function __invoke(Request $request, ?string $path = null): Response
     {
+        $legacyDestination = $this->legacyDestination($request, $path);
+        if ($legacyDestination !== null) {
+            return redirect()->to($legacyDestination, Response::HTTP_MOVED_PERMANENTLY);
+        }
+
         $legalSlug = $this->legalSlugFromPath($path);
         $legalPage = $legalSlug === null ? null : $this->legalPages->find($legalSlug);
         if ($legalSlug !== null && $legalPage === null) {
@@ -76,9 +82,66 @@ class SpaController extends Controller
             return $this->noindexResponse($html);
         }
 
-        return response('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Página não encontrada | CRCN</title></head><body><main><h1>Página não encontrada</h1><a href="/">Voltar à busca de hospedagens</a></main></body></html>', 404)
+        $html = preg_replace('~<meta\b(?=[^>]*\bname\s*=\s*(["\'])robots\1)[^>]*>\s*~i', '', $html) ?? $html;
+        $html = Str::replaceFirst('</head>', '<meta name="robots" content="noindex, nofollow" /></head>', $html);
+
+        return response($html, Response::HTTP_NOT_FOUND)
             ->header('Content-Type', 'text/html; charset=utf-8')
             ->header('X-Robots-Tag', 'noindex, nofollow');
+    }
+
+    private function legacyDestination(Request $request, ?string $path): ?string
+    {
+        $normalizedPath = trim((string) $path, '/');
+        $legacyPaths = config('legacy_redirects.paths', []);
+        $destinationPath = is_array($legacyPaths) ? ($legacyPaths[$normalizedPath] ?? null) : null;
+        $legacyHosts = array_map('mb_strtolower', config('legacy_redirects.hosts', []));
+        $isLegacyHost = in_array(mb_strtolower($request->getHost()), $legacyHosts, true);
+
+        if (! is_string($destinationPath) && ! $isLegacyHost) {
+            return null;
+        }
+
+        if (! is_string($destinationPath)) {
+            $destinationPath = $normalizedPath === '' ? '/' : '/'.$normalizedPath;
+        }
+
+        if ($isLegacyHost) {
+            $canonicalUrl = config('app.url');
+            $canonicalParts = is_string($canonicalUrl) ? parse_url($canonicalUrl) : false;
+            $canonicalHost = is_array($canonicalParts) ? ($canonicalParts['host'] ?? null) : null;
+            if (! is_string($canonicalHost) || $canonicalHost === '') {
+                return null;
+            }
+
+            if (mb_strtolower($canonicalHost) === mb_strtolower($request->getHost())) {
+                if (! is_string($legacyPaths[$normalizedPath] ?? null)) {
+                    return null;
+                }
+
+                return $this->appendQueryString($destinationPath, $request->getQueryString());
+            }
+
+            $canonicalOrigin = ($canonicalParts['scheme'] ?? 'https').'://'.$canonicalHost;
+            if (isset($canonicalParts['port'])) {
+                $canonicalOrigin .= ':'.$canonicalParts['port'];
+            }
+
+            $destinationPath = $canonicalOrigin.$destinationPath;
+        }
+
+        return $this->appendQueryString($destinationPath, $request->getQueryString());
+    }
+
+    private function appendQueryString(string $destination, ?string $queryString): string
+    {
+        if (! is_string($queryString) || $queryString === '') {
+            return $destination;
+        }
+
+        $destination .= str_contains($destination, '?') ? '&' : '?';
+
+        return $destination.$queryString;
     }
 
     private function homeResponse(string $html): Response
