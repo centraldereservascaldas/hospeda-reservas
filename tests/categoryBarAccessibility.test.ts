@@ -71,15 +71,15 @@ test('mobile category cards show compact labels beside icons and keep a full-hei
   assert.match(category.className, /min-h-12/);
   assert.match(category.className, /gap-2/);
   assert.match(category.className, /sm:px-2/);
-  assert.match(iconSurface?.className ?? '', /h-6 w-6/);
-  assert.match(iconSurface?.className ?? '', /sm:h-6 sm:w-6/);
-  assert.match(iconSurface?.querySelector('svg')?.getAttribute('class') ?? '', /w-4 h-4/);
+  assert.match(iconSurface?.className ?? '', /h-10 w-10/);
+  assert.match(iconSurface?.className ?? '', /sm:h-10 sm:w-10/);
+  assert.match(iconSurface?.querySelector('svg')?.getAttribute('class') ?? '', /w-5 h-5/);
   assert.match(label?.className ?? '', /flex-1/);
   assert.doesNotMatch(label?.className ?? '', /\bhidden\b/);
   assert.match(label?.textContent ?? '', /Todas as hospedagens/);
   assert.match(label?.className ?? '', /sm:flex-1/);
   assert.match(label?.querySelector('span')?.className ?? '', /text-caption/);
-  assert.match(label?.querySelector('span')?.className ?? '', /leading-3/);
+  assert.match(label?.querySelector('span')?.className ?? '', /leading-tight/);
 });
 
 test('category, filter, map, and price controls expose visible keyboard focus styles', () => {
