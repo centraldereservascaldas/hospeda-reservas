@@ -991,7 +991,7 @@ export function CheckoutResumePage({
                   <p className="border-t border-neutral-200 pt-4 text-xs leading-5 text-neutral-600">
                     {paymentAttempt
                       ? 'Esta consulta acompanha o pagamento já solicitado e não envia novas cobranças.'
-                      : 'Nenhum dado pessoal ou informação de cartão é exibido nesta página.'}
+                      : 'Esta página não exibe dados do cartão.'}
                   </p>
                 </div>
               )}

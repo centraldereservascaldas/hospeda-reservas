@@ -147,7 +147,7 @@ function GuestFormPreview() {
           </button>
           <p className="flex items-start gap-2 text-xs leading-5 text-neutral-500">
             <ShieldCheck className="mt-0.5 shrink-0 text-orange-700" size={15} aria-hidden="true" />
-            Prévia: o envio dos dados ainda está em implementação.
+            Demonstração: esta prévia não envia dados para uma reserva real.
           </p>
         </div>
       </div>

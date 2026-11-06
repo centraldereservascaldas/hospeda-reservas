@@ -171,12 +171,13 @@ export const StaysCheckoutModal: React.FC<StaysCheckoutModalProps> = ({
                   {formatCurrency(quote.total, currency)}
                 </p>
                 <p className="text-xs text-neutral-600">
-                  Total cotado para sua hospedagem. O valor final será mostrado novamente no checkout.
+                  Total cotado para sua hospedagem. O valor final será mostrado novamente no
+                  checkout.
                 </p>
               </div>
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-                Você será direcionado para nosso parceiro de reservas para conferir as condições da hospedagem,
-                preencher os demais dados e concluir o pagamento.
+                Você será direcionado para nosso parceiro de reservas para conferir as condições da
+                hospedagem, preencher os demais dados e concluir o pagamento.
               </div>
             </div>
 
@@ -220,8 +221,8 @@ export const StaysCheckoutModal: React.FC<StaysCheckoutModalProps> = ({
                   />
                 </div>
                 <p className="text-xs leading-relaxed text-neutral-600">
-                  Ao continuar, estes dados serão enviados ao parceiro de reservas para abrir o checkout. Consulte
-                  nossa{' '}
+                  Ao continuar, estes dados serão enviados ao parceiro de reservas para abrir o
+                  checkout. Consulte nossa{' '}
                   <a href="/privacidade" className="underline">
                     Política de Privacidade
                   </a>
