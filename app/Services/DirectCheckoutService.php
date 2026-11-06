@@ -161,6 +161,7 @@ class DirectCheckoutService
                     'guest_name' => $input['guest']['fullName'],
                     'guest_email' => mb_strtolower($input['guest']['email']),
                     'guest_phone' => $input['guest']['phone'],
+                    'guest_cpf' => $input['guest']['cpf'] ?? null,
                     'quote_total' => number_format($quote['total'], 2, '.', ''),
                     'currency' => $quote['currency'],
                     'quote_snapshot' => $quote['snapshot'],

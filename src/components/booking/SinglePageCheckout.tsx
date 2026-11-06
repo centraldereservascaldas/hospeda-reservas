@@ -1,3 +1,4 @@
+import { navigateToPaymentConfirmation } from '../../utils/paymentConfirmation';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, QrCode, ShieldCheck } from 'lucide-react';
 import { LogoCRCN } from '../LogoCRCN';
@@ -54,6 +55,7 @@ export function SinglePageCheckout({
   previewOnly = false,
 }: SinglePageCheckoutProps) {
   const [guest, setGuest] = useState(guestPrefill ?? { fullName: '', email: '', phone: '' });
+  const [guestCpf, setGuestCpf] = useState('');
   const [terms, setTerms] = useState<{ version: string; fields: [string, string][] } | null>(null);
   const [readiness, setReadiness] = useState<CheckoutReadinessResponse | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('card');
@@ -161,6 +163,7 @@ export function SinglePageCheckout({
         setStatusUnavailable(false);
         setResult(response.data);
         void emitConfirmedPurchase(response.data.order);
+        if (navigateToPaymentConfirmation(response.data.order)) return;
         const terminal = [
           'confirmado',
           'concluido',
@@ -242,6 +245,7 @@ export function SinglePageCheckout({
         fullName: guest.fullName.trim(),
         email: guest.email.trim(),
         phone: guest.phone.trim(),
+        cpf: guestCpf,
       },
       acceptedTermsVersion: terms.version,
       acceptedTerms: true as const,
@@ -617,6 +621,13 @@ export function SinglePageCheckout({
                         }
                         className={fieldClass}
                       />
+                    </label>
+                    <label className="text-sm font-medium sm:col-span-2">
+                      CPF do responsável pela reserva
+                      <input required name="guestCpf" inputMode="numeric" autoComplete="off" pattern="[0-9]{11}" maxLength={11} value={guestCpf}
+                        onChange={(event) => setGuestCpf(event.target.value.replace(/\D/g, '').slice(0, 11))}
+                        title="Informe os 11 dígitos do CPF do responsável pela reserva." className={fieldClass} />
+                      <span className="mt-1 block text-xs text-neutral-500">Pode ser diferente do CPF de quem faz o pagamento.</span>
                     </label>
                   </div>
                 </fieldset>

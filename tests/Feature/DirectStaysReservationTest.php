@@ -19,6 +19,42 @@ class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_new_stays_client_receives_checkout_phone_without_storing_it_in_action_snapshot(): void
+    {
+        config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        $order->update(['stays_client_id' => null, 'guest_phone' => '11999999999', 'guest_cpf' => '12345678909']);
+        Http::preventStrayRequests();
+        Http::fake([
+            '*/booking/clients*' => Http::sequence()->push([], 200)->push(['_id' => '6a3e847be2dd9f1b7508abcd'], 201),
+        ]);
+
+        $result = (fn () => $this->resolveClient($order))->call(app(DirectStaysReservationService::class));
+
+        $this->assertTrue($result['ready']);
+        Http::assertSent(fn (ClientRequest $request) => $request->method() === 'POST'
+            && $request['phones'] === [['iso' => '+5511999999999', 'hint' => 'checkout']]
+            && $request['documents'] === [['type' => 'cpf', 'numb' => '12345678909']]);
+        $this->assertArrayNotHasKey('phones', $order->staysActions()->where('action_type', 'create_client')->sole()->request_snapshot);
+        $this->assertArrayNotHasKey('documents', $order->staysActions()->where('action_type', 'create_client')->sole()->request_snapshot);
+        $this->assertNotSame('12345678909', $order->getRawOriginal('guest_cpf'));
+    }
+
+    public function test_existing_client_with_different_cpf_is_not_overwritten(): void
+    {
+        config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        $order->update(['stays_client_id' => '6a3e847be2dd9f1b7508abcd', 'guest_cpf' => '12345678909']);
+        Http::preventStrayRequests();
+        Http::fake(['*/booking/clients/*' => Http::response(['_id' => $order->stays_client_id, 'email' => $order->guest_email, 'documents' => [['type' => 'cpf', 'numb' => '98765432100']]])]);
+
+        $result = (fn () => $this->resolveClient($order))->call(app(DirectStaysReservationService::class));
+
+        $this->assertFalse($result['ready']);
+        $this->assertSame('stays_client_cpf_conflict', $result['code']);
+        Http::assertNotSent(fn (ClientRequest $request) => $request->method() === 'PATCH');
+    }
+
     #[DataProvider('duplicateClientCases')]
     public function test_duplicate_stays_client_is_reused_only_after_confirming_exact_identity(string $mode, bool $ready): void
     {

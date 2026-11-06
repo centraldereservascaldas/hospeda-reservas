@@ -130,6 +130,7 @@ async function fill(view: ReturnType<typeof setup>) {
       false,
     ),
   );
+  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), { target: { value: '12345678909' } });
   fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
   for (const [label, value] of [
     ['Número do cartão', '4111111111111111'],
@@ -313,6 +314,7 @@ test('Pix stays on the checkout, has no surcharge and waits for authoritative co
     ),
   );
   fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), { target: { value: '12345678909' } });
   fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), {
     target: { value: '12345678901' },
   });
@@ -367,6 +369,7 @@ test('Pix requires payer identity before reserving and an uncertain gateway resu
     ),
   );
   fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), { target: { value: '12345678909' } });
   fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
   fireEvent.submit(view.container.querySelector('form')!);
   assert.equal(
@@ -427,6 +430,7 @@ test('a Stays reservation requiring review never presents tracking as a generate
     ),
   );
   fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), { target: { value: '12345678909' } });
   fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), {
     target: { value: '12345678901' },
   });

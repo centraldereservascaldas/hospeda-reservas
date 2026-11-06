@@ -27,7 +27,8 @@ class DirectStaysReservationMatcher
             && (string) ($reservation['checkInDate'] ?? '') === $checkIn
             && $checkOut !== null
             && (string) ($reservation['checkOutDate'] ?? '') === $checkOut
-            && hash_equals('CRCN_DIRECT_ORDER:'.$order->id, (string) ($reservation['internalNote'] ?? ''));
+            && ((string) ($reservation['internalNote'] ?? '') === 'CRCN_DIRECT_ORDER:'.$order->id
+                || str_starts_with((string) ($reservation['internalNote'] ?? ''), 'CRCN_DIRECT_ORDER:'.$order->id."\n"));
     }
 
     /** @param array<string, mixed> $reservation */
@@ -40,6 +41,7 @@ class DirectStaysReservationMatcher
         }
 
         $price = $reservation['price'];
+
         return array_key_exists('currency', $price)
             && array_key_exists('_f_total', $price);
     }

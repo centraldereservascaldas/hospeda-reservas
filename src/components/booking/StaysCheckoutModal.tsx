@@ -97,7 +97,7 @@ export const StaysCheckoutModal: React.FC<StaysCheckoutModalProps> = ({
       });
       if (result?.success === true) {
         if (navigateToHostedCheckout(result.checkoutUrl)) return;
-        setError('A Stays retornou um endereço de checkout inválido. Tente novamente.');
+        setError('O sistema retornou um endereço de checkout inválido. Tente novamente.');
         return;
       }
       if (result?.success === false && result.code === 'quote_changed') {
@@ -112,7 +112,7 @@ export const StaysCheckoutModal: React.FC<StaysCheckoutModalProps> = ({
       setError(
         result?.success === false
           ? result.message
-          : 'Não foi possível abrir o checkout da Stays. Tente novamente.',
+          : 'Não foi possível abrir o checkout. Tente novamente.',
       );
     } finally {
       inFlight.current = false;
@@ -171,12 +171,11 @@ export const StaysCheckoutModal: React.FC<StaysCheckoutModalProps> = ({
                   {formatCurrency(quote.total, currency)}
                 </p>
                 <p className="text-xs text-neutral-600">
-                  Total cotado pela Stays. O valor final será mostrado novamente no checkout da
-                  Stays.
+                  Total cotado para sua hospedagem. O valor final será mostrado novamente no checkout.
                 </p>
               </div>
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-                Você será direcionado para a Stays para conferir as condições da hospedagem,
+                Você será direcionado para nosso parceiro de reservas para conferir as condições da hospedagem,
                 preencher os demais dados e concluir o pagamento.
               </div>
             </div>
@@ -221,7 +220,7 @@ export const StaysCheckoutModal: React.FC<StaysCheckoutModalProps> = ({
                   />
                 </div>
                 <p className="text-xs leading-relaxed text-neutral-600">
-                  Ao continuar, estes dados serão enviados à Stays para abrir o checkout. Consulte
+                  Ao continuar, estes dados serão enviados ao parceiro de reservas para abrir o checkout. Consulte
                   nossa{' '}
                   <a href="/privacidade" className="underline">
                     Política de Privacidade
@@ -242,11 +241,11 @@ export const StaysCheckoutModal: React.FC<StaysCheckoutModalProps> = ({
                   className="flex w-full items-center justify-center gap-2 rounded-2xl bg-orange-700 px-4 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-                  {submitting ? 'Abrindo checkout da Stays…' : 'Continuar na Stays'}
+                  {submitting ? 'Abrindo checkout…' : 'Continuar para o checkout'}
                 </button>
                 {quote.source !== 'stays-live' && (
                   <p role="status" className="text-xs text-amber-800">
-                    Aguarde uma cotação atual da Stays para continuar.
+                    Aguarde uma cotação atualizada para continuar.
                   </p>
                 )}
               </form>

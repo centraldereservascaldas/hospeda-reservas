@@ -473,7 +473,7 @@ class DirectStaysPaymentService
      */
     private function safeReservationSnapshot(array $reservation): array
     {
-        return array_intersect_key($reservation, array_flip(['_id', 'id', 'partnerCode', '_idlisting', '_idclient', 'type', 'checkInDate', 'checkInTime', 'checkOutDate', 'checkOutTime', 'guests', 'guestsDetails', 'price', 'internalNote']));
+        return array_intersect_key($reservation, array_flip(['_id', 'id', 'partnerCode', '_idlisting', '_idclient', 'type', 'checkInDate', 'checkInTime', 'checkOutDate', 'checkOutTime', 'guests', 'price']));
     }
 
     private function action(DirectBookingOrder $order, string $type, array $payload): DirectBookingStaysAction

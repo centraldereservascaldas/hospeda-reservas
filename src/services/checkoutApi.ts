@@ -14,7 +14,7 @@ export interface CheckoutRequestPayload {
   to: string;
   guests: { adults: number; children: number; infants: number; pets: number };
   quoteTotal: number;
-  guest: { fullName: string; email: string; phone: string };
+  guest: { fullName: string; email: string; phone: string; cpf?: string };
   acceptedTermsVersion: string;
   acceptedTerms: true;
   idempotencyKey: string;
@@ -437,6 +437,7 @@ const checkoutFields = new Set([
   'guest.fullName',
   'guest.email',
   'guest.phone',
+  'guest.cpf',
   'acceptedTermsVersion',
   'acceptedTerms',
   'idempotencyKey',
