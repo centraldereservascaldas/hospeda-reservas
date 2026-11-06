@@ -418,7 +418,7 @@ class DirectStaysReservationService
     private function resolveClient(DirectBookingOrder $order): array
     {
         if ($order->stays_client_id !== null) {
-            return ['ready' => true, 'clientId' => $order->stays_client_id, 'code' => 'client_ready', 'message' => ''];
+            return $this->syncExistingClientCpf($order, $order->stays_client_id);
         }
 
         $clients = $this->findClientsByEmail($order->guest_email);
@@ -427,20 +427,26 @@ class DirectStaysReservationService
         }
 
         if (count($clients) === 1) {
-            return ['ready' => true, 'clientId' => $this->clientId($clients[0]), 'code' => 'client_ready', 'message' => ''];
+            return $this->syncExistingClientCpf($order, $this->clientId($clients[0]));
         }
         if (count($clients) > 1) {
             return ['ready' => false, 'clientId' => '', 'code' => 'stays_client_ambiguous', 'message' => 'Há mais de um cliente com o e-mail exato na Stays; a associação requer revisão operacional.'];
         }
 
         $parts = preg_split('/\s+/', trim($order->guest_name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $phoneDigits = preg_replace('/\D+/', '', $order->guest_phone);
+        $phoneIso = '+'.(strlen($phoneDigits) <= 11 ? '55' : '').$phoneDigits;
         $payload = [
             'kind' => 'person',
             'fName' => $parts[0] ?? '',
             'lName' => implode(' ', array_slice($parts, 1)),
             'email' => $order->guest_email,
+            'phones' => [['iso' => $phoneIso, 'hint' => 'checkout']],
             'internalNote' => 'CRCN_DIRECT_ORDER:'.$order->id,
         ];
+        if ($order->guest_cpf) {
+            $payload['documents'] = [['type' => 'cpf', 'numb' => $order->guest_cpf]];
+        }
         $action = $this->action($order, 'create_client', $payload);
         $claim = $this->claim($action, $order);
         if (! $claim['claimed']) {
@@ -453,7 +459,7 @@ class DirectStaysReservationService
                 $clientId = $this->clientId($clients[0]);
                 $this->markActionSucceeded($action, $clientId, ['_id' => $clientId]);
 
-                return ['ready' => true, 'clientId' => $clientId, 'code' => 'client_ready', 'message' => ''];
+                return $this->syncExistingClientCpf($order, $clientId);
             }
 
             $this->markAttention($action, $order, 'stays_client_write_unknown', 'A escrita anterior do cliente não pode ser reconciliada por e-mail exato; não foi repetida.');
@@ -481,7 +487,7 @@ class DirectStaysReservationService
                     && mb_strtolower(trim($existing['email'])) === mb_strtolower(trim($order->guest_email))) {
                     $this->markActionSucceeded($action, $conflictClientId, ['_id' => $conflictClientId]);
 
-                    return ['ready' => true, 'clientId' => $conflictClientId, 'code' => 'client_ready', 'message' => ''];
+                    return $this->syncExistingClientCpf($order, $conflictClientId);
                 }
             }
 
@@ -501,10 +507,55 @@ class DirectStaysReservationService
             $clientId = $this->clientId($clients[0]);
             $this->markActionSucceeded($action, $clientId, ['_id' => $clientId]);
 
-            return ['ready' => true, 'clientId' => $clientId, 'code' => 'client_ready', 'message' => ''];
+            return $this->syncExistingClientCpf($order, $clientId);
         }
 
         return $this->markAttention($action, $order, 'stays_client_write_unknown', 'A resposta da Stays não confirmou o cadastro e a busca por e-mail não encontrou resultado único.');
+    }
+
+    /** @return array{ready: bool, clientId: string, code: string, message: string} */
+    private function syncExistingClientCpf(DirectBookingOrder $order, string $clientId): array
+    {
+        $ready = ['ready' => true, 'clientId' => $clientId, 'code' => 'client_ready', 'message' => ''];
+        if (! $order->guest_cpf) {
+            return $ready;
+        }
+
+        $path = '/booking/clients/'.rawurlencode($clientId);
+        $client = $this->stays->get($path);
+        if (! is_array($client) || $this->clientId($client) !== $clientId
+            || mb_strtolower(trim((string) ($client['email'] ?? ''))) !== mb_strtolower(trim($order->guest_email))
+            || (isset($client['documents']) && ! is_array($client['documents']))) {
+            return ['ready' => false, 'clientId' => '', 'code' => 'stays_client_identity_unverified', 'message' => 'Não foi possível verificar o cadastro existente; nenhuma reserva foi iniciada.'];
+        }
+
+        $documents = $client['documents'] ?? [];
+        foreach ($documents as $document) {
+            if (! is_array($document)) {
+                return ['ready' => false, 'clientId' => '', 'code' => 'stays_client_documents_invalid', 'message' => 'O cadastro existente requer conferência; nenhuma reserva foi iniciada.'];
+            }
+            if (strtolower((string) ($document['type'] ?? '')) === 'cpf') {
+                if (preg_replace('/\D+/', '', (string) ($document['numb'] ?? '')) === $order->guest_cpf) {
+                    return $ready;
+                }
+
+                return ['ready' => false, 'clientId' => '', 'code' => 'stays_client_cpf_conflict', 'message' => 'O CPF informado difere do cadastro existente. Nossa equipe precisa conferir antes de continuar.'];
+            }
+        }
+
+        $documents[] = ['type' => 'cpf', 'numb' => $order->guest_cpf];
+        $response = $this->stays->request('PATCH', $path, payload: ['documents' => $documents]);
+        $confirmed = $this->stays->get($path);
+        if ($response?->successful() && is_array($confirmed) && $this->clientId($confirmed) === $clientId) {
+            foreach ($confirmed['documents'] ?? [] as $document) {
+                if (is_array($document) && strtolower((string) ($document['type'] ?? '')) === 'cpf'
+                    && preg_replace('/\D+/', '', (string) ($document['numb'] ?? '')) === $order->guest_cpf) {
+                    return $ready;
+                }
+            }
+        }
+
+        return ['ready' => false, 'clientId' => '', 'code' => 'stays_client_cpf_unconfirmed', 'message' => 'Não foi possível confirmar o cadastro do CPF. Nossa equipe precisa conferir antes de continuar.'];
     }
 
     /** @return array<int, array<string, mixed>>|null */
@@ -574,7 +625,7 @@ class DirectStaysReservationService
 
         $commercialDetailsVerified = $this->reservationMatcher->matchesCommercialDetails($reservation, $order);
 
-        $safeSnapshot = array_intersect_key($reservation, array_flip(['_id', 'id', '_idlisting', '_idclient', 'type', 'checkInDate', 'checkOutDate', 'guests', 'price', 'internalNote']));
+        $safeSnapshot = array_intersect_key($reservation, array_flip(['_id', 'id', '_idlisting', '_idclient', 'type', 'checkInDate', 'checkOutDate', 'guests', 'price']));
         if ($action !== null) {
             $this->markActionSucceeded($action, $reservationId, $safeSnapshot);
         }
@@ -696,7 +747,7 @@ class DirectStaysReservationService
         $key = 'direct-booking:'.$order->id.':'.$type;
         $snapshot = $payload;
         if ($type === 'create_client') {
-            unset($snapshot['fName'], $snapshot['lName'], $snapshot['email']);
+            unset($snapshot['fName'], $snapshot['lName'], $snapshot['email'], $snapshot['phones'], $snapshot['documents']);
         }
         try {
             return DirectBookingStaysAction::query()->firstOrCreate(

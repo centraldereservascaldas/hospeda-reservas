@@ -149,7 +149,7 @@ export function CieloCheckoutIframe({
         <div className="space-y-3">
           <p className="text-sm leading-6 text-neutral-700">
             Os dados do cartão serão informados diretamente no ambiente seguro da Cielo. A reserva
-            só será confirmada depois que a Cielo validar o pagamento e a Stays confirmar a estadia.
+            só será confirmada depois que a Cielo validar o pagamento e a estadia for confirmada.
           </p>
           <button
             type="button"

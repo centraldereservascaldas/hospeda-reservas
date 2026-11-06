@@ -29,6 +29,7 @@ class DirectBookingOrder extends Model
         'guest_name',
         'guest_email',
         'guest_phone',
+        'guest_cpf',
         'quote_total',
         'currency',
         'quote_snapshot',
@@ -50,6 +51,7 @@ class DirectBookingOrder extends Model
         'payment_expires_at',
         'paid_at',
         'payment_qr_code',
+        'guest_cpf',
         'operational_events',
     ];
 
@@ -76,6 +78,7 @@ class DirectBookingOrder extends Model
             'payment_expires_at' => 'immutable_datetime',
             'paid_at' => 'immutable_datetime',
             'resume_token' => 'encrypted',
+            'guest_cpf' => 'encrypted',
             'resume_token_expires_at' => 'immutable_datetime',
             'operational_events' => 'array',
         ];

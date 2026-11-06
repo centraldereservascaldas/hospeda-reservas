@@ -22,6 +22,7 @@ function serializeSubmission(submission: CheckoutSubmission): string {
       fullName: submission.guest.fullName,
       email: submission.guest.email,
       phone: submission.guest.phone,
+      cpf: submission.guest.cpf,
     },
     acceptedTermsVersion: submission.acceptedTermsVersion,
     acceptedTerms: submission.acceptedTerms,

@@ -94,7 +94,7 @@ test('does not render personal-data fields while hosted checkout is disabled', a
   );
   assert.equal(screen.queryByLabelText('Nome e sobrenome'), null);
   assert.equal(screen.queryByLabelText('E-mail'), null);
-  assert.equal(screen.queryByRole('button', { name: 'Continuar na Stays' }), null);
+  assert.equal(screen.queryByRole('button', { name: 'Continuar para o checkout' }), null);
 });
 
 test('renders only the minimal contact fields after readiness succeeds', async () => {
@@ -113,7 +113,7 @@ test('renders only the minimal contact fields after readiness succeeds', async (
   assert.equal((screen.getByLabelText('E-mail') as HTMLInputElement).value, 'pessoa@example.test');
   assert.equal(screen.queryByLabelText('Telefone'), null);
   assert.ok(screen.getByRole('link', { name: 'Política de Privacidade' }));
-  assert.ok(screen.getByRole('button', { name: 'Continuar na Stays' }));
+  assert.ok(screen.getByRole('button', { name: 'Continuar para o checkout' }));
 });
 
 test('submits the validated stay to the backend and follows only the hosted Stays link', async () => {
@@ -143,7 +143,7 @@ test('submits the validated stay to the backend and follows only the hosted Stay
 
   try {
     renderModal();
-    const continueButton = await screen.findByRole('button', { name: 'Continuar na Stays' });
+    const continueButton = await screen.findByRole('button', { name: 'Continuar para o checkout' });
     fireEvent.submit(continueButton.closest('form')!);
 
     await waitFor(() => assert.notEqual(checkoutHref, ''));

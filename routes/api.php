@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CheckoutCancellationController;
+use App\Http\Controllers\Api\CheckoutGuestsController;
 use App\Http\Controllers\Api\CheckoutPaymentController;
 use App\Http\Controllers\Api\CieloSopController;
 use App\Http\Controllers\Api\CieloWebhookController;
@@ -51,6 +52,7 @@ Route::middleware('supabase.guest')->group(function (): void {
     Route::get('/my-direct-booking-orders', [GuestReservationController::class, 'directBookingOrders'])
         ->middleware('throttle:direct-booking-orders');
     Route::get('/my-direct-booking-orders/{publicReference}/checkout', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
+    Route::post('/my-direct-booking-orders/{publicReference}/checkout/guests', [CheckoutGuestsController::class, 'store'])->middleware('throttle:5,1');
     Route::post('/my-direct-booking-orders/{publicReference}/checkout/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
     Route::post('/my-direct-booking-orders/{publicReference}/checkout/payments/cielo-sop-token', [CheckoutPaymentController::class, 'cieloSopToken'])->middleware('throttle:10,1');
     Route::post('/my-direct-booking-orders/{publicReference}/cancel', [GuestReservationController::class, 'requestDirectBookingCancellation'])->middleware('throttle:5,1');
@@ -81,6 +83,7 @@ Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->mid
 Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');
 Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
+Route::post('/checkout/{publicReference}/guests', [CheckoutGuestsController::class, 'store'])->middleware('throttle:5,1');
 Route::post('/checkout/{publicReference}/cielo-checkout', [CheckoutPaymentController::class, 'createCieloCheckout'])->middleware('throttle:5,1');
 Route::post('/checkout/{publicReference}/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');
 Route::post('/checkout/{publicReference}/payments/cielo-sop-token', [CheckoutPaymentController::class, 'cieloSopToken'])->middleware('throttle:10,1');

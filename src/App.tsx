@@ -59,6 +59,10 @@ const CieloCheckoutPreviewPage = lazy(() =>
   })),
 );
 
+const PaymentConfirmationPreview = lazy(() =>
+  import('./components/booking/PaymentConfirmationPreview').then(({ PaymentConfirmationPreview }) => ({ default: PaymentConfirmationPreview })),
+);
+
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
 function CheckoutResumeEntry({ reference }: { reference: string }) {
@@ -549,7 +553,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})$/.exec(pathname)?.[1];
+  const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})(?:\/pagamento-confirmado)?$/.exec(pathname)?.[1];
   const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
   const legalSlug =
     normalizedPathname === '/privacidade'
@@ -562,6 +566,10 @@ export default function App() {
 
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+
+  if (checkoutPreviewAllowed && pathname === '/checkout-preview/pagamento-confirmado') {
+    return <Suspense fallback={<main role="status">Carregando prévia…</main>}><PaymentConfirmationPreview /></Suspense>;
+  }
 
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/cielo') {
     return (

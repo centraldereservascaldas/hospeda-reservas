@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -9,6 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { checkoutApi } from '../../services/checkoutApi';
+import { navigateToPaymentConfirmation } from '../../utils/paymentConfirmation';
 import { emitConfirmedPurchase, emitFunnelEvent } from '../../utils/measurementEvents';
 import type {
   CheckoutAccessCredentials,
@@ -23,6 +24,7 @@ import {
   getPixPayerIdentification,
 } from './PixPayerIdentificationField';
 import { CieloCheckoutIframe } from './CieloCheckoutIframe';
+import { GuestDetailsForm } from './GuestDetailsForm';
 import {
   clearCheckoutResumeToken,
   getCheckoutResumeToken,
@@ -64,6 +66,8 @@ function clearPixPaymentIdempotencyKey(reference: string): void {
 interface CheckoutResumePageProps {
   reference: string;
   accessToken?: string;
+  previewData?: CheckoutResumeResponse;
+  previewGuestForm?: ReactNode;
 }
 
 type ResumeState =
@@ -127,12 +131,12 @@ const statusDetails: Record<
   },
   pago_em_confirmacao: {
     title: 'Pagamento recebido',
-    detail: 'Estamos verificando a confirmação da reserva na Stays.',
+    detail: 'Estamos verificando a confirmação da sua reserva.',
     tone: 'neutral',
   },
   confirmado: {
     title: 'Reserva confirmada',
-    detail: 'A confirmação da reserva foi registrada após a verificação na Stays.',
+    detail: 'Sua reserva foi confirmada.',
     tone: 'positive',
   },
   atencao_operacional: {
@@ -152,7 +156,7 @@ const statusDetails: Record<
   },
   liberacao_pendente: {
     title: 'Liberação em andamento',
-    detail: 'Estamos verificando a liberação da pré-reserva na Stays.',
+    detail: 'Estamos verificando a liberação da pré-reserva.',
     tone: 'attention',
   },
   cancelamento_solicitado: {
@@ -218,7 +222,7 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
     return {
       title: 'Pagamento estornado',
       detail: order.reservationConfirmed
-        ? 'O gateway informa o estorno. O último registro da Stays indica a reserva como confirmada, e a equipe está revisando a situação da hospedagem.'
+        ? 'O gateway informa o estorno. O último registro indica a reserva como confirmada, e a equipe está revisando a situação da hospedagem.'
         : 'O gateway informa o estorno. A equipe está revisando a situação do pedido e da reserva.',
       tone: 'attention' as const,
     };
@@ -227,7 +231,7 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
     return {
       title: 'Pagamento contestado',
       detail: order.reservationConfirmed
-        ? 'O gateway informa uma contestação. O último registro da Stays indica a reserva como confirmada; a equipe está revisando a situação da hospedagem.'
+        ? 'O gateway informa uma contestação. O último registro indica a reserva como confirmada; a equipe está revisando a situação da hospedagem.'
         : 'O gateway informa uma contestação. A equipe está revisando a situação do pedido e da reserva.',
       tone: 'attention' as const,
     };
@@ -236,7 +240,12 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
   return statusDetails[order.status];
 }
 
-export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePageProps) {
+export function CheckoutResumePage({
+  reference,
+  accessToken,
+  previewData,
+  previewGuestForm,
+}: CheckoutResumePageProps) {
   const [resumeState, setResumeState] = useState<ResumeState>({ kind: 'loading' });
   const [retryKey, setRetryKey] = useState(0);
   const [pixCopyResult, setPixCopyResult] = useState<{
@@ -246,8 +255,6 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
   const [isStartingPixPayment, setIsStartingPixPayment] = useState(false);
   const [pixPayerDocument, setPixPayerDocument] = useState('');
   const [paymentStartError, setPaymentStartError] = useState<string | null>(null);
-  const [cancellationRequestError, setCancellationRequestError] = useState<string | null>(null);
-  const [isRequestingCancellation, setIsRequestingCancellation] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'card'>('pix');
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const pixPaymentSubmissionInFlightRef = useRef(false);
@@ -255,6 +262,14 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
   const pixPaymentIdempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (previewData) {
+      setResumeState({
+        kind: 'ready',
+        data: previewData,
+        credentials: { type: 'resume-token', resumeToken: '' },
+      });
+      return;
+    }
     setPixCopyResult(null);
     const resumeToken = getCheckoutResumeToken(reference);
     const credentials: CheckoutAccessCredentials | null = accessToken
@@ -291,6 +306,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
 
       setResumeState({ kind: 'ready', data: result.data, credentials: resolvedCredentials });
       void emitConfirmedPurchase(result.data.order);
+      navigateToPaymentConfirmation(result.data.order);
       if (
         refreshableStatuses.has(result.data.order.status) ||
         (result.data.order.status === 'expirado' &&
@@ -309,7 +325,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
       isCurrent = false;
       if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
     };
-  }, [accessToken, reference, retryKey]);
+  }, [accessToken, reference, retryKey, previewData]);
 
   const copyPixCode = async (copyPaste: string): Promise<void> => {
     try {
@@ -389,29 +405,6 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
     }
   };
 
-  const requestCancellation = async (): Promise<void> => {
-    if (resumeState.kind !== 'ready' || isRequestingCancellation) return;
-    const confirmed = window.confirm(
-      'Deseja registrar uma solicitação de cancelamento? A Central analisará o pedido. Esta solicitação não cancela a reserva nem realiza estorno do pagamento.',
-    );
-    if (!confirmed) return;
-
-    setIsRequestingCancellation(true);
-    setCancellationRequestError(null);
-    try {
-      await checkoutApi.requestCheckoutCancellation(reference, resumeState.credentials);
-      setRetryKey((current) => current + 1);
-    } catch (error) {
-      setCancellationRequestError(
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível registrar a solicitação. Tente novamente.',
-      );
-    } finally {
-      setIsRequestingCancellation(false);
-    }
-  };
-
   const order = resumeState.kind === 'ready' ? resumeState.data.order : null;
   const paymentAttempt =
     resumeState.kind === 'ready' ? (resumeState.data.payment.attempt ?? null) : null;
@@ -480,6 +473,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
   const status = order ? getOrderStatusDetails(order) : null;
   const StatusIcon =
     status?.tone === 'positive' ? BadgeCheck : status?.tone === 'attention' ? CircleAlert : Clock3;
+  const OrderHeading = order?.paymentStatus === 'approved' ? 'h2' : 'h1';
 
   return (
     <main
@@ -505,21 +499,55 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
           </span>
         </header>
 
+        {order?.paymentStatus === 'approved' && (
+          <section className="pt-8 sm:pt-10" aria-labelledby="payment-success-title">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-800">
+              Pagamento confirmado
+            </p>
+            <h1
+              id="payment-success-title"
+              className="mt-3 max-w-3xl text-3xl font-black leading-tight tracking-tight sm:text-4xl"
+            >
+              Parabéns, seu pagamento está confirmado!
+            </h1>
+            <p className="mt-3 max-w-2xl text-base leading-7 text-neutral-600">
+              {order.reservationConfirmed
+                ? 'Sua reserva está confirmada. Confira os detalhes abaixo.'
+                : 'Falta pouco para finalizarmos a sua reserva. Estamos verificando a confirmação.'}
+            </p>
+          </section>
+        )}
+
         <div className="grid flex-1 items-center gap-10 py-10 [@media(max-height:400px)]:gap-4 [@media(max-height:400px)]:py-4 max-[360px]:gap-4 max-[360px]:py-4 lg:grid-cols-[1.1fr_0.9fr] lg:gap-16">
+          {(previewGuestForm ||
+            (order?.paymentStatus === 'approved' &&
+              order.reservationConfirmed &&
+              resumeState.kind === 'ready')) && (
+            <div className="min-w-0 self-start print:hidden">
+              {previewGuestForm ??
+                (resumeState.kind === 'ready' && (
+                  <GuestDetailsForm reference={reference} credentials={resumeState.credentials} />
+                ))}
+            </div>
+          )}
           <section aria-labelledby="checkout-resume-title" className="min-w-0 max-w-xl">
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-800">
               Acompanhe seu pedido
             </p>
-            <h1
+            <OrderHeading
               id="checkout-resume-title"
               className="mt-4 text-3xl font-black leading-tight tracking-tight min-[400px]:text-4xl sm:text-5xl [@media(max-height:400px)]:mt-2 [@media(max-height:400px)]:text-3xl"
             >
-              Sua estadia, com cada etapa no lugar.
-            </h1>
-            <p className="mt-5 max-w-lg text-base leading-7 text-neutral-600 [@media(max-height:400px)]:hidden max-[360px]:hidden">
-              Consulte o estado registrado pela Central de Reservas. A confirmação só aparece depois
-              da verificação da reserva na Stays.
-            </p>
+              {order?.paymentStatus === 'approved'
+                ? 'Detalhes da sua reserva.'
+                : 'Sua estadia, com cada etapa no lugar.'}
+            </OrderHeading>
+            {order?.paymentStatus !== 'approved' && (
+              <p className="mt-5 max-w-lg text-base leading-7 text-neutral-600 [@media(max-height:400px)]:hidden max-[360px]:hidden">
+                Consulte o estado registrado pela Central de Reservas. A confirmação só aparece
+                depois da verificação da reserva.
+              </p>
+            )}
 
             <div className="mt-8 rounded-3xl border border-neutral-200 bg-white p-5 shadow-[0_18px_60px_-36px_rgba(37,30,18,0.35)] sm:p-7 [@media(max-height:400px)]:mt-2 [@media(max-height:400px)]:p-3 max-[360px]:mt-4 max-[360px]:p-4">
               {resumeState.kind === 'loading' && (
@@ -686,7 +714,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                         id="checkout-confirmation-title"
                         className="font-extrabold text-emerald-950"
                       >
-                        Confirmação registrada na Stays
+                        Confirmação da reserva registrada
                       </h2>
                       {resumeState.data.confirmation.reservationCode && (
                         <div>
@@ -746,34 +774,6 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                           Imprimir comprovante
                         </button>
                       </div>
-                    </section>
-                  )}
-
-                  {order.status === 'confirmado' && order.paymentStatus === 'approved' && (
-                    <section className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-4">
-                      <h2 className="font-extrabold text-neutral-950">Solicitar cancelamento</h2>
-                      <p className="text-sm leading-6 text-neutral-700">
-                        A Central analisará sua solicitação. O pedido não cancela a reserva nem
-                        realiza o estorno do pagamento.
-                      </p>
-                      {cancellationRequestError && (
-                        <p className="text-sm text-red-800" role="alert">
-                          {cancellationRequestError}
-                        </p>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => void requestCancellation()}
-                        disabled={isRequestingCancellation}
-                        className="inline-flex min-h-11 items-center gap-2 rounded-full border border-neutral-300 bg-white px-4 py-2 text-sm font-bold text-neutral-900 transition hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-800 disabled:cursor-wait disabled:opacity-60"
-                      >
-                        {isRequestingCancellation && (
-                          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-                        )}
-                        {isRequestingCancellation
-                          ? 'Enviando solicitação…'
-                          : 'Solicitar cancelamento'}
-                      </button>
                     </section>
                   )}
 
@@ -846,7 +846,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                               <p className="mt-1 text-sm leading-6 text-neutral-700">
                                 {paymentAttempt
                                   ? 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto a pré-reserva estiver válida.'
-                                  : 'A cobrança Pix só será solicitada quando você continuar. A confirmação da estadia depende da validação posterior na Stays.'}
+                                  : 'A cobrança Pix só será solicitada quando você continuar. A confirmação da estadia depende de validação posterior.'}
                               </p>
                             </div>
                             {paymentStartError && (
@@ -991,40 +991,43 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                   <p className="border-t border-neutral-200 pt-4 text-xs leading-5 text-neutral-600">
                     {paymentAttempt
                       ? 'Esta consulta acompanha o pagamento já solicitado e não envia novas cobranças.'
-                      : 'Nenhum dado pessoal ou informação de cartão é exibido nesta página.'}
+                      : 'Esta página não exibe dados do cartão.'}
                   </p>
                 </div>
               )}
             </div>
           </section>
 
-          <aside className="relative hidden min-h-[430px] overflow-hidden rounded-[2rem] bg-neutral-950 p-9 text-white shadow-[0_30px_80px_-35px_rgba(37,30,18,0.5)] lg:flex lg:flex-col lg:justify-between print:hidden">
-            <div
-              className="absolute -right-20 -top-16 h-72 w-72 rounded-full border border-white/10"
-              aria-hidden="true"
-            />
-            <div
-              className="absolute -right-5 -top-1 h-44 w-44 rounded-full border border-orange-300/25"
-              aria-hidden="true"
-            />
-            <div className="relative flex items-center gap-3 text-sm font-bold text-orange-200">
-              <span className="h-px w-8 bg-orange-300" />
-              HOSPEDAGEM EM CALDAS NOVAS
-            </div>
-            <div className="relative max-w-sm">
-              <p className="text-5xl font-black leading-[1.05] tracking-tight">
-                Transparência em cada passo.
-              </p>
-              <p className="mt-5 text-sm leading-6 text-neutral-300">
-                Cotação, pagamento e confirmação são etapas diferentes. Aqui você acompanha somente
-                o que já foi verificado.
-              </p>
-            </div>
-            <div className="relative flex items-center justify-between border-t border-white/15 pt-5 text-xs text-neutral-400">
-              <span>Central de Reservas CRCN</span>
-              <span>BR · 01</span>
-            </div>
-          </aside>
+          {!previewGuestForm &&
+            !(order?.paymentStatus === 'approved' && order.reservationConfirmed) && (
+              <aside className="relative hidden min-h-[430px] overflow-hidden rounded-[2rem] bg-neutral-950 p-9 text-white shadow-[0_30px_80px_-35px_rgba(37,30,18,0.5)] lg:flex lg:flex-col lg:justify-between print:hidden">
+                <div
+                  className="absolute -right-20 -top-16 h-72 w-72 rounded-full border border-white/10"
+                  aria-hidden="true"
+                />
+                <div
+                  className="absolute -right-5 -top-1 h-44 w-44 rounded-full border border-orange-300/25"
+                  aria-hidden="true"
+                />
+                <div className="relative flex items-center gap-3 text-sm font-bold text-orange-200">
+                  <span className="h-px w-8 bg-orange-300" />
+                  HOSPEDAGEM EM CALDAS NOVAS
+                </div>
+                <div className="relative max-w-sm">
+                  <p className="text-5xl font-black leading-[1.05] tracking-tight">
+                    Transparência em cada passo.
+                  </p>
+                  <p className="mt-5 text-sm leading-6 text-neutral-300">
+                    Cotação, pagamento e confirmação são etapas diferentes. Aqui você acompanha
+                    somente o que já foi verificado.
+                  </p>
+                </div>
+                <div className="relative flex items-center justify-between border-t border-white/15 pt-5 text-xs text-neutral-400">
+                  <span>Central de Reservas CRCN</span>
+                  <span>BR · 01</span>
+                </div>
+              </aside>
+            )}
         </div>
       </div>
     </main>
