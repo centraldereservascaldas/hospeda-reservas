@@ -48,6 +48,7 @@ class ExistingReservationPaymentChannelsTest extends TestCase
 
             return Http::response(['_id' => $id, 'status' => 'active', 'internalName' => $name]);
         });
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
         $channels = app(ExistingReservationPaymentChannels::class);
         $id = str_repeat('a', 24);
         $this->assertSame(['methods' => ['pix'], 'card_installments' => []], $channels->availableForReceivable(['pix', 'card'], [['_id' => $id, '_idpaymentProvider' => $pix]], $id));

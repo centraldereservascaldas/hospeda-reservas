@@ -106,6 +106,8 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
             }
             $this->fail('Unexpected synthetic external request.');
         });
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsCandidate', 'confirmsSnapshot')->andReturnTrue();
         $createdOrder = $this->withHeader('Idempotency-Key', 'synthetic-bootstrap-order-123')->postJson('/api/existing-reservations/ZX91K/checkout', [
             'expectedBalanceCents' => 101600, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Synthetic Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
         ])->assertCreated();
@@ -121,7 +123,7 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
         $reference = $createdOrder->json('resume.reference');
         $token = $createdOrder->json('resume.token');
         config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
-        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
+
         $this->withHeaders(['Idempotency-Key' => 'synthetic-bootstrap-pix-1234', 'X-Checkout-Resume-Token' => $token])
             ->postJson('/api/checkout/'.$reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix', 'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']])
             ->assertCreated()->assertJsonPath('payment.status', 'pending')->assertJsonPath('payment.pix.copyPaste', 'synthetic-pix');

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DirectBookingOrder;
+use App\Services\ExistingReservationLedgerAudit;
 use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -145,6 +146,8 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
             'direct-booking.enabled' => true, 'direct-booking.existing_reservation_checkout_enabled' => true,
             'direct-booking.experimental_existing_receivable_creation_enabled' => true, 'direct-booking.experimental_existing_approved_balances' => [str_repeat('c', 24) => $this->approval()], 'direct-booking.payment_provider' => 'cielo',
             'direct-booking.stays_cielo_pix_provider_id' => str_repeat('f', 24)]);
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsCandidate', 'confirmsSnapshot')->andReturnTrue();
         $this->mock(DirectCheckoutPaymentService::class, function ($mock) use ($gatewayAvailable): void {
             $mock->shouldReceive('availableMethods')->andReturn($gatewayAvailable ? ['pix'] : []);
             $mock->shouldReceive('publicKey')->andReturn(null);

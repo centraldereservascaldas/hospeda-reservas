@@ -120,6 +120,8 @@ class ExistingReservationCieloJourneyTest extends TestCase
             $this->fail('Unexpected external request.');
         });
 
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $created = $this->withHeader('Idempotency-Key', 'existing-order-key-123456')->postJson('/api/existing-reservations/ZY92K/checkout', [
             'expectedBalanceCents' => 19750, 'paymentMethod' => $method, ...($method === 'card' ? ['installments' => 6] : []), 'guest' => ['fullName' => 'Test Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
         ]);
@@ -134,6 +136,8 @@ class ExistingReservationCieloJourneyTest extends TestCase
         $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => $reservationId]);
         $reference = $created->json('resume.reference');
         $token = $created->json('resume.token');
+        $this->app->forgetInstance(ExistingReservationLedgerAudit::class);
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => false]);
         $balanceChanged = $scenario === 'changed';
         if ($scenario === 'financial_paid') {
             config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
@@ -181,9 +185,9 @@ class ExistingReservationCieloJourneyTest extends TestCase
             return;
         }
         if (in_array($scenario, ['changed', 'disabled', 'approval_revoked', 'approval_changed', 'approval_expired', 'approval_status_changed', 'approval_partner_changed', 'ledger_review', 'ledger_off', 'financial_paid', 'cycle_without_ledger'], true)) {
-            if (in_array($scenario, ['disabled', 'cycle_without_ledger'], true)) {
+            if ($scenario === 'disabled') {
                 $response->assertStatus(503)->assertJsonPath('code', 'payments_disabled');
-            } elseif (in_array($scenario, ['approval_revoked', 'approval_changed', 'approval_expired', 'ledger_review', 'ledger_off', 'financial_paid'], true)) {
+            } elseif (in_array($scenario, ['approval_revoked', 'approval_changed', 'approval_expired', 'ledger_review', 'ledger_off', 'financial_paid', 'cycle_without_ledger'], true)) {
                 $response->assertStatus(409)->assertJsonPath('code', 'existing_balance_unverified');
             } else {
                 $response->assertStatus(409)->assertJsonPath('code', 'stays_reservation_mismatch');

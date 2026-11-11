@@ -588,6 +588,14 @@ class DirectCheckoutPaymentService
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
     public function createAttempt(DirectBookingOrder $order, StoreCheckoutPaymentRequest $request): array
     {
+        // Let Cielo replay an existing attempt or reject a new one when the audit is off.
+        if ($order->origin === 'stays_existing'
+            && config('direct-booking.existing_reservation_checkout_enabled', false) === true
+            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true
+            && CieloDirectConfiguration::isProvider($order->gateway_provider)) {
+            return $this->cieloPayments->createAttempt($order, $request);
+        }
+
         if ($this->availableMethods($order) === []) {
             $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
                 'order_id' => $order->id,
