@@ -127,7 +127,8 @@ class GuestReservationController extends Controller
                     ->filter(fn (mixed $id): bool => is_string($id) || is_int($id))
                     ->map(fn (mixed $id): string => (string) $id)->unique();
                 $matching = $directOrders->filter(fn (DirectBookingOrder $order): bool => $ids->contains((string) $order->stays_reservation_id))->values();
-                $order = $matching->count() === 1 && $matching->first()->origin !== 'stays_existing' ? $matching->first() : null;
+                $websiteOrders = $matching->filter(fn (DirectBookingOrder $order): bool => $order->origin !== 'stays_existing')->values();
+                $order = $websiteOrders->count() === 1 ? $websiteOrders->first() : null;
 
                 return $this->mapReservation($record, $catalog, $guest, $order);
             })
