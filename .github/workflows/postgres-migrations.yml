@@ -76,3 +76,7 @@ jobs:
       - name: Test reservation lock transaction boundaries on PostgreSQL
         if: github.event_name == 'pull_request'
         run: php artisan test --compact tests/Feature/PostgresReservationLockTransactionTest.php
+
+      - name: Test existing checkout intent race on PostgreSQL
+        if: github.event_name == 'pull_request'
+        run: php artisan test --compact tests/Feature/PostgresExistingCheckoutIntentRaceTest.php
