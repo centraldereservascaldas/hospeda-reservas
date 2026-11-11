@@ -31,9 +31,6 @@ class ExistingReservationBalance
             return $review;
         }
         $reportedPaid = $paidSnapshot['cents'];
-        if ($reportedPaid !== null && $reportedPaid > $total) {
-            return $review;
-        }
 
         $partner = $reservation['partner']['name'] ?? null;
         if (! is_string($partner) || mb_strtolower(trim($partner)) !== 'api booking.com') {
@@ -58,7 +55,7 @@ class ExistingReservationBalance
             }
             if (($payment['type'] ?? null) === 'credit' && ($payment['status'] ?? null) === 'completed') {
                 $completed = MoneyAmount::toCents($payment['_f_val'] ?? null);
-                if ($completed === null || $completed > $total - $completedCredits) {
+                if ($completed === null || $completed > PHP_INT_MAX - $completedCredits) {
                     return $review;
                 }
                 $completedCredits += $completed;
@@ -73,7 +70,7 @@ class ExistingReservationBalance
             $id = $payment['_id'] ?? null;
             if (! is_string($id) || ! preg_match('/^[a-f0-9]{24}$/iD', $id)
                 || ($payment['readonly'] ?? false) !== false || ! empty($payment['paymentDate'])
-                || $amount === null || $amount <= 0 || $amount > $total) {
+                || $amount === null || $amount <= 0) {
                 return $review;
             }
             $candidates[] = ['amount' => $amount, 'id' => $id];
@@ -88,8 +85,7 @@ class ExistingReservationBalance
         }
 
         if (($reportedPaid !== null && $reportedPaid < $completedCredits)
-            || count($candidates) !== 1 || $candidates[0]['amount'] > $total - $completedCredits
-            || ($reportedPaid !== null && $candidates[0]['amount'] > $total - $reportedPaid)) {
+            || count($candidates) !== 1) {
             return $review;
         }
 

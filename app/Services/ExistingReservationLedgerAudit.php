@@ -74,7 +74,7 @@ class ExistingReservationLedgerAudit
         }
         $total = MoneyAmount::toCents($reservation['price']['_f_total'] ?? null);
         $paid = MoneyAmount::toCents($reservation['stats']['_f_totalPaid'] ?? null);
-        if ($total === null || $total <= 0 || $paid === null || $paid > $total) {
+        if ($total === null || $total <= 0 || $paid === null) {
             return $this->review('reported_paid_unverified');
         }
         $created = $reservation['creationDate'] ?? null;
@@ -125,15 +125,18 @@ class ExistingReservationLedgerAudit
             $detail = $this->getWithinDeadline($path.'/payments/'.rawurlencode($id), [], $deadline);
             $value = MoneyAmount::toCents($line['_mcval']['BRL'] ?? null);
             $bookingValue = is_array($detail) ? MoneyAmount::toCents($detail['_f_val'] ?? null) : null;
+            $detailFee = is_array($detail) ? MoneyAmount::toCents($detail['_f_fee'] ?? 0) : null;
+            $detailTax = is_array($detail) ? MoneyAmount::toCents($detail['_f_tax'] ?? 0) : null;
+            $financeFee = MoneyAmount::toCents($line['payment']['_mcfee']['BRL'] ?? 0);
+            $financeTax = MoneyAmount::toCents($line['payment']['_mctax']['BRL'] ?? 0);
             if (! is_array($detail) || ($detail['_id'] ?? null) !== $id || ($detail['_idreserve'] ?? null) !== $reservation['_id']
                 || ($detail['type'] ?? null) !== 'credit' || $value === null || $value <= 0 || $bookingValue !== $value
                 || ($line['bankAccountId'] ?? null) !== ($detail['_idpaymentProvider'] ?? null)
                 || (($line['paid'] === true) !== (($detail['status'] ?? null) === 'completed'))
                 || ! in_array($detail['status'] ?? null, ['pending', 'completed'], true)
                 || ($line['paid'] && (($line['payment']['paymentDate'] ?? null) !== ($detail['paymentDate'] ?? null) || empty($detail['paymentDate'])))
-                || MoneyAmount::toCents($detail['_f_fee'] ?? 0) !== 0 || MoneyAmount::toCents($detail['_f_tax'] ?? 0) !== 0
-                || MoneyAmount::toCents($line['payment']['_mcfee']['BRL'] ?? 0) !== 0
-                || MoneyAmount::toCents($line['payment']['_mctax']['BRL'] ?? 0) !== 0) {
+                || $detailFee === null || $detailTax === null || $financeFee === null || $financeTax === null
+                || (! $line['paid'] && ($detailFee > 0 || $detailTax > 0 || $financeFee > 0 || $financeTax > 0))) {
                 return $this->review('credit_views_disagree');
             }
             // Entries missing from the booking collection can be internal or
@@ -152,8 +155,8 @@ class ExistingReservationLedgerAudit
             }
             $creditDetails[$id] = $this->creditFingerprint($detail);
             if ($line['paid']) {
-                if ($value > $total - $completed) {
-                    return $this->review('paid_amount_exceeds_total');
+                if ($value > PHP_INT_MAX - $completed) {
+                    return $this->review('paid_amount_overflow');
                 }
                 $completed += $value;
             } else {
@@ -182,10 +185,10 @@ class ExistingReservationLedgerAudit
                 return $this->review('credit_detail_changed');
             }
         }
-        if ($paid !== $completed) {
+        if ($paid < $completed) {
             return $this->review('reported_paid_disagrees_with_ledger');
         }
-        $balance = $total - $completed;
+        $balance = max(0, $total - $paid);
         if ($balance > 0 && (count($pending) > 1 || (count($pending) === 1 && $pending[0]['amount'] > $balance))) {
             return $this->review('pending_amount_ambiguous');
         }

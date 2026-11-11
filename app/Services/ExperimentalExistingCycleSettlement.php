@@ -36,7 +36,7 @@ class ExperimentalExistingCycleSettlement
         $oldPaid = $proof['audit']['paid_cents'] ?? null;
         if (($audit['status'] ?? null) !== 'consistent_candidate' || ! is_int($paid) || ! is_int($oldPaid) || $paid < $oldPaid
             || ($audit['total_cents'] ?? null) !== ($proof['audit']['total_cents'] ?? null)
-            || ($audit['balance_cents'] ?? null) !== $audit['total_cents'] - $paid
+            || ($audit['balance_cents'] ?? null) !== max(0, $audit['total_cents'] - $paid)
             || ! $this->readback($snapshot, $action->request_snapshot)) {
             return null;
         }
@@ -81,7 +81,7 @@ class ExperimentalExistingCycleSettlement
             || ! is_string($snapshot['reservation_code'] ?? null) || ! is_int($snapshot['reservation_total_cents'] ?? null)
             || ! is_int($snapshot['pending_amount_cents'] ?? null) || ($snapshot['reported_paid_present'] ?? null) !== true
             || ! is_int($snapshot['reported_paid_cents'] ?? null) || $snapshot['reported_paid_cents'] < 0
-            || $snapshot['pending_amount_cents'] <= 0 || $snapshot['reported_paid_cents'] > $snapshot['reservation_total_cents'] - $snapshot['pending_amount_cents']) {
+            || $snapshot['pending_amount_cents'] <= 0) {
             return false;
         }
         $attempts = $order->paymentAttempts()->where('status', 'approved')->get();
@@ -94,8 +94,8 @@ class ExperimentalExistingCycleSettlement
         $audit = app(ExistingReservationLedgerAudit::class)->inspect($snapshot['reservation_code'], $snapshot['_id']);
         $expectedPaid = $snapshot['reported_paid_cents'] + $snapshot['pending_amount_cents'];
         if (($audit['status'] ?? null) !== 'consistent_candidate' || ($audit['total_cents'] ?? null) !== $snapshot['reservation_total_cents']
-            || ($audit['paid_cents'] ?? null) !== $expectedPaid
-            || ($audit['balance_cents'] ?? null) !== $snapshot['reservation_total_cents'] - $expectedPaid
+            || ! is_int($audit['paid_cents'] ?? null) || $audit['paid_cents'] < $expectedPaid
+            || ($audit['balance_cents'] ?? null) !== max(0, $snapshot['reservation_total_cents'] - $audit['paid_cents'])
             || ! $this->readback($snapshot, $action->request_snapshot)) {
             return false;
         }
