@@ -61,7 +61,7 @@ class ExperimentalLegacyReservationEvidence
         });
     }
 
-    private function accountFingerprint(): ?string
+    public function accountFingerprint(): ?string
     {
         $url = config('services.stays.base_url');
         $client = config('services.stays.client_id');
@@ -72,7 +72,7 @@ class ExperimentalLegacyReservationEvidence
         return hash('sha256', json_encode([rtrim($url, '/'), $client], JSON_THROW_ON_ERROR));
     }
 
-    private function snapshot(DirectBookingOrder $order): string
+    public function snapshot(DirectBookingOrder $order): string
     {
         $fields = ['id', 'origin', 'stays_reservation_id', 'stays_listing_id', 'stays_client_id', 'check_in', 'check_out', 'quote_snapshot'];
         $values = [];

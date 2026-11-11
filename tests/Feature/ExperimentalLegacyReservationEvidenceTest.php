@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Services\ExperimentalLegacyReservationEvidence;
+use App\Services\ExistingReservationPaymentLock;
+use App\Services\ReservationReleaseGuard;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -99,6 +101,58 @@ class ExperimentalLegacyReservationEvidenceTest extends TestCase
         $this->assertFalse(app(ExperimentalLegacyReservationEvidence::class)->capture($order->id));
         Http::assertSentCount(1);
         $this->assertSame(0, DB::table('legacy_reservation_order_evidence')->where('direct_booking_order_id', $order->id)->count());
+    }
+
+    public function test_guard_uses_evidence_only_when_enabled_and_revalidates_it(): void
+    {
+        $order = $this->order();
+        Http::fake(fn () => Http::response($this->reservation($order)));
+        $this->assertTrue(app(ExperimentalLegacyReservationEvidence::class)->capture($order->id));
+        $guard = fn (string $id): bool => app(ExistingReservationPaymentLock::class)->synchronized($id,
+            fn () => app(ReservationReleaseGuard::class)->hasAmbiguousOrder([$id, strtoupper($id), 'OTHER']));
+
+        $this->assertTrue($guard($this->competingCanonical));
+        config(['services.stays.experimental_legacy_order_evidence' => true]);
+        $this->assertFalse($guard($this->competingCanonical));
+        $this->assertTrue($guard($this->canonical));
+        config(['services.stays.client_id' => 'different-account']);
+        $this->assertTrue($guard($this->competingCanonical));
+        config(['services.stays.client_id' => 'test-account']);
+        $order->update(['stays_client_id' => 'changed']);
+        $this->assertTrue($guard($this->competingCanonical));
+        Http::assertSentCount(1);
+    }
+
+    public function test_guard_treats_missing_or_corrupt_evidence_as_ambiguous(): void
+    {
+        $order = $this->order();
+        config(['services.stays.experimental_legacy_order_evidence' => true]);
+        $guard = fn (): bool => app(ExistingReservationPaymentLock::class)->synchronized($this->competingCanonical,
+            fn () => app(ReservationReleaseGuard::class)->hasAmbiguousOrder([$this->competingCanonical, 'OTHER']));
+        $this->assertTrue($guard());
+        Http::fake(fn () => Http::response($this->reservation($order)));
+        $this->assertTrue(app(ExperimentalLegacyReservationEvidence::class)->capture($order->id));
+        DB::table('legacy_reservation_order_evidence')->where('direct_booking_order_id', $order->id)->update(['reservation_reference' => 'WRONG']);
+        $this->assertTrue($guard());
+    }
+
+    public function test_guard_skips_canonical_references_but_not_malformed_24_character_values(): void
+    {
+        $order = $this->order();
+        config(['services.stays.experimental_legacy_order_evidence' => true]);
+        $guard = fn (): bool => app(ExistingReservationPaymentLock::class)->synchronized($this->competingCanonical,
+            fn () => app(ReservationReleaseGuard::class)->hasAmbiguousOrder([$this->competingCanonical, 'OTHER']));
+        $order->update(['stays_reservation_id' => strtoupper($this->canonical)]);
+        $this->assertFalse($guard());
+        $target = 'a'.substr($this->competingCanonical, 1, 22).'b';
+        $order->update(['stays_reservation_id' => 'A'.substr($target, 1)]);
+        $this->assertTrue(app(ExistingReservationPaymentLock::class)->synchronized($target,
+            fn () => app(ReservationReleaseGuard::class)->hasAmbiguousOrder([$target, strtoupper($target), 'OTHER'])));
+        DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', $target)->delete();
+        $order->update(['stays_reservation_id' => str_repeat('g', 24)]);
+        $this->assertTrue($guard());
+        $order->update(['stays_reservation_id' => $this->canonical."\0suffix"]);
+        $this->assertTrue($guard());
     }
 
     private function reservation(DirectBookingOrder $order, ?string $canonical = null): array
