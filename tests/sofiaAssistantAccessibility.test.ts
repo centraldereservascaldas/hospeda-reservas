@@ -79,10 +79,7 @@ test('generates an existing checkout link only from the explicitly entered code'
         '/checkout/AB123',
       ),
     );
-    assert.match(
-      view.getByText(/A consulta verifica/).textContent || '',
-      /reavaliadas/,
-    );
+    assert.match(view.getByText(/A consulta verifica/).textContent || '', /reavaliadas/);
     fireEvent.change(input, { target: { value: 'ZZ' } });
     assert.equal(view.queryByRole('link', { name: /Abrir checkout/ }), null);
   } finally {
