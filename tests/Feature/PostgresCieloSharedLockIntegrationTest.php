@@ -6,6 +6,7 @@ use App\Enums\DirectBookingOrderStatus;
 use App\Http\Requests\StoreCheckoutPaymentRequest;
 use App\Models\DirectBookingOrder;
 use App\Services\DirectStaysReservationService;
+use App\Services\ExistingReservationLedgerAudit;
 use App\Services\ExistingReservationPaymentChannels;
 use App\Services\ExistingReservationPaymentCycleRegistry;
 use App\Services\ExistingReservationPaymentLock;
@@ -48,12 +49,13 @@ class PostgresCieloSharedLockIntegrationTest extends TestCase
         ]);
         config(['direct-booking.enabled' => true, 'direct-booking.payments_enabled' => true, 'direct-booking.confirmation_enabled' => true,
             'direct-booking.existing_reservation_checkout_enabled' => true, 'direct-booking.experimental_existing_cycle_settlement_enabled' => false,
-            'direct-booking.experimental_existing_ledger_audit_enabled' => false, 'direct-booking.resume_token_ttl_days' => 2,
+            'direct-booking.experimental_existing_ledger_audit_enabled' => true, 'direct-booking.resume_token_ttl_days' => 2,
             'direct-booking.stays_payment_type' => 'credit', 'direct-booking.stays_payment_provider_id' => 'test-provider',
             'direct-booking.notification_queue_connection' => 'database', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test',
             'services.cielo.direct_environment' => 'sandbox', 'services.cielo.enabled' => true, 'services.cielo.pix_enabled' => true,
             'services.cielo.merchant_id' => 'test-merchant', 'services.cielo.merchant_key' => 'test-key']);
         $this->mock(ExistingReservationPaymentChannels::class)->shouldReceive('verifiedProvider')->andReturn($provider);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->andReturnTrue();
         $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->andReturn(['canonical' => $reservation, 'code' => 'ZY92K']);
         $lock = new class extends ExistingReservationPaymentLock
