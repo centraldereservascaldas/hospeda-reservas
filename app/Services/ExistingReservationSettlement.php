@@ -140,7 +140,7 @@ class ExistingReservationSettlement
         }
 
         $paymentId = $snapshot['payment_id'];
-        $paymentName = $attempt->payment_method === 'pix' ? 'Pix API Cielo' : 'Cartão API Cielo '.$attempt->installments.'x';
+        $paymentName = $attempt->payment_method === 'pix' ? 'Cielo Site Externo' : 'Cartão API Cielo '.$attempt->installments.'x';
         $sentClaim = app(ExistingReservationPaymentLock::class)->synchronized($order->stays_reservation_id, function () use ($order, $attempt, $attemptHash, $snapshot, $claim): bool {
             $locked = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $action = DirectBookingStaysAction::query()->lockForUpdate()->findOrFail($claim->id);

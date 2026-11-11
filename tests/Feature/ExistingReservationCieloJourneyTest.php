@@ -60,7 +60,7 @@ class ExistingReservationCieloJourneyTest extends TestCase
             $this->assertLessThanOrEqual(1, DB::transactionLevel());
             if (str_contains($request->url(), 'stays.test')) {
                 if (str_contains($request->url(), '/finance/payment-providers/')) {
-                    return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => $method === 'pix' ? 'Pix API Cielo' : 'Cartão API Cielo 6x']);
+                    return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => $method === 'pix' ? 'Cielo Site Externo' : 'Cartão API Cielo 6x']);
                 }
                 if (str_contains($request->url(), '/finance/accounting-transactions/')) {
                     return Http::response(['_id' => $receivable['_id'], 'reserveId' => $reservation['_id'], 'type' => 'credit', 'paid' => $completed,
@@ -251,7 +251,7 @@ class ExistingReservationCieloJourneyTest extends TestCase
         Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'POST');
         $this->assertCount(1, Http::recorded(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'PATCH'));
         Http::assertSent(fn (Request $request) => $request->method() === 'PATCH'
-            && ($request['name'] ?? null) === ($method === 'pix' ? 'Pix API Cielo' : 'Cartão API Cielo 6x')
+            && ($request['name'] ?? null) === ($method === 'pix' ? 'Cielo Site Externo' : 'Cartão API Cielo 6x')
             && ! array_key_exists('_idpaymentProvider', $request->data()));
     }
 

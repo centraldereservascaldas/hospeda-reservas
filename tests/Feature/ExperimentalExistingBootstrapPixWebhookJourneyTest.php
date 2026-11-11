@@ -57,7 +57,7 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
         Http::fake(function (Request $r) use (&$reservation, $reservationId, $commission, $paymentId, $providerId, $gatewayId, &$created, &$settled, &$booked, &$marker, &$settlementDesc) {
             if (str_contains($r->url(), 'stays.test')) {
                 if (str_contains($r->url(), '/finance/payment-providers/')) {
-                    return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => 'Pix API Cielo']);
+                    return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => 'Cielo Site Externo']);
                 }
                 if ($r->method() === 'POST' && str_ends_with($r->url(), '/payments')) {
                     $created = true;
