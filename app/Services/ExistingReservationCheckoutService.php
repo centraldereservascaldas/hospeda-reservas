@@ -29,15 +29,6 @@ class ExistingReservationCheckoutService
         if (($input['paymentMethod'] ?? null) === 'card') {
             return $this->result(null, 'existing_card_fee_accounting_unverified', 503);
         }
-        if (config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true
-            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
-            return $this->result(null, 'existing_balance_unverified', 409);
-        }
-        if (! config('direct-booking.enabled', false) || ! config('direct-booking.existing_reservation_checkout_enabled', false)
-            || ! CieloDirectConfiguration::isProvider((string) config('direct-booking.payment_provider'))
-            || $this->channels->availableMethods($this->payments->availableMethods()) === [] || $this->cielo->merchantId() === null) {
-            return $this->result(null, 'existing_checkout_disabled', 503);
-        }
         if (! preg_match('/^[A-Z0-9]{5}$/D', $code)) {
             return $this->result(null, 'reservation_not_found', 404);
         }
@@ -57,6 +48,15 @@ class ExistingReservationCheckoutService
             }
 
             return $this->recoverExisting($existing, $input, $intentVerified);
+        }
+
+        if (config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
+            return $this->result(null, 'existing_balance_unverified', 409);
+        }
+        if (! config('direct-booking.enabled', false) || ! config('direct-booking.existing_reservation_checkout_enabled', false)
+            || ! CieloDirectConfiguration::isProvider((string) config('direct-booking.payment_provider'))
+            || $this->channels->availableMethods($this->payments->availableMethods()) === [] || $this->cielo->merchantId() === null) {
+            return $this->result(null, 'existing_checkout_disabled', 503);
         }
 
         $reservation = $this->stays->get('/booking/reservations/'.$code);

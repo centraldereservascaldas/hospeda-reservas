@@ -23,8 +23,7 @@ class ExistingReservationPaymentChannels
      */
     public function availableMethods(array $gatewayMethods): array
     {
-        if (config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true
-            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
+        if (config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
             return [];
         }
         $snapshot = $this->snapshot();
