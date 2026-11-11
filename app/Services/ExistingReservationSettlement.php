@@ -41,14 +41,9 @@ class ExistingReservationSettlement
             return ['ready' => false, 'code' => 'existing_payment_not_confirmable'];
         }
 
-        if ($attempt->payment_method === 'card') {
-            if (config('direct-booking.experimental_existing_card_amount_verification_enabled', false) === true
-                && ! app(ExistingReservationCardAmounts::class)->matches($attempt, $snapshot['pending_amount_cents'])) {
-                return ['ready' => false, 'code' => 'existing_card_amount_mismatch'];
-            }
-
-            // Arithmetic alone cannot establish how Stays posts the surcharge.
-            return ['ready' => false, 'code' => 'existing_card_fee_accounting_unverified'];
+        if ($attempt->payment_method === 'card'
+            && ! app(ExistingReservationCardAmounts::class)->matches($attempt, $snapshot['pending_amount_cents'])) {
+            return ['ready' => false, 'code' => 'existing_card_amount_mismatch'];
         }
 
         $channelSnapshot = $snapshot['channel_provider_ids'] ?? null;

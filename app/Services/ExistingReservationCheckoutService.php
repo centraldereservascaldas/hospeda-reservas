@@ -26,9 +26,6 @@ class ExistingReservationCheckoutService
      */
     public function create(string $code, array $input, bool $intentVerified = false): array
     {
-        if (($input['paymentMethod'] ?? null) === 'card') {
-            return $this->result(null, 'existing_card_fee_accounting_unverified', 503);
-        }
         if (! preg_match('/^[A-Z0-9]{5}$/D', $code)) {
             return $this->result(null, 'reservation_not_found', 404);
         }

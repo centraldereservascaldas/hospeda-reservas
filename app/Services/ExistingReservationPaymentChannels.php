@@ -31,7 +31,7 @@ class ExistingReservationPaymentChannels
 
         return array_values(array_filter($gatewayMethods, fn (string $method): bool => match ($method) {
             'pix' => $snapshot['pix'] !== null && ! in_array($snapshot['pix'], $cardIds, true),
-            'card' => false, // Stays accounting for the surcharge is not yet established.
+            'card' => count(array_filter($cardIds, fn (?string $id): bool => $id !== null && $id !== $snapshot['pix'])) > 0,
             default => false,
         }));
     }

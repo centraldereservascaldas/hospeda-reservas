@@ -39,7 +39,8 @@ class ExistingReservationCieloJourneyTest extends TestCase
         $reservationId = str_repeat('c', 24);
         $paymentId = str_repeat('a', 24);
         $gatewayId = '123e4567-e89b-12d3-a456-426614174080';
-        $providerId = $method === 'pix' ? str_repeat('f', 24) : str_repeat('6', 24);
+        $installments = $scenario === 'one_installment' ? 1 : 6;
+        $providerId = $method === 'pix' ? str_repeat('f', 24) : str_repeat((string) $installments, 24);
         $reservation = ['id' => 'ZY92K', 'partnerCode' => 'booking-partner-code', '_id' => $reservationId, '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24), 'type' => 'booked', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'partner' => ['name' => 'API booking.com']];
         if ($scenario === 'external_stats_after_qr') {
             $reservation['stats'] = ['_f_totalPaid' => 0];
@@ -57,7 +58,7 @@ class ExistingReservationCieloJourneyTest extends TestCase
         $observeContradictoryCapture = false;
         $queryNotFound = false;
         Http::preventStrayRequests();
-        Http::fake(function (Request $request) use (&$completed, &$settlementDesc, &$balanceChanged, &$delayedPendingResponse, &$declineCard, &$observeContradictoryCapture, &$queryNotFound, &$reservation, $receivable, $gatewayId, $method, $scenario, $providerId) {
+        Http::fake(function (Request $request) use (&$completed, &$settlementDesc, &$balanceChanged, &$delayedPendingResponse, &$declineCard, &$observeContradictoryCapture, &$queryNotFound, &$reservation, $receivable, $gatewayId, $method, $scenario, $providerId, $installments) {
             // RefreshDatabase wraps the test in one transaction; external calls
             // must not run inside the nested reservation-lock transaction.
             $this->assertLessThanOrEqual(1, DB::transactionLevel());
@@ -69,8 +70,11 @@ class ExistingReservationCieloJourneyTest extends TestCase
                 if ($scenario === 'financial_paid' && str_ends_with($request->url(), '/payments/'.$receivable['_id'])) {
                     return Http::response([...$receivable, '_idreserve' => $reservation['_id']]);
                 }
+                if (str_contains($request->url(), '/content/listings/')) {
+                    return Http::response([]);
+                }
                 if (str_contains($request->url(), '/finance/payment-providers/')) {
-                    return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => $method === 'pix' ? 'Pix API Cielo' : 'Cartão API Cielo 6x']);
+                    return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => $method === 'pix' ? 'Pix API Cielo' : 'Cartão API Cielo '.$installments.'x']);
                 }
                 if (str_contains($request->url(), '/finance/accounting-transactions/')) {
                     return Http::response(['_id' => $receivable['_id'], 'reserveId' => $reservation['_id'], 'type' => 'credit', 'paid' => $completed,
@@ -122,16 +126,14 @@ class ExistingReservationCieloJourneyTest extends TestCase
 
         config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
         $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
-        $created = $this->withHeader('Idempotency-Key', 'existing-order-key-123456')->postJson('/api/existing-reservations/ZY92K/checkout', [
-            'expectedBalanceCents' => 19750, 'paymentMethod' => $method, ...($method === 'card' ? ['installments' => 6] : []), 'guest' => ['fullName' => 'Test Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
-        ]);
-        if ($method === 'card') {
-            $created->assertStatus(503)->assertJsonPath('code', 'existing_card_fee_accounting_unverified');
-            $this->assertDatabaseCount('direct_booking_orders', 0);
-            Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
-
-            return;
+        if ($method === 'card' && in_array($scenario, ['approved', 'one_installment'], true)) {
+            $this->getJson('/api/existing-reservations/ZY92K/checkout-summary')->assertOk()
+                ->assertJsonPath('reservation.paymentMethods', ['card'])
+                ->assertJsonPath('reservation.cardInstallments', [$installments]);
         }
+        $created = $this->withHeader('Idempotency-Key', 'existing-order-key-123456')->postJson('/api/existing-reservations/ZY92K/checkout', [
+            'expectedBalanceCents' => 19750, 'paymentMethod' => $method, ...($method === 'card' ? ['installments' => $installments] : []), 'guest' => ['fullName' => 'Test Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
+        ]);
         $created->assertCreated();
         $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => $reservationId]);
         $reference = $created->json('resume.reference');
@@ -175,15 +177,8 @@ class ExistingReservationCieloJourneyTest extends TestCase
         }
         $payload = $method === 'pix'
             ? ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix', 'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']]
-            : ['paymentMethod' => 'card', 'paymentMethodId' => 'cielo_credit_card', 'token' => '123e4567-e89b-12d3-a456-426614174000', 'installments' => 6, 'cardholderName' => 'Test Guest', 'cardholderEmail' => 'guest@example.test', 'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']];
+            : ['paymentMethod' => 'card', 'paymentMethodId' => 'cielo_credit_card', 'token' => '123e4567-e89b-12d3-a456-426614174000', 'installments' => $installments, 'cardholderName' => 'Test Guest', 'cardholderEmail' => 'guest@example.test', 'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']];
         $response = $this->withHeaders(['Idempotency-Key' => 'existing-payment-key-123456', 'X-Checkout-Resume-Token' => $token])->postJson('/api/checkout/'.$reference.'/payments', $payload);
-        if ($method === 'card') {
-            $response->assertStatus(503)->assertJsonPath('code', 'existing_card_fee_accounting_unverified');
-            $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
-            Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'cieloecommerce.cielo.com.br'));
-
-            return;
-        }
         if (in_array($scenario, ['changed', 'disabled', 'approval_revoked', 'approval_changed', 'approval_expired', 'approval_status_changed', 'approval_partner_changed', 'ledger_review', 'ledger_off', 'financial_paid', 'cycle_without_ledger'], true)) {
             if ($scenario === 'disabled') {
                 $response->assertStatus(503)->assertJsonPath('code', 'payments_disabled');
@@ -252,7 +247,12 @@ class ExistingReservationCieloJourneyTest extends TestCase
             $this->assertSame('approved', app(DirectCheckoutPaymentService::class)->reconcileCieloPaymentId($gatewayId)['attempt']->status);
             $this->assertSame('approved', DirectBookingOrder::query()->sole()->payment_status);
         } else {
-            $response->assertJsonPath('payment.status', 'approved')->assertJsonPath('payment.amount', '240.86');
+            $response->assertJsonPath('payment.status', 'approved')->assertJsonPath('payment.amount', $installments === 1 ? '210.09' : '240.86');
+            $attempt = DirectBookingPaymentAttempt::query()->sole();
+            $this->assertSame('197.50', $attempt->base_amount);
+            $this->assertSame($installments === 1 ? '12.59' : '43.36', $attempt->processing_fee_amount);
+            $this->withHeaders(['Idempotency-Key' => 'existing-payment-key-123456', 'X-Checkout-Resume-Token' => $token])->postJson('/api/checkout/'.$reference.'/payments', $payload)->assertOk();
+            $this->assertDatabaseCount('direct_booking_payment_attempts', 1);
         }
         $order = DirectBookingOrder::query()->sole();
         if (in_array($scenario, ['external_payment', 'external_stats_after_qr'], true)) {
@@ -269,12 +269,12 @@ class ExistingReservationCieloJourneyTest extends TestCase
         Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'POST');
         $this->assertCount(1, Http::recorded(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'PATCH'));
         Http::assertSent(fn (Request $request) => $request->method() === 'PATCH'
-            && ($request['name'] ?? null) === ($method === 'pix' ? 'Pix API Cielo' : 'Cartão API Cielo 6x')
+            && ($request['name'] ?? null) === ($method === 'pix' ? 'Pix API Cielo' : 'Cartão API Cielo '.$installments.'x')
             && ! array_key_exists('_idpaymentProvider', $request->data()));
     }
 
     public static function paymentMethods(): array
     {
-        return ['Pix' => ['pix', 'approved'], 'cartão em 6 parcelas' => ['card', 'approved'], 'cartão recusado' => ['card', 'declined'], 'webhook antes do timeout' => ['card', 'webhook_timeout'], 'saldo alterado' => ['pix', 'changed'], 'baixa externa após QR' => ['pix', 'external_payment'], 'stats mudaram após QR' => ['pix', 'external_stats_after_qr'], 'fluxo desativado' => ['pix', 'disabled'], 'aprovação revogada' => ['pix', 'approval_revoked'], 'versão alterada' => ['pix', 'approval_changed'], 'aprovação expirada' => ['pix', 'approval_expired'], 'aprovação válida' => ['pix', 'approval_valid'], 'status alterado antes do pagamento' => ['pix', 'approval_status_changed'], 'parceiro alterado antes do pagamento' => ['pix', 'approval_partner_changed'], 'ledger divergente antes da cobrança' => ['pix', 'ledger_review'], 'auditoria desligada' => ['pix', 'ledger_off'], 'financeiro pago e reserva pendente' => ['pix', 'financial_paid'], 'ciclo sem ledger' => ['pix', 'cycle_without_ledger']];
+        return ['Pix' => ['pix', 'approved'], 'cartão em 1 parcela' => ['card', 'one_installment'], 'cartão em 6 parcelas' => ['card', 'approved'], 'cartão recusado' => ['card', 'declined'], 'webhook antes do timeout' => ['card', 'webhook_timeout'], 'saldo alterado' => ['pix', 'changed'], 'baixa externa após QR' => ['pix', 'external_payment'], 'stats mudaram após QR' => ['pix', 'external_stats_after_qr'], 'fluxo desativado' => ['pix', 'disabled'], 'aprovação revogada' => ['pix', 'approval_revoked'], 'versão alterada' => ['pix', 'approval_changed'], 'aprovação expirada' => ['pix', 'approval_expired'], 'aprovação válida' => ['pix', 'approval_valid'], 'status alterado antes do pagamento' => ['pix', 'approval_status_changed'], 'parceiro alterado antes do pagamento' => ['pix', 'approval_partner_changed'], 'ledger divergente antes da cobrança' => ['pix', 'ledger_review'], 'auditoria desligada' => ['pix', 'ledger_off'], 'financeiro pago e reserva pendente' => ['pix', 'financial_paid'], 'ciclo sem ledger' => ['pix', 'cycle_without_ledger']];
     }
 }
