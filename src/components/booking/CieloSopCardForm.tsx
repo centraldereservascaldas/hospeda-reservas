@@ -35,6 +35,8 @@ interface CieloSopCardFormProps {
   alternativeContent?: ReactNode;
   onAlternativeSubmit?: () => Promise<void>;
   onPricingChange?: (pricing: CieloCardPricing) => void;
+  lockInstallments?: boolean;
+  allowedInstallments?: number[];
   failureContent?: ReactNode;
 }
 
@@ -127,6 +129,8 @@ export function CieloSopCardForm({
   alternativeContent,
   onAlternativeSubmit,
   onPricingChange,
+  lockInstallments = false,
+  allowedInstallments,
   failureContent,
 }: CieloSopCardFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -143,7 +147,9 @@ export function CieloSopCardForm({
   const [environment, setEnvironment] = useState<CieloSopEnvironment>('sandbox');
   const [error, setError] = useState<string | null>(null);
   const [installments, setInstallments] = useState(1);
-  const installmentOptions = useMemo(() => getInstallmentOptions(amount), [amount]);
+  const installmentOptions = useMemo(() => getInstallmentOptions(amount).filter(
+    (option) => allowedInstallments === undefined || allowedInstallments.includes(option.installments),
+  ), [amount, allowedInstallments]);
   const selectedPricing =
     installmentOptions.find((option) => option.installments === installments) ??
     installmentOptions[0];
@@ -247,7 +253,7 @@ export function CieloSopCardForm({
             paymentMethod: 'card',
             paymentMethodId: 'cielo_credit_card',
             token: paymentToken,
-            installments,
+            installments: selectedPricing?.installments ?? installments,
             cardholderName,
             cardholderEmail,
             payerIdentification: { type: documentType, number: documentNumber },
@@ -545,8 +551,8 @@ export function CieloSopCardForm({
             <select
               name="installments"
               required
-              disabled={installmentOptions.length === 0}
-              value={installments}
+              disabled={lockInstallments || installmentOptions.length === 0}
+              value={selectedPricing?.installments ?? installments}
               onChange={(event) => setInstallments(Number(event.target.value))}
               className="min-h-11 w-full rounded-xl border border-neutral-400/70 bg-white px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             >

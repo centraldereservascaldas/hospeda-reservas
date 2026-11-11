@@ -104,6 +104,7 @@ export const isDirectBookingOrder = (
 
 export const isDirectBookingOrderListItem = (value: unknown): value is DirectBookingOrderListItem =>
   isRecord(value) &&
+  (value.origin === undefined || typeof value.origin === 'string') &&
   checkoutOrderStatuses.includes(value.status as (typeof checkoutOrderStatuses)[number]) &&
   typeof value.publicReference === 'string' &&
   /^[A-Za-z0-9]{40}$/.test(value.publicReference) &&

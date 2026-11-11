@@ -26,6 +26,12 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->travelTo(\Carbon\Carbon::parse('2026-11-09 12:00:00', 'UTC'));
+    }
+
     public function test_checkout_pix_webhook_confirmation_email_and_resume_complete_the_real_order_journey(): void
     {
         $this->configureCheckout();

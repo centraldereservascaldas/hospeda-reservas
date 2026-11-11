@@ -8,9 +8,12 @@ use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysReservationService;
 use App\Services\Payments\CieloCheckoutPaymentService;
 use App\Services\Payments\DirectCheckoutPaymentService;
+use App\Services\StaysReservationIdentity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -217,6 +220,234 @@ class CieloCheckoutPaymentTest extends TestCase
             && $request->data()['Payment']['Interest'] === 'ByMerchant'
             && isset($request->data()['Payment']['CreditCard']['PaymentToken'])
         );
+    }
+
+    public function test_website_with_short_reservation_id_still_works_when_existing_rollout_is_enabled(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->andReturn(['canonical' => str_repeat('c', 24), 'code' => 'AB12C']);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        $paymentId = '123e4567-e89b-12d3-a456-426614174060';
+        Http::fake(function (ClientRequest $request) use ($paymentId) {
+            $this->assertLessThanOrEqual(1, DB::transactionLevel());
+            $merchantOrderId = $request->method() === 'POST' ? $request['MerchantOrderId'] : DirectBookingPaymentAttempt::query()->sole()->merchant_order_id;
+
+            return Http::response($this->cieloPayment($paymentId, $merchantOrderId, 2), 201);
+        });
+        $this->submitCardPayment($order, 'website-serialized-payment-0001');
+        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+        $this->assertDatabaseCount('existing_reservation_payment_cycles', 0);
+
+        // Existing website orders may hold a short Stays ID; they must remain
+        // reconcilable even while alias canonicalization is not implemented.
+        $this->assertSame('approved', app(DirectCheckoutPaymentService::class)->reconcileCieloPaymentId($paymentId)['attempt']->status);
+        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+    }
+
+    public function test_website_checkout_does_not_use_reservation_lock_when_existing_rollout_is_disabled(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        $this->mock(StaysReservationIdentity::class)->shouldNotReceive('resolve');
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => str_repeat('c', 24)]);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        Http::fake(fn (ClientRequest $request) => Http::response($this->cieloPayment('123e4567-e89b-12d3-a456-426614174060', $request['MerchantOrderId'], 2), 201));
+
+        $this->submitCardPayment($order, 'website-feature-disabled-0001');
+        $this->assertDatabaseCount('existing_reservation_payment_locks', 0);
+        $this->assertDatabaseCount('existing_reservation_payment_cycles', 0);
+    }
+
+    public function test_cielo_payment_cannot_start_while_reservation_release_is_claimed(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C']);
+        DB::table('existing_reservation_payment_locks')->insert(['stays_reservation_id' => str_repeat('c', 24), 'release_order_id' => fake()->uuid(), 'created_at' => now(), 'updated_at' => now()]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => str_repeat('c', 24), 'code' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturnTrue();
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', $this->cardPayload(), [
+            'Idempotency-Key' => 'release-lock-cielo-test-01', 'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertStatus(409)->assertJsonPath('code', 'order_not_payable');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_website_does_not_start_new_charge_if_identity_cannot_be_verified(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturnNull();
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C']);
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', $this->cardPayload(), [
+            'Idempotency-Key' => 'website-identity-unavailable-01', 'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertStatus(409)->assertJsonPath('code', 'existing_reservation_unverified');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+        Http::assertNothingSent();
+    }
+
+    public function test_website_timeout_keeps_pending_gateway_result_recorded_by_webhook(): void
+    {
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.cielo.pix_enabled' => true]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->andReturn(['canonical' => str_repeat('c', 24), 'code' => 'AB12C']);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        Http::fake(function () {
+            DirectBookingPaymentAttempt::query()->sole()->update([
+                'status' => 'pending', 'gateway_status' => 'pending',
+                'gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174080',
+                'pix_copy_paste' => 'synthetic-pix-code',
+            ]);
+            throw new ConnectionException('synthetic timeout after webhook');
+        });
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            'paymentMethod' => 'pix', 'paymentMethodId' => 'pix',
+            'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901'],
+        ], ['Idempotency-Key' => 'website-webhook-timeout-0001', 'X-Checkout-Resume-Token' => 'synthetic-resume-token'])
+            ->assertOk()->assertJsonPath('payment.status', 'pending');
+        $attempt = DirectBookingPaymentAttempt::query()->sole();
+        $this->assertSame('pending', $attempt->gateway_status);
+        $this->assertSame('synthetic-pix-code', $attempt->pix_copy_paste);
+        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+    }
+
+    public function test_website_short_id_cannot_charge_while_canonical_existing_order_has_active_payment(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->andReturn(['canonical' => str_repeat('c', 24), 'code' => 'AB12C']);
+        $website = $this->createPayableOrder();
+        $website->update(['stays_reservation_id' => 'AB12C']);
+        $existing = $this->createPayableOrder();
+        $existing->update(['origin' => 'stays_existing', 'stays_reservation_id' => str_repeat('c', 24)]);
+        $this->createAttempt($existing, 'cielo-merchant-sentinel');
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+
+        $this->postJson('/api/checkout/'.$website->public_reference.'/payments', $this->cardPayload(), [
+            'Idempotency-Key' => 'website-other-origin-active-001', 'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertStatus(409)->assertJsonPath('code', 'payment_attempt_in_progress');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_website_remains_coordinated_after_existing_rollout_is_disabled(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $website = $this->createPayableOrder();
+        $website->update(['stays_reservation_id' => 'AB12C']);
+        $existing = $this->createPayableOrder();
+        $existing->update(['origin' => 'stays_existing', 'stays_reservation_id' => str_repeat('c', 24)]);
+        $this->createAttempt($existing, 'cielo-merchant-sentinel');
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->andReturn(['canonical' => str_repeat('c', 24), 'code' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+
+        $this->postJson('/api/checkout/'.$website->public_reference.'/payments', $this->cardPayload(), [
+            'Idempotency-Key' => 'website-rollback-active-0001', 'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertStatus(409)->assertJsonPath('code', 'payment_attempt_in_progress');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 1);
+        Http::assertNothingSent();
+    }
+
+    public function test_website_empty_gateway_lookup_does_not_overwrite_new_pending_result(): void
+    {
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->andReturn(['canonical' => str_repeat('c', 24), 'code' => 'AB12C']);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'status' => DirectBookingOrderStatus::PagamentoPendente, 'payment_status' => 'pending']);
+        $attempt = $this->createAttempt($order, 'cielo-merchant-sentinel');
+        $attempt->update(['status' => 'processing', 'gateway_status' => null, 'stays_reservation_canonical_id' => str_repeat('c', 24)]);
+        Http::fake(function () use ($attempt) {
+            DirectBookingPaymentAttempt::query()->whereKey($attempt->id)->update([
+                'status' => 'pending', 'gateway_status' => 'pending',
+                'gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174081',
+                'pix_copy_paste' => 'synthetic-pix-code',
+            ]);
+
+            return Http::response([], 404);
+        });
+
+        $result = app(DirectCheckoutPaymentService::class)->reconcileAttempt($attempt);
+        $this->assertSame('pending', $result['code']);
+        $this->assertSame('pending', $result['attempt']->status);
+        $this->assertSame('pending', $attempt->refresh()->gateway_status);
+        $this->assertSame('synthetic-pix-code', $attempt->pix_copy_paste);
+        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+    }
+
+    public function test_legacy_website_attempt_is_backfilled_before_gateway_reconciliation(): void
+    {
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'status' => DirectBookingOrderStatus::PagamentoPendente, 'payment_status' => 'pending']);
+        $attempt = $this->createAttempt($order, 'cielo-merchant-sentinel');
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolveForLegacyOrder')->once()
+            ->andReturn(['canonical' => str_repeat('c', 24), 'code' => 'AB12C']);
+        Http::fake(fn () => Http::response($this->cieloPayment('123e4567-e89b-12d3-a456-426614174081', $attempt->merchant_order_id, 1, 125050)));
+
+        $result = app(DirectCheckoutPaymentService::class)->reconcileAttempt($attempt);
+        $this->assertSame('pending', $result['attempt']->status);
+        $this->assertSame(str_repeat('c', 24), $attempt->refresh()->stays_reservation_canonical_id);
+        $this->assertSame('123e4567-e89b-12d3-a456-426614174081', $attempt->gateway_payment_id);
+        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+    }
+
+    public function test_legacy_website_attempt_with_unverified_reservation_is_not_backfilled(): void
+    {
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'status' => DirectBookingOrderStatus::PagamentoPendente, 'payment_status' => 'pending']);
+        $attempt = $this->createAttempt($order, 'cielo-merchant-sentinel');
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolveForLegacyOrder')->once()->andReturnNull();
+        Http::fake(fn () => Http::response($this->cieloPayment('123e4567-e89b-12d3-a456-426614174081', $attempt->merchant_order_id, 1, 125050)));
+
+        $result = app(DirectCheckoutPaymentService::class)->reconcileAttempt($attempt);
+        $this->assertSame('existing_reservation_unverified', $result['code']);
+        $this->assertNull($attempt->refresh()->stays_reservation_canonical_id);
+        $this->assertNull($attempt->gateway_payment_id);
+        $this->assertDatabaseCount('existing_reservation_payment_locks', 0);
+    }
+
+    public function test_legacy_backfill_rejects_attempt_changed_during_identity_lookup(): void
+    {
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'status' => DirectBookingOrderStatus::PagamentoPendente, 'payment_status' => 'pending']);
+        $attempt = $this->createAttempt($order, 'cielo-merchant-sentinel');
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolveForLegacyOrder')->once()->andReturnUsing(function () use ($attempt) {
+            DirectBookingPaymentAttempt::query()->whereKey($attempt->id)->update(['gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174099']);
+
+            return ['canonical' => str_repeat('c', 24), 'code' => 'AB12C'];
+        });
+        Http::fake(fn () => Http::response($this->cieloPayment('123e4567-e89b-12d3-a456-426614174081', $attempt->merchant_order_id, 1, 125050)));
+
+        $result = app(DirectCheckoutPaymentService::class)->reconcileAttempt($attempt);
+        $this->assertSame('existing_reservation_unverified', $result['code']);
+        $this->assertNull($attempt->refresh()->stays_reservation_canonical_id);
+        $this->assertSame('123e4567-e89b-12d3-a456-426614174099', $attempt->gateway_payment_id);
     }
 
     public function test_card_payment_accepts_six_installments_without_changing_the_order_total(): void

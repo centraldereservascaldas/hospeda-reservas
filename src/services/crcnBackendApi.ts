@@ -38,6 +38,8 @@ import type { ScheduledRequestOptions } from './requestScheduler';
 const API_REQUEST_TIMEOUT_MS = 20_000;
 const STAYS_SEARCH_PAGE_SIZE = 20;
 
+export class ReservationCancellationSupportRequiredError extends Error {}
+
 async function withApiRequestTimeout<T>(
   request: (signal: AbortSignal) => Promise<T>,
   externalSignal?: AbortSignal,
@@ -946,6 +948,13 @@ class CrcnBackendApiService {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const json: unknown = await res.json();
+    if (
+      res.status === 409 &&
+      isRecord(json) &&
+      json.code === 'direct_booking_cancellation_requires_support'
+    ) {
+      throw new ReservationCancellationSupportRequiredError();
+    }
     if (
       !res.ok ||
       !isRecord(json) ||

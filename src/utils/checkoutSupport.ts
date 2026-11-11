@@ -7,8 +7,10 @@ export interface CheckoutSupportDetails {
   paymentMethod?: 'card' | 'pix';
   installments?: number;
   baseTotal?: number;
+  balanceTotal?: number;
   total?: number;
   reference?: string;
+  reservationCode?: string;
 }
 
 const supportNumber = '5564992946675';
@@ -22,6 +24,9 @@ const date = (value: string) => {
 /** Only booking context is shared. Never serialize customer, token, Pix or card objects. */
 export function getCheckoutSupportUrl(details: CheckoutSupportDetails): string {
   const lines = ['Olá! Preciso de ajuda para concluir uma reserva no checkout da CRCN.'];
+  if (details.reservationCode && /^[A-Z0-9]{5}$/.test(details.reservationCode)) {
+    lines.push(`Código da reserva: ${details.reservationCode}`);
+  }
   if (details.listingTitle) lines.push(`Imóvel: ${details.listingTitle}`);
   if (details.listingId) {
     lines.push(`Código do imóvel: ${details.listingId}`);
@@ -49,6 +54,9 @@ export function getCheckoutSupportUrl(details: CheckoutSupportDetails): string {
   }
   if (details.baseTotal !== undefined && Number.isFinite(details.baseTotal)) {
     lines.push(`Hospedagem com taxas: ${money(details.baseTotal)}`);
+  }
+  if (details.balanceTotal !== undefined && Number.isFinite(details.balanceTotal)) {
+    lines.push(`Saldo para conferência: ${money(details.balanceTotal)}`);
   }
   if (details.total !== undefined && Number.isFinite(details.total)) {
     lines.push(`Total para a forma escolhida: ${money(details.total)}`);

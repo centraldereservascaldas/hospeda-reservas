@@ -41,6 +41,7 @@ function getCheckoutMarketingAttribution(): CheckoutMarketingAttribution | undef
 }
 
 export interface DirectBookingOrderSummary {
+  origin?: string;
   status:
     | 'iniciado'
     | 'cotado'

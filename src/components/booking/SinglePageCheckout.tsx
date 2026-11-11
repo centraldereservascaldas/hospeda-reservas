@@ -1,4 +1,5 @@
-import { navigateToPaymentConfirmation } from '../../utils/paymentConfirmation';
+import { navigateToPaymentConfirmation, navigateToPaymentRejection } from '../../utils/paymentConfirmation';
+import { checkoutUrlWithStay } from '../../utils/checkoutUrl';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, QrCode, ShieldCheck } from 'lucide-react';
 import { LogoCRCN } from '../LogoCRCN';
@@ -164,6 +165,7 @@ export function SinglePageCheckout({
         setResult(response.data);
         void emitConfirmedPurchase(response.data.order);
         if (navigateToPaymentConfirmation(response.data.order)) return;
+        if (navigateToPaymentRejection(response.data.order)) return;
         const terminal = [
           'confirmado',
           'concluido',
@@ -261,7 +263,12 @@ export function SinglePageCheckout({
       };
       preparedRef.current = context;
       setPrepared(true);
-      window.history.replaceState(null, '', response.resume.path);
+      window.history.replaceState(null, '', checkoutUrlWithStay(response.resume.path, {
+        listingId: property.id,
+        from: checkIn,
+        to: checkOut,
+        guests,
+      }));
       await clearCheckoutSubmissionKey(submission);
       if (
         !response.success ||

@@ -2,6 +2,16 @@
 
 return [
     'checkout_ui_enabled' => (bool) env('DIRECT_BOOKING_CHECKOUT_UI_ENABLED', false),
+    'existing_reservation_checkout_enabled' => (bool) env('DIRECT_BOOKING_EXISTING_RESERVATION_CHECKOUT_ENABLED', false),
+    'experimental_existing_order_history_enabled' => false,
+    // Research adapter: no production setting or application flow enables it.
+    'experimental_existing_accounting_settlement_enabled' => false,
+    'experimental_existing_receivable_creation_enabled' => false,
+    'experimental_existing_ledger_audit_enabled' => false,
+    'experimental_existing_cycle_settlement_enabled' => false,
+    'experimental_existing_card_amount_verification_enabled' => false,
+    // This empty map is not an environment setting: balances require a reviewed, per-reservation decision.
+    'experimental_existing_approved_balances' => [],
     'enabled' => (bool) env('DIRECT_BOOKING_ENABLED', false),
     'payments_enabled' => (bool) env('DIRECT_BOOKING_PAYMENTS_ENABLED', false),
     'confirmation_enabled' => (bool) env('DIRECT_BOOKING_CONFIRMATION_ENABLED', false),

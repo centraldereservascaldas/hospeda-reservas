@@ -8,7 +8,15 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
 use App\Services\DirectStaysReservationService;
+use App\Services\ExistingReservationBalanceApproval;
+use App\Services\ExistingReservationLedgerAudit;
+use App\Services\ExistingReservationPaymentChannels;
+use App\Services\ExistingReservationPaymentCycleRegistry;
+use App\Services\ExistingReservationPaymentLock;
 use App\Services\MoneyAmount;
+use App\Services\ReservationReleaseGuard;
+use App\Services\ReservationCoordinationMode;
+use App\Services\StaysReservationIdentity;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
@@ -97,6 +105,25 @@ class CieloCheckoutPaymentService
 
         $input = $request->validated();
         $paymentMethod = $input['paymentMethod'];
+        if ($order->origin === 'stays_existing' && $paymentMethod === 'card') {
+            return $this->result(null, 'existing_card_fee_accounting_unverified', 'O pagamento com cartão ainda precisa de conferência. Escolha Pix ou fale com o atendimento.', 503);
+        }
+        if ($order->origin === 'stays_existing' && config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true
+            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
+            return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma cobrança foi iniciada.', 409);
+        }
+        if (! $this->bootstrapApprovalValid($order)) {
+            return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma cobrança foi iniciada.', 409);
+        }
+        if ($order->origin === 'stays_existing') {
+            $existingSnapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
+            $snapshot = is_array($existingSnapshot) ? ($existingSnapshot['channel_provider_ids'] ?? null) : null;
+            $installments = $paymentMethod === 'card' ? (int) ($input['installments'] ?? 0) : null;
+            $provider = is_array($snapshot) ? app(ExistingReservationPaymentChannels::class)->verifiedProvider($snapshot, $paymentMethod, $installments) : null;
+            if ($provider === null || ! is_array($existingSnapshot) || ($existingSnapshot['pending_provider_id'] ?? null) !== $provider) {
+                return $this->result(null, 'existing_payment_channel_unavailable', 'O meio de pagamento precisa de conferência antes de continuar. Nenhuma cobrança foi iniciada.', 503);
+            }
+        }
         if (! in_array($paymentMethod, $this->availableMethods(), true)
             || ($paymentMethod === 'card'
                 && mb_strtolower(trim($input['cardholderEmail'])) !== mb_strtolower(trim($order->guest_email)))) {
@@ -172,33 +199,78 @@ class CieloCheckoutPaymentService
             return $this->result(null, 'stays_reservation_mismatch', 'A pré-reserva não corresponde mais ao pedido. Nenhuma cobrança foi iniciada.', 409);
         }
 
+        $ledgerSnapshot = null;
+        if ($order->origin === 'stays_existing' && config('direct-booking.experimental_existing_ledger_audit_enabled', false) === true) {
+            $ledgerSnapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
+            if (! is_array($ledgerSnapshot) || ! app(ExistingReservationLedgerAudit::class)->confirmsSnapshot($ledgerSnapshot)) {
+                return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma cobrança foi iniciada.', 409);
+            }
+        }
+
+        $serializeReservation = $this->serializeReservation($order);
+        $identity = $serializeReservation && is_string($order->stays_reservation_id)
+            ? app(StaysReservationIdentity::class)->resolve($order->stays_reservation_id) : null;
+        if ($serializeReservation && $identity === null) {
+            return $this->result(null, 'existing_reservation_unverified', 'Os dados da reserva precisam de conferência. Nenhuma cobrança foi iniciada.', 409);
+        }
+
+        $cyclePreparation = $order->origin === 'stays_existing' && is_string($order->stays_reservation_id)
+            ? app(ExistingReservationPaymentCycleRegistry::class)->prepare($order->stays_reservation_id) : null;
+
         try {
-            $attempt = DB::transaction(function () use ($order, $idempotencyKey, $fingerprint, $input, $paymentMethod, $paymentPricing): DirectBookingPaymentAttempt|array {
+            $persistAttempt = function () use ($order, $idempotencyKey, $fingerprint, $input, $paymentMethod, $paymentPricing, $serializeReservation, $identity, $ledgerSnapshot, $cyclePreparation): DirectBookingPaymentAttempt|array {
                 $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
                 $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
                 if ($existingAttempt !== null) {
                     return ['existing' => $existingAttempt];
                 }
 
-                if (! $this->orderUsesCurrentMerchant($lockedOrder)
+                if (($serializeReservation && ($lockedOrder->origin !== $order->origin
+                        || $lockedOrder->stays_reservation_id !== $order->stays_reservation_id))
+                    || ($identity !== null && app(ReservationReleaseGuard::class)->paymentBlocked($identity['canonical'], $identity['code']))
+                    || ! $this->orderUsesCurrentMerchant($lockedOrder)
+                    || ($ledgerSnapshot !== null && ($lockedOrder->quote_snapshot['existing_reservation'] ?? null) !== $ledgerSnapshot)
+                    || ($lockedOrder->origin === 'stays_existing' && config('direct-booking.experimental_existing_ledger_audit_enabled', false) === true && $ledgerSnapshot === null)
+                    || ! $this->bootstrapApprovalValid($lockedOrder)
                     || ! in_array($lockedOrder->status, [DirectBookingOrderStatus::PreReservado, DirectBookingOrderStatus::PagamentoRecusado], true)
                     || $lockedOrder->stays_reservation_id === null
-                    || $lockedOrder->reservation_status !== 'reserved'
+                    || ! ($lockedOrder->reservation_status === 'reserved'
+                        || ($lockedOrder->origin === 'stays_existing'
+                            && config('direct-booking.existing_reservation_checkout_enabled', false)
+                            && $lockedOrder->reservation_status === 'booked'))
                     || $lockedOrder->expires_at === null
                     || $lockedOrder->expires_at->lessThanOrEqualTo(now())) {
                     return ['error' => 'order_not_payable'];
                 }
 
-                $activeAttemptExists = DirectBookingPaymentAttempt::query()
-                    ->where('direct_booking_order_id', $lockedOrder->id)
-                    ->whereIn('status', ['processing', 'pending', 'in_process', 'approved', 'unknown', 'attention_required'])
-                    ->exists();
+                $statuses = ['processing', 'pending', 'in_process', 'approved', 'unknown', 'attention_required'];
+                if ($lockedOrder->origin === 'stays_existing' && config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true) {
+                    // Registry verifies every approved attempt against its settled proof.
+                    $statuses = array_values(array_diff($statuses, ['approved']));
+                }
+                $attempts = DirectBookingPaymentAttempt::query()->whereIn('status', $statuses);
+                if ($serializeReservation) {
+                    $attempts->where(fn ($query) => $query->where('stays_reservation_canonical_id', $identity['canonical'])
+                        ->orWhereHas('order', fn ($query) => $query->whereIn('stays_reservation_id', [$identity['canonical'], strtoupper($identity['canonical']), $identity['code']])));
+                } else {
+                    $attempts->where('direct_booking_order_id', $lockedOrder->id);
+                }
+                $activeAttemptExists = $attempts->exists();
                 if ($activeAttemptExists) {
                     return ['error' => 'payment_attempt_in_progress'];
                 }
 
+                $cycle = null;
+                if ($lockedOrder->origin === 'stays_existing') {
+                    $cycle = app(ExistingReservationPaymentCycleRegistry::class)->open($lockedOrder->stays_reservation_id, $lockedOrder->id, $idempotencyKey, $identity['code'], $cyclePreparation);
+                    if ($cycle['status'] !== 'opened' || ! is_string($cycle['cycle_id'])) {
+                        return ['error' => 'payment_cycle_unavailable'];
+                    }
+                }
+
                 $attempt = DirectBookingPaymentAttempt::query()->create([
                     'direct_booking_order_id' => $lockedOrder->id,
+                    'stays_reservation_canonical_id' => $identity['canonical'] ?? null,
                     'idempotency_key' => $idempotencyKey,
                     'request_fingerprint' => $fingerprint,
                     'gateway_provider' => $this->configuration->provider(),
@@ -218,6 +290,10 @@ class CieloCheckoutPaymentService
                     'gateway_submission_count' => 1,
                 ]);
 
+                if ($cycle !== null && ! app(ExistingReservationPaymentCycleRegistry::class)->bindAttempt($cycle['cycle_id'], $lockedOrder, $attempt)) {
+                    throw new \RuntimeException('Could not bind the payment attempt to its reservation cycle.');
+                }
+
                 if ($lockedOrder->status !== DirectBookingOrderStatus::PagamentoPendente) {
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoPendente, ['source' => 'payment_attempt_started', 'gateway' => $this->configuration->provider()]);
                 }
@@ -229,7 +305,10 @@ class CieloCheckoutPaymentService
                 $lockedOrder->save();
 
                 return $attempt;
-            });
+            };
+            $attempt = $serializeReservation
+                ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $persistAttempt)
+                : DB::transaction($persistAttempt);
         } catch (UniqueConstraintViolationException) {
             $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existingAttempt !== null) {
@@ -332,6 +411,14 @@ class CieloCheckoutPaymentService
                 'gateway_http_status' => $response?->status(),
                 'gateway_error_codes' => $codes,
             ]);
+            if ($this->protectGatewayUnknown($attempt->order)) {
+                $attempt = $this->recordExistingUnknownWithoutRegression($attempt, $diagnostic);
+                if (in_array($attempt->status, ['approved', 'rejected', 'cancelled', 'expired'], true) || $this->hasAuthoritativePending($attempt)) {
+                    return $this->result($attempt, $attempt->status, $this->paymentMessage($attempt->status), 200, true);
+                }
+
+                return $this->result($attempt, 'gateway_result_unknown', 'O resultado da solicitação ao gateway exige conciliação; não inicie outra cobrança.', 503);
+            }
             $attempt->forceFill([
                 'status' => 'unknown',
                 'gateway_status' => 'unknown',
@@ -372,8 +459,12 @@ class CieloCheckoutPaymentService
     public function reconcileAttempt(DirectBookingPaymentAttempt $attempt): array
     {
         if (! $this->attemptUsesCurrentMerchant($attempt)) {
-            $attempt->forceFill(['status' => 'attention_required', 'error_code' => 'gateway_merchant_identity_changed'])->save();
-            $this->markOrderForAttention($attempt->order, 'gateway_merchant_identity_changed');
+            if ($this->protectGatewayUnknown($attempt->order)) {
+                $attempt = $this->recordExistingUnknownWithoutRegression($attempt, errorCode: 'gateway_merchant_identity_changed');
+            } else {
+                $attempt->forceFill(['status' => 'attention_required', 'error_code' => 'gateway_merchant_identity_changed'])->save();
+                $this->markOrderForAttention($attempt->order, 'gateway_merchant_identity_changed');
+            }
 
             return [...$this->result($attempt->refresh(), 'gateway_merchant_identity_changed', 'A identidade da conta Cielo mudou. A tentativa foi bloqueada para conferência.', 503), 'gatewayStatus' => $attempt->gateway_status];
         }
@@ -382,6 +473,14 @@ class CieloCheckoutPaymentService
             ? $this->cielo->findPaymentById($attempt->gateway_payment_id)
             : $this->cielo->findPaymentByMerchantOrderId((string) $attempt->merchant_order_id);
         if ($gatewayPayment === null) {
+            if ($this->protectGatewayUnknown($attempt->order)) {
+                $attempt = $this->recordExistingUnknownWithoutRegression($attempt);
+                if (in_array($attempt->status, ['approved', 'rejected', 'cancelled', 'expired'], true) || $this->hasAuthoritativePending($attempt)) {
+                    return [...$this->result($attempt, $attempt->status, $this->paymentMessage($attempt->status), 200, true), 'gatewayStatus' => $attempt->gateway_status];
+                }
+
+                return [...$this->result($attempt, 'gateway_result_unknown', 'A consulta da Cielo exige conciliação; não inicie outra cobrança.', 503), 'gatewayStatus' => $attempt->gateway_status];
+            }
             $attempt->forceFill(['status' => 'unknown', 'error_code' => 'gateway_result_unknown'])->save();
 
             return [...$this->result($attempt->refresh(), 'gateway_result_unknown', 'A consulta da Cielo ainda não encontrou o pagamento. A tentativa continua bloqueada.', 503), 'gatewayStatus' => null];
@@ -432,8 +531,12 @@ class CieloCheckoutPaymentService
             || ($payment['Currency'] ?? null) !== $order->currency
             || $paymentType !== $expectedPaymentType
             || $initialPixResponseMissingInstructions) {
-            $attempt->forceFill(['status' => 'attention_required', 'error_code' => 'gateway_payment_mismatch'])->save();
-            $this->markOrderForAttention($order, 'gateway_payment_mismatch');
+            if ($this->serializeReservation($order)) {
+                $attempt = $this->recordExistingUnknownWithoutRegression($attempt, errorCode: 'gateway_payment_mismatch');
+            } else {
+                $attempt->forceFill(['status' => 'attention_required', 'error_code' => 'gateway_payment_mismatch'])->save();
+                $this->markOrderForAttention($order, 'gateway_payment_mismatch');
+            }
 
             return $this->result($attempt->refresh(), 'gateway_payment_mismatch', 'O gateway retornou dados que não correspondem ao pedido. A confirmação foi interrompida.', 503);
         }
@@ -481,9 +584,52 @@ class CieloCheckoutPaymentService
             $attemptStatus = 'expired';
         }
 
-        $paymentIdConflict = DB::transaction(function () use ($order, $attempt, $paymentId, $status, $attemptStatus, $payment, $paidAt, $expiresAt, $pixCopyPaste, $pixQrCode, $fraudReviewRequired, $fraudAnalysisRequired): bool {
+        $serializeReservation = $this->serializeReservation($order);
+        $canonicalId = $serializeReservation ? $this->ensureAttemptReservationId($attempt) : null;
+        if ($serializeReservation && $canonicalId === null) {
+            return $this->result($attempt, 'existing_reservation_unverified', 'A reserva exige conferência antes da conciliação.', 503);
+        }
+
+        $applyState = function () use ($order, $attempt, $paymentId, $status, $attemptStatus, $payment, $paidAt, $expiresAt, $pixCopyPaste, $pixQrCode, $fraudReviewRequired, $fraudAnalysisRequired, $serializeReservation, $canonicalId): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
+            if ($serializeReservation && ($lockedOrder->origin !== $order->origin
+                || $lockedOrder->stays_reservation_id !== $order->stays_reservation_id
+                || $this->attemptReservationId($lockedAttempt) !== $canonicalId
+                || $lockedAttempt->direct_booking_order_id !== $lockedOrder->id)) {
+                throw new \RuntimeException('Reservation payment identity changed during reconciliation.');
+            }
+            if ($lockedOrder->origin === 'stays_existing' && $lockedAttempt->error_code === 'gateway_cycle_conflict'
+                && in_array($status, ['captured', 'pending', 'authorized', 'rejected', 'expired'], true)) {
+                return false;
+            }
+            $declinedThenCaptured = $lockedOrder->origin === 'stays_existing' && $status === 'captured'
+                && DB::table('existing_reservation_payment_cycles')
+                    ->where('direct_booking_payment_attempt_id', $lockedAttempt->id)->where('state', 'declined')->exists();
+            $anotherConflict = $lockedOrder->origin === 'stays_existing' && $status === 'captured'
+                && $lockedOrder->paymentAttempts()->whereKeyNot($lockedAttempt->id)
+                    ->where('error_code', 'gateway_cycle_conflict')->exists();
+            if ($declinedThenCaptured || $anotherConflict) {
+                $lockedAttempt->forceFill(['status' => 'attention_required', 'gateway_status' => 'captured',
+                    'gateway_payment_id' => $paymentId, 'paid_at' => $paidAt, 'error_code' => 'gateway_cycle_conflict'])->save();
+                $lockedOrder->paymentAttempts()->whereKeyNot($lockedAttempt->id)
+                    ->whereIn('status', ['processing', 'pending', 'in_process'])
+                    ->update(['status' => 'attention_required', 'error_code' => 'gateway_cycle_conflict']);
+                $lockedOrder->payment_status = 'attention_required';
+                $lockedOrder->paid_at = $paidAt;
+                if (! in_array($lockedOrder->status, [DirectBookingOrderStatus::AtencaoOperacional, DirectBookingOrderStatus::ReembolsoPendente, DirectBookingOrderStatus::Reembolsado, DirectBookingOrderStatus::Contestado, DirectBookingOrderStatus::Concluido], true)) {
+                    $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'cielo_decline_capture_conflict']);
+                }
+                $lockedOrder->save();
+
+                return false;
+            }
+            // A slower, older Cielo response must not undo an already observed
+            // capture; refunds and chargebacks still follow their own paths.
+            if ($lockedOrder->origin === 'stays_existing' && $lockedAttempt->status === 'approved'
+                && in_array($status, ['pending', 'authorized', 'rejected', 'expired'], true)) {
+                return false;
+            }
             if ($status === 'expired' && ($lockedAttempt->status === 'approved' || $lockedOrder->payment_status === 'approved')) {
                 return false;
             }
@@ -529,7 +675,10 @@ class CieloCheckoutPaymentService
                 }
             } elseif ($status === 'captured') {
                 $lockedOrder->paid_at = $paidAt;
-                $reservationIsStillValid = $lockedOrder->reservation_status === 'reserved'
+                $reservationIsStillValid = ($lockedOrder->reservation_status === 'reserved'
+                    || ($lockedOrder->origin === 'stays_existing'
+                        && config('direct-booking.existing_reservation_checkout_enabled', false)
+                        && $lockedOrder->reservation_status === 'booked'))
                     && $lockedOrder->expires_at !== null
                     && $lockedOrder->expires_at->isFuture();
                 if ($reservationIsStillValid && in_array($lockedOrder->status, [DirectBookingOrderStatus::PagamentoPendente, DirectBookingOrderStatus::AtencaoOperacional], true)) {
@@ -542,6 +691,9 @@ class CieloCheckoutPaymentService
             } elseif ($status === 'expired' && in_array($lockedOrder->status, [DirectBookingOrderStatus::PagamentoPendente, DirectBookingOrderStatus::AtencaoOperacional], true)) {
                 $lockedOrder->expires_at = now();
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::LiberacaoPendente, ['source' => 'cielo_unpaid_pix_expired', 'payment_id' => $paymentId]);
+                if ($lockedOrder->origin === 'stays_existing') {
+                    $lockedOrder->transitionTo(DirectBookingOrderStatus::Expirado, ['source' => 'existing_checkout_expired']);
+                }
             } elseif ($attemptStatus === 'attention_required') {
                 if ($lockedOrder->status !== DirectBookingOrderStatus::AtencaoOperacional) {
                     $lockedOrder->transitionTo(DirectBookingOrderStatus::AtencaoOperacional, ['source' => 'cielo_authoritative_lookup', 'payment_id' => $paymentId]);
@@ -550,8 +702,16 @@ class CieloCheckoutPaymentService
 
             $lockedOrder->save();
 
+            if ($lockedOrder->origin === 'stays_existing' && $status === 'rejected'
+                && $lockedAttempt->payment_method === 'card') {
+                app(ExistingReservationPaymentCycleRegistry::class)->closeDeclined($lockedOrder, $lockedAttempt);
+            }
+
             return false;
-        });
+        };
+        $paymentIdConflict = $serializeReservation
+            ? app(ExistingReservationPaymentLock::class)->synchronized($canonicalId, $applyState)
+            : DB::transaction($applyState);
 
         $attempt->refresh();
         if ($paymentIdConflict) {
@@ -569,7 +729,7 @@ class CieloCheckoutPaymentService
 
         return [
             ...$this->result($attempt, $attempt->status, $this->paymentMessage($attempt->status), $httpStatus),
-            'gatewayStatus' => $status,
+            'gatewayStatus' => $order->origin === 'stays_existing' ? $attempt->gateway_status : $status,
         ];
     }
 
@@ -636,6 +796,115 @@ class CieloCheckoutPaymentService
         return $this->result($attempt, $attempt->status, $this->paymentMessage($attempt->status), 200, true);
     }
 
+    /** Preserve a gateway result already recorded by another worker. */
+    private function recordExistingUnknownWithoutRegression(DirectBookingPaymentAttempt $attempt, ?array $diagnostic = null, string $errorCode = 'gateway_result_unknown'): DirectBookingPaymentAttempt
+    {
+        $order = $attempt->order;
+        $canonicalId = $this->serializeReservation($order) ? $this->ensureAttemptReservationId($attempt) : null;
+        if ($this->serializeReservation($order) && $canonicalId === null) {
+            return $attempt->fresh();
+        }
+
+        $update = function () use ($order, $attempt, $diagnostic, $errorCode, $canonicalId): DirectBookingPaymentAttempt {
+            $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
+            $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
+            if ($lockedOrder->origin !== $order->origin || $lockedOrder->stays_reservation_id !== $order->stays_reservation_id
+                || $lockedAttempt->direct_booking_order_id !== $lockedOrder->id
+                || ($canonicalId !== null && $this->attemptReservationId($lockedAttempt) !== $canonicalId)) {
+                throw new \RuntimeException('Reservation payment identity changed during reconciliation.');
+            }
+            if (in_array($lockedAttempt->status, ['approved', 'rejected', 'cancelled', 'expired', 'refunded', 'attention_required'], true)
+                || in_array($lockedOrder->payment_status, ['approved', 'refunded', 'charged_back'], true)
+                || $this->hasAuthoritativePending($lockedAttempt)) {
+                return $lockedAttempt;
+            }
+
+            $changes = ['status' => $errorCode === 'gateway_result_unknown' ? 'unknown' : 'attention_required', 'error_code' => $errorCode];
+            if ($diagnostic !== null) {
+                $changes['gateway_status'] = 'unknown';
+                $changes['gateway_status_detail'] = json_encode($diagnostic, JSON_THROW_ON_ERROR);
+            }
+            $lockedAttempt->forceFill($changes)->save();
+            $this->markOrderForAttention($lockedOrder, $errorCode);
+
+            return $lockedAttempt->refresh();
+        };
+
+        return $this->serializeReservation($order)
+            ? app(ExistingReservationPaymentLock::class)->synchronized($canonicalId, $update)
+            : DB::transaction($update);
+    }
+
+    private function hasAuthoritativePending(DirectBookingPaymentAttempt $attempt): bool
+    {
+        return in_array($attempt->status, ['pending', 'in_process'], true)
+            && in_array($attempt->gateway_status, ['pending', 'authorized'], true)
+            && is_string($attempt->gateway_payment_id)
+            && preg_match('/^[0-9a-f-]{36}$/iD', $attempt->gateway_payment_id) === 1;
+    }
+
+    private function attemptReservationId(DirectBookingPaymentAttempt $attempt): ?string
+    {
+        $id = $attempt->stays_reservation_canonical_id;
+        if ($id === null && $attempt->order->origin === 'stays_existing') {
+            $id = $attempt->order->stays_reservation_id;
+        }
+
+        return is_string($id) && preg_match('/^[a-f0-9]{24}$/iD', $id) ? strtolower($id) : null;
+    }
+
+    /** Backfill old website attempts only after matching the Stays order correlation. */
+    private function ensureAttemptReservationId(DirectBookingPaymentAttempt $attempt): ?string
+    {
+        $id = $this->attemptReservationId($attempt);
+        if ($id !== null || $attempt->order->origin !== 'website') {
+            return $id;
+        }
+        $order = $attempt->order;
+        $identity = app(StaysReservationIdentity::class)->resolveForLegacyOrder($order);
+        if ($identity === null) {
+            return null;
+        }
+        $orderFields = ['origin', 'stays_reservation_id', 'stays_client_id', 'stays_listing_id', 'check_in', 'check_out'];
+        $attemptFields = ['direct_booking_order_id', 'gateway_provider', 'gateway_merchant_id', 'merchant_order_id', 'gateway_payment_id', 'payment_method', 'amount', 'currency'];
+
+        return app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], function () use ($order, $attempt, $identity, $orderFields, $attemptFields): ?string {
+            $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
+            $lockedAttempt = DirectBookingPaymentAttempt::query()->lockForUpdate()->findOrFail($attempt->id);
+            foreach ($orderFields as $field) {
+                if ($lockedOrder->getRawOriginal($field) !== $order->getRawOriginal($field)) {
+                    return null;
+                }
+            }
+            foreach ($attemptFields as $field) {
+                $actual = $field === 'amount' ? MoneyAmount::toCents($lockedAttempt->amount) : $lockedAttempt->getRawOriginal($field);
+                $expected = $field === 'amount' ? MoneyAmount::toCents($attempt->amount) : $attempt->getRawOriginal($field);
+                if ($actual !== $expected) {
+                    return null;
+                }
+            }
+            if ($lockedAttempt->stays_reservation_canonical_id !== null
+                && $lockedAttempt->stays_reservation_canonical_id !== $identity['canonical']) {
+                return null;
+            }
+            $lockedAttempt->forceFill(['stays_reservation_canonical_id' => $identity['canonical']])->save();
+            $attempt->setRawAttributes($lockedAttempt->getAttributes(), true);
+
+            return $identity['canonical'];
+        });
+    }
+
+    private function protectGatewayUnknown(DirectBookingOrder $order): bool
+    {
+        return $order->origin === 'stays_existing' || app(ReservationCoordinationMode::class)->isRequired($order);
+    }
+
+    /** The rollout serializes both origins only after a Stays identity lookup. */
+    private function serializeReservation(DirectBookingOrder $order): bool
+    {
+        return $order->origin === 'stays_existing' || app(ReservationCoordinationMode::class)->isRequired($order);
+    }
+
     private function markOrderForAttention(DirectBookingOrder $order, string $code): void
     {
         DB::transaction(function () use ($order, $code): void {
@@ -686,6 +955,22 @@ class CieloCheckoutPaymentService
         }
 
         return $value;
+    }
+
+    private function bootstrapApprovalValid(DirectBookingOrder $order): bool
+    {
+        if ($order->origin !== 'stays_existing') {
+            return true;
+        }
+        $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
+        if (! is_array($snapshot) || ($snapshot['bootstrap_receivable'] ?? false) !== true) {
+            return true;
+        }
+
+        return config('direct-booking.experimental_existing_receivable_creation_enabled', false) === true
+            && ($snapshot['_id'] ?? null) === $order->stays_reservation_id
+            && ExistingReservationBalanceApproval::approved($snapshot)
+            && MoneyAmount::toCents($order->quote_total) === ($snapshot['pending_amount_cents'] ?? null);
     }
 
     private function paymentMessage(string $status): string

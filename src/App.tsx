@@ -40,11 +40,16 @@ import { focusWithoutScrolling } from './utils/focus';
 import { countOccupancyGuests } from './utils/guestCounts';
 import { usePageMetadata } from './hooks/usePageMetadata';
 import { LegalDocumentPage } from './components/LegalDocumentPage';
+import { existingReservationCodeFromPath } from './utils/checkoutUrl';
 
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
     default: CheckoutResumePage,
   })),
+);
+
+const ExistingReservationCheckout = lazy(() =>
+  import('./components/booking/ExistingReservationCheckout').then(({ ExistingReservationCheckout }) => ({ default: ExistingReservationCheckout })),
 );
 
 const RecoveryLinkConfirmationPage = lazy(() =>
@@ -553,7 +558,8 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})(?:\/pagamento-confirmado)?$/.exec(pathname)?.[1];
+  const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})(?:\/(?:pagamento-confirmado|pagamento-recusado))?$/.exec(pathname)?.[1];
+  const existingReservationCode = existingReservationCodeFromPath(pathname);
   const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
   const legalSlug =
     normalizedPathname === '/privacidade'
@@ -600,6 +606,10 @@ export default function App() {
         <RecoveryLinkConfirmationPage />
       </Suspense>
     );
+  }
+
+  if (existingReservationCode) {
+    return <Suspense fallback={<main role="status">Consultando reserva…</main>}><ExistingReservationCheckout code={existingReservationCode} /></Suspense>;
   }
 
   if (checkoutResumeReference) {

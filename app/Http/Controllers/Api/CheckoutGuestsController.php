@@ -6,6 +6,7 @@ use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
 use App\Models\DirectBookingOrder;
 use App\Services\DirectStaysReservationMatcher;
+use App\Services\ExistingReservationPaymentGuard;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 class CheckoutGuestsController extends Controller
 {
-    public function store(Request $request, string $publicReference, StaysExternalApiClient $stays, DirectStaysReservationMatcher $matcher): JsonResponse
+    public function store(Request $request, string $publicReference, StaysExternalApiClient $stays, DirectStaysReservationMatcher $matcher, ExistingReservationPaymentGuard $existingGuard): JsonResponse
     {
         $order = DirectBookingOrder::query()->where('public_reference', $publicReference)->first();
         $guest = $request->attributes->get('verified_guest');
@@ -33,7 +34,7 @@ class CheckoutGuestsController extends Controller
             'companions.*.document' => ['required', 'string', 'max:30', 'regex:/^[\pL\pN .\/-]+$/u'],
         ]);
 
-        $result = DB::transaction(function () use ($order, $data, $stays, $matcher): array {
+        $result = DB::transaction(function () use ($order, $data, $stays, $matcher, $existingGuard): array {
             $order = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             $capacity = collect($order->guests)->only(['adults', 'children', 'infants'])->sum();
             if ($order->payment_status !== 'approved' || $order->reservation_status !== 'booked' || ! $order->stays_reservation_id) {
@@ -43,8 +44,12 @@ class CheckoutGuestsController extends Controller
                 return [422, 'A quantidade de hóspedes excede o total da reserva.'];
             }
             $path = '/booking/reservations/'.rawurlencode($order->stays_reservation_id);
+            $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
+            $matches = fn (array $reservation): bool => $order->origin === 'stays_existing'
+                ? is_array($snapshot) && $existingGuard->matchesReservation($reservation, $snapshot)
+                : $matcher->matchesIdentity($reservation, $order);
             $reservation = $stays->get($path);
-            if (! is_array($reservation) || ! $matcher->matchesIdentity($reservation, $order) || ($reservation['type'] ?? null) !== 'booked') {
+            if (! is_array($reservation) || ! $matches($reservation) || ($reservation['type'] ?? null) !== 'booked') {
                 return [503, 'Não foi possível confirmar a reserva. Tente novamente.'];
             }
 
@@ -64,7 +69,7 @@ class CheckoutGuestsController extends Controller
             $newNote = $note.$start.implode("\n", $lines).$end;
             $response = $stays->request('PATCH', $path, payload: ['type' => 'booked', 'internalNote' => $newNote]);
             $verified = $stays->get($path);
-            if (! $response?->successful() || ! is_array($verified) || ! $matcher->matchesIdentity($verified, $order)
+            if (! $response?->successful() || ! is_array($verified) || ! $matches($verified)
                 || ($verified['internalNote'] ?? null) !== $newNote) {
                 return [503, 'Não foi possível confirmar o envio dos dados. Confira e tente novamente.'];
             }

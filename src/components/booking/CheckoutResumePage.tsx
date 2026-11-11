@@ -9,7 +9,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { checkoutApi } from '../../services/checkoutApi';
-import { navigateToPaymentConfirmation } from '../../utils/paymentConfirmation';
+import { navigateToPaymentConfirmation, navigateToPaymentRejection } from '../../utils/paymentConfirmation';
 import { emitConfirmedPurchase, emitFunnelEvent } from '../../utils/measurementEvents';
 import type {
   CheckoutAccessCredentials,
@@ -68,6 +68,7 @@ interface CheckoutResumePageProps {
   accessToken?: string;
   previewData?: CheckoutResumeResponse;
   previewGuestForm?: ReactNode;
+  focusOnMount?: boolean;
 }
 
 type ResumeState =
@@ -237,6 +238,13 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
     };
   }
 
+  if (order.origin === 'stays_existing') {
+    if (order.status === 'pre_reservado') return { title: 'Pagamento disponível', detail: 'Confira o saldo da sua reserva antes de pagar.', tone: 'neutral' as const };
+    if (order.status === 'pagamento_pendente') return { title: 'Pagamento pendente', detail: 'Aguardamos a confirmação do pagamento desta reserva.', tone: 'neutral' as const };
+    if (order.status === 'pagamento_recusado') return { title: 'Pagamento não aprovado', detail: 'O pagamento não foi aprovado. A reserva existente não foi cancelada por esta tentativa.', tone: 'attention' as const };
+    if (order.status === 'expirado') return { title: 'Prazo do pagamento encerrado', detail: 'O prazo deste pagamento terminou. A reserva existente não foi cancelada pelo checkout; fale com a Central.', tone: 'attention' as const };
+  }
+
   return statusDetails[order.status];
 }
 
@@ -245,6 +253,7 @@ export function CheckoutResumePage({
   accessToken,
   previewData,
   previewGuestForm,
+  focusOnMount = false,
 }: CheckoutResumePageProps) {
   const [resumeState, setResumeState] = useState<ResumeState>({ kind: 'loading' });
   const [retryKey, setRetryKey] = useState(0);
@@ -260,6 +269,11 @@ export function CheckoutResumePage({
   const pixPaymentSubmissionInFlightRef = useRef(false);
   const pixPaymentInfoEmittedRef = useRef(false);
   const pixPaymentIdempotencyKeyRef = useRef<string | null>(null);
+  const resumeSectionRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (focusOnMount) resumeSectionRef.current?.focus();
+  }, [focusOnMount]);
 
   useEffect(() => {
     if (previewData) {
@@ -307,6 +321,7 @@ export function CheckoutResumePage({
       setResumeState({ kind: 'ready', data: result.data, credentials: resolvedCredentials });
       void emitConfirmedPurchase(result.data.order);
       navigateToPaymentConfirmation(result.data.order);
+      navigateToPaymentRejection(result.data.order);
       if (
         refreshableStatuses.has(result.data.order.status) ||
         (result.data.order.status === 'expirado' &&
@@ -415,7 +430,7 @@ export function CheckoutResumePage({
         listingId: order?.listingId,
         from: order?.from,
         to: order?.to,
-        paymentMethod: paymentAttempt?.method ?? selectedPaymentMethod,
+        paymentMethod: paymentAttempt?.method ?? (order?.origin === 'stays_existing' ? undefined : selectedPaymentMethod),
         baseTotal: order ? Number(order.quoteTotal) : undefined,
         total: paymentAttempt ? Number(paymentAttempt.amount) : undefined,
       }}
@@ -442,6 +457,7 @@ export function CheckoutResumePage({
     paymentAttempt.status === 'cancelled';
   const canStartPixPayment =
     order !== null &&
+    order.origin !== 'stays_existing' &&
     resumeState.kind === 'ready' &&
     resumeState.data.payment.enabled &&
     resumeState.data.payment.methods.includes('pix') &&
@@ -455,6 +471,7 @@ export function CheckoutResumePage({
   const isHostedCieloProvider = paymentCapabilities?.provider === 'cielo_hosted';
   const canStartCardPayment =
     order !== null &&
+    order.origin !== 'stays_existing' &&
     paymentCapabilities?.enabled === true &&
     paymentCapabilities.methods.includes('card') &&
     (isCieloProvider || isHostedCieloProvider || cardPublicKey !== null) &&
@@ -530,7 +547,7 @@ export function CheckoutResumePage({
                 ))}
             </div>
           )}
-          <section aria-labelledby="checkout-resume-title" className="min-w-0 max-w-xl">
+          <section ref={resumeSectionRef} tabIndex={focusOnMount ? -1 : undefined} aria-labelledby="checkout-resume-title" className="min-w-0 max-w-xl">
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-800">
               Acompanhe seu pedido
             </p>
@@ -632,6 +649,12 @@ export function CheckoutResumePage({
                       </p>
                     </div>
                   </div>
+                  {order.origin === 'stays_existing' && (order.status === 'pre_reservado' || order.status === 'pagamento_recusado') && (paymentAttempt === null || paymentAttempt.status === 'rejected' || paymentAttempt.status === 'cancelled') && (
+                    <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" role="status">
+                      <p>Para continuar com esta reserva, fale com nosso atendimento antes de iniciar outra tentativa.</p>
+                      {supportLink}
+                    </div>
+                  )}
                   {order.status === 'atencao_operacional' && paymentAttempt === null && (
                     <p
                       className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
@@ -651,8 +674,9 @@ export function CheckoutResumePage({
                       className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
                       role="status"
                     >
-                      O prazo da pré-reserva terminou. Consulte novamente a disponibilidade e o
-                      preço antes de iniciar outro pedido.
+                      {order.origin === 'stays_existing'
+                        ? 'O prazo deste pagamento terminou. Fale com a Central antes de solicitar outro.'
+                        : 'O prazo da pré-reserva terminou. Consulte novamente a disponibilidade e o preço antes de iniciar outro pedido.'}
                     </p>
                   )}
 
@@ -680,7 +704,7 @@ export function CheckoutResumePage({
                     {order.expiresAt && !resumeState.data.confirmation && (
                       <div className="rounded-2xl bg-[#f7f4ee] p-4">
                         <dt className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                          Prazo da pré-reserva
+                          {order.origin === 'stays_existing' ? 'Prazo deste pagamento' : 'Prazo da pré-reserva'}
                         </dt>
                         <dd className="mt-1 font-bold">
                           {dateTimeFormatter.format(new Date(order.expiresAt))} (horário local)
@@ -841,11 +865,13 @@ export function CheckoutResumePage({
                               <h2 id="checkout-start-payment-title" className="font-extrabold">
                                 {paymentAttempt
                                   ? 'Nova tentativa Pix disponível'
-                                  : 'Pré-reserva pronta para pagamento'}
+                                  : order.origin === 'stays_existing' ? 'Reserva pronta para pagamento' : 'Pré-reserva pronta para pagamento'}
                               </h2>
                               <p className="mt-1 text-sm leading-6 text-neutral-700">
                                 {paymentAttempt
-                                  ? 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto a pré-reserva estiver válida.'
+                                  ? order.origin === 'stays_existing'
+                                    ? 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto este pagamento estiver disponível.'
+                                    : 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto a pré-reserva estiver válida.'
                                   : 'A cobrança Pix só será solicitada quando você continuar. A confirmação da estadia depende de validação posterior.'}
                               </p>
                             </div>

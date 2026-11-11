@@ -76,7 +76,7 @@ class GatewayPaymentConflictPreservesTerminalOrderTest extends TestCase
                 'X-Checkout-Resume-Token' => 'valid-resume-token',
             ])->assertServiceUnavailable()->assertJsonPath('code', 'gateway_result_unknown');
             if ($idempotencyKey === 'initial-invalid-id-01') {
-                $order = $order->replicate();
+                $order = $order->replicate(['website_stays_reservation_id']);
                 $order->forceFill([
                     'status' => DirectBookingOrderStatus::PreReservado,
                     'idempotency_key' => 'order-initial-invalid-id-second',

@@ -115,15 +115,17 @@ class GuestReservationController extends Controller
             ->values();
         $directOrders = DirectBookingOrder::query()
             ->whereIn('stays_reservation_id', $reservationIds)
-            ->get()
-            ->keyBy('stays_reservation_id');
+            ->get();
         $data = $reservationRecords
-            ->map(fn (array $record): ?array => $this->mapReservation(
-                $record,
-                $catalog,
-                $guest,
-                $directOrders->get((string) ($record['id'] ?? $record['_id'] ?? '')),
-            ))
+            ->map(function (array $record) use ($catalog, $guest, $directOrders): ?array {
+                $ids = collect([$record['_id'] ?? null, $record['id'] ?? null])
+                    ->filter(fn (mixed $id): bool => is_string($id) || is_int($id))
+                    ->map(fn (mixed $id): string => (string) $id)->unique();
+                $matching = $directOrders->filter(fn (DirectBookingOrder $order): bool => $ids->contains((string) $order->stays_reservation_id))->values();
+                $order = $matching->count() === 1 && $matching->first()->origin !== 'stays_existing' ? $matching->first() : null;
+
+                return $this->mapReservation($record, $catalog, $guest, $order);
+            })
             ->filter()
             ->values();
 
@@ -169,7 +171,12 @@ class GuestReservationController extends Controller
         }
 
         $reservationIds = $detailIds->push($reservationId)->unique()->values();
-        $directOrder = DirectBookingOrder::query()->whereIn('stays_reservation_id', $reservationIds)->first();
+        $directOrders = DirectBookingOrder::query()->whereIn('stays_reservation_id', $reservationIds)->get();
+        if ($directOrders->count() > 1 || $directOrders->contains(fn (DirectBookingOrder $order): bool => $order->origin === 'stays_existing')) {
+            return response()->json(['success' => false, 'code' => 'direct_booking_cancellation_requires_support', 'message' => 'Entre em contato com o atendimento para analisar o cancelamento desta reserva e seus pagamentos.'], 409)
+                ->header('Cache-Control', 'no-store, private');
+        }
+        $directOrder = $directOrders->first();
         $isDirectCheckoutReservation = str_starts_with((string) ($details['internalNote'] ?? ''), 'CRCN_DIRECT_ORDER:')
             || $directOrder !== null;
         if ($isDirectCheckoutReservation) {

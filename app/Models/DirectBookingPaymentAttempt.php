@@ -13,6 +13,7 @@ class DirectBookingPaymentAttempt extends Model
 
     protected $fillable = [
         'direct_booking_order_id',
+        'stays_reservation_canonical_id',
         'idempotency_key',
         'request_fingerprint',
         'gateway_payment_id',

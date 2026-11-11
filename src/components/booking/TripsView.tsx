@@ -1,6 +1,9 @@
 import React, { useRef, useState } from 'react';
 import type { Reservation, Currency, ReservationCancellationResult } from '../../types';
-import { crcnBackendApi } from '../../services/crcnBackendApi';
+import {
+  crcnBackendApi,
+  ReservationCancellationSupportRequiredError,
+} from '../../services/crcnBackendApi';
 import type { DirectBookingOrderListItem } from '../../services/checkoutApi';
 import type { DirectBookingCancellationReceipt } from '../../services/checkoutApi';
 import { formatCurrency } from '../../utils/formatters';
@@ -268,7 +271,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                 <p className="mt-3 text-xs text-neutral-600">
                   {order.from} até {order.to}
                   {order.expiresAt && ['pre_reservado', 'pagamento_pendente'].includes(order.status)
-                    ? ` · pré-reserva até ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(order.expiresAt))}`
+                    ? ` · ${order.origin === 'stays_existing' ? 'pagamento até' : 'pré-reserva até'} ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(order.expiresAt))}`
                     : ''}
                 </p>
                 <div className="mt-3 flex items-center justify-between border-t border-neutral-100 pt-3">
@@ -355,8 +358,10 @@ export const TripsView: React.FC<TripsViewProps> = ({
                     <span className="mt-1 block font-mono font-bold">
                       Protocolo{' '}
                       {
-                        (localCancellationReceipts[order.publicReference] ??
-                          order.cancellationReceipt)?.protocol
+                        (
+                          localCancellationReceipts[order.publicReference] ??
+                          order.cancellationReceipt
+                        )?.protocol
                       }{' '}
                       · recebido em{' '}
                       {new Intl.DateTimeFormat('pt-BR', {
@@ -864,7 +869,9 @@ export const TripsView: React.FC<TripsViewProps> = ({
                   } catch (error) {
                     console.warn('Unable to cancel guest reservation:', error);
                     setCancellationError(
-                      'Não foi possível solicitar o cancelamento. A reserva continua ativa.',
+                      error instanceof ReservationCancellationSupportRequiredError
+                        ? 'Entre em contato com o atendimento para analisar o cancelamento desta reserva e seus pagamentos. A reserva continua ativa.'
+                        : 'Não foi possível solicitar o cancelamento. A reserva continua ativa.',
                     );
                   } finally {
                     setIsSubmittingCancellation(false);

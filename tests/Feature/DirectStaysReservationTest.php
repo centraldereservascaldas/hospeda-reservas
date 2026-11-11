@@ -9,8 +9,11 @@ use App\Services\DirectSaleTermsRegistry;
 use App\Services\DirectStaysReservationMatcher;
 use App\Services\DirectStaysReservationService;
 use App\Services\Payments\DirectCheckoutPaymentService;
+use App\Services\StaysReservationIdentity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -191,6 +194,7 @@ class DirectStaysReservationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(Carbon::parse('2026-11-03 12:00:00'));
         config([
             'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
             'direct-booking.enabled' => true,
@@ -423,6 +427,113 @@ class DirectStaysReservationTest extends TestCase
     public static function releasableExpiredStates(): array
     {
         return ['no payment' => [DirectBookingOrderStatus::PreReservado], 'expired unpaid Pix' => [DirectBookingOrderStatus::LiberacaoPendente]];
+    }
+
+    public function test_existing_reservation_is_not_canceled_when_checkout_expires(): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::PreReservado, 'existing-reservation');
+        $order->update(['origin' => 'stays_existing']);
+        Http::preventStrayRequests();
+        Http::fake();
+
+        $result = app(DirectStaysReservationService::class)->release($order);
+        $this->assertFalse($result['ready']);
+        $this->assertSame('existing_reservation_not_released', $result['code']);
+        $this->assertSame(DirectBookingOrderStatus::PreReservado, $order->fresh()->status);
+        Http::assertNothingSent();
+        $this->assertDatabaseCount('direct_booking_stays_actions', 0);
+    }
+
+    public function test_release_refuses_other_order_for_same_reservation_under_verified_alias(): void
+    {
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->order(DirectBookingOrderStatus::PreReservado, str_repeat('a', 24));
+        $other = $this->order(DirectBookingOrderStatus::PreReservado, 'AB12C');
+        $other->update(['origin' => 'stays_existing']);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        Http::preventStrayRequests();
+
+        $result = app(DirectStaysReservationService::class)->release($order);
+        $this->assertFalse($result['ready']);
+        $this->assertSame('reservation_shared_or_payment_active', $result['code']);
+        $this->assertDatabaseCount('direct_booking_stays_actions', 0);
+        Http::assertNothingSent();
+    }
+
+    #[DataProvider('rollbackPaymentStatuses')]
+    public function test_disabling_existing_checkout_does_not_cancel_its_pending_or_paid_reservation(string $status): void
+    {
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->order(DirectBookingOrderStatus::PreReservado, str_repeat('a', 24));
+        $existing = $this->order(DirectBookingOrderStatus::PreReservado, 'AB12C');
+        $existing->update(['origin' => 'stays_existing', 'payment_status' => $status]);
+        $existing->paymentAttempts()->create(['idempotency_key' => 'rollback-'.$status.'-test', 'request_fingerprint' => str_repeat('b', 64),
+            'gateway_provider' => 'cielo', 'payment_method' => 'pix', 'payment_method_id' => 'pix', 'status' => $status, 'amount' => '3001.00', 'currency' => 'BRL']);
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        Http::preventStrayRequests();
+
+        $result = app(DirectStaysReservationService::class)->release($order);
+        $this->assertSame('reservation_shared_or_payment_active', $result['code']);
+        $this->assertDatabaseCount('direct_booking_stays_actions', 0);
+        Http::assertNothingSent();
+    }
+
+    public static function rollbackPaymentStatuses(): array
+    {
+        return ['pending' => ['pending'], 'approved' => ['approved']];
+    }
+
+    public function test_rollback_still_blocks_website_adoption_when_release_claim_exists(): void
+    {
+        config(['direct-booking.existing_reservation_checkout_enabled' => false, 'direct-booking.enabled' => true, 'direct-booking.reservation_hold_minutes' => 60,
+            'services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
+        $id = str_repeat('a', 24);
+        $order = $this->order(DirectBookingOrderStatus::Cotado, $id);
+        DB::table('existing_reservation_payment_locks')->insert(['stays_reservation_id' => $id, 'release_order_id' => fake()->uuid(), 'created_at' => now(), 'updated_at' => now()]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => $id, 'code' => 'AB12C']);
+        Http::fake(fn () => Http::response(['_id' => $id, '_idlisting' => 'JQ08G', '_idclient' => 'client-3', 'checkInDate' => '2026-11-10', 'checkOutDate' => '2026-11-13',
+            'type' => 'reserved', 'guests' => 2, 'price' => ['currency' => 'BRL', '_f_total' => 3001], 'internalNote' => 'CRCN_DIRECT_ORDER:'.$order->id]));
+
+        $result = app(DirectStaysReservationService::class)->reserve($order);
+        $this->assertSame('reservation_release_in_progress', $result['code']);
+        Http::assertNotSent(fn (ClientRequest $request) => $request->method() !== 'GET');
+    }
+
+    public function test_release_persists_claim_before_stays_request_and_keeps_it_when_stays_is_uncertain(): void
+    {
+        config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.stays.base_url' => 'https://stays.test/external/v1',
+            'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
+        $order = $this->order(DirectBookingOrderStatus::PreReservado, str_repeat('a', 24));
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        Http::fake(function () use ($order) {
+            $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => str_repeat('a', 24), 'release_order_id' => $order->id]);
+
+            return Http::response([], 503);
+        });
+
+        $result = app(DirectStaysReservationService::class)->release($order);
+        $this->assertSame('reservation_state_unavailable', $result['code']);
+        $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => str_repeat('a', 24), 'release_order_id' => $order->id]);
+        $this->assertDatabaseHas('direct_booking_stays_actions', ['action_type' => 'cancel_reservation', 'status' => 'attention_required']);
+        Http::assertNotSent(fn (ClientRequest $request) => $request->method() === 'PATCH');
+    }
+
+    public function test_website_cannot_adopt_a_reservation_after_release_claim(): void
+    {
+        config(['direct-booking.existing_reservation_checkout_enabled' => true, 'direct-booking.enabled' => true, 'direct-booking.reservation_hold_minutes' => 60,
+            'services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
+        $id = str_repeat('a', 24);
+        $order = $this->order(DirectBookingOrderStatus::Cotado, $id);
+        DB::table('existing_reservation_payment_locks')->insert(['stays_reservation_id' => $id, 'release_order_id' => fake()->uuid(), 'created_at' => now(), 'updated_at' => now()]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => $id, 'code' => 'AB12C']);
+        Http::fake(fn () => Http::response(['_id' => $id, '_idlisting' => 'JQ08G', '_idclient' => 'client-3', 'checkInDate' => '2026-11-10', 'checkOutDate' => '2026-11-13',
+            'type' => 'reserved', 'guests' => 2, 'price' => ['currency' => 'BRL', '_f_total' => 3001], 'internalNote' => 'CRCN_DIRECT_ORDER:'.$order->id]));
+
+        $result = app(DirectStaysReservationService::class)->reserve($order);
+        $this->assertSame('reservation_release_in_progress', $result['code']);
+        $this->assertNotSame(DirectBookingOrderStatus::PreReservado, $order->refresh()->status);
+        Http::assertNotSent(fn (ClientRequest $request) => $request->method() !== 'GET');
     }
 
     private function approvedTerms(): void
