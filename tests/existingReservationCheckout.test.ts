@@ -772,11 +772,11 @@ test('replayed preparation opens protected order tracking without posting a paym
     const url = String(input);
     calls.push({ url, init });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      code: 'RP123', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }));
-    if (url.endsWith('/existing-reservations/ZY92K/checkout')) return new Response(JSON.stringify({
+    if (url.endsWith('/existing-reservations/RP123/checkout')) return new Response(JSON.stringify({
       success: true, replayed: true, resume: { reference, token, path: `/checkout/${reference}`, expiresAt },
       order: { publicReference: reference, status: 'pre_reservado', paymentStatus: null, quoteTotal: '197.50' },
       payment: { enabled: true, provider: 'cielo_sandbox' },
@@ -785,8 +785,8 @@ test('replayed preparation opens protected order tracking without posting a paym
     return new Response('{}', { status: 503 });
   };
   try {
-    window.history.replaceState(null, '', '/checkout/ZY92K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    window.history.replaceState(null, '', '/checkout/RP123');
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'RP123' }));
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
     fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
