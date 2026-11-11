@@ -226,6 +226,25 @@ class ExistingReservationPaymentCycleRegistryTest extends TestCase
         $this->assertSame('payment_requires_reconciliation', app(ExistingReservationPaymentCycleRegistry::class)->open($order->stays_reservation_id, $order->id, 'second-cycle-12345678', null, app(ExistingReservationPaymentCycleRegistry::class)->prepare($order->stays_reservation_id))['status']);
     }
 
+    public function test_historical_revalidation_rejects_action_changed_during_external_audit(): void
+    {
+        [$order, $attempt, $cycleId] = $this->settledFixture();
+        config(['direct-booking.experimental_existing_cycle_settlement_enabled' => true]);
+        $calls = 0;
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('inspect')->twice()->andReturnUsing(function () use ($order, &$calls) {
+            if (++$calls === 2) {
+                $order->staysActions()->where('action_type', 'settle_existing_receivable')->update(['request_snapshot' => 'null']);
+            }
+
+            return ['status' => 'consistent_candidate', 'total_cents' => 2000, 'paid_cents' => 1000, 'balance_cents' => 1000];
+        });
+        $service = app(ExperimentalExistingCycleSettlement::class);
+        $this->assertTrue($service->close($order));
+        $cycle = DB::table('existing_reservation_payment_cycles')->where('id', $cycleId)->first();
+
+        $this->assertNull($service->revalidateHistorical($cycle));
+    }
+
     #[DataProvider('thirdSettlementOutcomes')]
     public function test_three_partial_cycles_use_current_balance_and_historical_readbacks_in_isolated_sqlite(bool $financeMismatch): void
     {
