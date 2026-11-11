@@ -2,7 +2,29 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { clearCheckoutResumeToken, saveCheckoutResumeToken } from '../src/utils/checkoutResumeStorage.ts';
-import { getExistingReservationResumeReference, getExistingReservationResumeReferences, saveExistingReservationResumeReference } from '../src/utils/existingReservationResumeStorage.ts';
+import { bindExistingReservationIntent, clearExistingReservationIntent, getExistingReservationIntent, getExistingReservationResumeReference, getExistingReservationResumeReferences, saveExistingReservationResumeReference, startExistingReservationIntent } from '../src/utils/existingReservationResumeStorage.ts';
+
+test('interrupted intent accepts only the original request after reload without storing payer details', async () => {
+  const dom = new JSDOM('', { url: 'https://example.test' });
+  const previousWindow = globalThis.window;
+  globalThis.window = dom.window as unknown as Window & typeof globalThis;
+  try {
+    const key = startExistingReservationIntent('ZX91K');
+    const request = { guest: { fullName: 'Pessoa Exemplo', email: 'pessoa@example.test', phone: '11999999999' }, paymentMethod: 'pix', expectedBalanceCents: 10000 };
+    await bindExistingReservationIntent('ZX91K', key, request);
+    assert.equal(getExistingReservationIntent('ZX91K'), key);
+    const stored = JSON.stringify(dom.window.sessionStorage);
+    assert.equal(stored.includes('Pessoa Exemplo'), false);
+    assert.equal(stored.includes('pessoa@example.test'), false);
+    await assert.rejects(bindExistingReservationIntent('ZX91K', key, { ...request, guest: { ...request.guest, phone: '11888888888' } }), /exatamente os mesmos dados/);
+    await bindExistingReservationIntent('ZX91K', key, request);
+    clearExistingReservationIntent('ZX91K');
+    assert.equal(getExistingReservationIntent('ZX91K'), null);
+  } finally {
+    globalThis.window = previousWindow;
+    dom.window.close();
+  }
+});
 
 test('reservation reference requires the matching live token in the same browser session', () => {
   const dom = new JSDOM('', { url: 'https://example.test' });

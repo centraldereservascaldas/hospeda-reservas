@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../../services/apiFetch';
 import { checkoutApi } from '../../services/checkoutApi';
 import { checkoutPathWithStayQuery, existingReservationUrl } from '../../utils/checkoutUrl';
-import { getOrCreateCheckoutSubmissionKey } from '../../utils/checkoutSubmissionStorage';
 import { saveCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
 import { formatBrazilianPhone } from '../../utils/checkoutInputFormatting';
 import { CieloSopCardForm, type CieloCardPricing, type CieloPaymentContext } from './CieloSopCardForm';
@@ -11,7 +10,7 @@ import { PixPayerIdentificationField, getPixPayerIdentification } from './PixPay
 import { CheckoutSupportLink } from './CheckoutSupportLink';
 import { LogoCRCN } from '../LogoCRCN';
 import { LockKeyhole, QrCode } from 'lucide-react';
-import { clearExistingReservationIntent, getExistingReservationIntent, getExistingReservationResumeReferences, saveExistingReservationResumeReference, startExistingReservationIntent } from '../../utils/existingReservationResumeStorage';
+import { bindExistingReservationIntent, clearExistingReservationIntent, getExistingReservationIntent, getExistingReservationResumeReferences, markExistingReservationIntentSubmitted, saveExistingReservationResumeReference, startExistingReservationIntent } from '../../utils/existingReservationResumeStorage';
 
 interface ReservationSummary {
   code: string;
@@ -95,22 +94,29 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
       throw new Error('Confira os dados e aceite o valor do pagamento antes de continuar.');
     }
     const payer = { fullName: guest.fullName.trim(), email: guest.email.trim(), phone: guest.phone.trim() };
-    const idempotencyKey = intentKey ?? await getOrCreateCheckoutSubmissionKey({
-      listingId: `${code}:${summary.listingId}:${method}:${method === 'card' ? cardPricing?.installments ?? 'unavailable' : 'single'}`, from: summary.checkIn, to: summary.checkOut,
-      guests: { adults: summary.adults ?? 0, children: summary.children ?? 0, infants: summary.infants ?? 0, pets: 0 },
-      quoteTotal: summary.candidateBalanceCents / 100, guest: payer,
-      acceptedTermsVersion: 'existing-booking-payment-v1', acceptedTerms: true,
-    });
+    const idempotencyKey = intentKey ?? startExistingReservationIntent(code);
+    if (!intentKey) setIntentKey(idempotencyKey);
+    const request = { expectedBalanceCents: summary.candidateBalanceCents, guest: payer, acceptedPayment: true, paymentMethod: method, ...(method === 'card' ? { installments: cardPricing?.installments } : {}) };
+    await bindExistingReservationIntent(code, idempotencyKey, request);
+    const previouslySubmitted = markExistingReservationIntentSubmitted(code, idempotencyKey);
     let response: Response;
     let data: unknown;
     try {
       response = await apiFetch(`/api/existing-reservations/${encodeURIComponent(code)}/checkout`, {
         method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
-        body: JSON.stringify({ expectedBalanceCents: summary.candidateBalanceCents, guest: payer, acceptedPayment: true, paymentMethod: method, ...(method === 'card' ? { installments: cardPricing?.installments } : {}) }),
+        body: JSON.stringify(request),
       });
       data = await response.json();
     } catch {
       throw new Error('Não foi possível confirmar o preparo do pagamento. Tente novamente sem alterar os dados ou fale com nosso atendimento.');
+    }
+    // Laravel FormRequest validation runs before the checkout service. Only a first,
+    // definitively rejected dispatch can be reset; an earlier lost response remains ambiguous.
+    if (!previouslySubmitted && response.status === 422 && data && typeof data === 'object'
+      && 'errors' in data && data.errors && typeof data.errors === 'object' && !Array.isArray(data.errors)) {
+      clearExistingReservationIntent(code);
+      setIntentKey(null);
+      throw new Error('Confira e corrija os dados informados para continuar. Nenhum pedido foi iniciado nesta tentativa.');
     }
     if (!response.ok && data && typeof data === 'object' && 'code' in data) {
       if (data.code === 'existing_checkout_already_started') {
@@ -152,7 +158,8 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
       setStorageFailure(true);
       throw new Error('Não foi possível guardar o acesso ao pedido. Tente novamente sem alterar os dados ou fale com nosso atendimento.');
     }
-    if (intentKey) clearExistingReservationIntent(code);
+    clearExistingReservationIntent(code);
+    setIntentKey(null);
     const context: CieloPaymentContext = { reference: resume.reference, amount: order.quoteTotal, credentials: { type: 'resume-token', resumeToken: resume.token } };
     window.history.replaceState(null, '', checkoutPathWithStayQuery(resume.path, window.location.search));
     if (order.status !== 'pre_reservado' || order.paymentStatus !== null || payment.enabled !== true) {
@@ -202,6 +209,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
       <p className="text-sm font-bold uppercase tracking-widest text-orange-700">Central de Reservas · Caldas Novas</p>
       <h1 className="mt-3 text-3xl font-black">Sua reserva</h1>
       {previousReferences.length > 0 && <div className="mt-6 space-y-3 rounded-xl border border-orange-200 bg-orange-50 p-4"><p className="font-semibold">Você já iniciou pagamento para esta reserva neste navegador.</p><p className="text-sm text-neutral-700">Acompanhe as tentativas antes de iniciar outra cobrança.</p>{previousReferences.map((reference, index) => <a key={reference} className="mr-3 inline-flex min-h-11 items-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" href={checkoutPathWithStayQuery(`/checkout/${reference}`, window.location.search)}>Acompanhar pagamento {previousReferences.length > 1 ? index + 1 : ''}</a>)}{!intentKey && <button type="button" className="min-h-11 rounded-xl border border-neutral-400 px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-orange-700" onClick={() => { try { setIntentKey(startExistingReservationIntent(code)); setIntentError(''); } catch (error) { setIntentError(error instanceof Error ? error.message : 'Não foi possível guardar esta tentativa.'); } }}>Iniciar nova tentativa</button>}{intentError && <p role="alert">{intentError}</p>}</div>}
+      {intentKey && <p role="status" className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">Para recuperar uma tentativa interrompida, informe exatamente os mesmos dados, valor e forma de pagamento usados anteriormente. Se não souber, fale com nosso atendimento.</p>}
       {state === 'loading' && <p role="status" className="mt-6">Consultando os dados da reserva…</p>}
       {state === 'error' && <div className="mt-6 space-y-3"><p role="alert">Não foi possível consultar esta reserva. Confira o código ou fale com nosso atendimento.</p><button type="button" className="min-h-11 rounded-xl border border-neutral-400 px-4 py-2 font-semibold focus-visible:outline-2 focus-visible:outline-orange-700" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button><CheckoutSupportLink details={{ reservationCode: code }} /></div>}
       {state === 'ready' && summary && <section className="mt-6 space-y-6" aria-label="Dados da reserva">
