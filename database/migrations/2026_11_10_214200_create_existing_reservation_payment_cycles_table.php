@@ -13,11 +13,12 @@ return new class extends Migration
     {
         Schema::create('existing_reservation_payment_cycles', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->char('stays_reservation_id', 24)->index();
-            $table->char('active_reservation_id', 24)->nullable()->unique();
-            $table->foreignUuid('direct_booking_order_id')->constrained('direct_booking_orders')->restrictOnDelete();
-            $table->foreignUuid('direct_booking_payment_attempt_id')->nullable()->unique()->constrained('direct_booking_payment_attempts')->restrictOnDelete();
-            $table->string('idempotency_key', 128)->unique();
+            $table->char('stays_reservation_id', 24)->index('erc_reservation_idx');
+            $table->char('active_reservation_id', 24)->nullable()->unique('erc_active_reservation_unique');
+            $table->foreignUuid('direct_booking_order_id')->constrained('direct_booking_orders', indexName: 'erc_order_fk')->restrictOnDelete();
+            $table->foreignUuid('direct_booking_payment_attempt_id')->nullable()->unique('erc_attempt_unique')
+                ->constrained('direct_booking_payment_attempts', indexName: 'erc_attempt_fk')->restrictOnDelete();
+            $table->string('idempotency_key', 128)->unique('erc_idempotency_unique');
             $table->string('state', 40);
             $table->timestamps();
         });
