@@ -63,4 +63,35 @@ class ExistingCheckoutIntentGuardTest extends TestCase
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout', $this->valid())
             ->assertStatus(409)->assertJsonPath('code', 'existing_checkout_intent_conflict');
     }
+
+    public function test_downstream_exception_does_not_remove_the_claim(): void
+    {
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
+        $key = 'failed-downstream-intent-key-123';
+        $request = Request::create('/api/existing-reservations/ZX91K/checkout', 'POST', $this->valid(), [], [], ['HTTP_IDEMPOTENCY_KEY' => $key]);
+
+        try {
+            app(GuardExistingCheckoutIntent::class)->handle($request, function () {
+                throw new \RuntimeException('downstream failed');
+            });
+            $this->fail('The downstream exception should propagate.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('downstream failed', $exception->getMessage());
+        }
+
+        $this->assertSame('claimed', DB::table('existing_checkout_intents')->where('key_hash', hash('sha256', $key))->value('state'));
+        $this->assertSame(409, $this->send($key, [])->getStatusCode());
+    }
+
+    public function test_rejected_intent_stays_rejected_after_a_long_delay(): void
+    {
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
+        $key = 'old-rejected-intent-key-123';
+        $this->assertSame(422, $this->send($key, [])->getStatusCode());
+
+        $this->travel(10)->years();
+
+        $this->assertSame(409, $this->send($key, $this->valid())->getStatusCode());
+        $this->assertSame('rejected', DB::table('existing_checkout_intents')->where('key_hash', hash('sha256', $key))->value('state'));
+    }
 }
