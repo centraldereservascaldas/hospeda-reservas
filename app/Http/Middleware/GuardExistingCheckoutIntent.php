@@ -18,7 +18,6 @@ class GuardExistingCheckoutIntent
         }
 
         $key = $request->header('Idempotency-Key');
-        // Invalid keys cannot reach the service, including in an older client.
         if (! is_string($key) || ! preg_match('/^[A-Za-z0-9._~-]{16,128}$/D', $key)) {
             return $next($request);
         }
@@ -27,16 +26,41 @@ class GuardExistingCheckoutIntent
             (new StoreExistingReservationCheckoutRequest)->rules());
         $valid = ! $validator->fails();
         $hash = hash('sha256', $key);
-        $decision = DB::transaction(function () use ($hash, $key, $valid): string {
+        $fingerprint = null;
+        if ($valid) {
+            $secret = config('app.key');
+            $code = $request->route('code');
+            if (! is_string($secret) || $secret === '' || ! is_string($code)) {
+                return response()->json(['success' => false, 'code' => 'existing_checkout_intent_unavailable'], 503)
+                    ->header('Cache-Control', 'no-store, private');
+            }
+            try {
+                $data = $validator->validated();
+                // Mirror the service fingerprint: retain guest ordering and balance type,
+                // but normalize acceptedPayment and installments as the service does.
+                $serialized = json_encode(['version' => 1, 'code' => $code, 'data' => [
+                    $data['expectedBalanceCents'], $data['guest'], $data['paymentMethod'],
+                    $data['paymentMethod'] === 'card' ? (int) $data['installments'] : null, true,
+                ]], JSON_THROW_ON_ERROR);
+                $fingerprint = hash_hmac('sha256', "existing-checkout-intent-v1\0".$serialized, $secret);
+            } catch (\JsonException $exception) {
+                return response()->json(['success' => false, 'code' => 'existing_checkout_intent_unavailable'], 503)
+                    ->header('Cache-Control', 'no-store, private');
+            }
+        }
+        $decision = DB::transaction(function () use ($hash, $key, $valid, $fingerprint): string {
             $now = now();
-            // Preserve keys already used before this protocol was introduced.
+            // A legacy order has no trustworthy payload binding, so it cannot be claimed retroactively.
             $alreadyUsed = DB::table('direct_booking_orders')->where('idempotency_key', $key)->exists();
             DB::table('existing_checkout_intents')->insertOrIgnore([
-                'key_hash' => $hash, 'state' => $valid || $alreadyUsed ? 'claimed' : 'rejected', 'created_at' => $now, 'updated_at' => $now,
+                'key_hash' => $hash, 'state' => $valid || $alreadyUsed ? 'claimed' : 'rejected',
+                'payload_hmac' => $alreadyUsed ? null : $fingerprint, 'created_at' => $now, 'updated_at' => $now,
             ]);
-            $state = DB::table('existing_checkout_intents')->where('key_hash', $hash)->lockForUpdate()->value('state');
+            $intent = DB::table('existing_checkout_intents')->where('key_hash', $hash)->lockForUpdate()->first();
+            if ($intent->state !== 'claimed') return 'rejected';
 
-            return $state === 'claimed' ? ($valid ? 'continue' : 'conflict') : 'rejected';
+            return $valid && is_string($intent->payload_hmac) && hash_equals($intent->payload_hmac, $fingerprint)
+                ? 'continue' : 'conflict';
         });
 
         if ($decision === 'continue') return $next($request);

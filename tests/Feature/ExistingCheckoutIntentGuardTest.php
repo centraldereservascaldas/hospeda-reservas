@@ -12,9 +12,13 @@ class ExistingCheckoutIntentGuardTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function send(string $key, array $payload): \Symfony\Component\HttpFoundation\Response
+    private function send(string $key, array $payload, string $code = 'ZX91K'): \Symfony\Component\HttpFoundation\Response
     {
         $request = Request::create('/api/existing-reservations/ZX91K/checkout', 'POST', $payload, [], [], ['HTTP_IDEMPOTENCY_KEY' => $key]);
+        $route = new \Illuminate\Routing\Route('POST', '/', []);
+        $route->bind($request);
+        $route->setParameter('code', $code);
+        $request->setRouteResolver(fn () => $route);
 
         return app(GuardExistingCheckoutIntent::class)->handle($request, fn () => response()->json(['accepted' => true], 201));
     }
@@ -46,6 +50,35 @@ class ExistingCheckoutIntentGuardTest extends TestCase
         $this->assertStringNotContainsString($key, $stored);
     }
 
+    public function test_changed_valid_payload_and_legacy_claim_fail_closed(): void
+    {
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
+        $key = 'bound-valid-intent-key-12345';
+        $this->assertSame(201, $this->send($key, $this->valid())->getStatusCode());
+        $changed = $this->valid();
+        $changed['guest']['email'] = 'other@example.test';
+        $this->assertSame(409, $this->send($key, $changed)->getStatusCode());
+        $this->assertSame(201, $this->send($key, $this->valid())->getStatusCode());
+        $row = DB::table('existing_checkout_intents')->first();
+        $this->assertSame(64, strlen($row->payload_hmac));
+        $this->assertStringNotContainsString('guest@example.test', json_encode($row));
+        $legacy = 'legacy-claimed-intent-key-123';
+        DB::table('existing_checkout_intents')->insert(['key_hash' => hash('sha256', $legacy), 'state' => 'claimed', 'created_at' => now(), 'updated_at' => now()]);
+        $this->assertSame(409, $this->send($legacy, $this->valid())->getStatusCode());
+    }
+    public function test_binding_matches_service_equivalence_and_reservation_code(): void
+    {
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
+        $key = 'equivalence-intent-key-12345';
+        $payload = $this->valid();
+        $this->assertSame(201, $this->send($key, $payload)->getStatusCode());
+        $payload['acceptedPayment'] = 'yes';
+        $payload['installments'] = null;
+        $this->assertSame(201, $this->send($key, $payload)->getStatusCode());
+        $this->assertSame(409, $this->send($key, $payload, 'AB123')->getStatusCode());
+        $payload['expectedBalanceCents'] = '10000';
+        $this->assertSame(409, $this->send($key, $payload)->getStatusCode());
+    }
     public function test_disabled_flag_preserves_existing_behavior(): void
     {
         $this->assertFalse(config('direct-booking.experimental_existing_intent_guard_enabled'));
@@ -69,6 +102,10 @@ class ExistingCheckoutIntentGuardTest extends TestCase
         config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
         $key = 'failed-downstream-intent-key-123';
         $request = Request::create('/api/existing-reservations/ZX91K/checkout', 'POST', $this->valid(), [], [], ['HTTP_IDEMPOTENCY_KEY' => $key]);
+        $route = new \Illuminate\Routing\Route('POST', '/', []);
+        $route->bind($request);
+        $route->setParameter('code', 'ZX91K');
+        $request->setRouteResolver(fn () => $route);
 
         try {
             app(GuardExistingCheckoutIntent::class)->handle($request, function () {
