@@ -174,7 +174,7 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(function (Request $r) use ($mode, &$reservation, $reservationId, $commission, &$created, &$marker) {
             if (str_contains($r->url(), '/finance/payment-providers/')) {
-                return Http::response(['_id' => str_repeat('f', 24), 'status' => 'active', 'internalName' => 'Pix API Cielo']);
+                return Http::response(['_id' => str_repeat('f', 24), 'status' => 'active', 'internalName' => 'Cielo Site Externo']);
             }
             if ($r->method() === 'POST') {
                 $marker = $r['desc'];

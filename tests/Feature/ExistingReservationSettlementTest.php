@@ -87,7 +87,7 @@ class ExistingReservationSettlementTest extends TestCase
         $this->assertTrue($service->settle($order)['ready']);
         $this->assertTrue($service->settle($order)['ready']);
         Http::assertSentCount(11);
-        Http::assertSent(fn (Request $request) => $request->method() === 'PATCH' && $request['paymentDate'] === '2026-11-10' && $request['name'] === 'Pix API Cielo' && str_starts_with($request['desc'], 'CRCN_SETTLEMENT:'));
+        Http::assertSent(fn (Request $request) => $request->method() === 'PATCH' && $request['paymentDate'] === '2026-11-10' && $request['name'] === 'Cielo Site Externo' && str_starts_with($request['desc'], 'CRCN_SETTLEMENT:'));
         $this->assertDatabaseCount('direct_booking_stays_actions', 1);
         $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => str_repeat('c', 24)]);
         $this->assertDatabaseHas('direct_booking_stays_actions', ['action_type' => 'settle_existing_receivable', 'status' => 'succeeded', 'external_id' => $payment['_id']]);

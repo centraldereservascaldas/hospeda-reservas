@@ -31,7 +31,7 @@ class ExistingReservationPaymentChannelsTest extends TestCase
         $id = str_repeat('f', 24);
         config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test', 'direct-booking.stays_cielo_pix_provider_id' => $id]);
         Http::preventStrayRequests();
-        Http::fake(['*' => Http::response(['_id' => $id, 'status' => 'active', 'internalName' => 'Pix API Cielo'])]);
+        Http::fake(['*' => Http::response(['_id' => $id, 'status' => 'active', 'internalName' => 'Cielo Site Externo'])]);
         $service = app(ExistingReservationPaymentChannels::class);
         $this->assertSame($id, $service->verifiedProvider($service->snapshot(), 'pix', null));
     }
@@ -44,7 +44,7 @@ class ExistingReservationPaymentChannelsTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(function ($request) use ($pix, $cards) {
             $id = basename($request->url());
-            $name = $id === $pix ? 'Pix API Cielo' : 'Cartão API Cielo '.array_search($id, $cards, true).'x';
+            $name = $id === $pix ? 'Cielo Site Externo' : 'Cartão API Cielo '.array_search($id, $cards, true).'x';
 
             return Http::response(['_id' => $id, 'status' => 'active', 'internalName' => $name]);
         });

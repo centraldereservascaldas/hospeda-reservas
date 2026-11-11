@@ -110,7 +110,7 @@ class ExistingReservationPaymentChannels
         $current = $this->snapshot();
         $candidate = $method === 'pix' ? ($snapshot['pix'] ?? null) : ($snapshot['cards'][$installments ?? 0] ?? null);
         $expected = $method === 'pix' ? $current['pix'] : ($current['cards'][$installments ?? 0] ?? null);
-        $name = $method === 'pix' ? 'Pix API Cielo' : 'Cartão API Cielo '.$installments.'x';
+        $name = $method === 'pix' ? 'Cielo Site Externo' : 'Cartão API Cielo '.$installments.'x';
         if (! in_array($method, ['pix', 'card'], true) || ($method === 'card' && ($installments === null || $installments < 1 || $installments > 6))
             || ! is_string($candidate) || ! is_string($expected) || ! hash_equals($expected, $candidate)) {
             return null;

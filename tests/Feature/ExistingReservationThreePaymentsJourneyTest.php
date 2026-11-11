@@ -49,7 +49,7 @@ class ExistingReservationThreePaymentsJourneyTest extends TestCase
             $this->assertSame(0, DB::transactionLevel(), 'External HTTP must remain outside the reservation lock.');
             if (str_contains($request->url(), 'stays.test')) {
                 if (str_contains($request->url(), '/finance/payment-providers/')) {
-                    return Http::response(['_id' => $provider, 'status' => 'active', 'internalName' => 'Pix API Cielo']);
+                    return Http::response(['_id' => $provider, 'status' => 'active', 'internalName' => 'Cielo Site Externo']);
                 }
                 if (str_ends_with(parse_url($request->url(), PHP_URL_PATH), '/finance/accounting-transactions')) {
                     $rows = [];
