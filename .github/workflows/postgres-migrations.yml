@@ -64,4 +64,4 @@ jobs:
 
       - name: Test reservation history migration and safe rollback on PostgreSQL
         if: github.event_name == 'pull_request'
-        run: php artisan test --compact tests/Feature/ExistingReservationCheckoutTest.php tests/Feature/MigrationIdentifierCompatibilityTest.php tests/Feature/PostgresReservationLockConcurrencyTest.php
+        run: php artisan test --compact tests/Feature/ExistingReservationCheckoutTest.php tests/Feature/MigrationIdentifierCompatibilityTest.php tests/Feature/PostgresReservationLockConcurrencyTest.php tests/Feature/ExistingReservationConcurrentClaimsTest.php
