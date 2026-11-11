@@ -70,6 +70,27 @@ class CheckoutGuestsTest extends TestCase
         $this->postJson('/api/checkout/'.$order->public_reference.'/guests', $payload, ['X-Checkout-Resume-Token' => str_repeat('a', 64)])->assertStatus(503)->assertJsonPath('success', false);
     }
 
+    public function test_booking_reservation_accepts_guest_details_without_overwriting_existing_note(): void
+    {
+        $order = $this->order();
+        $snapshot = ['_id' => 'reservation-1', '_idlisting' => 'JQ08G', '_idclient' => 'client-1', 'checkInDate' => '2026-11-10', 'checkOutDate' => '2026-11-13', 'guests' => 2, 'reservation_total_cents' => 39500];
+        $order->update(['origin' => 'stays_existing', 'quote_snapshot' => ['existing_reservation' => $snapshot]]);
+        $note = 'Observação da Booking';
+        $reservation = [...$snapshot, 'type' => 'booked', 'partner' => ['name' => 'API booking.com'], 'price' => ['currency' => 'BRL', '_f_total' => 395]];
+        Http::preventStrayRequests();
+        Http::fake(function (Request $request) use (&$note, $reservation) {
+            if ($request->method() === 'PATCH') {
+                $note = $request['internalNote'];
+            }
+
+            return Http::response([...$reservation, 'internalNote' => $note]);
+        });
+        $payload = ['holder' => ['name' => 'Pessoa Exemplo', 'document' => '12345678909', 'phone' => '11999999999'], 'companions' => []];
+        $this->postJson('/api/checkout/'.$order->public_reference.'/guests', $payload, ['X-Checkout-Resume-Token' => str_repeat('a', 64)])->assertOk();
+        $this->assertStringStartsWith('Observação da Booking', $note);
+        $this->assertStringContainsString('Titular: Pessoa Exemplo', $note);
+    }
+
     private function order(): DirectBookingOrder
     {
         config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);

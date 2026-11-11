@@ -50,3 +50,10 @@ test('Pix support has no installment text or session access URL', () => {
   assert.equal(message.includes('Parcelamento'), false);
   assert.equal(message.includes('/checkout/'), false);
 });
+
+test('support may share only the verified reservation balance without inventing payment method', () => {
+  const message = new URL(getCheckoutSupportUrl({ reservationCode: 'ZX91K', balanceTotal: 1016 })).searchParams.get('text')!;
+  assert.ok(message.includes('ZX91K'));
+  assert.ok(message.includes('Saldo para conferência: R$ 1.016,00'));
+  assert.equal(message.includes('Como quero pagar:'), false);
+});

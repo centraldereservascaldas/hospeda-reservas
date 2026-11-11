@@ -11,6 +11,7 @@ class DirectBookingOrderResource extends JsonResource
     {
         return [
             'status' => $this->status->value,
+            'origin' => $this->origin,
             'publicReference' => $this->public_reference,
             'reservationConfirmed' => $this->reservation_status === 'booked',
             'listingId' => $this->listing_id,

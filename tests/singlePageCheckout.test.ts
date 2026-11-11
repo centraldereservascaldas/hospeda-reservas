@@ -5,6 +5,7 @@ import { checkoutApi, type CheckoutResumeResponse } from '../src/services/checko
 import { crcnBackendApi } from '../src/services/crcnBackendApi.ts';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
 import type { CieloSopOptions } from '../src/services/cieloSopSdk.ts';
+import { saveCheckoutResumeToken } from '../src/utils/checkoutResumeStorage.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
 Object.assign(globalThis, {
@@ -13,12 +14,14 @@ Object.assign(globalThis, {
   HTMLElement: dom.window.HTMLElement,
   Element: dom.window.Element,
   Node: dom.window.Node,
+  PopStateEvent: dom.window.PopStateEvent,
   getComputedStyle: dom.window.getComputedStyle,
 });
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 const { SinglePageCheckout } = await import('../src/components/booking/SinglePageCheckout.tsx');
 const { CheckoutEntry } = await import('../src/components/booking/CheckoutEntry.tsx');
+const { CheckoutResumePage } = await import('../src/components/booking/CheckoutResumePage.tsx');
 const originals = { ...checkoutApi };
 const originalWindowTimeout = window.setTimeout;
 const originalPrice = crcnBackendApi.calculatePrice;
@@ -90,6 +93,7 @@ afterEach(() => {
 function setup(
   parkTicketsPreviewEnabled = false,
   checkoutPayment: CheckoutResumeResponse['payment'] = payment,
+  withResumeRoute = false,
 ) {
   checkoutApi.getCheckoutTerms = async () => ({
     kind: 'ready',
@@ -110,8 +114,7 @@ function setup(
       payment: checkoutPayment,
     },
   });
-  return render(
-    React.createElement(SinglePageCheckout, {
+  const checkoutProps = {
       bookingData,
       guestPrefill: {
         fullName: 'Sandbox Guest',
@@ -119,8 +122,19 @@ function setup(
         phone: '11999999999',
       },
       onClose() {},
-    }),
-  );
+    };
+  function RouteHarness() {
+    const [path, setPath] = React.useState(window.location.pathname);
+    React.useEffect(() => {
+      const update = () => setPath(window.location.pathname);
+      window.addEventListener('popstate', update);
+      return () => window.removeEventListener('popstate', update);
+    }, []);
+    return path === `/checkout/${reference}/pagamento-recusado`
+      ? React.createElement(CheckoutResumePage, { reference })
+      : React.createElement(SinglePageCheckout, checkoutProps);
+  }
+  return render(withResumeRoute ? React.createElement(RouteHarness) : React.createElement(SinglePageCheckout, checkoutProps));
 }
 
 async function fill(view: ReturnType<typeof setup>) {
@@ -229,6 +243,37 @@ test('one submit prepares the reservation then tokenizes and pays without leavin
   await waitFor(() => assert.ok(view.getByText('Reserva confirmada!')));
   assert.deepEqual(calls, ['reservation', 'access-token', 'tokenize', 'payment']);
   assert.ok(view.getByText('SIMULATED-1'));
+});
+
+test('a rejected new-reservation card payment navigates to the tracking page and offers safe retry', async () => {
+  const token = 'W'.repeat(64);
+  let submissions = 0;
+  checkoutApi.createCheckout = async () => {
+    saveCheckoutResumeToken(reference, token, order.expiresAt!);
+    return { success: true, order, payment, idempotentReplay: false, resume: { reference, token, path: `/checkout/${reference}`, expiresAt: order.expiresAt! } };
+  };
+  checkoutApi.getCieloSopAccessToken = async () => ({ environment: 'sandbox', accessToken: 'sandbox-fixture' });
+  window.bpSop_silentOrderPost = (options) => options.onSuccess({ PaymentToken: '11111111-1111-4111-8111-111111111111' });
+  checkoutApi.createCheckoutPayment = async () => {
+    submissions++;
+    return { kind: 'response', success: true, code: 'rejected', message: 'Não aprovado', replayed: false, payment: null };
+  };
+  checkoutApi.resumeCheckout = async () => ({
+    kind: 'ready', data: {
+      success: true,
+      order: { ...order, origin: 'website', status: 'pagamento_recusado', paymentStatus: 'rejected' },
+      confirmation: null,
+      payment: { ...payment, methods: ['pix', 'card'], attempt: { status: 'rejected', method: 'card', amount: '3192.24', currency: 'BRL', expiresAt: null, paidAt: null, pix: null } },
+    },
+  });
+  const view = setup(false, payment, true);
+  await fill(view);
+  fireEvent.submit(view.container.querySelector('form')!);
+  await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pagamento não aprovado' })));
+  assert.equal(window.location.pathname, `/checkout/${reference}/pagamento-recusado`);
+  assert.equal(window.location.href.includes(token), false);
+  assert.ok(view.getByRole('button', { name: 'Tentar novamente com Pix' }));
+  assert.equal(submissions, 1);
 });
 
 test('Pix stays on the checkout, has no surcharge and waits for authoritative confirmation', async () => {

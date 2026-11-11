@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CheckoutGuestsController;
 use App\Http\Controllers\Api\CheckoutPaymentController;
 use App\Http\Controllers\Api\CieloSopController;
 use App\Http\Controllers\Api\CieloWebhookController;
+use App\Http\Controllers\Api\ExistingReservationCheckoutController;
 use App\Http\Controllers\Api\GuestReservationController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OwnerAccessController;
@@ -40,6 +41,8 @@ Route::get('/accommodations/{id}', [AccommodationController::class, 'show']);
 Route::post('/search', [AccommodationController::class, 'search']);
 Route::get('/accommodations/{id}/calendar', [AccommodationController::class, 'calendar']);
 Route::post('/price', [BookingController::class, 'price']);
+Route::get('/existing-reservations/{code}/checkout-summary', [ExistingReservationCheckoutController::class, 'show'])->middleware('throttle:5,1');
+Route::post('/existing-reservations/{code}/checkout', [ExistingReservationCheckoutController::class, 'store'])->middleware('throttle:5,1');
 Route::get('/stays/status', [BookingController::class, 'staysStatus']);
 Route::get('/stays-checkout/readiness', [BookingController::class, 'staysCheckoutReadiness'])
     ->middleware('throttle:30,1');

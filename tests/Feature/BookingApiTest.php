@@ -20,6 +20,7 @@ class BookingApiTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Keep the fixed November booking fixtures in the future on every CI run.
         $this->travelTo(CarbonImmutable::parse('2026-10-24T17:00:00Z'));
     }
 

@@ -239,6 +239,7 @@ class DirectStaysReservationService
 
         DirectBookingOrder::query()
             ->whereNotNull('stays_reservation_id')
+            ->where(fn ($query) => $query->whereNull('origin')->orWhere('origin', '!=', 'stays_existing'))
             ->where(function ($query): void {
                 $query->whereIn('status', [DirectBookingOrderStatus::PreReservado, DirectBookingOrderStatus::PagamentoRecusado, DirectBookingOrderStatus::LiberacaoPendente])
                     ->orWhere('status', DirectBookingOrderStatus::AtencaoOperacional);
@@ -286,6 +287,9 @@ class DirectStaysReservationService
     public function release(DirectBookingOrder $order): array
     {
         $order->refresh();
+        if ($order->origin === 'stays_existing') {
+            return $this->result(false, 'existing_reservation_not_released', 'O vencimento do checkout não cancela uma reserva existente.');
+        }
         if ($this->chargebackRequiresManualReview($order)) {
             return $this->result(false, 'gateway_chargeback_requires_review', 'A contestação do pagamento exige revisão operacional; nenhuma liberação automática foi enviada à Stays.');
         }
@@ -298,8 +302,17 @@ class DirectStaysReservationService
             return $this->attention($order, 'payment_state_requires_reconciliation', 'A situação do pagamento exige conciliação antes de liberar a unidade.');
         }
 
-        $releaseError = DB::transaction(function () use ($order): ?string {
+        $serializeReservation = app(ReservationCoordinationMode::class)->isRequired($order);
+        $identity = $serializeReservation ? app(StaysReservationIdentity::class)->resolve($order->stays_reservation_id) : null;
+        if ($serializeReservation && $identity === null) {
+            return $this->result(false, 'reservation_identity_unverified', 'A identidade da reserva precisa ser conferida antes da liberação.');
+        }
+
+        $prepareRelease = function () use ($order, $identity): ?string {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
+            if ($identity !== null && ($lockedOrder->origin !== $order->origin || $lockedOrder->stays_reservation_id !== $order->stays_reservation_id)) {
+                return 'reservation_no_longer_releasable';
+            }
             if ($this->paymentRequiresReconciliation($lockedOrder)) {
                 return 'payment_state_requires_reconciliation';
             }
@@ -311,13 +324,19 @@ class DirectStaysReservationService
             ], true)) {
                 return 'reservation_no_longer_releasable';
             }
+            if ($identity !== null && ! app(ReservationReleaseGuard::class)->claim($lockedOrder, $identity)) {
+                return 'reservation_shared_or_payment_active';
+            }
             if ($lockedOrder->status !== DirectBookingOrderStatus::LiberacaoPendente) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::LiberacaoPendente, ['source' => 'reservation_expiration']);
                 $lockedOrder->save();
             }
 
             return null;
-        });
+        };
+        $releaseError = $identity !== null
+            ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $prepareRelease)
+            : DB::transaction($prepareRelease);
         if ($releaseError !== null) {
             if ($releaseError === 'payment_state_requires_reconciliation') {
                 return $this->attention($order, $releaseError, 'A tentativa de pagamento ativa exige conciliação antes de liberar a unidade.');
@@ -365,7 +384,7 @@ class DirectStaysReservationService
             return $this->markAttention($action, $order, 'reservation_not_releasable', 'A reserva não está em estado reserved; a liberação automática foi interrompida.');
         }
 
-        $mayRelease = DB::transaction(function () use ($order): bool {
+        $verifyRelease = function () use ($order, $identity): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
 
             $confirmationActionInProgress = DirectBookingStaysAction::query()
@@ -376,8 +395,12 @@ class DirectStaysReservationService
 
             return $lockedOrder->status === DirectBookingOrderStatus::LiberacaoPendente
                 && ! $this->paymentRequiresReconciliation($lockedOrder)
+                && ($identity === null || (app(ReservationReleaseGuard::class)->claim($lockedOrder, $identity)))
                 && ! $confirmationActionInProgress;
-        });
+        };
+        $mayRelease = $identity !== null
+            ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $verifyRelease)
+            : DB::transaction($verifyRelease);
         if (! $mayRelease) {
             return $this->markAttention($action, $order, 'reservation_release_interrupted', 'O estado do pagamento ou pedido mudou antes do cancelamento. Nenhum novo cancelamento foi enviado à Stays.');
         }
@@ -408,6 +431,36 @@ class DirectStaysReservationService
         $reservation = $this->stays->get('/booking/reservations/'.rawurlencode($order->stays_reservation_id));
         if (! is_array($reservation)) {
             return null;
+        }
+
+        if ($order->origin === 'stays_existing') {
+            if (! config('direct-booking.existing_reservation_checkout_enabled', false)) {
+                return false;
+            }
+            $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
+            $guestDetails = is_array($order->guests) ? $order->guests : [];
+            $guestCount = 0;
+            foreach (['adults', 'children', 'infants'] as $guestType) {
+                if (! is_int($guestDetails[$guestType] ?? null) || $guestDetails[$guestType] < 0) {
+                    return false;
+                }
+                $guestCount += $guestDetails[$guestType];
+            }
+            if (! is_array($snapshot) || ($snapshot['_id'] ?? null) !== $order->stays_reservation_id
+                || ($snapshot['_idclient'] ?? null) !== $order->stays_client_id
+                || ($snapshot['_idlisting'] ?? null) !== $order->stays_listing_id
+                || ($snapshot['checkInDate'] ?? null) !== $order->check_in?->toDateString()
+                || ($snapshot['checkOutDate'] ?? null) !== $order->check_out?->toDateString()
+                || ($snapshot['guests'] ?? null) !== $guestCount || $order->currency !== 'BRL'
+                || ($snapshot['pending_amount_cents'] ?? null) !== MoneyAmount::toCents($order->quote_total)) {
+                return false;
+            }
+            $payments = $this->stays->get('/booking/reservations/'.rawurlencode($order->stays_reservation_id).'/payments');
+            if (! is_array($payments)) {
+                return null;
+            }
+
+            return app(ExistingReservationPaymentGuard::class)->matches($reservation, $payments, $snapshot);
         }
 
         return ($reservation['type'] ?? null) === 'reserved'
@@ -624,9 +677,16 @@ class DirectStaysReservationService
         }
 
         $commercialDetailsVerified = $this->reservationMatcher->matchesCommercialDetails($reservation, $order);
+        $serializeReservation = app(ReservationCoordinationMode::class)->isRequired($order);
+        $identity = $serializeReservation ? app(StaysReservationIdentity::class)->resolve($reservationId) : null;
+        if ($serializeReservation && $identity === null) {
+            return $action
+                ? $this->markAttention($action, $order, 'reservation_identity_unverified', 'A identidade da reserva precisa ser conferida antes da associação ao pedido.')
+                : $this->attention($order, 'reservation_identity_unverified', 'A identidade da reserva precisa ser conferida antes da associação ao pedido.');
+        }
 
         $safeSnapshot = array_intersect_key($reservation, array_flip(['_id', 'id', '_idlisting', '_idclient', 'type', 'checkInDate', 'checkOutDate', 'guests', 'price']));
-        if ($action !== null) {
+        if ($action !== null && $identity === null) {
             $this->markActionSucceeded($action, $reservationId, $safeSnapshot);
         }
 
@@ -634,8 +694,11 @@ class DirectStaysReservationService
         $holdStartedAt = $reservationAction?->created_at ?? $order->created_at;
         $holdExpiresAt = $holdStartedAt?->copy()->addMinutes($holdMinutes) ?? now()->addMinutes($holdMinutes);
 
-        DB::transaction(function () use ($order, $reservationId, $safeSnapshot, $holdExpiresAt, $commercialDetailsVerified): void {
+        $adopt = function () use ($order, $reservationId, $safeSnapshot, $holdExpiresAt, $commercialDetailsVerified, $identity): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
+            if ($identity !== null && app(ReservationReleaseGuard::class)->paymentBlocked($identity['canonical'], $identity['code'])) {
+                return false;
+            }
             if (in_array($lockedOrder->status, [
                 DirectBookingOrderStatus::Expirado,
                 DirectBookingOrderStatus::ReembolsoPendente,
@@ -654,7 +717,7 @@ class DirectStaysReservationService
                 $lockedOrder->operational_events = $events;
                 $lockedOrder->save();
 
-                return;
+                return true;
             }
             $lockedOrder->stays_reservation_id = $reservationId;
             $lockedOrder->reservation_status = 'reserved';
@@ -680,7 +743,20 @@ class DirectStaysReservationService
             ];
             $lockedOrder->operational_events = $events;
             $lockedOrder->save();
-        });
+
+            return true;
+        };
+        $adopted = $identity !== null
+            ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $adopt)
+            : DB::transaction($adopt);
+        if (! $adopted) {
+            return $action
+                ? $this->markAttention($action, $order, 'reservation_release_in_progress', 'A reserva está em liberação ou exige conferência; nenhuma cobrança será iniciada.')
+                : $this->attention($order, 'reservation_release_in_progress', 'A reserva está em liberação ou exige conferência; nenhuma cobrança será iniciada.');
+        }
+        if ($action !== null && $identity !== null) {
+            $this->markActionSucceeded($action, $reservationId, $safeSnapshot);
+        }
 
         if (! $commercialDetailsVerified) {
             return $this->result(false, 'stays_reservation_details_unverified', 'A Stays não confirmou quantidade de hóspedes, valor e moeda da pré-reserva. Nenhuma cobrança será iniciada.');

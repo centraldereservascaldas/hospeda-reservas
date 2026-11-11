@@ -178,3 +178,67 @@ test('new cancellation request displays the returned receipt and received status
     crcnBackendApi.requestDirectBookingCancellation = originalRequest;
   }
 });
+
+test('payment deadline for an existing reservation is distinct from a website pre-reservation', () => {
+  const deadline = '2026-11-10T15:00:00.000Z';
+  const { getByText } = render(
+    React.createElement(TripsView, {
+      reservations: [],
+      directBookingOrders: [
+        {
+          ...cancellationOrder,
+          origin: 'stays_existing',
+          status: 'pagamento_pendente',
+          expiresAt: deadline,
+        },
+        {
+          ...cancellationOrder,
+          origin: 'website',
+          publicReference: 'other-reference',
+          status: 'pagamento_pendente',
+          expiresAt: deadline,
+        },
+      ],
+      currency: 'BRL',
+      onCancelReservation: async () => {},
+      onExploreMore: () => {},
+    }),
+  );
+  assert.ok(getByText(/pagamento até/));
+  assert.ok(getByText(/pré-reserva até/));
+});
+
+test('support-required cancellation response directs the guest to support without claiming cancellation', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        success: false,
+        code: 'direct_booking_cancellation_requires_support',
+        message: 'Entre em contato com o atendimento.',
+      }),
+      { status: 409, headers: { 'Content-Type': 'application/json' } },
+    );
+  try {
+    const { getByRole, getByText } = render(
+      React.createElement(TripsView, {
+        reservations: [reservation],
+        currency: 'BRL',
+        onCancelReservation: (id: string) => crcnBackendApi.cancelMyReservation(id, 'test-token'),
+        onExploreMore: () => {},
+      }),
+    );
+    fireEvent.click(getByRole('button', { name: 'Cancelar' }));
+    fireEvent.click(getByRole('button', { name: 'Confirmar cancelamento' }));
+    await waitFor(() =>
+      assert.ok(
+        getByText(
+          /Entre em contato com o atendimento para analisar o cancelamento desta reserva e seus pagamentos. A reserva continua ativa./,
+        ),
+      ),
+    );
+    assert.ok(getByRole('dialog', { name: 'Deseja cancelar esta reserva?' }));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

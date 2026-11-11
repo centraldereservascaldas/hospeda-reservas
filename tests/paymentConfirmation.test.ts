@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
-import { navigateToPaymentConfirmation } from '../src/utils/paymentConfirmation';
+import { navigateToPaymentConfirmation, navigateToPaymentRejection } from '../src/utils/paymentConfirmation';
 import type { DirectBookingOrderSummary } from '../src/services/checkoutApi';
 
 test('confirmation URL is reached only for approved payment and never contains the access token', () => {
@@ -33,6 +33,23 @@ test('confirmation URL is reached only for approved payment and never contains t
       }),
       false,
     );
+  } finally {
+    Object.assign(globalThis, { window: previousWindow, PopStateEvent: previousPopStateEvent });
+    dom.window.close();
+  }
+});
+
+test('rejection URL is used only after the server reports a rejected payment', () => {
+  const dom = new JSDOM('', { url: 'https://example.test/checkout?entrada=2027-01-08&token=secret' });
+  const previousWindow = globalThis.window;
+  const previousPopStateEvent = globalThis.PopStateEvent;
+  Object.assign(globalThis, { window: dom.window, PopStateEvent: dom.window.PopStateEvent });
+  try {
+    const order = { publicReference: 'B'.repeat(40), status: 'atencao_operacional' } as DirectBookingOrderSummary;
+    assert.equal(navigateToPaymentRejection(order), false);
+    assert.equal(navigateToPaymentRejection({ ...order, status: 'pagamento_recusado' }), true);
+    assert.equal(dom.window.location.pathname, `/checkout/${order.publicReference}/pagamento-recusado`);
+    assert.equal(dom.window.location.search, '?entrada=2027-01-08');
   } finally {
     Object.assign(globalThis, { window: previousWindow, PopStateEvent: previousPopStateEvent });
     dom.window.close();

@@ -70,9 +70,13 @@ jobs:
 
   postgres-migrations:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [16, 17]
     services:
       postgres:
-        image: postgres:17
+        image: postgres:${{ matrix.postgres }}-alpine
         env:
           POSTGRES_DB: hospeda_test
           POSTGRES_USER: hospeda_test

@@ -8,9 +8,12 @@ use App\Models\DirectBookingEmail;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysReservationService;
+use App\Services\Payments\CieloClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\Payments\MercadoPagoClient;
+use App\Services\StaysReservationIdentity;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
@@ -19,6 +22,199 @@ use Tests\TestCase;
 class CheckoutPaymentEndpointTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_mercadopago_will_not_start_while_reservation_release_is_claimed(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'mercadopago']);
+        DB::table('existing_reservation_payment_locks')->insert(['stays_reservation_id' => str_repeat('a', 24), 'release_order_id' => fake()->uuid(), 'created_at' => now(), 'updated_at' => now()]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturnTrue();
+        $this->mock(MercadoPagoClient::class)->shouldNotReceive('createPayment');
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix'],
+            ['Idempotency-Key' => 'release-lock-mp-test-0001', 'X-Checkout-Resume-Token' => 'resume-token'])
+            ->assertStatus(409)->assertJsonPath('code', 'order_not_payable');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+    }
+
+    public function test_unrelated_existing_reservation_does_not_add_identity_lookup_after_rollback(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        $website = $this->createPayableOrder();
+        $website->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'mercadopago']);
+        DB::table('stays_reservation_aliases')->insert(['canonical_id' => str_repeat('a', 24), 'reservation_code' => 'AB12C', 'created_at' => now(), 'updated_at' => now()]);
+        $other = $this->createPayableOrder();
+        $other->update(['stays_reservation_id' => str_repeat('b', 24), 'origin' => 'stays_existing']);
+        DB::table('stays_reservation_aliases')->insert(['canonical_id' => str_repeat('b', 24), 'reservation_code' => 'XY12Z', 'created_at' => now(), 'updated_at' => now()]);
+        $this->mock(StaysReservationIdentity::class)->shouldNotReceive('resolve');
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturnTrue();
+        $gateway = $this->mock(MercadoPagoClient::class);
+        $gateway->shouldReceive('createPayment')->once()->andReturn(['id' => '123456789']);
+        $gateway->shouldReceive('getPayment')->once()->andReturn($this->pendingGatewayPayment($website));
+
+        $this->postJson('/api/checkout/'.$website->public_reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix'],
+            ['Idempotency-Key' => 'unrelated-existing-rollback-01', 'X-Checkout-Resume-Token' => 'resume-token'])->assertCreated();
+        $this->assertNull(DirectBookingPaymentAttempt::query()->sole()->stays_reservation_canonical_id);
+    }
+
+    public function test_unknown_short_code_after_rollback_fails_closed_when_stays_is_unavailable(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        $website = $this->createPayableOrder();
+        $website->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'mercadopago']);
+        $other = $this->createPayableOrder();
+        $other->update(['stays_reservation_id' => str_repeat('b', 24), 'origin' => 'stays_existing']);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturnNull();
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturnTrue();
+        $this->mock(MercadoPagoClient::class)->shouldNotReceive('createPayment');
+
+        $this->postJson('/api/checkout/'.$website->public_reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix'],
+            ['Idempotency-Key' => 'unknown-alias-rollback-001', 'X-Checkout-Resume-Token' => 'resume-token'])
+            ->assertStatus(409)->assertJsonPath('code', 'existing_reservation_unverified');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+    }
+
+    public function test_mercadopago_does_not_start_if_other_origin_has_active_attempt(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $website = $this->createPayableOrder();
+        $website->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'mercadopago']);
+        $existing = $this->createPayableOrder();
+        $existing->update(['stays_reservation_id' => str_repeat('a', 24), 'origin' => 'stays_existing']);
+        $existing->paymentAttempts()->create(['idempotency_key' => 'other-origin-payment-001', 'request_fingerprint' => str_repeat('b', 64), 'payment_method' => 'pix', 'payment_method_id' => 'pix', 'status' => 'pending', 'amount' => '3001.00', 'currency' => 'BRL']);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->twice()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->twice()->andReturnTrue();
+        $this->mock(MercadoPagoClient::class)->shouldNotReceive('createPayment');
+
+        $this->postJson('/api/checkout/'.$website->public_reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix'],
+            ['Idempotency-Key' => 'cross-origin-mp-test-0001', 'X-Checkout-Resume-Token' => 'resume-token'])
+            ->assertStatus(409)->assertJsonPath('code', 'payment_attempt_in_progress');
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        $this->postJson('/api/checkout/'.$website->public_reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix'],
+            ['Idempotency-Key' => 'cross-origin-mp-test-0002', 'X-Checkout-Resume-Token' => 'resume-token'])
+            ->assertStatus(409)->assertJsonPath('code', 'payment_attempt_in_progress');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 1);
+    }
+
+    public function test_hosted_cielo_does_not_start_if_other_origin_has_active_attempt(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.cielo.checkout_merchant_id' => 'hosted-merchant',
+            'services.cielo.checkout_sop_client_id' => 'hosted-client', 'services.cielo.checkout_sop_client_secret' => 'hosted-secret']);
+        $website = $this->createPayableOrder();
+        $website->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'cielo_checkout', 'gateway_merchant_id' => 'hosted-merchant']);
+        $existing = $this->createPayableOrder();
+        $existing->update(['stays_reservation_id' => str_repeat('a', 24), 'origin' => 'stays_existing']);
+        $existing->paymentAttempts()->create(['idempotency_key' => 'other-origin-payment-001', 'request_fingerprint' => str_repeat('b', 64), 'payment_method' => 'pix', 'payment_method_id' => 'pix', 'status' => 'pending', 'amount' => '3001.00', 'currency' => 'BRL']);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->twice()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->twice()->andReturnTrue();
+        $this->mock(CieloClient::class)->shouldNotReceive('createCheckoutPage');
+
+        $result = app(DirectCheckoutPaymentService::class)->createCieloCheckoutPage($website, 'cross-origin-hosted-0001');
+        $this->assertSame('payment_attempt_in_progress', $result['code']);
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        $result = app(DirectCheckoutPaymentService::class)->createCieloCheckoutPage($website, 'cross-origin-hosted-0002');
+        $this->assertSame('payment_attempt_in_progress', $result['code']);
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 1);
+    }
+
+    public function test_hosted_cielo_does_not_start_while_reservation_release_is_claimed(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.cielo.checkout_merchant_id' => 'hosted-merchant',
+            'services.cielo.checkout_sop_client_id' => 'hosted-client', 'services.cielo.checkout_sop_client_secret' => 'hosted-secret']);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'cielo_checkout', 'gateway_merchant_id' => 'hosted-merchant']);
+        DB::table('existing_reservation_payment_locks')->insert(['stays_reservation_id' => str_repeat('a', 24), 'release_order_id' => fake()->uuid(), 'created_at' => now(), 'updated_at' => now()]);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturnTrue();
+        $this->mock(CieloClient::class)->shouldNotReceive('createCheckoutPage');
+
+        $result = app(DirectCheckoutPaymentService::class)->createCieloCheckoutPage($order, 'release-hosted-test-0001');
+        $this->assertSame('order_not_payable', $result['code']);
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+    }
+
+    public function test_mercadopago_attempt_persists_identity_and_applies_reply_under_reservation_lock(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'mercadopago']);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturnTrue();
+        $gateway = $this->mock(MercadoPagoClient::class);
+        $gateway->shouldReceive('createPayment')->once()->andReturn(['id' => '123456789']);
+        $gateway->shouldReceive('getPayment')->once()->andReturn($this->pendingGatewayPayment($order));
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix'],
+            ['Idempotency-Key' => 'website-mp-lock-test-0001', 'X-Checkout-Resume-Token' => 'resume-token'])->assertCreated();
+        $this->assertSame(str_repeat('a', 24), DirectBookingPaymentAttempt::query()->sole()->stays_reservation_canonical_id);
+        $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => str_repeat('a', 24)]);
+    }
+
+    public function test_legacy_mercadopago_attempt_is_backfilled_before_reconciliation(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'mercadopago', 'status' => DirectBookingOrderStatus::PagamentoPendente, 'payment_status' => 'pending']);
+        $attempt = $order->paymentAttempts()->create(['idempotency_key' => 'legacy-mp-attempt-00001', 'request_fingerprint' => str_repeat('b', 64),
+            'gateway_provider' => 'mercadopago', 'gateway_payment_id' => '123456789', 'payment_method' => 'pix', 'payment_method_id' => 'pix', 'status' => 'pending', 'amount' => '3001.00', 'currency' => 'BRL']);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolveForLegacyOrder')->once()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        $this->mock(MercadoPagoClient::class)->shouldReceive('getPayment')->once()->andReturn($this->pendingGatewayPayment($order));
+
+        $result = app(DirectCheckoutPaymentService::class)->reconcileGatewayPayment('123456789');
+        $this->assertSame('pending', $result['attempt']->status);
+        $this->assertSame(str_repeat('a', 24), $attempt->refresh()->stays_reservation_canonical_id);
+    }
+
+    public function test_mercadopago_timeout_cannot_overwrite_a_webhook_approval(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true]);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'mercadopago']);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturnTrue();
+        $this->mock(MercadoPagoClient::class)->shouldReceive('createPayment')->once()->andReturnUsing(function () use ($order) {
+            DirectBookingPaymentAttempt::query()->sole()->update(['status' => 'approved', 'gateway_status' => 'approved', 'gateway_payment_id' => '123456789']);
+            $order->update(['status' => DirectBookingOrderStatus::PagoEmConfirmacao, 'payment_status' => 'approved']);
+            throw new RuntimeException('synthetic timeout after webhook');
+        });
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix'],
+            ['Idempotency-Key' => 'website-mp-timeout-0001', 'X-Checkout-Resume-Token' => 'resume-token'])->assertOk()->assertJsonPath('payment.status', 'approved');
+        $this->assertSame('approved', DirectBookingPaymentAttempt::query()->sole()->status);
+        $this->assertSame('approved', $order->refresh()->payment_status);
+    }
+
+    public function test_hosted_cielo_timeout_cannot_overwrite_a_webhook_approval(): void
+    {
+        $this->enablePayments();
+        config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.cielo.checkout_merchant_id' => 'hosted-merchant',
+            'services.cielo.checkout_sop_client_id' => 'hosted-client', 'services.cielo.checkout_sop_client_secret' => 'hosted-secret']);
+        $order = $this->createPayableOrder();
+        $order->update(['stays_reservation_id' => 'AB12C', 'gateway_provider' => 'cielo_checkout', 'gateway_merchant_id' => 'hosted-merchant']);
+        $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->once()->andReturn(['canonical' => str_repeat('a', 24), 'code' => 'AB12C']);
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturnTrue();
+        $this->mock(CieloClient::class)->shouldReceive('createCheckoutPage')->once()->andReturnUsing(function () use ($order) {
+            DirectBookingPaymentAttempt::query()->sole()->update(['status' => 'approved', 'gateway_status' => 'approved', 'gateway_payment_id' => 'hosted-id']);
+            $order->update(['status' => DirectBookingOrderStatus::PagoEmConfirmacao, 'payment_status' => 'approved']);
+            throw new RuntimeException('synthetic timeout after webhook');
+        });
+
+        $result = app(DirectCheckoutPaymentService::class)->createCieloCheckoutPage($order, 'website-hosted-timeout-001');
+        $this->assertSame('approved', $result['code']);
+        $this->assertSame('approved', DirectBookingPaymentAttempt::query()->sole()->status);
+        $this->assertSame('approved', $order->refresh()->payment_status);
+    }
 
     public function test_replaying_payment_request_does_not_create_another_gateway_payment(): void
     {

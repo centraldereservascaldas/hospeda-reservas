@@ -71,6 +71,19 @@ class DirectStaysPaymentService
             return $this->attention($order, 'approved_payment_mismatch', 'O pagamento aprovado não corresponde ao valor e moeda congelados no pedido.');
         }
 
+        if ($order->origin === 'stays_existing') {
+            // An approved gateway result is not sufficient for automatic settlement:
+            // a late Pix may overlap a new payment or a manual Stays adjustment.
+            // Compare the capture time with both deadlines, not the notification time.
+            if ($attempt->paid_at === null || $attempt->expires_at === null
+                || $attempt->paid_at->greaterThanOrEqualTo($attempt->expires_at)
+                || $attempt->paid_at->greaterThanOrEqualTo($order->expires_at)) {
+                return $this->attention($order, 'existing_payment_after_expiration', 'O pagamento foi confirmado após o prazo ou sem horário verificável. A reserva exige conferência antes da baixa automática.');
+            }
+
+            return $this->confirmExistingReservation($order);
+        }
+
         $reservationEndpoint = '/booking/reservations/'.rawurlencode($order->stays_reservation_id);
         $reservation = $this->stays->get($reservationEndpoint);
         if (! is_array($reservation) || ! $this->matchesReservationForConfirmation($reservation, $order)) {
@@ -108,6 +121,67 @@ class DirectStaysPaymentService
         }
 
         return $this->confirmReservationType($order, $reservationEndpoint, $reservation);
+    }
+
+    /** @return array{ready: bool, code: string, message: string} */
+    private function confirmExistingReservation(DirectBookingOrder $order): array
+    {
+        if (! config('direct-booking.existing_reservation_checkout_enabled', false)) {
+            return $this->attention($order, 'existing_checkout_disabled', 'A conciliação da reserva existente está desativada e exige conferência.');
+        }
+        $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
+        if (! is_array($snapshot)) {
+            return $this->attention($order, 'existing_snapshot_missing', 'Os dados da reserva precisam de conferência.');
+        }
+
+        $result = app(ExistingReservationSettlement::class)->settle($order);
+        if (! $result['ready']) {
+            return $this->attention($order, $result['code'], 'O pagamento aprovado requer conferência antes da confirmação da reserva.');
+        }
+        $endpoint = '/booking/reservations/'.rawurlencode((string) $order->stays_reservation_id);
+        $reservation = $this->stays->get($endpoint);
+        $guard = app(ExistingReservationPaymentGuard::class);
+        if (! is_array($reservation) || ! $guard->matchesReservation($reservation, $snapshot, allowConfirmedTransition: true)) {
+            return $this->attention($order, 'existing_reservation_changed', 'O estado da reserva mudou após o pagamento e requer conferência.');
+        }
+        if (! $guard->hasFullyPaidReservation($reservation, $snapshot)) {
+            return $this->attention($order, 'existing_balance_remaining', 'O pagamento foi registrado, mas o saldo total da reserva ainda não aparece como pago na Stays.');
+        }
+
+        $action = $this->action($order, 'confirm_reservation', ['type' => 'booked']);
+        if (($reservation['type'] ?? null) === 'booked') {
+            if ($action->status !== 'succeeded') {
+                $this->markActionSucceeded($action, (string) $order->stays_reservation_id, $this->safeExistingReservationSnapshot($reservation));
+            }
+
+            return $this->markConfirmed($order, $reservation);
+        }
+        if ($action->attempt_count > 0 || $action->status !== 'pending') {
+            return $this->markAttention($action, $order, 'existing_confirmation_unconfirmed', 'A confirmação anterior exige conferência; nenhuma repetição foi enviada.');
+        }
+        $claim = $this->claim($action, $order);
+        if (! $claim['claimed']) {
+            return $this->result(false, $claim['status'], 'A confirmação da reserva já está em andamento ou requer conferência.');
+        }
+        $latest = $this->stays->get($endpoint);
+        if (! is_array($latest) || ! $guard->matchesReservation($latest, $snapshot, allowConfirmedTransition: true)
+            || ! $guard->hasFullyPaidReservation($latest, $snapshot) || ($latest['type'] ?? null) !== 'reserved') {
+            return $this->markAttention($action, $order, 'existing_reservation_changed', 'O estado da reserva mudou antes da confirmação.');
+        }
+        $order->refresh();
+        if ($order->payment_status !== 'approved' || ! in_array($order->status, [DirectBookingOrderStatus::PagoEmConfirmacao, DirectBookingOrderStatus::AtencaoOperacional], true)) {
+            return $this->markAttention($action, $order, 'existing_payment_state_changed', 'O pagamento mudou antes da confirmação da reserva.');
+        }
+        $this->stays->request('PATCH', $endpoint, payload: ['type' => 'booked']);
+        $verified = $this->stays->get($endpoint);
+        if (! is_array($verified) || ($verified['type'] ?? null) !== 'booked'
+            || ! $guard->matchesReservation($verified, $snapshot, allowConfirmedTransition: true)
+            || ! $guard->hasFullyPaidReservation($verified, $snapshot)) {
+            return $this->markAttention($action, $order, 'existing_confirmation_unconfirmed', 'A Stays não confirmou a reserva. Nenhuma repetição automática foi enviada.');
+        }
+        $this->markActionSucceeded($action, (string) $order->stays_reservation_id, $this->safeExistingReservationSnapshot($verified));
+
+        return $this->markConfirmed($order, $verified);
     }
 
     /** @return array{ready: bool, code: string, message: string} */
@@ -474,6 +548,14 @@ class DirectStaysPaymentService
     private function safeReservationSnapshot(array $reservation): array
     {
         return array_intersect_key($reservation, array_flip(['_id', 'id', 'partnerCode', '_idlisting', '_idclient', 'type', 'checkInDate', 'checkInTime', 'checkOutDate', 'checkOutTime', 'guests', 'price']));
+    }
+
+    /** @param array<string, mixed> $reservation
+     * @return array<string, mixed>
+     */
+    private function safeExistingReservationSnapshot(array $reservation): array
+    {
+        return array_diff_key($this->safeReservationSnapshot($reservation), ['partnerCode' => true]);
     }
 
     private function action(DirectBookingOrder $order, string $type, array $payload): DirectBookingStaysAction

@@ -16,9 +16,13 @@ concurrency:
 jobs:
   migrations:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [16, 17]
     services:
       postgres:
-        image: postgres:17
+        image: postgres:${{ matrix.postgres }}-alpine
         env:
           POSTGRES_DB: hospeda_test
           POSTGRES_USER: hospeda_test
@@ -61,3 +65,7 @@ jobs:
 
       - name: Run PostgreSQL fresh and historical migration tests
         run: php artisan test --compact tests/Feature/GatewayProviderMigrationTest.php
+
+      - name: Test reservation history migration and safe rollback on PostgreSQL
+        if: github.event_name == 'pull_request'
+        run: php artisan test --compact tests/Feature/ExistingReservationCheckoutTest.php tests/Feature/MigrationIdentifierCompatibilityTest.php tests/Feature/PostgresReservationLockConcurrencyTest.php tests/Feature/ExistingReservationConcurrentClaimsTest.php
