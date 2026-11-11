@@ -8,9 +8,22 @@ use InvalidArgumentException;
 
 class ExistingReservationPaymentLock
 {
+    /** @var array<int, string> */
+    private static array $sharedReservations = [];
+
+    /** This experimental protocol must remain disabled until independently reviewed. */
+    protected function sharedProtocolEnabled(): bool
+    {
+        return false;
+    }
+
     /** Serialize decisions that may otherwise skip the reservation-specific lock. */
     public function synchronizedDecision(Closure $callback): mixed
     {
+        if (isset(self::$sharedReservations[spl_object_id(DB::connection())])) {
+            throw new \LogicException('Cannot upgrade a shared reservation decision lock.');
+        }
+
         return DB::transaction(function () use ($callback): mixed {
             // A non-hex key cannot collide with a canonical reservation ID.
             $key = 'coordination-decision';
@@ -46,7 +59,17 @@ class ExistingReservationPaymentLock
 
         $reservationId = strtolower($reservationId);
 
-        return $this->synchronizedDecision(function () use ($reservationId, $callback): mixed {
+        $connection = DB::connection();
+        $connectionId = spl_object_id($connection);
+        if (isset(self::$sharedReservations[$connectionId])) {
+            if (self::$sharedReservations[$connectionId] !== $reservationId) {
+                throw new \LogicException('Cannot lock another reservation inside a shared reservation decision.');
+            }
+
+            return DB::transaction(fn (): mixed => $callback($reservationId));
+        }
+
+        $decision = function () use ($reservationId, $callback): mixed {
             $timestamp = now();
             DB::table('existing_reservation_payment_locks')->insertOrIgnore([
                 'stays_reservation_id' => $reservationId,
@@ -60,6 +83,30 @@ class ExistingReservationPaymentLock
                 ->firstOrFail();
 
             return $callback($reservationId);
+        };
+
+        if (! $this->sharedProtocolEnabled() || $connection->getDriverName() !== 'pgsql' || $connection->transactionLevel() > 0) {
+            return $this->synchronizedDecision($decision);
+        }
+
+        return DB::transaction(function () use ($connectionId, $reservationId, $decision): mixed {
+            $isolation = DB::selectOne('show transaction_isolation')->transaction_isolation;
+            if ($isolation !== 'read committed') {
+                return $this->synchronizedDecision($decision);
+            }
+
+            $timestamp = now();
+            DB::table('existing_reservation_payment_locks')->insertOrIgnore([
+                'stays_reservation_id' => 'coordination-decision', 'created_at' => $timestamp, 'updated_at' => $timestamp,
+            ]);
+            DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', 'coordination-decision')->sharedLock()->firstOrFail();
+
+            self::$sharedReservations[$connectionId] = $reservationId;
+            try {
+                return $decision();
+            } finally {
+                unset(self::$sharedReservations[$connectionId]);
+            }
         });
     }
 }
