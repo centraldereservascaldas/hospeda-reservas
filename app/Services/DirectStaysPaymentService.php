@@ -144,6 +144,9 @@ class DirectStaysPaymentService
         if (! is_array($reservation) || ! $guard->matchesReservation($reservation, $snapshot, allowConfirmedTransition: true)) {
             return $this->attention($order, 'existing_reservation_changed', 'O estado da reserva mudou após o pagamento e requer conferência.');
         }
+        if (! $guard->hasFullyPaidReservation($reservation, $snapshot)) {
+            return $this->attention($order, 'existing_balance_remaining', 'O pagamento foi registrado, mas o saldo total da reserva ainda não aparece como pago na Stays.');
+        }
 
         $action = $this->action($order, 'confirm_reservation', ['type' => 'booked']);
         if (($reservation['type'] ?? null) === 'booked') {
@@ -161,7 +164,8 @@ class DirectStaysPaymentService
             return $this->result(false, $claim['status'], 'A confirmação da reserva já está em andamento ou requer conferência.');
         }
         $latest = $this->stays->get($endpoint);
-        if (! is_array($latest) || ! $guard->matchesReservation($latest, $snapshot, allowConfirmedTransition: true) || ($latest['type'] ?? null) !== 'reserved') {
+        if (! is_array($latest) || ! $guard->matchesReservation($latest, $snapshot, allowConfirmedTransition: true)
+            || ! $guard->hasFullyPaidReservation($latest, $snapshot) || ($latest['type'] ?? null) !== 'reserved') {
             return $this->markAttention($action, $order, 'existing_reservation_changed', 'O estado da reserva mudou antes da confirmação.');
         }
         $order->refresh();
@@ -170,7 +174,9 @@ class DirectStaysPaymentService
         }
         $this->stays->request('PATCH', $endpoint, payload: ['type' => 'booked']);
         $verified = $this->stays->get($endpoint);
-        if (! is_array($verified) || ($verified['type'] ?? null) !== 'booked' || ! $guard->matchesReservation($verified, $snapshot, allowConfirmedTransition: true)) {
+        if (! is_array($verified) || ($verified['type'] ?? null) !== 'booked'
+            || ! $guard->matchesReservation($verified, $snapshot, allowConfirmedTransition: true)
+            || ! $guard->hasFullyPaidReservation($verified, $snapshot)) {
             return $this->markAttention($action, $order, 'existing_confirmation_unconfirmed', 'A Stays não confirmou a reserva. Nenhuma repetição automática foi enviada.');
         }
         $this->markActionSucceeded($action, (string) $order->stays_reservation_id, $this->safeExistingReservationSnapshot($verified));

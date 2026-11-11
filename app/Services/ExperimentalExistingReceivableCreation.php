@@ -8,7 +8,7 @@ use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingStaysAction;
 use DateTimeImmutable;
 
-/** Isolated research adapter. Simulated tests do not prove the production Stays contract. */
+/** Creates and verifies an outstanding Stays receivable before exposing checkout. */
 class ExperimentalExistingReceivableCreation
 {
     public function __construct(
@@ -21,9 +21,6 @@ class ExperimentalExistingReceivableCreation
     /** @return array{ready: bool, code: string, payment_id: string|null} */
     public function create(DirectBookingOrder $order, string $method, ?int $installments = null): array
     {
-        if (config('direct-booking.experimental_existing_receivable_creation_enabled', false) !== true) {
-            return $this->result(false, 'experimental_receivable_disabled');
-        }
         $order->refresh();
         $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
         if ($order->origin !== 'stays_existing' || $order->status !== DirectBookingOrderStatus::PreReservado
@@ -33,7 +30,6 @@ class ExperimentalExistingReceivableCreation
             || ($snapshot['_id'] ?? null) !== $order->stays_reservation_id
             || ($snapshot['payment_id'] ?? null) !== null || $order->currency !== 'BRL'
             || ! is_int($snapshot['pending_amount_cents'] ?? null) || $snapshot['pending_amount_cents'] <= 0
-            || ! ExistingReservationBalanceApproval::approved($snapshot)
             || MoneyAmount::toCents($order->quote_total) !== $snapshot['pending_amount_cents']
             || ! is_string($snapshot['checkInDate'] ?? null)
             || ! $this->validDate($snapshot['checkInDate'])
@@ -146,14 +142,15 @@ class ExperimentalExistingReceivableCreation
     {
         $reservation = $this->stays->get($path);
         $payments = $this->stays->get($path.'/payments');
+        $candidate = is_array($reservation) && is_array($payments) ? $this->balance->inspect($reservation, $payments) : null;
         if (! is_array($reservation) || ! is_array($payments) || ! $this->guard->matchesReservation($reservation, $snapshot)
             || ! $this->guard->matchesReportedPaid($reservation, $snapshot)
-            || ExistingReservationBalanceApproval::version(ExistingReservationBalanceApproval::projection($reservation, $snapshot['pending_amount_cents'])) !== ($snapshot['approval_version'] ?? null)) {
+            || ($candidate['status'] ?? null) !== 'unrecorded_candidate'
+            || ($candidate['candidate_cents'] ?? null) !== $snapshot['pending_amount_cents']) {
             return false;
         }
-        $candidate = $this->balance->inspect($reservation, $payments);
 
-        return $candidate['status'] === 'unrecorded_candidate' && $candidate['candidate_cents'] === $snapshot['pending_amount_cents'];
+        return true;
     }
 
     private function verifyCreated(string $path, array $snapshot, string $provider, string $marker): ?string
@@ -162,11 +159,12 @@ class ExperimentalExistingReceivableCreation
         $payments = $this->stays->get($path.'/payments');
         if (! is_array($reservation) || ! $this->guard->matchesReservation($reservation, $snapshot)
             || ! $this->guard->matchesReportedPaid($reservation, $snapshot)
-            || ExistingReservationBalanceApproval::version(ExistingReservationBalanceApproval::projection($reservation, $snapshot['pending_amount_cents'])) !== ($snapshot['approval_version'] ?? null)
             || ! is_array($payments) || ! array_is_list($payments)) {
             return null;
         }
-        $credits = array_values(array_filter($payments, fn (mixed $p): bool => is_array($p) && ($p['type'] ?? null) === 'credit'));
+        $credits = array_values(array_filter($payments, fn (mixed $payment): bool => is_array($payment)
+            && ($payment['type'] ?? null) === 'credit' && ($payment['status'] ?? null) === 'pending'
+            && ($payment['desc'] ?? null) === $marker));
         if (count($credits) !== 1) {
             return null;
         }
@@ -206,8 +204,7 @@ class ExperimentalExistingReceivableCreation
 
     private function matchesOrderSnapshot(DirectBookingOrder $order, array $snapshot, string $method, ?int $installments): bool
     {
-        return ExistingReservationBalanceApproval::approved($snapshot)
-            && $order->stays_reservation_id === ($snapshot['_id'] ?? null)
+        return $order->stays_reservation_id === ($snapshot['_id'] ?? null)
             && is_array($order->quote_snapshot) && ($order->quote_snapshot['existing_reservation'] ?? null) === $snapshot
             && $order->currency === 'BRL' && MoneyAmount::toCents($order->quote_total) === ($snapshot['pending_amount_cents'] ?? null)
             && ($snapshot['selected_payment_method'] ?? null) === $method

@@ -79,22 +79,12 @@ class ExistingReservationBalance
             $candidates[] = ['amount' => $amount, 'id' => $id];
         }
 
-        // A Booking pre-reservation can have no guest receivable,
-        // for example when it only has the partner commission debit.  This is merely
-        // a candidate for display/review; it must not authorize a charge until
-        // we can record and reconcile the payment against this reservation.
-        if ($candidates === [] && (($reservation['type'] ?? null) === 'reserved'
-            || (($reservation['type'] ?? null) === 'booked' && $reportedPaid === 0))
-            && ($reportedPaid === null || $reportedPaid === 0) && count($payments) === 1) {
-            $commission = $payments[0];
-            $commissionAmount = MoneyAmount::toCents($commission['_f_val'] ?? null);
-            if (($commission['type'] ?? null) === 'debit'
-                && ($commission['status'] ?? null) === 'pending'
-                && is_string($commission['name'] ?? null)
-                && mb_strtolower(trim($commission['name'])) === 'res. fee api booking.com'
-                && $commissionAmount !== null && $commissionAmount >= 0 && $commissionAmount <= $total) {
-                return ['status' => 'unrecorded_candidate', 'candidate_cents' => $total, 'payment_id' => null];
-            }
+        // When Stays reports an unpaid balance but has no guest receivable yet,
+        // the checkout may create a pending credit for exactly that balance.
+        // Without an authoritative paid amount, do not assume the full price is due.
+        if ($candidates === [] && ($reportedPaid === null || $reportedPaid < $total)
+            && ($reportedPaid === null || $reportedPaid >= $completedCredits)) {
+            return ['status' => 'unrecorded_candidate', 'candidate_cents' => $reportedPaid === null ? $total : $total - $reportedPaid, 'payment_id' => null];
         }
 
         if (($reportedPaid !== null && $reportedPaid < $completedCredits)

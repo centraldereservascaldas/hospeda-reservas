@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\DirectBookingStaysAction;
 
-/** An experimental receivable must never be laundered through the regular checkout path. */
+/** An order-created receivable can only resume through its originating checkout. */
 class ExistingReservationBootstrapOrigin
 {
     /** @param list<mixed> $payments */

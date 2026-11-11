@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreExistingReservationCheckoutRequest;
 use App\Http\Resources\DirectBookingOrderResource;
 use App\Services\ExistingReservationBalance;
-use App\Services\ExistingReservationBalanceApproval;
 use App\Services\ExistingReservationBootstrapOrigin;
 use App\Services\ExistingReservationCheckoutDetails;
 use App\Services\ExistingReservationCheckoutService;
@@ -82,14 +81,14 @@ class ExistingReservationCheckoutController extends Controller
         $guests = is_array($guests) ? $guests : [];
         $available = ['methods' => [], 'card_installments' => []];
         $details = app(ExistingReservationCheckoutDetails::class);
+        $reportedPaid = $balance->reportedPaid($reservation);
         if ($details->validGuests($reservation) && $details->validIdentity($reservation)
             && config('direct-booking.existing_reservation_checkout_enabled', false)
             && CieloDirectConfiguration::isProvider((string) config('direct-booking.payment_provider')) && is_array($payments)) {
             if ($paymentReview['status'] === 'pending_candidate') {
                 $available = $channels->availableForReceivable($gateway->availableMethods(), $payments, $paymentReview['payment_id'] ?? null);
-            } elseif ($paymentReview['status'] === 'unrecorded_candidate'
-                && config('direct-booking.experimental_existing_receivable_creation_enabled', false) === true
-                && ExistingReservationBalanceApproval::version(ExistingReservationBalanceApproval::projection($reservation, $paymentReview['candidate_cents'])) !== null) {
+            } elseif ($paymentReview['status'] === 'unrecorded_candidate' && $reportedPaid !== null
+                && $reportedPaid['present'] && is_int($reportedPaid['cents'])) {
                 $available = $channels->availableForNewReceivable($gateway->availableMethods());
             }
         }

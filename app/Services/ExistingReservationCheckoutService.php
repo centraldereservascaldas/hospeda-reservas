@@ -55,7 +55,7 @@ class ExistingReservationCheckoutService
                 return $this->result(null, 'existing_checkout_unavailable', 409);
             }
 
-            return $this->completeExperimentalBootstrap($existing, $input, 200);
+            return $this->completeUnrecordedReceivable($existing, $input, 200);
         }
 
         $reservation = $this->stays->get('/booking/reservations/'.$code);
@@ -68,10 +68,11 @@ class ExistingReservationCheckoutService
             && app(ExistingReservationBootstrapOrigin::class)->requiresReview($reservation['_id'] ?? null, $payments, $candidate['payment_id'])) {
             return $this->result(null, 'existing_balance_unverified', 409);
         }
-        $approvalVersion = ExistingReservationBalanceApproval::version(ExistingReservationBalanceApproval::projection($reservation, $candidate['candidate_cents']));
-        $bootstrap = $candidate['status'] === 'unrecorded_candidate'
-            && config('direct-booking.experimental_existing_receivable_creation_enabled', false) === true
-            && $approvalVersion !== null;
+        $bootstrap = $candidate['status'] === 'unrecorded_candidate';
+        $reportedPaid = $this->balance->reportedPaid($reservation);
+        if ($bootstrap && ($reportedPaid === null || ! $reportedPaid['present'] || ! is_int($reportedPaid['cents']))) {
+            return $this->result(null, 'existing_balance_unverified', 409);
+        }
         if (($reservation['id'] ?? null) !== $code || (! $bootstrap && $candidate['status'] !== 'pending_candidate')
             || $candidate['candidate_cents'] !== $input['expectedBalanceCents']) {
             return $this->result(null, 'existing_balance_unverified', 409);
@@ -119,7 +120,6 @@ class ExistingReservationCheckoutService
         $snapshot['reservation_total_cents'] = MoneyAmount::toCents($reservation['price']['_f_total'] ?? null);
         $snapshot['pending_amount_cents'] = $candidate['candidate_cents'];
         $snapshot['currency'] = 'BRL';
-        $snapshot['approval_version'] = $bootstrap ? $approvalVersion : null;
         $snapshot['payment_id'] = $candidate['payment_id'];
         $snapshot['bootstrap_receivable'] = $bootstrap;
         $snapshot['channel_provider_ids'] = $this->channels->snapshot();
@@ -189,26 +189,20 @@ class ExistingReservationCheckoutService
         }
 
         return $created['order'] instanceof DirectBookingOrder
-            ? $this->completeExperimentalBootstrap($created['order'], $input, $created['status'])
+            ? $this->completeUnrecordedReceivable($created['order'], $input, $created['status'])
             : $created;
     }
 
     /** @param array<string, mixed> $input
      * @return array{order: DirectBookingOrder|null, code: string, status: int}
      */
-    private function completeExperimentalBootstrap(DirectBookingOrder $order, array $input, int $successStatus): array
+    private function completeUnrecordedReceivable(DirectBookingOrder $order, array $input, int $successStatus): array
     {
         $order->refresh();
         $quote = is_array($order->quote_snapshot) ? $order->quote_snapshot : [];
         $snapshot = $quote['existing_reservation'] ?? null;
         if (! is_array($snapshot) || ($snapshot['bootstrap_receivable'] ?? false) !== true) {
             return $this->result($order, 'existing_checkout_ready', $successStatus);
-        }
-        if (config('direct-booking.experimental_existing_receivable_creation_enabled', false) !== true) {
-            return $this->result(null, 'existing_checkout_disabled', 503);
-        }
-        if (! ExistingReservationBalanceApproval::approved($snapshot)) {
-            return $this->result(null, 'existing_balance_unverified', 409);
         }
         if (! $this->ledgerAllows($snapshot)) {
             return $this->result(null, 'existing_balance_unverified', 409);
@@ -241,7 +235,6 @@ class ExistingReservationCheckoutService
             $action = $locked->staysActions()->where('action_type', 'experimental_create_receivable')->where('status', 'succeeded')->first();
             if ($locked->status !== DirectBookingOrderStatus::PreReservado || ! in_array($locked->payment_status, [null, 'not_started'], true)
                 || ! $locked->expires_at?->isFuture() || ! is_array($current) || $current !== $snapshot
-                || ! ExistingReservationBalanceApproval::approved($current)
                 || ! $action || $action->external_id !== $paymentId
                 || ($action->request_snapshot['method'] ?? null) !== $method
                 || ($action->request_snapshot['installments'] ?? null) !== $installments

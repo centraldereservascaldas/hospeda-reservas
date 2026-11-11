@@ -76,9 +76,7 @@ class ExistingReservationBootstrapRecovery
         }
         if (config('direct-booking.enabled', false) !== true
             || config('direct-booking.payments_enabled', false) !== true
-            || config('direct-booking.existing_reservation_checkout_enabled', false) !== true
-            || config('direct-booking.experimental_existing_receivable_creation_enabled', false) !== true
-            || ! ExistingReservationBalanceApproval::approved($snapshot)) {
+            || config('direct-booking.existing_reservation_checkout_enabled', false) !== true) {
             return $this->report('approval_requires_review', $method);
         }
         if ($attempts->isNotEmpty() || $order->status !== DirectBookingOrderStatus::PreReservado || $order->payment_status !== null) {

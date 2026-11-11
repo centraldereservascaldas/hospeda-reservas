@@ -55,6 +55,22 @@ class ExistingReservationPaymentGuard
     /** @param array<string, mixed> $reservation
      * @param  array<string, mixed>  $snapshot
      */
+    public function hasFullyPaidReservation(array $reservation, array $snapshot): bool
+    {
+        $reportedPaid = $this->balance->reportedPaid($reservation);
+        $reservationTotal = $snapshot['reservation_total_cents'] ?? null;
+
+        if ($reportedPaid === null || ! is_int($reportedPaid['cents'])) {
+            return false;
+        }
+
+        return $reportedPaid['present'] && is_int($reservationTotal) && $reservationTotal > 0
+            && $reportedPaid['cents'] >= $reservationTotal;
+    }
+
+    /** @param array<string, mixed> $reservation
+     * @param  array<string, mixed>  $snapshot
+     */
     public function matchesReservation(array $reservation, array $snapshot, bool $allowConfirmedTransition = false): bool
     {
         foreach (['_id', '_idclient', '_idlisting', 'checkInDate', 'checkOutDate'] as $field) {

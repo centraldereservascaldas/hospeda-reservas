@@ -8,14 +8,13 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
 use App\Services\DirectStaysReservationService;
-use App\Services\ExistingReservationBalanceApproval;
 use App\Services\ExistingReservationLedgerAudit;
 use App\Services\ExistingReservationPaymentChannels;
 use App\Services\ExistingReservationPaymentCycleRegistry;
 use App\Services\ExistingReservationPaymentLock;
 use App\Services\MoneyAmount;
-use App\Services\ReservationReleaseGuard;
 use App\Services\ReservationCoordinationMode;
+use App\Services\ReservationReleaseGuard;
 use App\Services\StaysReservationIdentity;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Client\RequestException;
@@ -967,9 +966,12 @@ class CieloCheckoutPaymentService
             return true;
         }
 
-        return config('direct-booking.experimental_existing_receivable_creation_enabled', false) === true
-            && ($snapshot['_id'] ?? null) === $order->stays_reservation_id
-            && ExistingReservationBalanceApproval::approved($snapshot)
+        return ($snapshot['_id'] ?? null) === $order->stays_reservation_id
+            && ($snapshot['bootstrap_receivable'] ?? false) === true
+            && is_int($snapshot['reservation_total_cents'] ?? null)
+            && is_int($snapshot['pending_amount_cents'] ?? null)
+            && $snapshot['pending_amount_cents'] > 0
+            && $snapshot['pending_amount_cents'] <= $snapshot['reservation_total_cents']
             && MoneyAmount::toCents($order->quote_total) === ($snapshot['pending_amount_cents'] ?? null);
     }
 
