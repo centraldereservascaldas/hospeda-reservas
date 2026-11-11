@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RedirectCanonicalHost;
 use App\Http\Middleware\RequireOwnerAdmin;
 use App\Http\Middleware\VerifySupabaseGuest;
 use Illuminate\Foundation\Application;
@@ -15,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(RedirectCanonicalHost::class);
         $middleware->alias([
             'supabase.guest' => VerifySupabaseGuest::class,
             'owner.admin' => RequireOwnerAdmin::class,

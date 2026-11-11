@@ -41,6 +41,7 @@ import { countOccupancyGuests } from './utils/guestCounts';
 import { usePageMetadata } from './hooks/usePageMetadata';
 import { LegalDocumentPage } from './components/LegalDocumentPage';
 import { existingReservationCodeFromPath } from './utils/checkoutUrl';
+import { NotFoundPage } from './components/NotFoundPage';
 
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
@@ -561,6 +562,13 @@ export default function App() {
   const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})(?:\/(?:pagamento-confirmado|pagamento-recusado))?$/.exec(pathname)?.[1];
   const existingReservationCode = existingReservationCodeFromPath(pathname);
   const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
+  const isPropertyPath =
+    /^(?:\/[a-z]{2})?\/(?:apartamento|apartment)\/[a-zA-Z0-9_-]+(?:\/.*)?$/i.test(
+      normalizedPathname,
+    );
+  const isReservationPath = /^\/reservar\/[a-zA-Z0-9_-]+(?:\/.*)?$/i.test(normalizedPathname);
+  const isCheckoutPath = /^\/checkout\/[a-zA-Z0-9_-]+(?:\/.*)?$/i.test(normalizedPathname);
+  const isLocalizedCatalogPath = /^\/(?:[a-z]{2}(?:\/search)?|search)$/i.test(normalizedPathname);
   const legalSlug =
     normalizedPathname === '/privacidade'
       ? 'privacidade'
@@ -627,6 +635,19 @@ export default function App() {
         </Suspense>
       </>
     );
+  }
+
+  if (
+    normalizedPathname !== '/' &&
+    !legalSlug &&
+    normalizedPathname !== '/auth/confirm' &&
+    !isPropertyPath &&
+    !isReservationPath &&
+    !isCheckoutPath &&
+    !isLocalizedCatalogPath &&
+    !(checkoutPreviewAllowed && normalizedPathname === '/checkout-preview/cielo')
+  ) {
+    return <NotFoundPage />;
   }
 
   return (
