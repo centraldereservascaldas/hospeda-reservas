@@ -199,7 +199,13 @@ class ExistingReservationCheckoutTest extends TestCase
         $first = DirectBookingOrder::query()->sole();
         $copy = $first->replicate(['website_stays_reservation_id']);
         $migration = require database_path('migrations/2026_11_10_233000_allow_existing_reservation_order_history.php');
+        DB::enableQueryLog();
+        DB::flushQueryLog();
         $migration->down();
+        $groupedQueries = array_values(array_filter(DB::getQueryLog(), fn (array $query): bool => str_contains(strtolower($query['query']), 'having count(*) > 1')));
+        DB::disableQueryLog();
+        $this->assertCount(1, $groupedQueries);
+        $this->assertStringNotContainsString('select *', strtolower($groupedQueries[0]['query']));
         $this->assertFalse(Schema::hasColumn('direct_booking_orders', 'website_stays_reservation_id'));
         $this->expectException(UniqueConstraintViolationException::class);
         $copy->forceFill(['idempotency_key' => 'rollback-safe-second-order-1', 'public_reference' => str_repeat('k', 40), 'resume_token' => str_repeat('j', 64)])->save();

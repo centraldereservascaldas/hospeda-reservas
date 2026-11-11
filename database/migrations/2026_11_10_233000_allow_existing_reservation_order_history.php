@@ -42,7 +42,7 @@ return new class extends Migration
             throw new RuntimeException('Reservation history rollback is partial or schema is unexpected; inspect it before retrying.');
         }
         // Restoring the old constraint must never erase or rewrite history.
-        $duplicates = DB::table('direct_booking_orders')->whereNotNull('stays_reservation_id')
+        $duplicates = DB::table('direct_booking_orders')->select('stays_reservation_id')->whereNotNull('stays_reservation_id')
             ->groupBy('stays_reservation_id')->havingRaw('COUNT(*) > 1')->exists();
         if ($duplicates) {
             throw new RuntimeException('Cannot restore the original reservation uniqueness while multiple orders exist.');
