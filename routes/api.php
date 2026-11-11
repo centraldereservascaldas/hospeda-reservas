@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\OwnerDashboardController;
 use App\Http\Controllers\Api\PropertyMetadataController;
 use App\Http\Controllers\Api\PublicLegalPageController;
 use App\Http\Controllers\Api\SofiaController;
+use App\Http\Middleware\GuardExistingCheckoutIntent;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
@@ -42,7 +43,8 @@ Route::post('/search', [AccommodationController::class, 'search']);
 Route::get('/accommodations/{id}/calendar', [AccommodationController::class, 'calendar']);
 Route::post('/price', [BookingController::class, 'price']);
 Route::get('/existing-reservations/{code}/checkout-summary', [ExistingReservationCheckoutController::class, 'show'])->middleware('throttle:5,1');
-Route::post('/existing-reservations/{code}/checkout', [ExistingReservationCheckoutController::class, 'store'])->middleware(['throttle:5,1', \App\Http\Middleware\GuardExistingCheckoutIntent::class]);
+Route::post('/existing-reservations/{code}/checkout-recovery', [ExistingReservationCheckoutController::class, 'recover'])->middleware('throttle:5,1');
+Route::post('/existing-reservations/{code}/checkout', [ExistingReservationCheckoutController::class, 'store'])->middleware(['throttle:5,1', GuardExistingCheckoutIntent::class]);
 Route::get('/stays/status', [BookingController::class, 'staysStatus']);
 Route::get('/stays-checkout/readiness', [BookingController::class, 'staysCheckoutReadiness'])
     ->middleware('throttle:30,1');

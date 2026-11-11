@@ -2,20 +2,56 @@
 
 namespace Tests\Feature;
 
+use App\Enums\DirectBookingOrderStatus;
 use App\Http\Middleware\GuardExistingCheckoutIntent;
+use App\Models\DirectBookingOrder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 class ExistingCheckoutIntentGuardTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function send(string $key, array $payload, string $code = 'ZX91K'): \Symfony\Component\HttpFoundation\Response
+    public function test_recovery_uses_only_a_bound_secret_and_does_not_contact_stays_or_charge(): void
+    {
+        $key = 'ae73d470-b83c-45ef-bce1-765512efd834';
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true, 'direct-booking.experimental_existing_intent_recovery_enabled' => true]);
+        Http::fake();
+        $this->assertSame(201, $this->send($key, $this->valid())->getStatusCode());
+        $order = DirectBookingOrder::query()->create([
+            'status' => DirectBookingOrderStatus::PreReservado, 'idempotency_key' => $key, 'request_fingerprint' => str_repeat('b', 64),
+            'listing_id' => 'JQ08G', 'stays_listing_id' => 'JQ08G', 'stays_reservation_id' => str_repeat('a', 24),
+            'check_in' => '2030-11-10', 'check_out' => '2030-11-13', 'guests' => ['adults' => 1],
+            'guest_name' => 'Private Guest', 'guest_email' => 'guest@example.test', 'guest_phone' => '11999999999',
+            'quote_total' => '100.00', 'currency' => 'BRL', 'quote_snapshot' => ['existing_reservation' => ['reservation_code' => 'ZX91K', 'selected_payment_method' => 'pix']],
+            'accepted_terms_version' => 'test', 'accepted_terms_snapshot' => [], 'terms_accepted_at' => now(), 'origin' => 'stays_existing',
+            'public_reference' => str_repeat('z', 40), 'resume_token' => str_repeat('x', 64), 'resume_token_expires_at' => now()->addDay(), 'operational_events' => [],
+        ]);
+        $this->withoutMiddleware(ThrottleRequests::class);
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout-recovery')
+            ->assertOk()->assertJsonPath('resume.reference', $order->public_reference)->assertJsonPath('resume.token', str_repeat('x', 64))
+            ->assertJsonMissing(['guest_email' => 'guest@example.test'])->assertHeader('Cache-Control', 'no-store, private');
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/AB123/checkout-recovery')->assertNotFound();
+        $this->withHeader('Idempotency-Key', 'ae73d470-b83c-45ef-bce1-765512efd835')->postJson('/api/existing-reservations/ZX91K/checkout-recovery')->assertNotFound();
+        config(['direct-booking.experimental_existing_intent_recovery_enabled' => false]);
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout-recovery')->assertNotFound();
+        config(['direct-booking.experimental_existing_intent_recovery_enabled' => true]);
+        $order->update(['resume_token_expires_at' => now()->subSecond()]);
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout-recovery')->assertNotFound();
+        Http::assertNothingSent();
+        $this->assertSame(0, $order->paymentAttempts()->count());
+    }
+
+    private function send(string $key, array $payload, string $code = 'ZX91K'): Response
     {
         $request = Request::create('/api/existing-reservations/ZX91K/checkout', 'POST', $payload, [], [], ['HTTP_IDEMPOTENCY_KEY' => $key]);
-        $route = new \Illuminate\Routing\Route('POST', '/', []);
+        $route = new Route('POST', '/', []);
         $route->bind($request);
         $route->setParameter('code', $code);
         $request->setRouteResolver(fn () => $route);
@@ -66,6 +102,7 @@ class ExistingCheckoutIntentGuardTest extends TestCase
         DB::table('existing_checkout_intents')->insert(['key_hash' => hash('sha256', $legacy), 'state' => 'claimed', 'created_at' => now(), 'updated_at' => now()]);
         $this->assertSame(409, $this->send($legacy, $this->valid())->getStatusCode());
     }
+
     public function test_binding_matches_service_equivalence_and_reservation_code(): void
     {
         config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
@@ -79,6 +116,7 @@ class ExistingCheckoutIntentGuardTest extends TestCase
         $payload['expectedBalanceCents'] = '10000';
         $this->assertSame(409, $this->send($key, $payload)->getStatusCode());
     }
+
     public function test_disabled_flag_preserves_existing_behavior(): void
     {
         $this->assertFalse(config('direct-booking.experimental_existing_intent_guard_enabled'));
@@ -89,7 +127,7 @@ class ExistingCheckoutIntentGuardTest extends TestCase
     public function test_route_guard_runs_before_form_request_validation(): void
     {
         config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
         $key = 'route-intent-rejection-key-123';
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout', [])
             ->assertStatus(422)->assertJsonValidationErrors(['guest']);
@@ -102,7 +140,7 @@ class ExistingCheckoutIntentGuardTest extends TestCase
         config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
         $key = 'failed-downstream-intent-key-123';
         $request = Request::create('/api/existing-reservations/ZX91K/checkout', 'POST', $this->valid(), [], [], ['HTTP_IDEMPOTENCY_KEY' => $key]);
-        $route = new \Illuminate\Routing\Route('POST', '/', []);
+        $route = new Route('POST', '/', []);
         $route->bind($request);
         $route->setParameter('code', 'ZX91K');
         $request->setRouteResolver(fn () => $route);

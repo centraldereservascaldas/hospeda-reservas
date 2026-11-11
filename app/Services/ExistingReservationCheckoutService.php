@@ -8,6 +8,7 @@ use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ExistingReservationCheckoutService
@@ -208,6 +209,29 @@ class ExistingReservationCheckoutService
     /** @param array<string, mixed> $input
      * @return array{order: DirectBookingOrder|null, code: string, status: int}
      */
+    public function recoverByIntent(string $code, mixed $key): ?DirectBookingOrder
+    {
+        if (config('direct-booking.experimental_existing_intent_recovery_enabled', false) !== true
+            || config('direct-booking.experimental_existing_intent_guard_enabled', false) !== true
+            || ! preg_match('/^[A-Z0-9]{5}$/D', $code)
+            || ! is_string($key) || ! preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/Di', $key)) {
+            return null;
+        }
+        $intent = DB::table('existing_checkout_intents')->where('key_hash', hash('sha256', $key))->first();
+        $order = DirectBookingOrder::query()->where('idempotency_key', $key)->first();
+        $snapshot = $order?->quote_snapshot['existing_reservation'] ?? null;
+        if (! $intent || $intent->state !== 'claimed' || ! is_string($intent->payload_hmac)
+            || ! $order || $order->origin !== 'stays_existing' || ! is_array($snapshot)
+            || ($snapshot['reservation_code'] ?? null) !== $code || ! $order->hasValidResumeToken($order->resume_token ?? '')) {
+            return null;
+        }
+        $input = ['idempotencyKey' => $key, 'paymentMethod' => $snapshot['selected_payment_method'] ?? null,
+            'installments' => $snapshot['selected_installments'] ?? null];
+        $result = $this->recoverExisting($order, $input, true);
+
+        return $result['order'];
+    }
+
     private function recoverExisting(DirectBookingOrder $order, array $input, bool $intentVerified): array
     {
         if (config('direct-booking.experimental_existing_intent_recovery_enabled', false) !== true) {

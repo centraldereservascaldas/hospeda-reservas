@@ -10,7 +10,7 @@ import { PixPayerIdentificationField, getPixPayerIdentification } from './PixPay
 import { CheckoutSupportLink } from './CheckoutSupportLink';
 import { LogoCRCN } from '../LogoCRCN';
 import { LockKeyhole, QrCode } from 'lucide-react';
-import { bindExistingReservationIntent, clearExistingReservationIntent, getExistingReservationIntent, getExistingReservationResumeReferences, markExistingReservationIntentSubmitted, saveExistingReservationResumeReference, startExistingReservationIntent } from '../../utils/existingReservationResumeStorage';
+import { bindExistingReservationIntent, clearExistingReservationIntent, getExistingReservationIntent, getExistingReservationResumeReferences, hasSubmittedExistingReservationIntent, markExistingReservationIntentSubmitted, saveExistingReservationResumeReference, startExistingReservationIntent } from '../../utils/existingReservationResumeStorage';
 
 interface ReservationSummary {
   code: string;
@@ -69,7 +69,38 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
   const previousReferences = useMemo(() => getExistingReservationResumeReferences(code), [code]);
   const [intentKey, setIntentKey] = useState(() => getExistingReservationIntent(code));
   const [intentError, setIntentError] = useState('');
+  const [recovering, setRecovering] = useState(false);
   const showPaymentForm = previousReferences.length === 0 || intentKey !== null;
+
+  const recoverIntent = async () => {
+    if (!intentKey || recovering) return;
+    setRecovering(true);
+    setIntentError('');
+    try {
+      const response = await apiFetch(`/api/existing-reservations/${encodeURIComponent(code)}/checkout-recovery`, {
+        method: 'POST', cache: 'no-store', headers: { 'Idempotency-Key': intentKey },
+      });
+      const data: unknown = await response.json();
+      if (!response.ok || !data || typeof data !== 'object' || !('resume' in data) || !data.resume || typeof data.resume !== 'object') throw new Error();
+      const resume = data.resume as Record<string, unknown>;
+      if (typeof resume.reference !== 'string' || !/^[A-Za-z0-9]{40}$/.test(resume.reference)
+        || typeof resume.token !== 'string' || !/^[A-Za-z0-9]{64}$/.test(resume.token)
+        || typeof resume.expiresAt !== 'string' || !Number.isFinite(Date.parse(resume.expiresAt)) || Date.parse(resume.expiresAt) <= Date.now()
+        || resume.path !== `/checkout/${resume.reference}`) throw new Error();
+      saveCheckoutResumeToken(resume.reference, resume.token, resume.expiresAt);
+      saveExistingReservationResumeReference(code, resume.reference);
+      const storedToken = window.sessionStorage.getItem(`crcn.checkout.resume.${resume.reference}`);
+      const storedReferences = window.sessionStorage.getItem(`crcn.existing-reservation.resume.${code}`);
+      if (!storedToken || JSON.parse(storedToken).token !== resume.token
+        || !storedReferences || !JSON.parse(storedReferences).includes(resume.reference)) throw new Error();
+      clearExistingReservationIntent(code);
+      setIntentKey(null);
+      window.history.replaceState(null, '', checkoutPathWithStayQuery(resume.path, window.location.search));
+      setActiveReference(resume.reference);
+    } catch {
+      setIntentError('Não foi possível recuperar esta tentativa. Não inicie outro pagamento; tente novamente ou fale com nosso atendimento.');
+    } finally { setRecovering(false); }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -208,6 +239,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     <div className="checkout-purchase-form liquid-glass-card mx-auto mt-8 max-w-3xl rounded-3xl p-5 sm:mt-10 sm:p-10">
       <p className="text-sm font-bold uppercase tracking-widest text-orange-700">Central de Reservas · Caldas Novas</p>
       <h1 className="mt-3 text-3xl font-black">Sua reserva</h1>
+      {intentKey && hasSubmittedExistingReservationIntent(code, intentKey) && <div className="mt-6 rounded-xl border border-orange-200 bg-orange-50 p-4"><p className="font-semibold">Uma tentativa anterior pode ter sido iniciada.</p><button type="button" disabled={recovering} onClick={() => void recoverIntent()} className="mt-3 min-h-11 rounded-xl bg-neutral-950 px-4 py-2 font-semibold text-white disabled:opacity-60">{recovering ? 'Recuperando…' : 'Acompanhar tentativa anterior'}</button>{intentError && <p role="alert" className="mt-3">{intentError}</p>}</div>}
       {previousReferences.length > 0 && <div className="mt-6 space-y-3 rounded-xl border border-orange-200 bg-orange-50 p-4"><p className="font-semibold">Você já iniciou pagamento para esta reserva neste navegador.</p><p className="text-sm text-neutral-700">Acompanhe as tentativas antes de iniciar outra cobrança.</p>{previousReferences.map((reference, index) => <a key={reference} className="mr-3 inline-flex min-h-11 items-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" href={checkoutPathWithStayQuery(`/checkout/${reference}`, window.location.search)}>Acompanhar pagamento {previousReferences.length > 1 ? index + 1 : ''}</a>)}{!intentKey && <button type="button" className="min-h-11 rounded-xl border border-neutral-400 px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-orange-700" onClick={() => { try { setIntentKey(startExistingReservationIntent(code)); setIntentError(''); } catch (error) { setIntentError(error instanceof Error ? error.message : 'Não foi possível guardar esta tentativa.'); } }}>Iniciar nova tentativa</button>}{intentError && <p role="alert">{intentError}</p>}</div>}
       {intentKey && <p role="status" className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">Para recuperar uma tentativa interrompida, informe exatamente os mesmos dados, valor e forma de pagamento usados anteriormente. Se não souber, fale com nosso atendimento.</p>}
       {state === 'loading' && <p role="status" className="mt-6">Consultando os dados da reserva…</p>}

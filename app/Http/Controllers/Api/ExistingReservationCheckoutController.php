@@ -17,6 +17,7 @@ use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ExistingReservationCheckoutController extends Controller
 {
@@ -117,6 +118,18 @@ class ExistingReservationCheckoutController extends Controller
                 'cardInstallments' => $available['card_installments'],
             ],
         ], 200, $headers);
+    }
+
+    public function recover(Request $request, string $code, ExistingReservationCheckoutService $checkout): JsonResponse
+    {
+        $order = $checkout->recoverByIntent($code, $request->header('Idempotency-Key'));
+        $response = $order === null ? ['success' => false, 'code' => 'existing_checkout_unavailable'] : [
+            'success' => true,
+            'resume' => ['reference' => $order->public_reference, 'token' => $order->resume_token,
+                'path' => '/checkout/'.$order->public_reference, 'expiresAt' => $order->resume_token_expires_at?->toISOString()],
+        ];
+
+        return response()->json($response, $order === null ? 404 : 200)->header('Cache-Control', 'no-store, private');
     }
 
     public function store(StoreExistingReservationCheckoutRequest $request, string $code, ExistingReservationCheckoutService $checkout, DirectCheckoutPaymentService $gateway): JsonResponse

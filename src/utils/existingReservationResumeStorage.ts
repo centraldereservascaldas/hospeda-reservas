@@ -43,6 +43,10 @@ export function getExistingReservationIntent(code: string): string | null {
   } catch { return null; }
 }
 
+export function hasSubmittedExistingReservationIntent(code: string, key: string): boolean {
+  try { return getExistingReservationIntent(code) === key && window.sessionStorage.getItem(`${intentPrefix}${code}.submitted`) === key; } catch { return false; }
+}
+
 export function startExistingReservationIntent(code: string): string {
   if (!validCode(code) || typeof window === 'undefined') throw new Error('Não foi possível guardar esta tentativa.');
   const key = crypto.randomUUID();
