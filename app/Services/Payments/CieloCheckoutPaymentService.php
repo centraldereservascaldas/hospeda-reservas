@@ -14,14 +14,15 @@ use App\Services\ExistingReservationPaymentChannels;
 use App\Services\ExistingReservationPaymentCycleRegistry;
 use App\Services\ExistingReservationPaymentLock;
 use App\Services\MoneyAmount;
-use App\Services\ReservationReleaseGuard;
 use App\Services\ReservationCoordinationMode;
+use App\Services\ReservationReleaseGuard;
 use App\Services\StaysReservationIdentity;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -105,13 +106,6 @@ class CieloCheckoutPaymentService
 
         $input = $request->validated();
         $paymentMethod = $input['paymentMethod'];
-        if ($order->origin === 'stays_existing' && $paymentMethod === 'card') {
-            return $this->result(null, 'existing_card_fee_accounting_unverified', 'O pagamento com cartão ainda precisa de conferência. Escolha Pix ou fale com o atendimento.', 503);
-        }
-        if ($order->origin === 'stays_existing' && config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true
-            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
-            return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma cobrança foi iniciada.', 409);
-        }
         if (! $this->bootstrapApprovalValid($order)) {
             return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma cobrança foi iniciada.', 409);
         }
@@ -172,6 +166,11 @@ class CieloCheckoutPaymentService
         $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
         if ($existingAttempt !== null) {
             return $this->replay($existingAttempt, $order, $fingerprint);
+        }
+
+        if ($order->origin === 'stays_existing'
+            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
+            return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma nova cobrança foi iniciada.', 409);
         }
 
         if ($paymentMethod === 'pix' && $this->configuration->usesLegacyPix()
@@ -308,7 +307,9 @@ class CieloCheckoutPaymentService
             };
             $attempt = $serializeReservation
                 ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $persistAttempt)
-                : DB::transaction($persistAttempt);
+                : (Schema::hasTable('existing_reservation_payment_locks')
+                    ? app(ExistingReservationPaymentLock::class)->synchronizedDecision(fn () => $this->serializeReservation($order) ? ['error' => 'existing_reservation_unverified'] : $persistAttempt())
+                    : DB::transaction($persistAttempt));
         } catch (UniqueConstraintViolationException) {
             $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existingAttempt !== null) {

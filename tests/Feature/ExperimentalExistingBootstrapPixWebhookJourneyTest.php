@@ -8,6 +8,7 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
 use App\Services\DirectStaysPaymentService;
+use App\Services\ExistingReservationLedgerAudit;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -105,6 +106,8 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
             }
             $this->fail('Unexpected synthetic external request.');
         });
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsCandidate', 'confirmsSnapshot')->andReturnTrue();
         $createdOrder = $this->withHeader('Idempotency-Key', 'synthetic-bootstrap-order-123')->postJson('/api/existing-reservations/ZX91K/checkout', [
             'expectedBalanceCents' => 101600, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Synthetic Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
         ])->assertCreated();
@@ -119,9 +122,17 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
             && $r['desc'] === 'CRCN_EXISTING_ORDER:'.$orderId.':PENDING');
         $reference = $createdOrder->json('resume.reference');
         $token = $createdOrder->json('resume.token');
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+
         $this->withHeaders(['Idempotency-Key' => 'synthetic-bootstrap-pix-1234', 'X-Checkout-Resume-Token' => $token])
             ->postJson('/api/checkout/'.$reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix', 'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']])
             ->assertCreated()->assertJsonPath('payment.status', 'pending')->assertJsonPath('payment.pix.copyPaste', 'synthetic-pix');
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => false]);
+        $this->withHeaders(['Idempotency-Key' => 'synthetic-bootstrap-pix-1234', 'X-Checkout-Resume-Token' => $token])
+            ->postJson('/api/checkout/'.$reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix', 'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']])
+            ->assertOk()->assertJsonPath('payment.status', 'pending');
+        $this->assertCount(1, Http::recorded(fn (Request $r) => $r->method() === 'POST' && str_contains($r->url(), 'cieloecommerce.cielo.com.br')));
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
         $this->assertFalse($settled);
         $this->assertFalse($booked);
         $this->assertSame('reserved', DirectBookingOrder::query()->sole()->reservation_status);

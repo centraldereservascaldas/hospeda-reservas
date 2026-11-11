@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send, X, ChevronRight, Filter } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { apiFetch } from '../../services/apiFetch';
 import { formatCurrency } from '../../utils/formatters';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { scrollIntoViewRespectingMotion } from '../../utils/motion';
@@ -43,6 +44,11 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showReservationLink, setShowReservationLink] = useState(false);
+  const [reservationCode, setReservationCode] = useState('');
+  const [checkoutCode, setCheckoutCode] = useState('');
+  const [checkingCheckout, setCheckingCheckout] = useState(false);
+  const [checkoutError, setCheckoutError] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: inputRef });
@@ -284,6 +290,98 @@ export const SofiaAssistantModal: React.FC<SofiaAssistantModalProps> = ({
           )}
 
           <div ref={messagesEndRef} />
+        </div>
+
+        <div className="border-t border-white/55 bg-white/25 px-3 py-2 sm:px-4">
+          <button
+            type="button"
+            onClick={() => setShowReservationLink((shown) => !shown)}
+            aria-expanded={showReservationLink}
+            aria-controls="sofia-reservation-link"
+            className="min-h-11 text-sm font-semibold text-orange-800 underline focus-visible:outline-2 focus-visible:outline-orange-700"
+          >
+            Gerar link para reserva existente
+          </button>
+          {showReservationLink && (
+            <form
+              id="sofia-reservation-link"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const code = reservationCode.trim().toUpperCase();
+                if (!/^[A-Z0-9]{5}$/.test(code) || checkingCheckout) return;
+                setCheckoutCode('');
+                setCheckoutError(false);
+                setCheckingCheckout(true);
+                try {
+                  const response = await apiFetch(
+                    `/api/existing-reservations/${code}/checkout-summary`,
+                    { cache: 'no-store' },
+                  );
+                  const data = response.ok ? await response.json() : null;
+                  if (
+                    data?.success === true &&
+                    data.reservation?.code === code &&
+                    data.reservation?.paymentEnabled === true
+                  )
+                    setCheckoutCode(code);
+                  else setCheckoutError(true);
+                } catch {
+                  setCheckoutError(true);
+                } finally {
+                  setCheckingCheckout(false);
+                }
+              }}
+              className="space-y-2 pb-2"
+            >
+              <label
+                htmlFor="sofia-reservation-code"
+                className="block text-sm font-medium text-neutral-800"
+              >
+                Código da reserva
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  id="sofia-reservation-code"
+                  disabled={checkingCheckout}
+                  value={reservationCode}
+                  onChange={(event) => {
+                    setReservationCode(event.target.value);
+                    setCheckoutCode('');
+                  }}
+                  required
+                  pattern="[A-Za-z0-9]{5}"
+                  maxLength={5}
+                  autoComplete="off"
+                  className="min-h-11 w-32 rounded-xl border border-neutral-400 bg-white px-3 text-base"
+                />
+                <button
+                  type="submit"
+                  className="min-h-11 rounded-xl bg-orange-700 px-4 text-sm font-semibold text-white"
+                >
+                  Gerar link
+                </button>
+              </div>
+              <p className="text-xs text-neutral-700">
+                Informe os 5 caracteres do código. A consulta verifica se o checkout pode ser
+                exibido; as condições de pagamento serão reavaliadas ao prosseguir.
+              </p>
+              {checkingCheckout && <p role="status">Consultando reserva…</p>}
+              {checkoutError && (
+                <p role="alert">
+                  Não foi possível disponibilizar o link. Confira o código ou fale com nosso
+                  atendimento.
+                </p>
+              )}
+              {checkoutCode && (
+                <a
+                  href={`/checkout/${checkoutCode}`}
+                  className="inline-flex min-h-11 items-center text-sm font-semibold text-orange-800 underline"
+                >
+                  Abrir checkout da reserva {checkoutCode}
+                </a>
+              )}
+            </form>
+          )}
         </div>
 
         {/* Input Bar */}

@@ -3,28 +3,22 @@
 namespace App\Services;
 
 use App\Models\DirectBookingPaymentAttempt;
-use App\Services\Payments\CieloCardPricing;
-use InvalidArgumentException;
 
-/** Validates the captured split; does not assert how Stays accounts for its fee. */
+/** Validates the captured card amounts using the rate recorded when the attempt was created. */
 class ExistingReservationCardAmounts
 {
-    public function __construct(private readonly CieloCardPricing $pricing) {}
-
     public function matches(DirectBookingPaymentAttempt $attempt, int $expectedBaseCents): bool
     {
+        $rate = $attempt->processing_fee_basis_points;
         if ($attempt->payment_method !== 'card' || $attempt->currency !== 'BRL' || ! is_int($attempt->installments)
+            || $attempt->installments < 1 || $attempt->installments > 6 || ! is_int($rate) || $rate < 0 || $rate >= 10000
             || $expectedBaseCents <= 0 || MoneyAmount::toCents($attempt->base_amount) !== $expectedBaseCents) {
             return false;
         }
-        try {
-            $expected = $this->pricing->calculate($attempt->base_amount, $attempt->installments);
-        } catch (InvalidArgumentException) {
-            return false;
-        }
+        $divisor = 10000 - $rate;
+        $total = intdiv(($expectedBaseCents * 10000) + $divisor - 1, $divisor);
 
-        return MoneyAmount::toCents($attempt->amount) === $expected['totalCents']
-            && MoneyAmount::toCents($attempt->processing_fee_amount) === $expected['feeCents']
-            && $attempt->processing_fee_basis_points === $expected['rateBasisPoints'];
+        return MoneyAmount::toCents($attempt->amount) === $total
+            && MoneyAmount::toCents($attempt->processing_fee_amount) === $total - $expectedBaseCents;
     }
 }

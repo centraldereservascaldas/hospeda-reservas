@@ -74,6 +74,18 @@ class ExistingReservationLedgerAuditTest extends TestCase
         $this->assertSame('credit_views_disagree', app(ExistingReservationLedgerAudit::class)->inspect('ZY92K')['reason']);
     }
 
+    public function test_financial_paid_while_booking_payment_is_pending_requires_review(): void
+    {
+        $this->configure();
+        $this->fakeStays('financial_paid_booking_pending');
+        $audit = app(ExistingReservationLedgerAudit::class);
+        $this->assertSame('credit_views_disagree', $audit->inspect('ZY92K')['reason']);
+        $this->assertFalse($audit->confirmsSnapshot(['reservation_code' => 'ZY92K', '_id' => str_repeat('c', 24),
+            'reservation_total_cents' => 10000, 'pending_amount_cents' => 5000,
+            'payment_id' => str_repeat('b', 24), 'pending_provider_id' => str_repeat('f', 24)]));
+        Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET');
+    }
+
     public function test_debit_missing_from_financial_scan_is_not_ignored(): void
     {
         $this->configure();
@@ -172,6 +184,10 @@ class ExistingReservationLedgerAuditTest extends TestCase
         ];
         if ($mode === 'partial') {
             $lines[1]['_mcval']['BRL'] = 30;
+        }
+        if ($mode === 'financial_paid_booking_pending') {
+            $lines[1]['paid'] = true;
+            $lines[1]['payment'] = ['paymentDate' => '2026-11-10'];
         }
         $scans = 0;
         $detailScans = 0;

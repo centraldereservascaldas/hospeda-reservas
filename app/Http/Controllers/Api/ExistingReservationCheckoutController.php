@@ -17,6 +17,7 @@ use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ExistingReservationCheckoutController extends Controller
 {
@@ -36,6 +37,27 @@ class ExistingReservationCheckoutController extends Controller
         }
         if (($reservation['id'] ?? null) !== $code || ! in_array($reservation['type'] ?? null, ['reserved', 'booked'], true)) {
             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404, $headers);
+        }
+        $guestPrefill = ['fullName' => '', 'email' => '', 'phone' => ''];
+        $clientId = $reservation['_idclient'] ?? null;
+        if (is_string($clientId) && preg_match('/^[a-f0-9]{24}$/iD', $clientId)) {
+            $client = $stays->get('/booking/clients/'.rawurlencode($clientId));
+            if (is_array($client) && ($client['_id'] ?? null) === $clientId) {
+                $firstName = is_string($client['fName'] ?? null) ? trim($client['fName']) : '';
+                $lastName = is_string($client['lName'] ?? null) ? trim($client['lName']) : '';
+                $name = trim($firstName.' '.$lastName);
+                $guestPrefill['fullName'] = mb_strlen($name) <= 180 ? $name : '';
+                $email = is_string($client['email'] ?? null) ? trim($client['email']) : '';
+                $guestPrefill['email'] = mb_strlen($email) <= 254 ? $email : '';
+                $phones = is_array($client['phones'] ?? null) ? $client['phones'] : [];
+                foreach ($phones as $phone) {
+                    if (is_array($phone) && is_string($phone['iso'] ?? null) && trim($phone['iso']) !== '') {
+                        $value = trim($phone['iso']);
+                        $guestPrefill['phone'] = mb_strlen($value) <= 40 ? $value : '';
+                        break;
+                    }
+                }
+            }
         }
         $payments = $stays->get('/booking/reservations/'.$code.'/payments');
         $paymentReview = is_array($payments) ? $balance->inspect($reservation, $payments) : ['status' => 'review_required', 'candidate_cents' => null];
@@ -99,6 +121,7 @@ class ExistingReservationCheckoutController extends Controller
             'success' => true,
             'reservation' => [
                 'code' => $code,
+                'guestPrefill' => $guestPrefill,
                 'status' => $reservation['type'],
                 'listingId' => is_string($listingId) ? $listingId : null,
                 'property' => is_array($property) ? ($property['title'] ?? null) : null,
@@ -119,11 +142,23 @@ class ExistingReservationCheckoutController extends Controller
         ], 200, $headers);
     }
 
+    public function recover(Request $request, string $code, ExistingReservationCheckoutService $checkout): JsonResponse
+    {
+        $order = $checkout->recoverByIntent($code, $request->header('Idempotency-Key'));
+        $response = $order === null ? ['success' => false, 'code' => 'existing_checkout_unavailable'] : [
+            'success' => true,
+            'resume' => ['reference' => $order->public_reference, 'token' => $order->resume_token,
+                'path' => '/checkout/'.$order->public_reference, 'expiresAt' => $order->resume_token_expires_at?->toISOString()],
+        ];
+
+        return response()->json($response, $order === null ? 404 : 200)->header('Cache-Control', 'no-store, private');
+    }
+
     public function store(StoreExistingReservationCheckoutRequest $request, string $code, ExistingReservationCheckoutService $checkout, DirectCheckoutPaymentService $gateway): JsonResponse
     {
-        $result = $checkout->create($code, $request->validated());
+        $result = $checkout->create($code, $request->validated(), $request->attributes->get('existing_checkout_intent_verified') === true);
         $order = $result['order'];
-        $response = ['success' => $order !== null, 'code' => $result['code']];
+        $response = ['success' => $order !== null, 'code' => $result['code'], 'replayed' => $order !== null && $result['status'] === 200];
         if ($order !== null) {
             $methods = app(ExistingReservationPaymentChannels::class)->availableMethods($gateway->availableMethods($order));
             $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;

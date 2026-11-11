@@ -2,19 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../../services/apiFetch';
 import { checkoutApi } from '../../services/checkoutApi';
 import { checkoutPathWithStayQuery, existingReservationUrl } from '../../utils/checkoutUrl';
-import { getOrCreateCheckoutSubmissionKey } from '../../utils/checkoutSubmissionStorage';
 import { saveCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
-import { formatBrazilianPhone } from '../../utils/checkoutInputFormatting';
 import { CieloSopCardForm, type CieloCardPricing, type CieloPaymentContext } from './CieloSopCardForm';
 import { CheckoutResumePage } from './CheckoutResumePage';
 import { PixPayerIdentificationField, getPixPayerIdentification } from './PixPayerIdentificationField';
 import { CheckoutSupportLink } from './CheckoutSupportLink';
 import { LogoCRCN } from '../LogoCRCN';
 import { LockKeyhole, QrCode } from 'lucide-react';
-import { getExistingReservationResumeReference, saveExistingReservationResumeReference } from '../../utils/existingReservationResumeStorage';
+import { bindExistingReservationIntent, clearExistingReservationIntent, getExistingReservationIntent, getExistingReservationResumeReferences, hasSubmittedExistingReservationIntent, markExistingReservationIntentSubmitted, saveExistingReservationResumeReference, startExistingReservationIntent } from '../../utils/existingReservationResumeStorage';
 
 interface ReservationSummary {
   code: string;
+  guestPrefill: { fullName: string; email: string; phone: string };
   listingId: string | null;
   property: string | null;
   image: string | null;
@@ -41,7 +40,10 @@ const fieldClass = 'mt-1.5 min-h-12 w-full rounded-xl border border-neutral-400/
 function isSummary(value: unknown, code: string): value is ReservationSummary {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
-  return item.code === code && nullableString(item.listingId) && nullableString(item.property)
+  const prefill = item.guestPrefill;
+  return !!prefill && typeof prefill === 'object' && !Array.isArray(prefill)
+    && ['fullName', 'email', 'phone'].every((key) => typeof (prefill as Record<string, unknown>)[key] === 'string')
+    && item.code === code && nullableString(item.listingId) && nullableString(item.property)
     && nullableString(item.image) && nullableString(item.checkIn) && nullableString(item.checkOut)
     && nullableInteger(item.guests) && nullableInteger(item.adults) && nullableInteger(item.children)
     && nullableInteger(item.infants) && nullableInteger(item.totalCents) && nullableInteger(item.candidateBalanceCents)
@@ -64,9 +66,45 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
   const [prepared, setPrepared] = useState(false);
   const [paymentReviewRequired, setPaymentReviewRequired] = useState(false);
   const [activeReference, setActiveReference] = useState<string | null>(null);
+  const [storageFailure, setStorageFailure] = useState(false);
+  const prefilledCodeRef = useRef<string | null>(null);
   const contextRef = useRef<CieloPaymentContext | null>(null);
   const pixKeyRef = useRef<string | null>(null);
-  const previousReference = useMemo(() => getExistingReservationResumeReference(code), [code]);
+  const previousReferences = useMemo(() => getExistingReservationResumeReferences(code), [code]);
+  const [intentKey, setIntentKey] = useState(() => getExistingReservationIntent(code));
+  const [intentError, setIntentError] = useState('');
+  const [recovering, setRecovering] = useState(false);
+  const showPaymentForm = previousReferences.length === 0 || intentKey !== null;
+
+  const recoverIntent = async () => {
+    if (!intentKey || recovering) return;
+    setRecovering(true);
+    setIntentError('');
+    try {
+      const response = await apiFetch(`/api/existing-reservations/${encodeURIComponent(code)}/checkout-recovery`, {
+        method: 'POST', cache: 'no-store', headers: { 'Idempotency-Key': intentKey },
+      });
+      const data: unknown = await response.json();
+      if (!response.ok || !data || typeof data !== 'object' || !('resume' in data) || !data.resume || typeof data.resume !== 'object') throw new Error();
+      const resume = data.resume as Record<string, unknown>;
+      if (typeof resume.reference !== 'string' || !/^[A-Za-z0-9]{40}$/.test(resume.reference)
+        || typeof resume.token !== 'string' || !/^[A-Za-z0-9]{64}$/.test(resume.token)
+        || typeof resume.expiresAt !== 'string' || !Number.isFinite(Date.parse(resume.expiresAt)) || Date.parse(resume.expiresAt) <= Date.now()
+        || resume.path !== `/checkout/${resume.reference}`) throw new Error();
+      saveCheckoutResumeToken(resume.reference, resume.token, resume.expiresAt);
+      saveExistingReservationResumeReference(code, resume.reference);
+      const storedToken = window.sessionStorage.getItem(`crcn.checkout.resume.${resume.reference}`);
+      const storedReferences = window.sessionStorage.getItem(`crcn.existing-reservation.resume.${code}`);
+      if (!storedToken || JSON.parse(storedToken).token !== resume.token
+        || !storedReferences || !JSON.parse(storedReferences).includes(resume.reference)) throw new Error();
+      clearExistingReservationIntent(code);
+      setIntentKey(null);
+      window.history.replaceState(null, '', checkoutPathWithStayQuery(resume.path, window.location.search));
+      setActiveReference(resume.reference);
+    } catch {
+      setIntentError('Não foi possível recuperar esta tentativa. Não inicie outro pagamento; tente novamente ou fale com nosso atendimento.');
+    } finally { setRecovering(false); }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -77,6 +115,10 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
         if (controller.signal.aborted) return;
         if (!data?.success || !isSummary(data.reservation, code)) { setState('error'); return; }
         setSummary(data.reservation);
+        if (prefilledCodeRef.current !== code) {
+          setGuest(data.reservation.guestPrefill);
+          prefilledCodeRef.current = code;
+        }
         setMethod(data.reservation.paymentMethods.includes('pix') ? 'pix' : 'card');
         window.history.replaceState(null, '', existingReservationUrl(code, data.reservation, window.location.search));
         setState('ready');
@@ -91,22 +133,29 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
       throw new Error('Confira os dados e aceite o valor do pagamento antes de continuar.');
     }
     const payer = { fullName: guest.fullName.trim(), email: guest.email.trim(), phone: guest.phone.trim() };
-    const idempotencyKey = await getOrCreateCheckoutSubmissionKey({
-      listingId: `${code}:${summary.listingId}:${method}:${method === 'card' ? cardPricing?.installments ?? 'unavailable' : 'single'}`, from: summary.checkIn, to: summary.checkOut,
-      guests: { adults: summary.adults ?? 0, children: summary.children ?? 0, infants: summary.infants ?? 0, pets: 0 },
-      quoteTotal: summary.candidateBalanceCents / 100, guest: payer,
-      acceptedTermsVersion: 'existing-booking-payment-v1', acceptedTerms: true,
-    });
+    const idempotencyKey = intentKey ?? startExistingReservationIntent(code);
+    if (!intentKey) setIntentKey(idempotencyKey);
+    const request = { expectedBalanceCents: summary.candidateBalanceCents, guest: payer, acceptedPayment: true, paymentMethod: method, ...(method === 'card' ? { installments: cardPricing?.installments } : {}) };
+    await bindExistingReservationIntent(code, idempotencyKey, request);
+    const previouslySubmitted = markExistingReservationIntentSubmitted(code, idempotencyKey);
     let response: Response;
     let data: unknown;
     try {
       response = await apiFetch(`/api/existing-reservations/${encodeURIComponent(code)}/checkout`, {
         method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
-        body: JSON.stringify({ expectedBalanceCents: summary.candidateBalanceCents, guest: payer, acceptedPayment: true, paymentMethod: method, ...(method === 'card' ? { installments: cardPricing?.installments } : {}) }),
+        body: JSON.stringify(request),
       });
       data = await response.json();
     } catch {
       throw new Error('Não foi possível confirmar o preparo do pagamento. Tente novamente sem alterar os dados ou fale com nosso atendimento.');
+    }
+    // Laravel FormRequest validation runs before the checkout service. Only a first,
+    // definitively rejected dispatch can be reset; an earlier lost response remains ambiguous.
+    if (!previouslySubmitted && response.status === 422 && data && typeof data === 'object'
+      && 'errors' in data && data.errors && typeof data.errors === 'object' && !Array.isArray(data.errors)) {
+      clearExistingReservationIntent(code);
+      setIntentKey(null);
+      throw new Error('Confira e corrija os dados informados para continuar. Nenhum pedido foi iniciado nesta tentativa.');
     }
     if (!response.ok && data && typeof data === 'object' && 'code' in data) {
       if (data.code === 'existing_checkout_already_started') {
@@ -139,9 +188,20 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     }
     saveCheckoutResumeToken(resume.reference, resume.token, resume.expiresAt);
     saveExistingReservationResumeReference(code, resume.reference);
+    try {
+      const storedToken = window.sessionStorage.getItem(`crcn.checkout.resume.${resume.reference}`);
+      const storedReferences = window.sessionStorage.getItem(`crcn.existing-reservation.resume.${code}`);
+      if (!storedToken || JSON.parse(storedToken).token !== resume.token
+        || !storedReferences || !JSON.parse(storedReferences).includes(resume.reference)) throw new Error();
+    } catch {
+      setStorageFailure(true);
+      throw new Error('Não foi possível guardar o acesso ao pedido. Tente novamente sem alterar os dados ou fale com nosso atendimento.');
+    }
+    clearExistingReservationIntent(code);
+    setIntentKey(null);
     const context: CieloPaymentContext = { reference: resume.reference, amount: order.quoteTotal, credentials: { type: 'resume-token', resumeToken: resume.token } };
     window.history.replaceState(null, '', checkoutPathWithStayQuery(resume.path, window.location.search));
-    if (order.status !== 'pre_reservado' || order.paymentStatus !== null || payment.enabled !== true) {
+    if (('replayed' in data && data.replayed === true) || previouslySubmitted || order.status !== 'pre_reservado' || order.paymentStatus !== null || payment.enabled !== true) {
       setActiveReference(context.reference);
       throw new Error('Acompanhe a situação deste pedido antes de tentar novamente.');
     }
@@ -174,6 +234,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     showPaymentStatus();
   };
 
+  if (storageFailure) return <main className="mx-auto max-w-3xl p-6"><h1 className="text-2xl font-bold">Não foi possível guardar o acesso ao pedido</h1><p role="alert" className="mt-4">Não inicie outro pagamento. Tente novamente sem alterar os dados quando o armazenamento do navegador estiver disponível ou fale com nosso atendimento.</p><CheckoutSupportLink details={{ reservationCode: code }} /></main>;
   if (activeReference) return <CheckoutResumePage reference={activeReference} focusOnMount />;
 
   return <main className="checkout-purchase min-h-screen pb-24 text-neutral-950">
@@ -186,7 +247,9 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     <div className="checkout-purchase-form liquid-glass-card mx-auto mt-8 max-w-3xl rounded-3xl p-5 sm:mt-10 sm:p-10">
       <p className="text-sm font-bold uppercase tracking-widest text-orange-700">Central de Reservas · Caldas Novas</p>
       <h1 className="mt-3 text-3xl font-black">Sua reserva</h1>
-      {previousReference && <div className="mt-6 space-y-3 rounded-xl border border-orange-200 bg-orange-50 p-4" role="status"><p className="font-semibold">Você já iniciou um pagamento para esta reserva neste navegador.</p><p className="text-sm text-neutral-700">Acompanhe a tentativa antes de iniciar outra cobrança.</p><a className="inline-flex min-h-11 items-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" href={checkoutPathWithStayQuery(`/checkout/${previousReference}`, window.location.search)}>Acompanhar pagamento</a></div>}
+      {intentKey && hasSubmittedExistingReservationIntent(code, intentKey) && <div className="mt-6 rounded-xl border border-orange-200 bg-orange-50 p-4"><p className="font-semibold">Uma tentativa anterior pode ter sido iniciada.</p><button type="button" disabled={recovering} onClick={() => void recoverIntent()} className="mt-3 min-h-11 rounded-xl bg-neutral-950 px-4 py-2 font-semibold text-white disabled:opacity-60">{recovering ? 'Recuperando…' : 'Acompanhar tentativa anterior'}</button>{intentError && <p role="alert" className="mt-3">{intentError}</p>}</div>}
+      {previousReferences.length > 0 && <div className="mt-6 space-y-3 rounded-xl border border-orange-200 bg-orange-50 p-4"><p className="font-semibold">Você já iniciou pagamento para esta reserva neste navegador.</p><p className="text-sm text-neutral-700">Acompanhe as tentativas antes de iniciar outra cobrança.</p>{previousReferences.map((reference, index) => <a key={reference} className="mr-3 inline-flex min-h-11 items-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" href={checkoutPathWithStayQuery(`/checkout/${reference}`, window.location.search)}>Acompanhar pagamento {previousReferences.length > 1 ? index + 1 : ''}</a>)}{!intentKey && <button type="button" className="min-h-11 rounded-xl border border-neutral-400 px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-orange-700" onClick={() => { try { setIntentKey(startExistingReservationIntent(code)); setIntentError(''); } catch (error) { setIntentError(error instanceof Error ? error.message : 'Não foi possível guardar esta tentativa.'); } }}>Iniciar nova tentativa</button>}{intentError && <p role="alert">{intentError}</p>}</div>}
+      {intentKey && <p role="status" className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">Para recuperar uma tentativa interrompida, informe exatamente os mesmos dados, valor e forma de pagamento usados anteriormente. Se não souber, fale com nosso atendimento.</p>}
       {state === 'loading' && <p role="status" className="mt-6">Consultando os dados da reserva…</p>}
       {state === 'error' && <div className="mt-6 space-y-3"><p role="alert">Não foi possível consultar esta reserva. Confira o código ou fale com nosso atendimento.</p><button type="button" className="min-h-11 rounded-xl border border-neutral-400 px-4 py-2 font-semibold focus-visible:outline-2 focus-visible:outline-orange-700" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button><CheckoutSupportLink details={{ reservationCode: code }} /></div>}
       {state === 'ready' && summary && <section className="mt-6 space-y-6" aria-label="Dados da reserva">
@@ -199,8 +262,8 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
           <div><dt className="text-sm text-slate-600">Total da hospedagem</dt><dd className="font-bold">{summary.totalCents === null ? 'Em conferência' : money(summary.totalCents)}</dd></div>
           {['pending_candidate', 'unrecorded_candidate'].includes(summary.balanceStatus) && summary.candidateBalanceCents !== null && <div><dt className="text-sm text-slate-600">{!summary.paymentEnabled ? 'Saldo para conferência' : summary.balanceStatus === 'unrecorded_candidate' ? 'Valor para pagamento' : 'Saldo a pagar'}</dt><dd className="font-bold">{money(summary.candidateBalanceCents)}</dd></div>}
         </dl>
-        {summary.paymentEnabled && summary.balanceStatus === 'unrecorded_candidate' && !previousReference && <p role="status" className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-950">Confira o valor antes de continuar. O pagamento será confirmado somente após a aprovação.</p>}
-        {!previousReference && summary.paymentEnabled && summary.candidateBalanceCents !== null ? <CieloSopCardForm
+        {summary.paymentEnabled && summary.balanceStatus === 'unrecorded_candidate' && showPaymentForm && <p role="status" className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-950">Confira o valor antes de continuar. O pagamento será confirmado somente após a aprovação.</p>}
+        {showPaymentForm && summary.paymentEnabled && summary.candidateBalanceCents !== null ? <CieloSopCardForm
           reference="" amount={(summary.candidateBalanceCents / 100).toFixed(2)} credentials={null}
           preparePayment={preparePayment} paymentMethod={method} guestPrefill={guest} disabled={!accepted || paymentReviewRequired}
           onPricingChange={setCardPricing}
@@ -214,7 +277,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
             <legend className="text-lg font-bold">Dados de quem vai pagar</legend>
             <label className="block text-sm font-semibold">Nome completo<input className={fieldClass} required value={guest.fullName} onChange={(event) => setGuest({ ...guest, fullName: event.target.value })} autoComplete="name" /></label>
             <label className="block text-sm font-semibold">E-mail<input className={fieldClass} required type="email" value={guest.email} onChange={(event) => setGuest({ ...guest, email: event.target.value })} autoComplete="email" /></label>
-            <label className="block text-sm font-semibold">WhatsApp<input className={fieldClass} required type="tel" value={guest.phone} onChange={(event) => setGuest({ ...guest, phone: formatBrazilianPhone(event.target.value) })} autoComplete="tel" /></label>
+            <label className="block text-sm font-semibold">WhatsApp<input className={fieldClass} required type="tel" value={guest.phone} onChange={(event) => setGuest({ ...guest, phone: event.target.value })} autoComplete="tel" /></label>
           </fieldset>
           <fieldset disabled={prepared || paymentReviewRequired} className="space-y-2"><legend className="font-bold">Forma de pagamento</legend>
             {summary.paymentMethods.includes('pix') && <label className="mr-5"><input type="radio" name="existing-method" checked={method === 'pix'} onChange={() => setMethod('pix')} /> Pix</label>}
@@ -222,8 +285,8 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
           </fieldset>
           {prepared && <p className="text-sm text-neutral-600">A forma de pagamento e as parcelas foram reservadas para este pedido.</p>}
           <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={paymentReviewRequired} required /> Confirmo o pagamento do saldo informado desta reserva.</label>
-        </CieloSopCardForm> : !previousReference && <p role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-950">O pagamento desta reserva ainda está em conferência. Entre em contato com nosso atendimento.</p>}
-        <CheckoutSupportLink details={{ reservationCode: summary.code, listingTitle: summary.property ?? undefined, listingId: summary.listingId ?? undefined, from: summary.checkIn ?? undefined, to: summary.checkOut ?? undefined, balanceTotal: summary.candidateBalanceCents !== null ? summary.candidateBalanceCents / 100 : undefined, paymentMethod: summary.paymentEnabled && !previousReference ? method : undefined, installments: summary.paymentEnabled && !previousReference && method === 'card' ? cardPricing?.installments : undefined, total: summary.paymentEnabled && !previousReference && method === 'card' && cardPricing ? cardPricing.totalCents / 100 : undefined }} />
+        </CieloSopCardForm> : showPaymentForm && <p role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-950">O pagamento desta reserva ainda está em conferência. Entre em contato com nosso atendimento.</p>}
+        <CheckoutSupportLink details={{ reservationCode: summary.code, listingTitle: summary.property ?? undefined, listingId: summary.listingId ?? undefined, from: summary.checkIn ?? undefined, to: summary.checkOut ?? undefined, balanceTotal: summary.candidateBalanceCents !== null ? summary.candidateBalanceCents / 100 : undefined, paymentMethod: summary.paymentEnabled && showPaymentForm ? method : undefined, installments: summary.paymentEnabled && showPaymentForm && method === 'card' ? cardPricing?.installments : undefined, total: summary.paymentEnabled && showPaymentForm && method === 'card' && cardPricing ? cardPricing.totalCents / 100 : undefined }} />
       </section>}
     </div>
   </main>;

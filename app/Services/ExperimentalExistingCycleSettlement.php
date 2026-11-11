@@ -28,7 +28,9 @@ class ExperimentalExistingCycleSettlement
         $snapshot = $order?->quote_snapshot['existing_reservation'] ?? null;
         $action = $order?->staysActions()->where('action_type', 'settle_existing_receivable')->first();
         $proof = json_decode($cycle->settlement_proof ?? '', true);
-        if (! is_array($snapshot) || ! $action || ! is_array($proof['audit'] ?? null)) {
+        if (! is_array($snapshot) || ! is_string($snapshot['reservation_code'] ?? null)
+            || ! is_string($snapshot['_id'] ?? null) || ! $action || ! is_array($action->request_snapshot)
+            || ! is_array($proof['audit'] ?? null)) {
             return null;
         }
         $audit = app(ExistingReservationLedgerAudit::class)->inspect($snapshot['reservation_code'], $snapshot['_id']);
@@ -41,7 +43,18 @@ class ExperimentalExistingCycleSettlement
             return null;
         }
 
-        return $audit;
+        // External reads happen outside the lock. Reject evidence if local proof
+        // changed while those reads were in flight.
+        $stillValid = app(ExistingReservationPaymentLock::class)->synchronized($cycle->stays_reservation_id, function () use ($cycle): bool {
+            $locked = DB::table('existing_reservation_payment_cycles')->where('id', $cycle->id)->lockForUpdate()->first();
+
+            return $locked !== null && is_string($locked->settlement_proof_hash)
+                && is_string($cycle->settlement_proof_hash)
+                && hash_equals($cycle->settlement_proof_hash, $locked->settlement_proof_hash)
+                && $this->recordedProofValid($locked);
+        });
+
+        return $stillValid ? $audit : null;
     }
 
     /** Verify local proof while holding the reservation lock; no external calls. */

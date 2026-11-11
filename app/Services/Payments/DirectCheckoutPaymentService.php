@@ -338,7 +338,9 @@ class DirectCheckoutPaymentService
             };
             $attempt = $identity !== null
                 ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $create)
-                : DB::transaction($create);
+                : (\Illuminate\Support\Facades\Schema::hasTable('existing_reservation_payment_locks')
+                    ? app(ExistingReservationPaymentLock::class)->synchronizedDecision(fn () => app(ReservationCoordinationMode::class)->isRequired($order) ? ['error' => 'existing_reservation_unverified'] : $create())
+                    : DB::transaction($create));
         } catch (UniqueConstraintViolationException) {
             $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existingAttempt !== null) {
@@ -586,6 +588,14 @@ class DirectCheckoutPaymentService
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
     public function createAttempt(DirectBookingOrder $order, StoreCheckoutPaymentRequest $request): array
     {
+        // Let Cielo replay an existing attempt or reject a new one when the audit is off.
+        if ($order->origin === 'stays_existing'
+            && config('direct-booking.existing_reservation_checkout_enabled', false) === true
+            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true
+            && CieloDirectConfiguration::isProvider($order->gateway_provider)) {
+            return $this->cieloPayments->createAttempt($order, $request);
+        }
+
         if ($this->availableMethods($order) === []) {
             $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
                 'order_id' => $order->id,
@@ -777,7 +787,9 @@ class DirectCheckoutPaymentService
             };
             $attempt = $identity !== null
                 ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $create)
-                : DB::transaction($create);
+                : (\Illuminate\Support\Facades\Schema::hasTable('existing_reservation_payment_locks')
+                    ? app(ExistingReservationPaymentLock::class)->synchronizedDecision(fn () => app(ReservationCoordinationMode::class)->isRequired($order) ? ['error' => 'existing_reservation_unverified'] : $create())
+                    : DB::transaction($create));
         } catch (UniqueConstraintViolationException) {
             $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existingAttempt !== null) {

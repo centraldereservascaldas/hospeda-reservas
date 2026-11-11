@@ -22,6 +22,15 @@ class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_legacy_ambiguous_reservation_blocks_a_later_guest_cancellation_claim(): void
+    {
+        $this->order(DirectBookingOrderStatus::PreReservado, 'legacy-unverified-reference');
+        $identity = ['canonical' => str_repeat('a', 24), 'code' => 'AB12C'];
+        $claimed = app(\App\Services\ExistingReservationPaymentLock::class)->synchronized($identity['canonical'],
+            fn () => app(\App\Services\ReservationReleaseGuard::class)->claimGuestCancellation($identity));
+        $this->assertFalse($claimed);
+    }
+
     public function test_new_stays_client_receives_checkout_phone_without_storing_it_in_action_snapshot(): void
     {
         config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);

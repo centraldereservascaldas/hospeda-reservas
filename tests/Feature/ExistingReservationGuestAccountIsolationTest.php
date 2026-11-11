@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
+use App\Services\ExistingReservationPaymentLock;
+use App\Services\ReservationReleaseGuard;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -14,6 +16,29 @@ use Tests\TestCase;
 class ExistingReservationGuestAccountIsolationTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_uncertain_guest_cancellation_blocks_payment_even_after_feature_rollback(): void
+    {
+        $id = str_repeat('a', 24);
+        $record = ['id' => 'ZX91K', '_id' => $id, '_idclient' => 'stays-client-1', 'type' => 'booked'];
+        config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
+        Http::preventStrayRequests();
+        Http::fake(fn (Request $request) => match (true) {
+            str_contains($request->url(), '/auth/v1/user') => Http::response(['id' => '575c8054-6646-443c-bf62-07945019a32f', 'email' => 'guest@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Guest Example']]),
+            str_contains($request->url(), '/booking/clients/') => Http::response(['client' => ['reservations' => [$record]]]),
+            $request->method() === 'PATCH' => Http::response([], 503),
+            default => Http::response($record),
+        });
+        GuestProfile::query()->create(['id' => '575c8054-6646-443c-bf62-07945019a32f', 'full_name' => 'Guest Example', 'stays_client_id' => 'stays-client-1']);
+
+        $this->withToken('valid-access-token')->postJson('/api/my-reservations/ZX91K/cancel')->assertStatus(502);
+        $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => $id]);
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        $blocked = app(ExistingReservationPaymentLock::class)->synchronized($id, fn () => app(ReservationReleaseGuard::class)->paymentBlocked($id, 'ZX91K'));
+        $this->assertTrue($blocked);
+        $this->withToken('valid-access-token')->postJson('/api/my-reservations/ZX91K/cancel')->assertStatus(409);
+        $this->assertCount(1, Http::recorded(fn (Request $request) => $request->method() === 'PATCH'));
+    }
 
     public function test_existing_reservation_payment_does_not_replace_booking_status_or_auto_cancel(): void
     {
@@ -39,6 +64,7 @@ class ExistingReservationGuestAccountIsolationTest extends TestCase
             ->assertOk()->assertJsonPath('data.0.status', 'confirmed')->assertJsonPath('data.0.directBookingReference', null);
         $this->withToken('valid-access-token')->postJson('/api/my-reservations/ZX91K/cancel')
             ->assertStatus(409)->assertJsonPath('code', 'direct_booking_cancellation_requires_support');
+        Http::assertNotSent(fn (Request $request): bool => $request->method() === 'PATCH' && str_contains($request->url(), '/booking/reservations/'));
         Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'stays.net') && $request->method() !== 'GET');
     }
 
@@ -68,6 +94,17 @@ class ExistingReservationGuestAccountIsolationTest extends TestCase
         $this->withToken('valid-access-token')->postJson('/api/my-reservations/ZX91K/cancel')
             ->assertOk()->assertJsonPath('cancellationStatus', 'requested');
         $this->assertSame(DirectBookingOrderStatus::CancelamentoSolicitado, $order->fresh()->status);
+        $existingPayment = $order->replicate(['public_reference']);
+        $existingPayment->idempotency_key = 'existing-payment-for-website-order';
+        $existingPayment->public_reference = str_repeat('y', 40);
+        $existingPayment->origin = 'stays_existing';
+        $existingPayment->save();
+        $this->withToken('valid-access-token')->getJson('/api/my-reservations')
+            ->assertOk()->assertJsonPath('data.0.status', 'confirmed')
+            ->assertJsonPath('data.0.cancellationRequested', true)
+            ->assertJsonPath('data.0.directBookingReference', str_repeat('z', 40));
+        $this->withToken('valid-access-token')->postJson('/api/my-reservations/ZX91K/cancel')
+            ->assertStatus(409)->assertJsonPath('code', 'direct_booking_cancellation_requires_support');
         Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'stays.net') && $request->method() !== 'GET');
     }
 

@@ -13,7 +13,7 @@ afterEach(() => window.sessionStorage.clear());
 test('existing reservation displays server data without enabling payment', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ success: true, reservation: {
-    code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+    guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
     checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
     totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: false, paymentMethods: [], cardInstallments: [],
   } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -35,7 +35,7 @@ test('existing reservation displays server data without enabling payment', async
 test('an unrecorded candidate is shown for review without offering payment', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ success: true, reservation: {
-    code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+    guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
     checkIn: '2026-11-19', checkOut: '2026-11-22', guests: 4, adults: 4, children: 0, infants: 0,
     totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: false, paymentMethods: [], cardInstallments: [],
   } }), { status: 200 });
@@ -53,14 +53,18 @@ test('an unrecorded candidate is shown for review without offering payment', asy
 test('checkout identifies Pix accessibly and does not imply unavailable card installments', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ success: true, reservation: {
-    code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+    guestPrefill: { fullName: 'Maria Silva', email: 'maria@example.test', phone: '+5564999999999' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
     checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
     totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix', 'card'], cardInstallments: [1, 3, 6],
   } }), { status: 200 });
   try {
     const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
     await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pague com Pix' })));
-    assert.equal((view.getByLabelText('WhatsApp') as HTMLInputElement).type, 'tel');
+    assert.equal((view.getByLabelText('Nome completo') as HTMLInputElement).value, 'Maria Silva');
+    assert.equal((view.getByLabelText('E-mail') as HTMLInputElement).value, 'maria@example.test');
+    assert.equal((view.getByLabelText('WhatsApp') as HTMLInputElement).value, '+5564999999999');
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Maria Editada' } });
+    assert.equal((view.getByLabelText('Nome completo') as HTMLInputElement).value, 'Maria Editada');
     fireEvent.click(view.getByLabelText('Cartão · parcelas disponíveis'));
     assert.deepEqual(view.getAllByRole('option').map((option) => (option as HTMLOptionElement).value), ['1', '3', '6']);
   } finally {
@@ -75,7 +79,7 @@ test('accessible reservation details and card pricing follow the chosen installm
   globalThis.fetch = async (_input, init) => {
     methods.push(init?.method ?? 'GET');
     return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2030-11-19', checkOut: '2030-11-22', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 99500, candidateBalanceCents: 99500, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix', 'card'], cardInstallments: [1, 2, 3, 4, 5, 6],
     } }), { status: 200 });
@@ -119,7 +123,7 @@ test('experimental unrecorded balance starts a pending Pix only after explicit c
     const url = String(input);
     requests.push({ url, method: init?.method ?? 'GET' });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-19', checkOut: '2026-11-22', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
@@ -168,7 +172,7 @@ test('experimental unrecorded balance shows selected card price and submits only
     const url = String(input);
     calls.push({ url, init });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-19', checkOut: '2026-11-22', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix', 'card'], cardInstallments: [1, 2, 3, 4, 5, 6],
     } }), { status: 200 });
@@ -246,7 +250,7 @@ for (const [code, message] of [
       const url = String(input);
       calls.push({ url, method: init?.method ?? 'GET' });
       if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-        code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+        guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
         checkIn: '2026-11-19', checkOut: '2026-11-22', guests: 4, adults: 4, children: 0, infants: 0,
         totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
       } }), { status: 200 });
@@ -274,6 +278,40 @@ for (const [code, message] of [
   });
 }
 
+test('a first validation rejection permits corrected data with a fresh intent', async () => {
+  const originalFetch = globalThis.fetch;
+  const keys: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'VA123', listingId: 'LISTING', property: 'Apartamento', image: null, checkIn: '2030-11-19', checkOut: '2030-11-22', guests: 1, adults: 1, children: 0, infants: 0,
+      totalCents: 10000, candidateBalanceCents: 10000, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
+    } }), { status: 200 });
+    if (url.endsWith('/existing-reservations/VA123/checkout')) {
+      keys.push((init?.headers as Record<string, string>)['Idempotency-Key']);
+      return keys.length === 1
+        ? new Response(JSON.stringify({ message: 'Invalid data', errors: { 'guest.fullName': ['Invalid'] } }), { status: 422 })
+        : new Response(JSON.stringify({ success: false, code: 'existing_receivable_unconfirmed' }), { status: 503 });
+    }
+    return new Response('{}', { status: 503 });
+  };
+  try {
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'VA123' }));
+    await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente' } });
+    fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
+    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
+    fireEvent.click(view.getByRole('checkbox'));
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+    await waitFor(() => assert.match(view.getByRole('alert').textContent ?? '', /corrija os dados/));
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Corrigido' } });
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+    await waitFor(() => assert.equal(keys.length, 2));
+    assert.notEqual(keys[0], keys[1]);
+  } finally { cleanup(); globalThis.fetch = originalFetch; }
+});
+
 test('an interrupted checkout preparation retries with the same idempotency key and does not send payment', async () => {
   const originalFetch = globalThis.fetch;
   const keys: string[] = [];
@@ -282,14 +320,14 @@ test('an interrupted checkout preparation retries with the same idempotency key 
     const url = String(input);
     calls.push(url);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2030-11-19', checkOut: '2030-11-22', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
     if (url.endsWith('/existing-reservations/ZX91K/checkout')) {
       keys.push((init?.headers as Record<string, string>)['Idempotency-Key']);
       if (keys.length === 1) throw new TypeError('synthetic network failure');
-      return new Response(JSON.stringify({ success: false, code: 'existing_receivable_unconfirmed' }), { status: 503 });
+      return new Response(JSON.stringify({ message: 'Invalid data', errors: { guest: ['Invalid'] } }), { status: 422 });
     }
     return new Response('{}', { status: 503 });
   };
@@ -305,9 +343,13 @@ test('an interrupted checkout preparation retries with the same idempotency key 
     fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
     await waitFor(() => assert.match(view.getByRole('alert').textContent ?? '', /sem alterar os dados/));
     fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
-    await waitFor(() => assert.match(view.getByRole('alert').textContent ?? '', /registro desta reserva está em conferência/));
+    await waitFor(() => assert.match(view.getByRole('alert').textContent ?? '', /Não foi possível preparar o pagamento/));
     assert.equal(keys.length, 2);
     assert.equal(keys[0], keys[1]);
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Outro Cliente' } });
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+    await waitFor(() => assert.match(view.getByRole('alert').textContent ?? '', /exatamente os mesmos dados/));
+    assert.equal(keys.length, 2);
     assert.equal(calls.some((url) => url.endsWith('/payments')), false);
   } finally {
     cleanup();
@@ -322,7 +364,7 @@ test('a prepared card order keeps its payment method and installments fixed afte
   globalThis.fetch = async (input) => {
     const url = String(input);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix', 'card'], cardInstallments: [1, 2, 3, 4, 5, 6],
     } }), { status: 200 });
@@ -369,7 +411,7 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     const url = String(input);
     calls.push({ url, init });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
@@ -428,7 +470,7 @@ test('a prepared order with payment disabled never starts a Pix attempt', async 
     const url = String(input);
     calls.push(url);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
@@ -468,7 +510,7 @@ test('card form sends the Cielo token and installments, not card details, to the
     const url = String(input);
     calls.push({ url, init });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['card'], cardInstallments: [6],
     } }), { status: 200 });
@@ -513,4 +555,258 @@ test('card form sends the Cielo token and installments, not card details, to the
     delete window.bpSop_silentOrderPost;
     globalThis.fetch = originalFetch;
   }
+});
+
+test('explicit new intent survives an ambiguous response and preserves earlier payment references', async () => {
+  const originalFetch = globalThis.fetch;
+  const oldReference = 'Q'.repeat(40), newReference = 'R'.repeat(40), token = 'S'.repeat(64);
+  const expiresAt = new Date(Date.now() + 86400000).toISOString();
+  window.sessionStorage.setItem(`crcn.checkout.resume.${oldReference}`, JSON.stringify({ token, expiresAt }));
+  window.sessionStorage.setItem('crcn.existing-reservation.resume.ZY92K', oldReference);
+  const keys: string[] = [];
+  let attempts = 0;
+  let payments = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
+      totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
+    } }), { status: 200 });
+    if (url.endsWith('/existing-reservations/ZY92K/checkout')) {
+      keys.push((init?.headers as Record<string, string>)['Idempotency-Key']);
+      if (++attempts === 1) throw new Error('network response lost');
+      return new Response(JSON.stringify({ success: true, resume: { reference: newReference, token, path: `/checkout/${newReference}`, expiresAt },
+        order: { publicReference: newReference, status: 'pre_reservado', paymentStatus: null, quoteTotal: '197.50' },
+        payment: { enabled: true, provider: 'cielo_sandbox' } }), { status: 201 });
+    }
+    if (url.endsWith('/payments')) { payments++; return new Response('{}', { status: 503 }); }
+    return new Response('{}', { status: 503 });
+  };
+  const fill = (view: ReturnType<typeof render>) => {
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
+    fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
+    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
+    fireEvent.click(view.getByRole('checkbox'));
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+  };
+  try {
+    let view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
+    fireEvent.click(view.getByRole('button', { name: 'Iniciar nova tentativa' }));
+    fill(view);
+    await waitFor(() => assert.equal(attempts, 1));
+    await waitFor(() => assert.ok(view.getByText(/Não foi possível confirmar o preparo/)));
+    assert.equal(payments, 0);
+    cleanup();
+    view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
+    fill(view);
+    await waitFor(() => assert.equal(window.location.pathname, `/checkout/${newReference}`));
+    assert.equal(payments, 0);
+    assert.equal(keys[0], keys[1]);
+    cleanup();
+    view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
+    const links = view.getAllByRole('link', { name: /Acompanhar pagamento/ }) as HTMLAnchorElement[];
+    assert.deepEqual(links.map((link) => new URL(link.href).pathname), [`/checkout/${oldReference}`, `/checkout/${newReference}`]);
+    assert.equal(window.sessionStorage.getItem(`crcn.checkout.resume.${oldReference}`) !== null, true);
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith('/existing-reservations/ZY92K/checkout')) return new Response(JSON.stringify({ code: 'existing_checkout_already_started' }), { status: 409 });
+      if (url.endsWith('/payments')) payments++;
+      return new Response('{}', { status: 503 });
+    };
+    fireEvent.click(view.getByRole('button', { name: 'Iniciar nova tentativa' }));
+    fill(view);
+    await waitFor(() => assert.ok(view.getByText(/Já existe um pedido para esta reserva/)));
+    assert.equal(payments, 0);
+  } finally { cleanup(); globalThis.fetch = originalFetch; }
+});
+
+test('a failed reference write after preparation retains memory access and prevents payment', async () => {
+  const originalFetch = globalThis.fetch;
+  const oldReference = 'T'.repeat(40), newReference = 'U'.repeat(40), token = 'V'.repeat(64);
+  const expiresAt = new Date(Date.now() + 86400000).toISOString();
+  window.sessionStorage.setItem(`crcn.checkout.resume.${oldReference}`, JSON.stringify({ token, expiresAt }));
+  window.sessionStorage.setItem('crcn.existing-reservation.resume.ZY92K', oldReference);
+  const storagePrototype = Object.getPrototypeOf(window.sessionStorage);
+  const originalSetItem = storagePrototype.setItem;
+  let payments = 0;
+  let resumeRequests = 0;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
+      totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
+    } }), { status: 200 });
+    if (url.endsWith('/existing-reservations/ZY92K/checkout')) {
+      storagePrototype.setItem = function (key: string, value: string) {
+        if (key === 'crcn.existing-reservation.resume.ZY92K') throw new Error('quota');
+        return originalSetItem.call(this, key, value);
+      };
+      return new Response(JSON.stringify({ success: true, resume: { reference: newReference, token, path: `/checkout/${newReference}`, expiresAt },
+        order: { publicReference: newReference, status: 'pre_reservado', paymentStatus: null, quoteTotal: '197.50' },
+        payment: { enabled: true, provider: 'cielo_sandbox' } }), { status: 201 });
+    }
+    if (url.includes(`/checkout/${newReference}`)) { resumeRequests++; return new Response(JSON.stringify({ success: true, order: { publicReference: newReference, status: 'pre_reservado', paymentStatus: null, quoteTotal: '197.50' }, payment: { enabled: true, provider: 'cielo_sandbox' } }), { status: 200 }); }
+    if (url.endsWith('/payments')) payments++;
+    return new Response('{}', { status: 503 });
+  };
+  try {
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
+    fireEvent.click(view.getByRole('button', { name: 'Iniciar nova tentativa' }));
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
+    fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
+    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
+    fireEvent.click(view.getByRole('checkbox'));
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+    await waitFor(() => assert.ok(view.getByRole('heading', { name: /não foi possível guardar o acesso ao pedido/i })));
+    assert.equal(view.queryByRole('button', { name: /pagar|gerar pix/i }), null);
+    const { getExistingReservationResumeReferences } = await import('../src/utils/existingReservationResumeStorage.ts');
+    assert.deepEqual(getExistingReservationResumeReferences('ZY92K'), [oldReference, newReference]);
+    assert.ok(window.sessionStorage.getItem('crcn.existing-reservation.intent.ZY92K'));
+    assert.equal(payments, 0);
+    assert.equal(resumeRequests, 0);
+  } finally { storagePrototype.setItem = originalSetItem; cleanup(); globalThis.fetch = originalFetch; }
+});
+
+test('two payment cycles retain the first order and block a duplicate after an ambiguous second payment', async () => {
+  const originalFetch = globalThis.fetch;
+  const expiresAt = new Date(Date.now() + 86400000).toISOString();
+  const orders: Array<{ key: string; reference: string; token: string; amount: number; closed: boolean }> = [];
+  const keys: string[] = [];
+  let balance = 39500;
+  let payments = 0;
+  let lostSecondPreparation = false;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY93K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
+      totalCents: 39500, candidateBalanceCents: balance, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
+    } }));
+    if (url.endsWith('/existing-reservations/ZY93K/checkout')) {
+      const key = (init?.headers as Record<string, string>)['Idempotency-Key'];
+      keys.push(key);
+      let order = orders.find((item) => item.key === key);
+      if (!order) {
+        if (orders.some((item) => !item.closed)) return new Response(JSON.stringify({ code: 'existing_checkout_already_started' }), { status: 409 });
+        order = { key, reference: String.fromCharCode(65 + orders.length).repeat(40), token: String.fromCharCode(75 + orders.length).repeat(64), amount: balance, closed: false };
+        orders.push(order);
+      }
+      if (orders.length === 2 && !lostSecondPreparation) { lostSecondPreparation = true; throw new Error('response lost'); }
+      return new Response(JSON.stringify({ success: true, resume: { reference: order.reference, token: order.token, path: `/checkout/${order.reference}`, expiresAt },
+        order: { publicReference: order.reference, status: 'pre_reservado', paymentStatus: null, quoteTotal: (order.amount / 100).toFixed(2) },
+        payment: { enabled: true, provider: 'cielo_sandbox' } }), { status: 201 });
+    }
+    if (url.endsWith('/payments')) {
+      payments++;
+      const token = (init?.headers as Record<string, string>)['X-Checkout-Resume-Token'];
+      const order = orders.find((item) => item.token === token);
+      assert.ok(order);
+      if (payments === 1) {
+        return new Response(JSON.stringify({ success: true, code: 'created', message: 'Aguardando', replayed: false, payment: {
+          status: 'pending', method: 'pix', amount: '395.00', currency: 'BRL', expiresAt: null, paidAt: null,
+          pix: { copyPaste: 'synthetic-pix-code', qrCodeBase64: 'c3ludGhldGlj' },
+        } }), { status: 201 });
+      }
+      throw new Error('payment response lost');
+    }
+    return new Response('{}', { status: 503 });
+  };
+  const fill = (view: ReturnType<typeof render>) => {
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
+    fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
+    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
+    fireEvent.click(view.getByRole('checkbox'));
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+  };
+  try {
+    let view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY93K' }));
+    await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
+    fill(view);
+    await waitFor(() => assert.equal(payments, 1));
+    // The first Pix expires, then a separate partial payment is recorded.
+    orders[0].closed = true;
+    balance -= 19750;
+    cleanup();
+    window.history.replaceState(null, '', '/checkout/ZY93K');
+    view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY93K' }));
+    await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
+    assert.ok(view.getByText(/197,50/));
+    fireEvent.click(view.getByRole('button', { name: 'Iniciar nova tentativa' }));
+    fill(view);
+    await waitFor(() => assert.ok(view.getByText(/Não foi possível confirmar o preparo/)));
+    assert.equal(payments, 1);
+    cleanup();
+    view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY93K' }));
+    await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
+    fill(view);
+    await waitFor(() => assert.equal(window.location.pathname, `/checkout/${orders[1].reference}`));
+    assert.equal(payments, 1);
+    assert.equal(keys[1], keys[2]);
+    assert.notEqual(keys[0], keys[1]);
+    assert.deepEqual(orders.map((order) => order.amount), [39500, 19750]);
+    cleanup();
+    window.history.replaceState(null, '', '/checkout/ZY93K');
+    view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY93K' }));
+    await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
+    assert.deepEqual(view.getAllByRole('link', { name: /Acompanhar pagamento/ }).map((link) => new URL((link as HTMLAnchorElement).href).pathname), orders.map((order) => `/checkout/${order.reference}`));
+    assert.ok(window.sessionStorage.getItem(`crcn.checkout.resume.${orders[0].reference}`));
+    fireEvent.click(view.getByRole('button', { name: 'Iniciar nova tentativa' }));
+    fill(view);
+    await waitFor(() => assert.ok(view.getByText(/Já existe um pedido para esta reserva/)));
+    assert.equal(orders.length, 2);
+    assert.equal(payments, 1);
+  } finally { cleanup(); globalThis.fetch = originalFetch; }
+});
+
+test('replayed preparation opens protected order tracking without posting a payment', async () => {
+  const originalFetch = globalThis.fetch;
+  const reference = 'W'.repeat(40), token = 'X'.repeat(64);
+  const expiresAt = new Date(Date.now() + 86400000).toISOString();
+  const calls: Array<{ url: string; init?: Parameters<typeof fetch>[1] }> = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'RP123', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
+      totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
+    } }));
+    if (url.endsWith('/existing-reservations/RP123/checkout')) return new Response(JSON.stringify({
+      success: true, replayed: true, resume: { reference, token, path: `/checkout/${reference}`, expiresAt },
+      order: { publicReference: reference, status: 'pre_reservado', paymentStatus: null, quoteTotal: '197.50' },
+      payment: { enabled: true, provider: 'cielo_sandbox' },
+    }));
+    if (url.endsWith(`/checkout/${reference}`)) return new Response('{}', { status: 503 });
+    return new Response('{}', { status: 503 });
+  };
+  try {
+    window.history.replaceState(null, '', '/checkout/RP123');
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'RP123' }));
+    await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
+    fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
+    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
+    fireEvent.click(view.getByRole('checkbox'));
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+    await waitFor(() => assert.ok(calls.some((call) => call.url.endsWith(`/checkout/${reference}`))));
+    const tracking = calls.find((call) => call.url.endsWith(`/checkout/${reference}`))!;
+    assert.equal((tracking.init?.headers as Record<string, string>)['X-Checkout-Resume-Token'], token);
+    assert.equal(calls.some((call) => call.url.endsWith('/payments') && call.init?.method === 'POST'), false);
+    assert.equal(window.location.pathname, `/checkout/${reference}`);
+    assert.equal(window.location.href.includes(token), false);
+    assert.equal(calls.some((call) => call.url.includes(token)), false);
+    assert.equal(JSON.parse(window.sessionStorage.getItem(`crcn.checkout.resume.${reference}`)!).token, token);
+    await waitFor(() => assert.ok(view.getByRole('heading', { name: /não foi possível consultar agora/i })));
+    assert.equal(view.queryByRole('button', { name: /gerar pix/i }), null);
+  } finally { cleanup(); globalThis.fetch = originalFetch; }
 });

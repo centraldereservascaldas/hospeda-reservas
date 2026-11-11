@@ -336,7 +336,9 @@ class DirectStaysReservationService
         };
         $releaseError = $identity !== null
             ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $prepareRelease)
-            : DB::transaction($prepareRelease);
+            : (\Illuminate\Support\Facades\Schema::hasTable('existing_reservation_payment_locks')
+                ? app(ExistingReservationPaymentLock::class)->synchronizedDecision(fn () => app(ReservationCoordinationMode::class)->isRequired($order) ? 'reservation_identity_unverified' : $prepareRelease())
+                : DB::transaction($prepareRelease));
         if ($releaseError !== null) {
             if ($releaseError === 'payment_state_requires_reconciliation') {
                 return $this->attention($order, $releaseError, 'A tentativa de pagamento ativa exige conciliação antes de liberar a unidade.');
@@ -400,7 +402,9 @@ class DirectStaysReservationService
         };
         $mayRelease = $identity !== null
             ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $verifyRelease)
-            : DB::transaction($verifyRelease);
+            : (\Illuminate\Support\Facades\Schema::hasTable('existing_reservation_payment_locks')
+                ? app(ExistingReservationPaymentLock::class)->synchronizedDecision(fn () => ! app(ReservationCoordinationMode::class)->isRequired($order) && $verifyRelease())
+                : DB::transaction($verifyRelease));
         if (! $mayRelease) {
             return $this->markAttention($action, $order, 'reservation_release_interrupted', 'O estado do pagamento ou pedido mudou antes do cancelamento. Nenhum novo cancelamento foi enviado à Stays.');
         }
@@ -686,15 +690,11 @@ class DirectStaysReservationService
         }
 
         $safeSnapshot = array_intersect_key($reservation, array_flip(['_id', 'id', '_idlisting', '_idclient', 'type', 'checkInDate', 'checkOutDate', 'guests', 'price']));
-        if ($action !== null && $identity === null) {
-            $this->markActionSucceeded($action, $reservationId, $safeSnapshot);
-        }
-
         $reservationAction = $action?->fresh();
         $holdStartedAt = $reservationAction?->created_at ?? $order->created_at;
         $holdExpiresAt = $holdStartedAt?->copy()->addMinutes($holdMinutes) ?? now()->addMinutes($holdMinutes);
 
-        $adopt = function () use ($order, $reservationId, $safeSnapshot, $holdExpiresAt, $commercialDetailsVerified, $identity): bool {
+        $adopt = function () use ($order, $reservationId, $safeSnapshot, $holdExpiresAt, $commercialDetailsVerified, &$identity): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             if ($identity !== null && app(ReservationReleaseGuard::class)->paymentBlocked($identity['canonical'], $identity['code'])) {
                 return false;
@@ -746,15 +746,33 @@ class DirectStaysReservationService
 
             return true;
         };
-        $adopted = $identity !== null
-            ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $adopt)
-            : DB::transaction($adopt);
+        $lock = app(ExistingReservationPaymentLock::class);
+        if ($identity !== null) {
+            $adopted = $lock->synchronized($identity['canonical'], $adopt);
+        } elseif (\Illuminate\Support\Facades\Schema::hasTable('existing_reservation_payment_locks')) {
+            // Recheck the mode under the same lock used by new claims. The
+            // legacy adoption must commit before a competing claim can begin.
+            $adopted = $lock->synchronizedDecision(function () use ($order, $adopt): ?bool {
+                return app(ReservationCoordinationMode::class)->isRequired($order) ? null : $adopt();
+            });
+            if ($adopted === null) {
+                $identity = app(StaysReservationIdentity::class)->resolve($reservationId);
+                if ($identity === null) {
+                    return $action
+                        ? $this->markAttention($action, $order, 'reservation_identity_unverified', 'A identidade da reserva precisa ser conferida antes da associação ao pedido.')
+                        : $this->attention($order, 'reservation_identity_unverified', 'A identidade da reserva precisa ser conferida antes da associação ao pedido.');
+                }
+                $adopted = $lock->synchronized($identity['canonical'], $adopt);
+            }
+        } else {
+            $adopted = DB::transaction($adopt);
+        }
         if (! $adopted) {
             return $action
                 ? $this->markAttention($action, $order, 'reservation_release_in_progress', 'A reserva está em liberação ou exige conferência; nenhuma cobrança será iniciada.')
                 : $this->attention($order, 'reservation_release_in_progress', 'A reserva está em liberação ou exige conferência; nenhuma cobrança será iniciada.');
         }
-        if ($action !== null && $identity !== null) {
+        if ($action !== null) {
             $this->markActionSucceeded($action, $reservationId, $safeSnapshot);
         }
 

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Services\DirectStaysPaymentService;
+use App\Services\ExistingReservationCardAmounts;
 use App\Services\ExistingReservationLedgerAudit;
 use App\Services\ExistingReservationPaymentChannels;
 use App\Services\ExistingReservationSettlement;
@@ -19,28 +20,28 @@ class ExistingReservationSettlementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_previously_captured_card_does_not_settle_base_when_experimental_check_is_off(): void
+    public function test_card_amount_mismatch_is_blocked_when_experimental_check_is_off(): void
     {
         [$order] = $this->fixture();
         config(['direct-booking.experimental_existing_card_amount_verification_enabled' => false]);
         $order->paymentAttempts()->first()->update(['payment_method' => 'card', 'installments' => 6,
-            'amount' => '240.86', 'base_amount' => '197.50', 'processing_fee_amount' => '43.36', 'processing_fee_basis_points' => 1800]);
+            'amount' => '240.85', 'base_amount' => '197.50', 'processing_fee_amount' => '43.36', 'processing_fee_basis_points' => 1800]);
         Http::preventStrayRequests();
         Http::fake();
-        $this->assertSame('existing_card_fee_accounting_unverified', app(ExistingReservationSettlement::class)->settle($order)['code']);
+        $this->assertSame('existing_card_amount_mismatch', app(ExistingReservationSettlement::class)->settle($order)['code']);
         $this->assertDatabaseCount('direct_booking_stays_actions', 0);
         Http::assertNothingSent();
     }
 
-    public function test_experimental_card_amount_check_does_not_claim_fee_accounting_is_complete(): void
+    public function test_card_amount_mismatch_is_blocked_when_experimental_check_is_on(): void
     {
         [$order] = $this->fixture();
         config(['direct-booking.experimental_existing_card_amount_verification_enabled' => true]);
         $order->paymentAttempts()->first()->update(['payment_method' => 'card', 'installments' => 6,
-            'amount' => '240.86', 'base_amount' => '197.50', 'processing_fee_amount' => '43.36', 'processing_fee_basis_points' => 1800]);
+            'amount' => '240.85', 'base_amount' => '197.50', 'processing_fee_amount' => '43.36', 'processing_fee_basis_points' => 1800]);
         Http::preventStrayRequests();
         Http::fake();
-        $this->assertSame('existing_card_fee_accounting_unverified', app(ExistingReservationSettlement::class)->settle($order)['code']);
+        $this->assertSame('existing_card_amount_mismatch', app(ExistingReservationSettlement::class)->settle($order)['code']);
         $this->assertDatabaseCount('direct_booking_stays_actions', 0);
         Http::assertNothingSent();
     }
@@ -56,6 +57,15 @@ class ExistingReservationSettlementTest extends TestCase
         $this->assertSame('existing_card_amount_mismatch', app(ExistingReservationSettlement::class)->settle($order)['code']);
         $this->assertDatabaseCount('direct_booking_stays_actions', 0);
         Http::assertNothingSent();
+    }
+
+    public function test_card_validation_uses_the_rate_recorded_at_capture(): void
+    {
+        [$order] = $this->fixture();
+        $attempt = $order->paymentAttempts()->first();
+        $attempt->update(['payment_method' => 'card', 'installments' => 6,
+            'amount' => '219.45', 'base_amount' => '197.50', 'processing_fee_amount' => '21.95', 'processing_fee_basis_points' => 1000]);
+        $this->assertTrue(app(ExistingReservationCardAmounts::class)->matches($attempt->fresh(), 19750));
     }
 
     public function test_approved_payment_settles_the_same_receivable_once_and_replays_safely(): void

@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\DirectBookingOrder;
 use App\Services\ExistingReservationLedgerAudit;
+use App\Services\ExistingReservationPaymentLock;
 use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
+use App\Services\ReservationReleaseGuard;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -60,6 +62,30 @@ class ExistingReservationCheckoutTest extends TestCase
             ->assertJsonPath('reservation.paymentEnabled', false)
             ->assertJsonMissing(['name' => 'private-name', 'email' => 'private@example.test'])
             ->assertDontSee('private-client')->assertHeader('Cache-Control', 'no-store, private');
+    }
+
+    public function test_summary_prefills_only_the_linked_client_and_tolerates_client_failure(): void
+    {
+        config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
+        Http::preventStrayRequests();
+        $clientId = str_repeat('d', 24);
+        $scenario = 'success';
+        Http::fake(function (Request $request) use (&$scenario, $clientId) {
+            return match (true) {
+                str_contains($request->url(), '/booking/clients/') => $scenario === 'failure'
+                    ? Http::response([], 503)
+                    : Http::response(['_id' => $scenario === 'mismatch' ? str_repeat('e', 24) : $clientId, 'fName' => 'Maria', 'lName' => 'Silva', 'email' => 'maria@example.test', 'phones' => [['iso' => '+5564999999999']], 'documents' => [['number' => '12345678900']]]),
+                str_ends_with($request->url(), '/payments') => Http::response([]),
+                default => Http::response(['id' => 'ZY92K', 'type' => 'booked', '_idclient' => $clientId]),
+            };
+        });
+        foreach (['success', 'failure', 'mismatch'] as $scenario) {
+            $response = $this->getJson('/api/existing-reservations/ZY92K/checkout-summary')->assertOk()->assertHeader('Cache-Control', 'no-store, private');
+            $response->assertJsonPath('reservation.guestPrefill', $scenario === 'success'
+                ? ['fullName' => 'Maria Silva', 'email' => 'maria@example.test', 'phone' => '+5564999999999']
+                : ['fullName' => '', 'email' => '', 'phone' => '']);
+            $response->assertDontSee('12345678900')->assertDontSee($clientId);
+        }
     }
 
     public function test_canceled_reservation_and_mismatched_code_are_not_returned(): void
@@ -122,20 +148,62 @@ class ExistingReservationCheckoutTest extends TestCase
     public function test_booking_checkout_creates_one_local_order_without_creating_a_stays_reservation(): void
     {
         $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $key = 'existing-checkout-test-key-123';
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
             ->assertCreated()->assertJsonPath('success', true)->assertJsonPath('order.quoteTotal', '197.50')
             ->assertJsonPath('payment.enabled', true)->assertJsonStructure(['resume' => ['reference', 'token', 'path']]);
-        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertOk()->assertJsonPath('success', true);
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409)->assertJsonPath('success', false);
         $this->assertDatabaseCount('direct_booking_orders', 1);
         $this->assertDatabaseHas('direct_booking_orders', ['origin' => 'stays_existing', 'stays_reservation_id' => str_repeat('c', 24), 'reservation_status' => 'booked']);
+        Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
+    }
+
+    public function test_lost_checkout_response_recovers_only_same_guarded_order_without_external_write(): void
+    {
+        $this->configureCheckout();
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true, 'direct-booking.experimental_existing_intent_recovery_enabled' => true]);
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->once()->andReturnTrue();
+        $key = '123e4567-e89b-42d3-a456-426614174000';
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $first = $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated()->assertJsonPath('replayed', false);
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => false, 'direct-booking.enabled' => false, 'direct-booking.payment_provider' => 'disabled']);
+        $retry = $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertOk()->assertJsonPath('replayed', true);
+        $this->assertSame($first->json('resume.reference'), $retry->json('resume.reference'));
+        $this->assertSame($first->json('resume.token'), $retry->json('resume.token'));
+        $this->withHeader('Idempotency-Key', '123e4567-e89b-42d3-a456-426614174001')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertStatus(409)->assertJsonPath('code', 'existing_balance_unverified');
+        $payload['guest']['email'] = 'changed@example.test';
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409);
+        $this->assertDatabaseCount('direct_booking_orders', 1);
+        Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
+    }
+
+    public function test_recovery_requires_guard_and_unexpired_token(): void
+    {
+        $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true, 'direct-booking.experimental_existing_intent_recovery_enabled' => true]);
+        $key = '123e4567-e89b-42d3-a456-426614174001';
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => false]);
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409)->assertJsonMissingPath('resume.token');
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
+        DB::table('direct_booking_orders')->update(['resume_token_expires_at' => now()->subMinute()]);
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409)->assertJsonMissingPath('resume.token');
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
     }
 
     public function test_existing_checkout_cannot_start_while_reservation_release_is_claimed(): void
     {
         $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         DB::table('existing_reservation_payment_locks')->insert(['stays_reservation_id' => str_repeat('c', 24), 'release_order_id' => fake()->uuid(), 'created_at' => now(), 'updated_at' => now()]);
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'existing-release-guard-123')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
@@ -144,9 +212,42 @@ class ExistingReservationCheckoutTest extends TestCase
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
     }
 
+    public function test_guest_cancellation_claim_and_checkout_are_serialized_by_canonical_reservation(): void
+    {
+        $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
+        $id = str_repeat('c', 24);
+        $identity = ['canonical' => $id, 'code' => 'ZY92K'];
+        $lock = app(ExistingReservationPaymentLock::class);
+        $guard = app(ReservationReleaseGuard::class);
+        $this->assertTrue($lock->synchronized($id, fn () => $guard->claimGuestCancellation($identity)));
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'guest-cancel-guard-123')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertStatus(409)->assertJsonPath('code', 'existing_checkout_unavailable');
+        $this->assertDatabaseCount('direct_booking_orders', 0);
+        Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
+    }
+
+    public function test_checkout_created_first_prevents_guest_cancellation_claim(): void
+    {
+        $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'checkout-before-cancel-123')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        $id = str_repeat('c', 24);
+        $claimed = app(ExistingReservationPaymentLock::class)->synchronized($id,
+            fn () => app(ReservationReleaseGuard::class)->claimGuestCancellation(['canonical' => $id, 'code' => 'ZY92K']));
+        $this->assertFalse($claimed);
+        $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => $id, 'guest_cancel_claimed_at' => null]);
+    }
+
     public function test_order_history_can_create_two_existing_orders_only_when_explicitly_enabled(): void
     {
         $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'history-order-key-first-001')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
         $this->withHeader('Idempotency-Key', 'history-order-key-second-01')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
@@ -160,6 +261,8 @@ class ExistingReservationCheckoutTest extends TestCase
     public function test_database_allows_existing_history_but_enforces_one_website_order(): void
     {
         $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'schema-order-key-first-0001')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
         $first = DirectBookingOrder::query()->sole();
@@ -177,6 +280,8 @@ class ExistingReservationCheckoutTest extends TestCase
     public function test_schema_rollback_refuses_to_discard_duplicate_reservation_history(): void
     {
         $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         config(['direct-booking.experimental_existing_order_history_enabled' => true]);
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'rollback-order-key-first-01')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
@@ -194,6 +299,8 @@ class ExistingReservationCheckoutTest extends TestCase
     public function test_schema_rollback_restores_original_unique_constraint_when_safe(): void
     {
         $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'rollback-safe-first-order-01')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
         $first = DirectBookingOrder::query()->sole();
@@ -227,6 +334,8 @@ class ExistingReservationCheckoutTest extends TestCase
     public function test_summary_only_offers_methods_compatible_with_the_receivable(): void
     {
         $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $this->getJson('/api/existing-reservations/ZY92K/checkout-summary')
             ->assertOk()->assertJsonPath('reservation.paymentEnabled', true)
             ->assertJsonPath('reservation.paymentMethods', ['pix'])
@@ -313,7 +422,7 @@ class ExistingReservationCheckoutTest extends TestCase
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
     }
 
-    public function test_existing_card_is_not_advertised_or_created_before_fee_accounting_is_verified(): void
+    public function test_card_is_not_offered_without_the_ledger_audit(): void
     {
         $this->configureCheckout(pendingProvider: str_repeat('3', 24));
         $this->getJson('/api/existing-reservations/ZY92K/checkout-summary')->assertOk()
@@ -322,7 +431,21 @@ class ExistingReservationCheckoutTest extends TestCase
         $this->withHeader('Idempotency-Key', 'existing-card-blocked-123456')->postJson('/api/existing-reservations/ZY92K/checkout', [
             'expectedBalanceCents' => 19750, 'paymentMethod' => 'card', 'installments' => 3,
             'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
-        ])->assertStatus(503)->assertJsonPath('code', 'existing_card_fee_accounting_unverified');
+        ])->assertStatus(409)->assertJsonPath('code', 'existing_balance_unverified');
+        $this->assertDatabaseCount('direct_booking_orders', 0);
+        Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
+    }
+
+    public function test_checkout_without_ledger_is_not_offered_and_does_not_create_order(): void
+    {
+        $this->configureCheckout();
+        config(['direct-booking.experimental_existing_cycle_settlement_enabled' => false, 'direct-booking.experimental_existing_ledger_audit_enabled' => false]);
+        $this->getJson('/api/existing-reservations/ZY92K/checkout-summary')->assertOk()
+            ->assertJsonPath('reservation.paymentEnabled', false)->assertJsonPath('reservation.paymentMethods', []);
+        $this->withHeader('Idempotency-Key', 'existing-no-ledger-test-123456')->postJson('/api/existing-reservations/ZY92K/checkout', [
+            'expectedBalanceCents' => 19750, 'paymentMethod' => 'pix',
+            'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
+        ])->assertStatus(409)->assertJsonPath('code', 'existing_balance_unverified');
         $this->assertDatabaseCount('direct_booking_orders', 0);
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
     }
@@ -344,19 +467,23 @@ class ExistingReservationCheckoutTest extends TestCase
     public function test_reusing_submission_key_for_a_different_payment_method_is_rejected(): void
     {
         $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $key = 'existing-checkout-method-key-123';
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
         $payload['paymentMethod'] = 'card';
         $payload['installments'] = 3;
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
-            ->assertStatus(503)->assertJsonPath('code', 'existing_card_fee_accounting_unverified');
+            ->assertStatus(409)->assertJsonPath('code', 'existing_checkout_unavailable');
         $this->assertDatabaseCount('direct_booking_orders', 1);
     }
 
     public function test_second_submission_with_a_new_key_does_not_create_a_second_order(): void
     {
         $this->configureCheckout();
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'existing-checkout-test-key-111')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
         $this->withHeader('Idempotency-Key', 'existing-checkout-test-key-222')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409)->assertJsonPath('code', 'existing_checkout_already_started');
@@ -378,6 +505,8 @@ class ExistingReservationCheckoutTest extends TestCase
     public function test_existing_receivable_with_other_provider_does_not_create_checkout(): void
     {
         $this->configureCheckout(pendingProvider: str_repeat('b', 24));
+        config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturnTrue();
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'existing-checkout-channel-test-123')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
             ->assertStatus(503)->assertJsonPath('code', 'existing_payment_channel_unavailable');

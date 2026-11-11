@@ -36,6 +36,7 @@ return [
     ],
 
     'stays' => [
+        'experimental_legacy_order_evidence' => false,
         'base_url' => env('STAYS_BASE_URL', 'https://crcn.stays.net/external/v1'),
         'client_id' => env('STAYS_CLIENT_ID'),
         'client_secret' => env('STAYS_CLIENT_SECRET'),
