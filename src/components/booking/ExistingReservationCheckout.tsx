@@ -3,7 +3,6 @@ import { apiFetch } from '../../services/apiFetch';
 import { checkoutApi } from '../../services/checkoutApi';
 import { checkoutPathWithStayQuery, existingReservationUrl } from '../../utils/checkoutUrl';
 import { saveCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
-import { formatBrazilianPhone } from '../../utils/checkoutInputFormatting';
 import { CieloSopCardForm, type CieloCardPricing, type CieloPaymentContext } from './CieloSopCardForm';
 import { CheckoutResumePage } from './CheckoutResumePage';
 import { PixPayerIdentificationField, getPixPayerIdentification } from './PixPayerIdentificationField';
@@ -14,6 +13,7 @@ import { bindExistingReservationIntent, clearExistingReservationIntent, getExist
 
 interface ReservationSummary {
   code: string;
+  guestPrefill: { fullName: string; email: string; phone: string };
   listingId: string | null;
   property: string | null;
   image: string | null;
@@ -40,7 +40,10 @@ const fieldClass = 'mt-1.5 min-h-12 w-full rounded-xl border border-neutral-400/
 function isSummary(value: unknown, code: string): value is ReservationSummary {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
-  return item.code === code && nullableString(item.listingId) && nullableString(item.property)
+  const prefill = item.guestPrefill;
+  return !!prefill && typeof prefill === 'object' && !Array.isArray(prefill)
+    && ['fullName', 'email', 'phone'].every((key) => typeof (prefill as Record<string, unknown>)[key] === 'string')
+    && item.code === code && nullableString(item.listingId) && nullableString(item.property)
     && nullableString(item.image) && nullableString(item.checkIn) && nullableString(item.checkOut)
     && nullableInteger(item.guests) && nullableInteger(item.adults) && nullableInteger(item.children)
     && nullableInteger(item.infants) && nullableInteger(item.totalCents) && nullableInteger(item.candidateBalanceCents)
@@ -64,6 +67,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
   const [paymentReviewRequired, setPaymentReviewRequired] = useState(false);
   const [activeReference, setActiveReference] = useState<string | null>(null);
   const [storageFailure, setStorageFailure] = useState(false);
+  const prefilledCodeRef = useRef<string | null>(null);
   const contextRef = useRef<CieloPaymentContext | null>(null);
   const pixKeyRef = useRef<string | null>(null);
   const previousReferences = useMemo(() => getExistingReservationResumeReferences(code), [code]);
@@ -111,6 +115,10 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
         if (controller.signal.aborted) return;
         if (!data?.success || !isSummary(data.reservation, code)) { setState('error'); return; }
         setSummary(data.reservation);
+        if (prefilledCodeRef.current !== code) {
+          setGuest(data.reservation.guestPrefill);
+          prefilledCodeRef.current = code;
+        }
         setMethod(data.reservation.paymentMethods.includes('pix') ? 'pix' : 'card');
         window.history.replaceState(null, '', existingReservationUrl(code, data.reservation, window.location.search));
         setState('ready');
@@ -269,7 +277,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
             <legend className="text-lg font-bold">Dados de quem vai pagar</legend>
             <label className="block text-sm font-semibold">Nome completo<input className={fieldClass} required value={guest.fullName} onChange={(event) => setGuest({ ...guest, fullName: event.target.value })} autoComplete="name" /></label>
             <label className="block text-sm font-semibold">E-mail<input className={fieldClass} required type="email" value={guest.email} onChange={(event) => setGuest({ ...guest, email: event.target.value })} autoComplete="email" /></label>
-            <label className="block text-sm font-semibold">WhatsApp<input className={fieldClass} required type="tel" value={guest.phone} onChange={(event) => setGuest({ ...guest, phone: formatBrazilianPhone(event.target.value) })} autoComplete="tel" /></label>
+            <label className="block text-sm font-semibold">WhatsApp<input className={fieldClass} required type="tel" value={guest.phone} onChange={(event) => setGuest({ ...guest, phone: event.target.value })} autoComplete="tel" /></label>
           </fieldset>
           <fieldset disabled={prepared || paymentReviewRequired} className="space-y-2"><legend className="font-bold">Forma de pagamento</legend>
             {summary.paymentMethods.includes('pix') && <label className="mr-5"><input type="radio" name="existing-method" checked={method === 'pix'} onChange={() => setMethod('pix')} /> Pix</label>}

@@ -38,6 +38,27 @@ class ExistingReservationCheckoutController extends Controller
         if (($reservation['id'] ?? null) !== $code || ! in_array($reservation['type'] ?? null, ['reserved', 'booked'], true)) {
             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404, $headers);
         }
+        $guestPrefill = ['fullName' => '', 'email' => '', 'phone' => ''];
+        $clientId = $reservation['_idclient'] ?? null;
+        if (is_string($clientId) && preg_match('/^[a-f0-9]{24}$/iD', $clientId)) {
+            $client = $stays->get('/booking/clients/'.rawurlencode($clientId));
+            if (is_array($client) && ($client['_id'] ?? null) === $clientId) {
+                $firstName = is_string($client['fName'] ?? null) ? trim($client['fName']) : '';
+                $lastName = is_string($client['lName'] ?? null) ? trim($client['lName']) : '';
+                $name = trim($firstName.' '.$lastName);
+                $guestPrefill['fullName'] = mb_strlen($name) <= 180 ? $name : '';
+                $email = is_string($client['email'] ?? null) ? trim($client['email']) : '';
+                $guestPrefill['email'] = mb_strlen($email) <= 254 ? $email : '';
+                $phones = is_array($client['phones'] ?? null) ? $client['phones'] : [];
+                foreach ($phones as $phone) {
+                    if (is_array($phone) && is_string($phone['iso'] ?? null) && trim($phone['iso']) !== '') {
+                        $value = trim($phone['iso']);
+                        $guestPrefill['phone'] = mb_strlen($value) <= 40 ? $value : '';
+                        break;
+                    }
+                }
+            }
+        }
         $payments = $stays->get('/booking/reservations/'.$code.'/payments');
         $paymentReview = is_array($payments) ? $balance->inspect($reservation, $payments) : ['status' => 'review_required', 'candidate_cents' => null];
         if ($paymentReview['status'] === 'pending_candidate' && is_array($payments)
@@ -100,6 +121,7 @@ class ExistingReservationCheckoutController extends Controller
             'success' => true,
             'reservation' => [
                 'code' => $code,
+                'guestPrefill' => $guestPrefill,
                 'status' => $reservation['type'],
                 'listingId' => is_string($listingId) ? $listingId : null,
                 'property' => is_array($property) ? ($property['title'] ?? null) : null,

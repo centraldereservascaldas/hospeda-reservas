@@ -13,7 +13,7 @@ afterEach(() => window.sessionStorage.clear());
 test('existing reservation displays server data without enabling payment', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ success: true, reservation: {
-    code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+    guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
     checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
     totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: false, paymentMethods: [], cardInstallments: [],
   } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -35,7 +35,7 @@ test('existing reservation displays server data without enabling payment', async
 test('an unrecorded candidate is shown for review without offering payment', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ success: true, reservation: {
-    code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+    guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
     checkIn: '2026-11-19', checkOut: '2026-11-22', guests: 4, adults: 4, children: 0, infants: 0,
     totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: false, paymentMethods: [], cardInstallments: [],
   } }), { status: 200 });
@@ -53,14 +53,18 @@ test('an unrecorded candidate is shown for review without offering payment', asy
 test('checkout identifies Pix accessibly and does not imply unavailable card installments', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ success: true, reservation: {
-    code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+    guestPrefill: { fullName: 'Maria Silva', email: 'maria@example.test', phone: '+5564999999999' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
     checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
     totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix', 'card'], cardInstallments: [1, 3, 6],
   } }), { status: 200 });
   try {
     const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
     await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pague com Pix' })));
-    assert.equal((view.getByLabelText('WhatsApp') as HTMLInputElement).type, 'tel');
+    assert.equal((view.getByLabelText('Nome completo') as HTMLInputElement).value, 'Maria Silva');
+    assert.equal((view.getByLabelText('E-mail') as HTMLInputElement).value, 'maria@example.test');
+    assert.equal((view.getByLabelText('WhatsApp') as HTMLInputElement).value, '+5564999999999');
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Maria Editada' } });
+    assert.equal((view.getByLabelText('Nome completo') as HTMLInputElement).value, 'Maria Editada');
     fireEvent.click(view.getByLabelText('Cartão · parcelas disponíveis'));
     assert.deepEqual(view.getAllByRole('option').map((option) => (option as HTMLOptionElement).value), ['1', '3', '6']);
   } finally {
@@ -75,7 +79,7 @@ test('accessible reservation details and card pricing follow the chosen installm
   globalThis.fetch = async (_input, init) => {
     methods.push(init?.method ?? 'GET');
     return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2030-11-19', checkOut: '2030-11-22', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 99500, candidateBalanceCents: 99500, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix', 'card'], cardInstallments: [1, 2, 3, 4, 5, 6],
     } }), { status: 200 });
@@ -119,7 +123,7 @@ test('experimental unrecorded balance starts a pending Pix only after explicit c
     const url = String(input);
     requests.push({ url, method: init?.method ?? 'GET' });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-19', checkOut: '2026-11-22', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
@@ -168,7 +172,7 @@ test('experimental unrecorded balance shows selected card price and submits only
     const url = String(input);
     calls.push({ url, init });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-19', checkOut: '2026-11-22', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix', 'card'], cardInstallments: [1, 2, 3, 4, 5, 6],
     } }), { status: 200 });
@@ -246,7 +250,7 @@ for (const [code, message] of [
       const url = String(input);
       calls.push({ url, method: init?.method ?? 'GET' });
       if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-        code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+        guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
         checkIn: '2026-11-19', checkOut: '2026-11-22', guests: 4, adults: 4, children: 0, infants: 0,
         totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
       } }), { status: 200 });
@@ -280,7 +284,7 @@ test('a first validation rejection permits corrected data with a fresh intent', 
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'VA123', listingId: 'LISTING', property: 'Apartamento', image: null, checkIn: '2030-11-19', checkOut: '2030-11-22', guests: 1, adults: 1, children: 0, infants: 0,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'VA123', listingId: 'LISTING', property: 'Apartamento', image: null, checkIn: '2030-11-19', checkOut: '2030-11-22', guests: 1, adults: 1, children: 0, infants: 0,
       totalCents: 10000, candidateBalanceCents: 10000, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
     if (url.endsWith('/existing-reservations/VA123/checkout')) {
@@ -316,7 +320,7 @@ test('an interrupted checkout preparation retries with the same idempotency key 
     const url = String(input);
     calls.push(url);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2030-11-19', checkOut: '2030-11-22', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 101600, candidateBalanceCents: 101600, balanceStatus: 'unrecorded_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
@@ -360,7 +364,7 @@ test('a prepared card order keeps its payment method and installments fixed afte
   globalThis.fetch = async (input) => {
     const url = String(input);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix', 'card'], cardInstallments: [1, 2, 3, 4, 5, 6],
     } }), { status: 200 });
@@ -407,7 +411,7 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     const url = String(input);
     calls.push({ url, init });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
@@ -466,7 +470,7 @@ test('a prepared order with payment disabled never starts a Pix attempt', async 
     const url = String(input);
     calls.push(url);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
@@ -506,7 +510,7 @@ test('card form sends the Cielo token and installments, not card details, to the
     const url = String(input);
     calls.push({ url, init });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['card'], cardInstallments: [6],
     } }), { status: 200 });
@@ -565,7 +569,7 @@ test('explicit new intent survives an ambiguous response and preserves earlier p
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
@@ -634,7 +638,7 @@ test('a failed reference write after preparation retains memory access and preve
   globalThis.fetch = async (input) => {
     const url = String(input);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }), { status: 200 });
@@ -682,7 +686,7 @@ test('two payment cycles retain the first order and block a duplicate after an a
   globalThis.fetch = async (input, init) => {
     const url = String(input);
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'ZY93K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'ZY93K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: balance, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }));
@@ -772,7 +776,7 @@ test('replayed preparation opens protected order tracking without posting a paym
     const url = String(input);
     calls.push({ url, init });
     if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
-      code: 'RP123', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      guestPrefill: { fullName: '', email: '', phone: '' }, code: 'RP123', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
       totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
     } }));

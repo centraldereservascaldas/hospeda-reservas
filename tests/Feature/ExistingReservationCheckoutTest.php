@@ -64,6 +64,30 @@ class ExistingReservationCheckoutTest extends TestCase
             ->assertDontSee('private-client')->assertHeader('Cache-Control', 'no-store, private');
     }
 
+    public function test_summary_prefills_only_the_linked_client_and_tolerates_client_failure(): void
+    {
+        config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
+        Http::preventStrayRequests();
+        $clientId = str_repeat('d', 24);
+        $scenario = 'success';
+        Http::fake(function (Request $request) use (&$scenario, $clientId) {
+            return match (true) {
+                str_contains($request->url(), '/booking/clients/') => $scenario === 'failure'
+                    ? Http::response([], 503)
+                    : Http::response(['_id' => $scenario === 'mismatch' ? str_repeat('e', 24) : $clientId, 'fName' => 'Maria', 'lName' => 'Silva', 'email' => 'maria@example.test', 'phones' => [['iso' => '+5564999999999']], 'documents' => [['number' => '12345678900']]]),
+                str_ends_with($request->url(), '/payments') => Http::response([]),
+                default => Http::response(['id' => 'ZY92K', 'type' => 'booked', '_idclient' => $clientId]),
+            };
+        });
+        foreach (['success', 'failure', 'mismatch'] as $scenario) {
+            $response = $this->getJson('/api/existing-reservations/ZY92K/checkout-summary')->assertOk()->assertHeader('Cache-Control', 'no-store, private');
+            $response->assertJsonPath('reservation.guestPrefill', $scenario === 'success'
+                ? ['fullName' => 'Maria Silva', 'email' => 'maria@example.test', 'phone' => '+5564999999999']
+                : ['fullName' => '', 'email' => '', 'phone' => '']);
+            $response->assertDontSee('12345678900')->assertDontSee($clientId);
+        }
+    }
+
     public function test_canceled_reservation_and_mismatched_code_are_not_returned(): void
     {
         config(['direct-booking.existing_reservation_checkout_enabled' => true]);
