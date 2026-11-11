@@ -52,7 +52,8 @@ class ExistingReservationPaymentChannelsTest extends TestCase
         $channels = app(ExistingReservationPaymentChannels::class);
         $id = str_repeat('a', 24);
         $this->assertSame(['methods' => ['pix'], 'card_installments' => []], $channels->availableForReceivable(['pix', 'card'], [['_id' => $id, '_idpaymentProvider' => $pix]], $id));
-        $this->assertSame(['methods' => [], 'card_installments' => []], $channels->availableForReceivable(['pix', 'card'], [['_id' => $id, '_idpaymentProvider' => $cards[6]]], $id));
+        $this->assertSame(['methods' => ['card'], 'card_installments' => [6]], $channels->availableForReceivable(['pix', 'card'], [['_id' => $id, '_idpaymentProvider' => $cards[6]]], $id));
+        $this->assertSame(['methods' => [], 'card_installments' => []], $channels->availableForReceivable(['pix'], [['_id' => $id, '_idpaymentProvider' => $cards[6]]], $id));
         $this->assertSame(['methods' => [], 'card_installments' => []], $channels->availableForReceivable(['pix', 'card'], [['_id' => $id, '_idpaymentProvider' => str_repeat('b', 24)]], $id));
         $this->assertSame(['methods' => [], 'card_installments' => []], $channels->availableForReceivable(['pix', 'card'], [['_id' => $id], ['_id' => $id]], $id));
     }
