@@ -70,6 +70,9 @@ class ExistingReservationCieloJourneyTest extends TestCase
                 if ($scenario === 'financial_paid' && str_ends_with($request->url(), '/payments/'.$receivable['_id'])) {
                     return Http::response([...$receivable, '_idreserve' => $reservation['_id']]);
                 }
+                if ($request->method() === 'GET' && str_ends_with($request->url(), '/booking/clients/'.$reservation['_idclient'])) {
+                    return Http::response(['_id' => $reservation['_idclient']]);
+                }
                 if (str_contains($request->url(), '/content/listings/')) {
                     return Http::response([]);
                 }
