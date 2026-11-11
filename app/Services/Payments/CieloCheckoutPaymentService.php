@@ -108,10 +108,6 @@ class CieloCheckoutPaymentService
         if ($order->origin === 'stays_existing' && $paymentMethod === 'card') {
             return $this->result(null, 'existing_card_fee_accounting_unverified', 'O pagamento com cartão ainda precisa de conferência. Escolha Pix ou fale com o atendimento.', 503);
         }
-        if ($order->origin === 'stays_existing' && config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true
-            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
-            return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma cobrança foi iniciada.', 409);
-        }
         if (! $this->bootstrapApprovalValid($order)) {
             return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma cobrança foi iniciada.', 409);
         }
@@ -172,6 +168,11 @@ class CieloCheckoutPaymentService
         $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
         if ($existingAttempt !== null) {
             return $this->replay($existingAttempt, $order, $fingerprint);
+        }
+
+        if ($order->origin === 'stays_existing'
+            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
+            return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma nova cobrança foi iniciada.', 409);
         }
 
         if ($paymentMethod === 'pix' && $this->configuration->usesLegacyPix()

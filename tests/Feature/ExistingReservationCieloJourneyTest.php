@@ -44,6 +44,10 @@ class ExistingReservationCieloJourneyTest extends TestCase
         if ($scenario === 'external_stats_after_qr') {
             $reservation['stats'] = ['_f_totalPaid' => 0];
         }
+        if ($scenario === 'financial_paid') {
+            $reservation['creationDate'] = now('America/Sao_Paulo')->toDateString();
+            $reservation['stats'] = ['_f_totalPaid' => 0];
+        }
         $receivable = ['_idpaymentProvider' => $providerId, '_id' => $paymentId, 'type' => 'credit', 'status' => 'pending', '_f_val' => 197.50, 'name' => 'Pagamento da reserva'];
         $completed = false;
         $settlementDesc = null;
@@ -58,6 +62,13 @@ class ExistingReservationCieloJourneyTest extends TestCase
             // must not run inside the nested reservation-lock transaction.
             $this->assertLessThanOrEqual(1, DB::transactionLevel());
             if (str_contains($request->url(), 'stays.test')) {
+                if ($scenario === 'financial_paid' && str_ends_with(parse_url($request->url(), PHP_URL_PATH), '/finance/accounting-transactions')) {
+                    return Http::response([['_id' => $receivable['_id'], 'reserveId' => $reservation['_id'], 'type' => 'credit', 'paid' => true,
+                        'bankAccountId' => $providerId, '_mcval' => ['BRL' => 197.50], 'payment' => ['paymentDate' => '2026-11-10']]]);
+                }
+                if ($scenario === 'financial_paid' && str_ends_with($request->url(), '/payments/'.$receivable['_id'])) {
+                    return Http::response([...$receivable, '_idreserve' => $reservation['_id']]);
+                }
                 if (str_contains($request->url(), '/finance/payment-providers/')) {
                     return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => $method === 'pix' ? 'Pix API Cielo' : 'Cartão API Cielo 6x']);
                 }
@@ -124,12 +135,17 @@ class ExistingReservationCieloJourneyTest extends TestCase
         $reference = $created->json('resume.reference');
         $token = $created->json('resume.token');
         $balanceChanged = $scenario === 'changed';
+        if ($scenario === 'financial_paid') {
+            config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+        } elseif (! in_array($scenario, ['ledger_off', 'cycle_without_ledger'], true)) {
+            config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
+            $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->andReturn($scenario !== 'ledger_review');
+        }
         if ($scenario === 'disabled') {
             config(['direct-booking.existing_reservation_checkout_enabled' => false]);
         }
         if ($scenario === 'ledger_review') {
             config(['direct-booking.experimental_existing_ledger_audit_enabled' => true]);
-            $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('confirmsSnapshot')->once()->andReturnFalse();
         }
         if ($scenario === 'cycle_without_ledger') {
             config(['direct-booking.experimental_existing_cycle_settlement_enabled' => true, 'direct-booking.experimental_existing_ledger_audit_enabled' => false]);
@@ -164,10 +180,10 @@ class ExistingReservationCieloJourneyTest extends TestCase
 
             return;
         }
-        if (in_array($scenario, ['changed', 'disabled', 'approval_revoked', 'approval_changed', 'approval_expired', 'approval_status_changed', 'approval_partner_changed', 'ledger_review', 'cycle_without_ledger'], true)) {
+        if (in_array($scenario, ['changed', 'disabled', 'approval_revoked', 'approval_changed', 'approval_expired', 'approval_status_changed', 'approval_partner_changed', 'ledger_review', 'ledger_off', 'financial_paid', 'cycle_without_ledger'], true)) {
             if (in_array($scenario, ['disabled', 'cycle_without_ledger'], true)) {
                 $response->assertStatus(503)->assertJsonPath('code', 'payments_disabled');
-            } elseif (in_array($scenario, ['approval_revoked', 'approval_changed', 'approval_expired', 'ledger_review'], true)) {
+            } elseif (in_array($scenario, ['approval_revoked', 'approval_changed', 'approval_expired', 'ledger_review', 'ledger_off', 'financial_paid'], true)) {
                 $response->assertStatus(409)->assertJsonPath('code', 'existing_balance_unverified');
             } else {
                 $response->assertStatus(409)->assertJsonPath('code', 'stays_reservation_mismatch');
@@ -255,6 +271,6 @@ class ExistingReservationCieloJourneyTest extends TestCase
 
     public static function paymentMethods(): array
     {
-        return ['Pix' => ['pix', 'approved'], 'cartão em 6 parcelas' => ['card', 'approved'], 'cartão recusado' => ['card', 'declined'], 'webhook antes do timeout' => ['card', 'webhook_timeout'], 'saldo alterado' => ['pix', 'changed'], 'baixa externa após QR' => ['pix', 'external_payment'], 'stats mudaram após QR' => ['pix', 'external_stats_after_qr'], 'fluxo desativado' => ['pix', 'disabled'], 'aprovação revogada' => ['pix', 'approval_revoked'], 'versão alterada' => ['pix', 'approval_changed'], 'aprovação expirada' => ['pix', 'approval_expired'], 'aprovação válida' => ['pix', 'approval_valid'], 'status alterado antes do pagamento' => ['pix', 'approval_status_changed'], 'parceiro alterado antes do pagamento' => ['pix', 'approval_partner_changed'], 'ledger divergente antes da cobrança' => ['pix', 'ledger_review'], 'ciclo sem ledger' => ['pix', 'cycle_without_ledger']];
+        return ['Pix' => ['pix', 'approved'], 'cartão em 6 parcelas' => ['card', 'approved'], 'cartão recusado' => ['card', 'declined'], 'webhook antes do timeout' => ['card', 'webhook_timeout'], 'saldo alterado' => ['pix', 'changed'], 'baixa externa após QR' => ['pix', 'external_payment'], 'stats mudaram após QR' => ['pix', 'external_stats_after_qr'], 'fluxo desativado' => ['pix', 'disabled'], 'aprovação revogada' => ['pix', 'approval_revoked'], 'versão alterada' => ['pix', 'approval_changed'], 'aprovação expirada' => ['pix', 'approval_expired'], 'aprovação válida' => ['pix', 'approval_valid'], 'status alterado antes do pagamento' => ['pix', 'approval_status_changed'], 'parceiro alterado antes do pagamento' => ['pix', 'approval_partner_changed'], 'ledger divergente antes da cobrança' => ['pix', 'ledger_review'], 'auditoria desligada' => ['pix', 'ledger_off'], 'financeiro pago e reserva pendente' => ['pix', 'financial_paid'], 'ciclo sem ledger' => ['pix', 'cycle_without_ledger']];
     }
 }
