@@ -11,7 +11,8 @@ class ExistingReservationConcurrentClaimsTest extends TestCase
 {
     public function test_competing_workers_open_only_one_cycle_for_a_reservation(): void
     {
-        if (PHP_OS_FAMILY !== 'Linux' || getenv('GITHUB_ACTIONS') !== 'true' || getenv('CI') !== 'true') {
+        if (PHP_OS_FAMILY !== 'Linux' || getenv('GITHUB_ACTIONS') !== 'true' || getenv('CI') !== 'true'
+            || DB::connection()->getDriverName() !== 'pgsql') {
             $this->markTestSkipped('Requires the isolated Linux GitHub Actions PostgreSQL service.');
         }
         $this->assertTrue(app()->environment('testing'));
