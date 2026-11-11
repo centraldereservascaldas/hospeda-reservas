@@ -514,3 +514,120 @@ test('card form sends the Cielo token and installments, not card details, to the
     globalThis.fetch = originalFetch;
   }
 });
+
+test('explicit new intent survives an ambiguous response and preserves earlier payment references', async () => {
+  const originalFetch = globalThis.fetch;
+  const oldReference = 'Q'.repeat(40), newReference = 'R'.repeat(40), token = 'S'.repeat(64);
+  const expiresAt = new Date(Date.now() + 86400000).toISOString();
+  window.sessionStorage.setItem(`crcn.checkout.resume.${oldReference}`, JSON.stringify({ token, expiresAt }));
+  window.sessionStorage.setItem('crcn.existing-reservation.resume.ZY92K', oldReference);
+  const keys: string[] = [];
+  let attempts = 0;
+  let payments = 0;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
+      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
+      totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
+    } }), { status: 200 });
+    if (url.endsWith('/existing-reservations/ZY92K/checkout')) {
+      keys.push((init?.headers as Record<string, string>)['Idempotency-Key']);
+      if (++attempts === 1) throw new Error('network response lost');
+      return new Response(JSON.stringify({ success: true, resume: { reference: newReference, token, path: `/checkout/${newReference}`, expiresAt },
+        order: { publicReference: newReference, status: 'pre_reservado', paymentStatus: null, quoteTotal: '197.50' },
+        payment: { enabled: true, provider: 'cielo_sandbox' } }), { status: 201 });
+    }
+    if (url.endsWith('/payments')) { payments++; return new Response('{}', { status: 503 }); }
+    return new Response('{}', { status: 503 });
+  };
+  const fill = (view: ReturnType<typeof render>) => {
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
+    fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
+    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
+    fireEvent.click(view.getByRole('checkbox'));
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+  };
+  try {
+    let view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
+    fireEvent.click(view.getByRole('button', { name: 'Iniciar nova tentativa' }));
+    fill(view);
+    await waitFor(() => assert.equal(attempts, 1));
+    await waitFor(() => assert.ok(view.getByText(/Não foi possível confirmar o preparo/)));
+    assert.equal(payments, 0);
+    cleanup();
+    view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
+    fill(view);
+    await waitFor(() => assert.equal(payments, 1));
+    assert.equal(keys[0], keys[1]);
+    cleanup();
+    view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
+    const links = view.getAllByRole('link', { name: /Acompanhar pagamento/ }) as HTMLAnchorElement[];
+    assert.deepEqual(links.map((link) => new URL(link.href).pathname), [`/checkout/${oldReference}`, `/checkout/${newReference}`]);
+    assert.equal(window.sessionStorage.getItem(`crcn.checkout.resume.${oldReference}`) !== null, true);
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith('/existing-reservations/ZY92K/checkout')) return new Response(JSON.stringify({ code: 'existing_checkout_already_started' }), { status: 409 });
+      if (url.endsWith('/payments')) payments++;
+      return new Response('{}', { status: 503 });
+    };
+    fireEvent.click(view.getByRole('button', { name: 'Iniciar nova tentativa' }));
+    fill(view);
+    await waitFor(() => assert.ok(view.getByText(/Já existe um pedido para esta reserva/)));
+    assert.equal(payments, 1);
+  } finally { cleanup(); globalThis.fetch = originalFetch; }
+});
+
+test('a failed reference write after preparation retains memory access and prevents payment', async () => {
+  const originalFetch = globalThis.fetch;
+  const oldReference = 'T'.repeat(40), newReference = 'U'.repeat(40), token = 'V'.repeat(64);
+  const expiresAt = new Date(Date.now() + 86400000).toISOString();
+  window.sessionStorage.setItem(`crcn.checkout.resume.${oldReference}`, JSON.stringify({ token, expiresAt }));
+  window.sessionStorage.setItem('crcn.existing-reservation.resume.ZY92K', oldReference);
+  const storagePrototype = Object.getPrototypeOf(window.sessionStorage);
+  const originalSetItem = storagePrototype.setItem;
+  let payments = 0;
+  let resumeRequests = 0;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
+      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
+      totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
+    } }), { status: 200 });
+    if (url.endsWith('/existing-reservations/ZY92K/checkout')) {
+      storagePrototype.setItem = function (key: string, value: string) {
+        if (key === 'crcn.existing-reservation.resume.ZY92K') throw new Error('quota');
+        return originalSetItem.call(this, key, value);
+      };
+      return new Response(JSON.stringify({ success: true, resume: { reference: newReference, token, path: `/checkout/${newReference}`, expiresAt },
+        order: { publicReference: newReference, status: 'pre_reservado', paymentStatus: null, quoteTotal: '197.50' },
+        payment: { enabled: true, provider: 'cielo_sandbox' } }), { status: 201 });
+    }
+    if (url.includes(`/checkout/${newReference}`)) { resumeRequests++; return new Response(JSON.stringify({ success: true, order: { publicReference: newReference, status: 'pre_reservado', paymentStatus: null, quoteTotal: '197.50' }, payment: { enabled: true, provider: 'cielo_sandbox' } }), { status: 200 }); }
+    if (url.endsWith('/payments')) payments++;
+    return new Response('{}', { status: 503 });
+  };
+  try {
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
+    fireEvent.click(view.getByRole('button', { name: 'Iniciar nova tentativa' }));
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
+    fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
+    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
+    fireEvent.click(view.getByRole('checkbox'));
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+    await waitFor(() => assert.ok(view.getByRole('heading', { name: /não foi possível guardar o acesso ao pedido/i })));
+    assert.equal(view.queryByRole('button', { name: /pagar|gerar pix/i }), null);
+    const { getExistingReservationResumeReferences } = await import('../src/utils/existingReservationResumeStorage.ts');
+    assert.deepEqual(getExistingReservationResumeReferences('ZY92K'), [oldReference, newReference]);
+    assert.ok(window.sessionStorage.getItem('crcn.existing-reservation.intent.ZY92K'));
+    assert.equal(payments, 0);
+    assert.equal(resumeRequests, 0);
+  } finally { storagePrototype.setItem = originalSetItem; cleanup(); globalThis.fetch = originalFetch; }
+});

@@ -11,7 +11,7 @@ import { PixPayerIdentificationField, getPixPayerIdentification } from './PixPay
 import { CheckoutSupportLink } from './CheckoutSupportLink';
 import { LogoCRCN } from '../LogoCRCN';
 import { LockKeyhole, QrCode } from 'lucide-react';
-import { getExistingReservationResumeReference, saveExistingReservationResumeReference } from '../../utils/existingReservationResumeStorage';
+import { clearExistingReservationIntent, getExistingReservationIntent, getExistingReservationResumeReferences, saveExistingReservationResumeReference, startExistingReservationIntent } from '../../utils/existingReservationResumeStorage';
 
 interface ReservationSummary {
   code: string;
@@ -64,9 +64,13 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
   const [prepared, setPrepared] = useState(false);
   const [paymentReviewRequired, setPaymentReviewRequired] = useState(false);
   const [activeReference, setActiveReference] = useState<string | null>(null);
+  const [storageFailure, setStorageFailure] = useState(false);
   const contextRef = useRef<CieloPaymentContext | null>(null);
   const pixKeyRef = useRef<string | null>(null);
-  const previousReference = useMemo(() => getExistingReservationResumeReference(code), [code]);
+  const previousReferences = useMemo(() => getExistingReservationResumeReferences(code), [code]);
+  const [intentKey, setIntentKey] = useState(() => getExistingReservationIntent(code));
+  const [intentError, setIntentError] = useState('');
+  const showPaymentForm = previousReferences.length === 0 || intentKey !== null;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -91,7 +95,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
       throw new Error('Confira os dados e aceite o valor do pagamento antes de continuar.');
     }
     const payer = { fullName: guest.fullName.trim(), email: guest.email.trim(), phone: guest.phone.trim() };
-    const idempotencyKey = await getOrCreateCheckoutSubmissionKey({
+    const idempotencyKey = intentKey ?? await getOrCreateCheckoutSubmissionKey({
       listingId: `${code}:${summary.listingId}:${method}:${method === 'card' ? cardPricing?.installments ?? 'unavailable' : 'single'}`, from: summary.checkIn, to: summary.checkOut,
       guests: { adults: summary.adults ?? 0, children: summary.children ?? 0, infants: summary.infants ?? 0, pets: 0 },
       quoteTotal: summary.candidateBalanceCents / 100, guest: payer,
@@ -139,6 +143,16 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     }
     saveCheckoutResumeToken(resume.reference, resume.token, resume.expiresAt);
     saveExistingReservationResumeReference(code, resume.reference);
+    try {
+      const storedToken = window.sessionStorage.getItem(`crcn.checkout.resume.${resume.reference}`);
+      const storedReferences = window.sessionStorage.getItem(`crcn.existing-reservation.resume.${code}`);
+      if (!storedToken || JSON.parse(storedToken).token !== resume.token
+        || !storedReferences || !JSON.parse(storedReferences).includes(resume.reference)) throw new Error();
+    } catch {
+      setStorageFailure(true);
+      throw new Error('Não foi possível guardar o acesso ao pedido. Tente novamente sem alterar os dados ou fale com nosso atendimento.');
+    }
+    if (intentKey) clearExistingReservationIntent(code);
     const context: CieloPaymentContext = { reference: resume.reference, amount: order.quoteTotal, credentials: { type: 'resume-token', resumeToken: resume.token } };
     window.history.replaceState(null, '', checkoutPathWithStayQuery(resume.path, window.location.search));
     if (order.status !== 'pre_reservado' || order.paymentStatus !== null || payment.enabled !== true) {
@@ -174,6 +188,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     showPaymentStatus();
   };
 
+  if (storageFailure) return <main className="mx-auto max-w-3xl p-6"><h1 className="text-2xl font-bold">Não foi possível guardar o acesso ao pedido</h1><p role="alert" className="mt-4">Não inicie outro pagamento. Tente novamente sem alterar os dados quando o armazenamento do navegador estiver disponível ou fale com nosso atendimento.</p><CheckoutSupportLink details={{ reservationCode: code }} /></main>;
   if (activeReference) return <CheckoutResumePage reference={activeReference} focusOnMount />;
 
   return <main className="checkout-purchase min-h-screen pb-24 text-neutral-950">
@@ -186,7 +201,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     <div className="checkout-purchase-form liquid-glass-card mx-auto mt-8 max-w-3xl rounded-3xl p-5 sm:mt-10 sm:p-10">
       <p className="text-sm font-bold uppercase tracking-widest text-orange-700">Central de Reservas · Caldas Novas</p>
       <h1 className="mt-3 text-3xl font-black">Sua reserva</h1>
-      {previousReference && <div className="mt-6 space-y-3 rounded-xl border border-orange-200 bg-orange-50 p-4" role="status"><p className="font-semibold">Você já iniciou um pagamento para esta reserva neste navegador.</p><p className="text-sm text-neutral-700">Acompanhe a tentativa antes de iniciar outra cobrança.</p><a className="inline-flex min-h-11 items-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" href={checkoutPathWithStayQuery(`/checkout/${previousReference}`, window.location.search)}>Acompanhar pagamento</a></div>}
+      {previousReferences.length > 0 && <div className="mt-6 space-y-3 rounded-xl border border-orange-200 bg-orange-50 p-4"><p className="font-semibold">Você já iniciou pagamento para esta reserva neste navegador.</p><p className="text-sm text-neutral-700">Acompanhe as tentativas antes de iniciar outra cobrança.</p>{previousReferences.map((reference, index) => <a key={reference} className="mr-3 inline-flex min-h-11 items-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700" href={checkoutPathWithStayQuery(`/checkout/${reference}`, window.location.search)}>Acompanhar pagamento {previousReferences.length > 1 ? index + 1 : ''}</a>)}{!intentKey && <button type="button" className="min-h-11 rounded-xl border border-neutral-400 px-4 py-3 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-orange-700" onClick={() => { try { setIntentKey(startExistingReservationIntent(code)); setIntentError(''); } catch (error) { setIntentError(error instanceof Error ? error.message : 'Não foi possível guardar esta tentativa.'); } }}>Iniciar nova tentativa</button>}{intentError && <p role="alert">{intentError}</p>}</div>}
       {state === 'loading' && <p role="status" className="mt-6">Consultando os dados da reserva…</p>}
       {state === 'error' && <div className="mt-6 space-y-3"><p role="alert">Não foi possível consultar esta reserva. Confira o código ou fale com nosso atendimento.</p><button type="button" className="min-h-11 rounded-xl border border-neutral-400 px-4 py-2 font-semibold focus-visible:outline-2 focus-visible:outline-orange-700" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button><CheckoutSupportLink details={{ reservationCode: code }} /></div>}
       {state === 'ready' && summary && <section className="mt-6 space-y-6" aria-label="Dados da reserva">
@@ -199,8 +214,8 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
           <div><dt className="text-sm text-slate-600">Total da hospedagem</dt><dd className="font-bold">{summary.totalCents === null ? 'Em conferência' : money(summary.totalCents)}</dd></div>
           {['pending_candidate', 'unrecorded_candidate'].includes(summary.balanceStatus) && summary.candidateBalanceCents !== null && <div><dt className="text-sm text-slate-600">{!summary.paymentEnabled ? 'Saldo para conferência' : summary.balanceStatus === 'unrecorded_candidate' ? 'Valor para pagamento' : 'Saldo a pagar'}</dt><dd className="font-bold">{money(summary.candidateBalanceCents)}</dd></div>}
         </dl>
-        {summary.paymentEnabled && summary.balanceStatus === 'unrecorded_candidate' && !previousReference && <p role="status" className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-950">Confira o valor antes de continuar. O pagamento será confirmado somente após a aprovação.</p>}
-        {!previousReference && summary.paymentEnabled && summary.candidateBalanceCents !== null ? <CieloSopCardForm
+        {summary.paymentEnabled && summary.balanceStatus === 'unrecorded_candidate' && showPaymentForm && <p role="status" className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-950">Confira o valor antes de continuar. O pagamento será confirmado somente após a aprovação.</p>}
+        {showPaymentForm && summary.paymentEnabled && summary.candidateBalanceCents !== null ? <CieloSopCardForm
           reference="" amount={(summary.candidateBalanceCents / 100).toFixed(2)} credentials={null}
           preparePayment={preparePayment} paymentMethod={method} guestPrefill={guest} disabled={!accepted || paymentReviewRequired}
           onPricingChange={setCardPricing}
@@ -222,8 +237,8 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
           </fieldset>
           {prepared && <p className="text-sm text-neutral-600">A forma de pagamento e as parcelas foram reservadas para este pedido.</p>}
           <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} disabled={paymentReviewRequired} required /> Confirmo o pagamento do saldo informado desta reserva.</label>
-        </CieloSopCardForm> : !previousReference && <p role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-950">O pagamento desta reserva ainda está em conferência. Entre em contato com nosso atendimento.</p>}
-        <CheckoutSupportLink details={{ reservationCode: summary.code, listingTitle: summary.property ?? undefined, listingId: summary.listingId ?? undefined, from: summary.checkIn ?? undefined, to: summary.checkOut ?? undefined, balanceTotal: summary.candidateBalanceCents !== null ? summary.candidateBalanceCents / 100 : undefined, paymentMethod: summary.paymentEnabled && !previousReference ? method : undefined, installments: summary.paymentEnabled && !previousReference && method === 'card' ? cardPricing?.installments : undefined, total: summary.paymentEnabled && !previousReference && method === 'card' && cardPricing ? cardPricing.totalCents / 100 : undefined }} />
+        </CieloSopCardForm> : showPaymentForm && <p role="status" className="rounded-xl bg-amber-50 p-4 text-sm text-amber-950">O pagamento desta reserva ainda está em conferência. Entre em contato com nosso atendimento.</p>}
+        <CheckoutSupportLink details={{ reservationCode: summary.code, listingTitle: summary.property ?? undefined, listingId: summary.listingId ?? undefined, from: summary.checkIn ?? undefined, to: summary.checkOut ?? undefined, balanceTotal: summary.candidateBalanceCents !== null ? summary.candidateBalanceCents / 100 : undefined, paymentMethod: summary.paymentEnabled && showPaymentForm ? method : undefined, installments: summary.paymentEnabled && showPaymentForm && method === 'card' ? cardPricing?.installments : undefined, total: summary.paymentEnabled && showPaymentForm && method === 'card' && cardPricing ? cardPricing.totalCents / 100 : undefined }} />
       </section>}
     </div>
   </main>;
