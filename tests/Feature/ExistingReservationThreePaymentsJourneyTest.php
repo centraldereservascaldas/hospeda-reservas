@@ -126,7 +126,12 @@ class ExistingReservationThreePaymentsJourneyTest extends TestCase
             $payment->assertJsonPath('payment.status', 'approved');
             $order = DirectBookingOrder::query()->where('public_reference', $reference)->firstOrFail();
             $result = app(DirectStaysPaymentService::class)->confirmPaidReservation($order);
-            $this->assertTrue($result['ready'], json_encode($result));
+            if ($index < 2) {
+                $this->assertFalse($result['ready'], json_encode($result));
+                $this->assertSame('existing_balance_remaining', $result['code']);
+            } else {
+                $this->assertTrue($result['ready'], json_encode($result));
+            }
         }
         $this->assertSame(20, $paid);
         $this->assertCount(3, $completed);

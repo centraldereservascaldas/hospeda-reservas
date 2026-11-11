@@ -14,7 +14,7 @@ use App\Models\DirectBookingPaymentWebhook;
 use App\Services\DirectSaleTermsRegistry;
 use App\Services\DirectStaysPaymentService;
 use App\Services\Payments\DirectCheckoutPaymentService;
-use Carbon\CarbonImmutable;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
@@ -30,7 +30,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->travelTo(\Carbon\Carbon::parse('2026-11-09 12:00:00', 'UTC'));
+        $this->travelTo(Carbon::parse('2026-11-09 12:00:00', 'UTC'));
     }
 
     public function test_checkout_pix_webhook_confirmation_email_and_resume_complete_the_real_order_journey(): void

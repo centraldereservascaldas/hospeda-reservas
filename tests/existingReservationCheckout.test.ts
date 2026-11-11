@@ -20,10 +20,9 @@ test('existing reservation displays server data without enabling payment', async
   try {
     const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
     await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
-    assert.ok(view.getByText('13/11/2026'));
-    assert.ok(view.getByText('16/11/2026'));
-    assert.ok(view.getByText(/197,50/));
-    assert.match(view.getByRole('status').textContent || '', /em conferência/);
+    assert.ok(view.getByText(/13\/11\/2026 – 16\/11\/2026/));
+    assert.ok(view.getAllByText(/197,50/).length > 0);
+    assert.match(view.getByRole('status').textContent || '', /Saldo em aberto/);
     assert.equal(view.queryByRole('button', { name: /pagar/i }), null);
     assert.equal(new URLSearchParams(window.location.search).get('adultos'), '4');
   } finally {
@@ -41,7 +40,7 @@ test('an unrecorded candidate is shown for review without offering payment', asy
   } }), { status: 200 });
   try {
     const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
-    await waitFor(() => assert.ok(view.getByText('Saldo para conferência')));
+    await waitFor(() => assert.ok(view.getAllByText('Em aberto').length > 0));
     assert.match(view.getAllByText(/1\.016,00/)[0].textContent || '', /1\.016,00/);
     assert.equal(view.queryByRole('button', { name: /pagar/i }), null);
   } finally {
@@ -60,7 +59,7 @@ test('checkout identifies Pix accessibly and does not imply unavailable card ins
   try {
     const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
     await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pague com Pix' })));
-    assert.equal((view.getByLabelText('WhatsApp') as HTMLInputElement).type, 'tel');
+    assert.equal((view.getByLabelText('Telefone') as HTMLInputElement).type, 'tel');
     fireEvent.click(view.getByLabelText('Cartão · parcelas disponíveis'));
     assert.deepEqual(view.getAllByRole('option').map((option) => (option as HTMLOptionElement).value), ['1', '3', '6']);
   } finally {
@@ -83,10 +82,9 @@ test('accessible reservation details and card pricing follow the chosen installm
   try {
     window.history.replaceState(null, '', '/checkout/ZX91K');
     const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
-    await waitFor(() => assert.ok(view.getByRole('region', { name: 'Dados da reserva' })));
+    await waitFor(() => assert.ok(view.getByRole('region', { name: 'Dados e pagamento da reserva' })));
     assert.ok(view.getByRole('heading', { name: 'Apartamento Exemplo' }));
-    assert.ok(view.getByText('19/11/2030'));
-    assert.ok(view.getByText('22/11/2030'));
+    assert.ok(view.getByText(/19\/11\/2030 – 22\/11\/2030/));
     assert.ok(view.getByRole('heading', { name: 'Pague com Pix' }));
     assert.ok(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/));
     fireEvent.click(view.getByLabelText('Cartão em até 6x'));
@@ -138,13 +136,14 @@ test('experimental unrecorded balance starts a pending Pix only after explicit c
   try {
     window.history.replaceState(null, '', '/checkout/ZX91K');
     const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
-    await waitFor(() => assert.ok(view.getByText('Valor para pagamento')));
-    assert.ok(view.getByText(/pagamento será confirmado somente após a aprovação/i));
+    await waitFor(() => assert.ok(view.getAllByText('Em aberto').length > 0));
+    assert.ok(view.getByText(/Este valor está em aberto/));
+    assert.ok(view.getByText(/depois que a Cielo confirmar a transação/i));
     assert.equal(requests.some((request) => request.method !== 'GET'), false);
     assert.equal(view.queryByText(/pagamento confirmado/i), null);
     fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
     fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
-    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '64999999999' } });
     fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
     fireEvent.click(view.getByRole('checkbox'));
     fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
@@ -190,7 +189,7 @@ test('experimental unrecorded balance shows selected card price and submits only
     fireEvent.click(view.getByLabelText('Cartão em até 6x'));
     fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
     fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
-    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '64999999999' } });
     fireEvent.change(view.getByLabelText('Número do cartão'), { target: { value: '4111111111111111' } });
     fireEvent.change(view.getByLabelText('Validade (MM/AA)'), { target: { value: '1230' } });
     fireEvent.change(view.getByLabelText('Código de segurança'), { target: { value: '123' } });
@@ -258,7 +257,7 @@ for (const [code, message] of [
       await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
       fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
       fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
-      fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+      fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '64999999999' } });
       fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
       fireEvent.click(view.getByRole('checkbox'));
       fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
@@ -299,7 +298,7 @@ test('an interrupted checkout preparation retries with the same idempotency key 
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
     fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
-    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '64999999999' } });
     fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
     fireEvent.click(view.getByRole('checkbox'));
     fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
@@ -340,7 +339,7 @@ test('a prepared card order keeps its payment method and installments fixed afte
     fireEvent.click(view.getByLabelText('Cartão em até 6x'));
     fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
     fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
-    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '64999999999' } });
     fireEvent.change(view.getByLabelText('Número do cartão'), { target: { value: '4111111111111111' } });
     fireEvent.change(view.getByLabelText('Validade (MM/AA)'), { target: { value: '1230' } });
     fireEvent.change(view.getByLabelText('Código de segurança'), { target: { value: '123' } });
@@ -390,7 +389,7 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
     fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
-    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '64999999999' } });
     fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
     fireEvent.click(view.getByRole('checkbox'));
     fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
@@ -445,7 +444,7 @@ test('a prepared order with payment disabled never starts a Pix attempt', async 
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
     fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
-    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '64999999999' } });
     fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
     fireEvent.click(view.getByRole('checkbox'));
     fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
@@ -489,7 +488,7 @@ test('card form sends the Cielo token and installments, not card details, to the
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
     fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
-    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '64999999999' } });
     fireEvent.change(view.getByLabelText('Número do cartão'), { target: { value: syntheticCard } });
     fireEvent.change(view.getByLabelText('Validade (MM/AA)'), { target: { value: '1230' } });
     fireEvent.change(view.getByLabelText('Código de segurança'), { target: { value: '123' } });

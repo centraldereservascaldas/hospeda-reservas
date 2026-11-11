@@ -64,11 +64,12 @@ class ExistingReservationSettlementTest extends TestCase
         $completed = false;
         $settlementDesc = null;
         Http::preventStrayRequests();
-        Http::fake(function (Request $request) use ($reservation, $payment, &$completed, &$settlementDesc) {
+        Http::fake(function (Request $request) use (&$reservation, $payment, &$completed, &$settlementDesc) {
             $this->assertLessThanOrEqual(1, DB::transactionLevel());
             if ($request->method() === 'PATCH') {
                 $completed = true;
                 $settlementDesc = $request['desc'];
+                $reservation['stats']['_f_totalPaid'] = 395;
 
                 return Http::response([], 200);
             }
@@ -175,10 +176,11 @@ class ExistingReservationSettlementTest extends TestCase
         $completed = false;
         $settlementDesc = null;
         Http::preventStrayRequests();
-        Http::fake(function (Request $request) use ($reservation, $payment, &$completed, &$settlementDesc) {
+        Http::fake(function (Request $request) use (&$reservation, $payment, &$completed, &$settlementDesc) {
             if ($request->method() === 'PATCH') {
                 $completed = true;
                 $settlementDesc = $request['desc'];
+                $reservation['stats']['_f_totalPaid'] = 395;
 
                 return Http::response([], 200);
             }
@@ -580,10 +582,11 @@ class ExistingReservationSettlementTest extends TestCase
         $completed = false;
         $settlementDesc = null;
         Http::preventStrayRequests();
-        Http::fake(function (Request $request) use ($reservation, $payment, &$completed, &$settlementDesc) {
+        Http::fake(function (Request $request) use (&$reservation, $payment, &$completed, &$settlementDesc) {
             if ($request->method() === 'PATCH') {
                 $completed = true;
                 $settlementDesc = $request['desc'];
+                $reservation['stats']['_f_totalPaid'] = 395;
 
                 return Http::response([]);
             }
@@ -615,11 +618,12 @@ class ExistingReservationSettlementTest extends TestCase
         $settlementDesc = null;
         $booked = false;
         Http::preventStrayRequests();
-        Http::fake(function (Request $request) use ($reservation, $payment, &$paymentCompleted, &$booked, &$settlementDesc) {
+        Http::fake(function (Request $request) use (&$reservation, $payment, &$paymentCompleted, &$booked, &$settlementDesc) {
             if ($request->method() === 'PATCH') {
                 if (str_contains($request->url(), '/payments/')) {
                     $paymentCompleted = true;
                     $settlementDesc = $request['desc'];
+                    $reservation['stats']['_f_totalPaid'] = 395;
                 } else {
                     $booked = true;
                 }
@@ -653,8 +657,8 @@ class ExistingReservationSettlementTest extends TestCase
         config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
         $this->mock(ExistingReservationPaymentChannels::class)->shouldReceive('verifiedProvider')->andReturn(str_repeat('f', 24));
         $paymentId = str_repeat('a', 24);
-        $snapshot = ['_id' => str_repeat('c', 24), '_idclient' => 'client', '_idlisting' => 'listing', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'reservation_total_cents' => 39500, 'pending_amount_cents' => 19750, 'reported_paid_present' => false, 'reported_paid_cents' => null, 'payment_id' => $paymentId, 'pending_provider_id' => str_repeat('f', 24), 'channel_provider_ids' => ['pix' => str_repeat('f', 24)]];
-        $reservation = ['_id' => str_repeat('c', 24), '_idclient' => 'client', '_idlisting' => 'listing', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'type' => 'booked', 'partner' => ['name' => 'API booking.com'], 'price' => ['currency' => 'BRL', '_f_total' => 395]];
+        $snapshot = ['_id' => str_repeat('c', 24), '_idclient' => 'client', '_idlisting' => 'listing', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'reservation_total_cents' => 39500, 'pending_amount_cents' => 19750, 'reported_paid_present' => true, 'reported_paid_cents' => 19750, 'payment_id' => $paymentId, 'pending_provider_id' => str_repeat('f', 24), 'channel_provider_ids' => ['pix' => str_repeat('f', 24)]];
+        $reservation = ['_id' => str_repeat('c', 24), '_idclient' => 'client', '_idlisting' => 'listing', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'type' => 'booked', 'partner' => ['name' => 'API booking.com'], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'stats' => ['_f_totalPaid' => 197.50]];
         $payment = ['_idpaymentProvider' => str_repeat('f', 24), '_id' => $paymentId, 'type' => 'credit', 'status' => 'pending', '_f_val' => 197.50, 'name' => 'Pagamento da reserva'];
         $order = DirectBookingOrder::query()->create([
             'status' => DirectBookingOrderStatus::PagoEmConfirmacao, 'idempotency_key' => 'existing-test', 'request_fingerprint' => str_repeat('a', 64), 'listing_id' => 'listing', 'stays_listing_id' => 'listing', 'stays_client_id' => 'client', 'stays_reservation_id' => str_repeat('c', 24), 'reservation_status' => 'booked', 'check_in' => '2026-11-13', 'check_out' => '2026-11-16', 'guests' => ['adults' => 4, 'children' => 0, 'infants' => 0, 'pets' => 0], 'guest_name' => 'Test', 'guest_email' => 'test@example.test', 'guest_phone' => '11999999999', 'quote_total' => '197.50', 'currency' => 'BRL', 'quote_snapshot' => ['existing_reservation' => $snapshot], 'accepted_terms_version' => 'test', 'accepted_terms_snapshot' => ['version' => 'test'], 'terms_accepted_at' => now(), 'origin' => 'stays_existing', 'payment_status' => 'approved', 'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'merchant', 'operational_events' => [],

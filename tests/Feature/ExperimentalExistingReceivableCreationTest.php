@@ -18,13 +18,13 @@ class ExperimentalExistingReceivableCreationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_disabled_by_default(): void
+    public function test_missing_authoritative_paid_amount_never_creates_a_receivable(): void
     {
-        [$order] = $this->fixture();
+        [$order, $reservation, $commission] = $this->fixture('missing_stats');
         Http::preventStrayRequests();
-        Http::fake();
-        $this->assertSame('experimental_receivable_disabled', app(ExperimentalExistingReceivableCreation::class)->create($order, 'pix')['code']);
-        Http::assertNothingSent();
+        Http::fake(fn (Request $request) => Http::response(str_ends_with($request->url(), '/payments') ? [$commission] : $reservation));
+        $this->assertSame('experimental_receivable_source_changed', app(ExperimentalExistingReceivableCreation::class)->create($order, 'pix')['code']);
+        Http::assertNotSent(fn (Request $request) => $request->method() === 'POST');
     }
 
     public function test_simulated_write_reconciles_same_receivable_and_is_idempotent(): void
@@ -175,13 +175,16 @@ class ExperimentalExistingReceivableCreationTest extends TestCase
     {
         config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test', 'direct-booking.experimental_existing_approved_balances' => [str_repeat('c', 24) => ['version' => 'review-1', 'expires_at' => '2030-01-01T00:00:00+00:00', '_idclient' => 'client', '_idlisting' => 'listing', 'checkInDate' => '2030-11-19', 'checkOutDate' => '2030-11-22', 'guests' => 4, 'currency' => 'BRL', 'reservation_type' => 'reserved', 'partner_name' => 'api booking.com', 'reservation_total_cents' => 101600, 'pending_amount_cents' => 101600]]]);
         $this->mock(ExistingReservationPaymentChannels::class)->shouldReceive('verifiedProvider')->andReturn(str_repeat('f', 24));
-        $reservation = ['_id' => 'reservation', '_idclient' => 'client', '_idlisting' => 'listing', 'checkInDate' => '2030-11-19', 'checkOutDate' => '2030-11-22', 'guests' => 4, 'type' => 'reserved', 'partner' => ['name' => 'API booking.com'], 'price' => ['currency' => 'BRL', '_f_total' => 1016]];
+        $reservation = ['_id' => 'reservation', '_idclient' => 'client', '_idlisting' => 'listing', 'checkInDate' => '2030-11-19', 'checkOutDate' => '2030-11-22', 'guests' => 4, 'type' => 'reserved', 'partner' => ['name' => 'API booking.com'], 'price' => ['currency' => 'BRL', '_f_total' => 1016], 'stats' => ['_f_totalPaid' => 0]];
         $commission = ['type' => 'debit', 'status' => 'pending', '_f_val' => 152.40, 'name' => 'res. fee API booking.com'];
-        $snapshot = ['_id' => 'reservation', '_idclient' => 'client', '_idlisting' => 'listing', 'checkInDate' => '2030-11-19', 'checkOutDate' => '2030-11-22', 'guests' => 4, 'currency' => 'BRL', 'reservation_type' => 'reserved', 'partner_name' => 'api booking.com', 'approval_version' => 'review-1', 'reservation_total_cents' => 101600, 'pending_amount_cents' => 101600, 'reported_paid_present' => false, 'reported_paid_cents' => null, 'payment_id' => null, 'bootstrap_receivable' => true, 'channel_provider_ids' => ['pix' => str_repeat('f', 24)], 'selected_payment_method' => 'pix', 'selected_installments' => null];
+        $snapshot = ['_id' => 'reservation', '_idclient' => 'client', '_idlisting' => 'listing', 'checkInDate' => '2030-11-19', 'checkOutDate' => '2030-11-22', 'guests' => 4, 'currency' => 'BRL', 'reservation_type' => 'reserved', 'partner_name' => 'api booking.com', 'approval_version' => 'review-1', 'reservation_total_cents' => 101600, 'pending_amount_cents' => 101600, 'reported_paid_present' => true, 'reported_paid_cents' => 0, 'payment_id' => null, 'bootstrap_receivable' => true, 'channel_provider_ids' => ['pix' => str_repeat('f', 24)], 'selected_payment_method' => 'pix', 'selected_installments' => null];
         if ($suffix === 'stats_changed') {
             $reservation['stats'] = ['_f_totalPaid' => 0];
-            $snapshot['reported_paid_present'] = true;
-            $snapshot['reported_paid_cents'] = 0;
+        }
+        if ($suffix === 'missing_stats') {
+            unset($reservation['stats']);
+            $snapshot['reported_paid_present'] = false;
+            $snapshot['reported_paid_cents'] = null;
         }
         $order = DirectBookingOrder::query()->create([
             'status' => DirectBookingOrderStatus::PreReservado, 'idempotency_key' => 'experimental-create-'.$suffix, 'request_fingerprint' => str_repeat('a', 64), 'listing_id' => 'listing', 'stays_listing_id' => 'listing', 'stays_client_id' => 'client', 'stays_reservation_id' => str_repeat('c', 24), 'reservation_status' => 'reserved', 'check_in' => '2030-11-19', 'check_out' => '2030-11-22', 'guests' => ['adults' => 4, 'children' => 0, 'infants' => 0, 'pets' => 0], 'guest_name' => 'Test', 'guest_email' => 'test@example.test', 'guest_phone' => '11999999999', 'quote_total' => '1016.00', 'currency' => 'BRL', 'quote_snapshot' => ['existing_reservation' => $snapshot], 'accepted_terms_version' => 'test', 'accepted_terms_snapshot' => ['version' => 'test'], 'terms_accepted_at' => now(), 'origin' => 'stays_existing', 'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'merchant', 'operational_events' => [], 'expires_at' => now()->addHour(),

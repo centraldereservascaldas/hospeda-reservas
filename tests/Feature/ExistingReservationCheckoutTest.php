@@ -84,7 +84,7 @@ class ExistingReservationCheckoutTest extends TestCase
             ->assertJsonPath('reservation.paymentEnabled', false);
     }
 
-    public function test_unrecorded_booking_balance_is_display_only_even_when_checkout_enabled(): void
+    public function test_unrecorded_booking_balance_without_reported_paid_amount_requires_review(): void
     {
         config(['services.stays.client_id' => 'test-client', 'services.stays.client_secret' => 'test-secret',
             'direct-booking.existing_reservation_checkout_enabled' => true, 'direct-booking.payment_provider' => 'cielo']);
@@ -93,8 +93,8 @@ class ExistingReservationCheckoutTest extends TestCase
             ? Http::response([['type' => 'debit', 'status' => 'pending', '_f_val' => 152.40, 'name' => 'res. fee API booking.com']])
             : Http::response(['id' => 'ZX91K', 'type' => 'reserved', 'price' => ['currency' => 'BRL', '_f_total' => 1016], 'partner' => ['name' => 'API booking.com']]));
         $this->getJson('/api/existing-reservations/ZX91K/checkout-summary')
-            ->assertOk()->assertJsonPath('reservation.candidateBalanceCents', 101600)
-            ->assertJsonPath('reservation.balanceStatus', 'unrecorded_candidate')
+            ->assertOk()->assertJsonPath('reservation.candidateBalanceCents', null)
+            ->assertJsonPath('reservation.balanceStatus', 'review_required')
             ->assertJsonPath('reservation.paymentEnabled', false)->assertJsonPath('reservation.paymentMethods', []);
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
     }

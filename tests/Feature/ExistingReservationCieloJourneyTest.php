@@ -41,6 +41,7 @@ class ExistingReservationCieloJourneyTest extends TestCase
         $gatewayId = '123e4567-e89b-12d3-a456-426614174080';
         $providerId = $method === 'pix' ? str_repeat('f', 24) : str_repeat('6', 24);
         $reservation = ['id' => 'ZY92K', 'partnerCode' => 'booking-partner-code', '_id' => $reservationId, '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24), 'type' => 'booked', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'partner' => ['name' => 'API booking.com']];
+        $reservation['stats'] = ['_f_totalPaid' => 197.50];
         if ($scenario === 'external_stats_after_qr') {
             $reservation['stats'] = ['_f_totalPaid' => 0];
         }
@@ -69,6 +70,7 @@ class ExistingReservationCieloJourneyTest extends TestCase
                 if ($request->method() === 'PATCH' && str_contains($request->url(), '/payments/')) {
                     $completed = true;
                     $settlementDesc = $request['desc'];
+                    $reservation['stats']['_f_totalPaid'] = 395;
 
                     return Http::response([]);
                 }
@@ -164,10 +166,10 @@ class ExistingReservationCieloJourneyTest extends TestCase
 
             return;
         }
-        if (in_array($scenario, ['changed', 'disabled', 'approval_revoked', 'approval_changed', 'approval_expired', 'approval_status_changed', 'approval_partner_changed', 'ledger_review', 'cycle_without_ledger'], true)) {
+        if (in_array($scenario, ['changed', 'disabled', 'approval_status_changed', 'approval_partner_changed', 'ledger_review', 'cycle_without_ledger'], true)) {
             if (in_array($scenario, ['disabled', 'cycle_without_ledger'], true)) {
                 $response->assertStatus(503)->assertJsonPath('code', 'payments_disabled');
-            } elseif (in_array($scenario, ['approval_revoked', 'approval_changed', 'approval_expired', 'ledger_review'], true)) {
+            } elseif ($scenario === 'ledger_review') {
                 $response->assertStatus(409)->assertJsonPath('code', 'existing_balance_unverified');
             } else {
                 $response->assertStatus(409)->assertJsonPath('code', 'stays_reservation_mismatch');

@@ -46,7 +46,7 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
         Queue::fake([ReconcileCieloPaymentWebhook::class]);
         $reservation = ['id' => 'ZX91K', '_id' => $reservationId, '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24),
             'type' => 'reserved', 'checkInDate' => '2030-11-19', 'checkOutDate' => '2030-11-22', 'guests' => 4,
-            'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 1016], 'partner' => ['name' => 'API booking.com']];
+            'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 1016], 'partner' => ['name' => 'API booking.com'], 'stats' => ['_f_totalPaid' => 0]];
         $commission = ['type' => 'debit', 'status' => 'pending', '_f_val' => 152.40, 'name' => 'res. fee API booking.com'];
         $created = false;
         $settled = false;
@@ -54,7 +54,7 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
         $marker = null;
         $settlementDesc = null;
         Http::preventStrayRequests();
-        Http::fake(function (Request $r) use ($reservation, $reservationId, $commission, $paymentId, $providerId, $gatewayId, &$created, &$settled, &$booked, &$marker, &$settlementDesc) {
+        Http::fake(function (Request $r) use (&$reservation, $reservationId, $commission, $paymentId, $providerId, $gatewayId, &$created, &$settled, &$booked, &$marker, &$settlementDesc) {
             if (str_contains($r->url(), 'stays.test')) {
                 if (str_contains($r->url(), '/finance/payment-providers/')) {
                     return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => 'Pix API Cielo']);
@@ -68,6 +68,7 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
                 if ($r->method() === 'PATCH' && str_contains($r->url(), '/payments/')) {
                     $settled = true;
                     $settlementDesc = $r['desc'];
+                    $reservation['stats']['_f_totalPaid'] = 1016;
 
                     return Http::response([], 200);
                 }

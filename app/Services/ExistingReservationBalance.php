@@ -79,9 +79,9 @@ class ExistingReservationBalance
         // When Stays reports an unpaid balance but has no guest receivable yet,
         // the checkout may create a pending credit for exactly that balance.
         // Without an authoritative paid amount, do not assume the full price is due.
-        if ($candidates === [] && ($reportedPaid === null || $reportedPaid < $total)
-            && ($reportedPaid === null || $reportedPaid >= $completedCredits)) {
-            return ['status' => 'unrecorded_candidate', 'candidate_cents' => $reportedPaid === null ? $total : $total - $reportedPaid, 'payment_id' => null];
+        if ($candidates === [] && $reportedPaid !== null && $reportedPaid < $total
+            && $reportedPaid >= $completedCredits) {
+            return ['status' => 'unrecorded_candidate', 'candidate_cents' => $total - $reportedPaid, 'payment_id' => null];
         }
 
         if (($reportedPaid !== null && $reportedPaid < $completedCredits)
