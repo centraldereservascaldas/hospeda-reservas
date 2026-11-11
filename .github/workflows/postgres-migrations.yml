@@ -72,3 +72,7 @@ jobs:
 
       - name: Test concurrent legacy evidence capture on PostgreSQL
         run: php artisan test --compact tests/Feature/PostgresLegacyEvidenceRaceTest.php
+
+      - name: Test reservation lock transaction boundaries on PostgreSQL
+        if: github.event_name == 'pull_request'
+        run: php artisan test --compact tests/Feature/PostgresReservationLockTransactionTest.php
