@@ -66,10 +66,12 @@ class ExperimentalLegacyReservationEvidenceTest extends TestCase
     {
         $order = $this->order();
         Http::fake(['https://stays.example.test/external/v1/booking/reservations/*' => Http::response($this->reservation($order))]);
+        $locksBefore = DB::table('existing_reservation_payment_locks')->orderBy('stays_reservation_id')->get()->toJson();
+        $evidenceBefore = DB::table('legacy_reservation_order_evidence')->orderBy('direct_booking_order_id')->get()->toJson();
 
         $this->artisan('checkout:capture-legacy-evidence', ['order' => $order->id])->assertSuccessful();
-        $this->assertDatabaseCount('legacy_reservation_order_evidence', 0);
-        $this->assertDatabaseCount('existing_reservation_payment_locks', 0);
+        $this->assertSame($evidenceBefore, DB::table('legacy_reservation_order_evidence')->orderBy('direct_booking_order_id')->get()->toJson());
+        $this->assertSame($locksBefore, DB::table('existing_reservation_payment_locks')->orderBy('stays_reservation_id')->get()->toJson());
         $this->artisan('checkout:capture-legacy-evidence', ['order' => $order->id, '--apply' => true])->assertSuccessful();
         $this->assertDatabaseHas('legacy_reservation_order_evidence', ['direct_booking_order_id' => $order->id, 'canonical_id' => $this->canonical]);
         $this->assertFalse(config('services.stays.experimental_legacy_order_evidence'));
@@ -85,7 +87,7 @@ class ExperimentalLegacyReservationEvidenceTest extends TestCase
         $this->artisan('checkout:capture-legacy-evidence', ['order' => 'invalid', '--apply' => true])->assertFailed();
         config(['services.stays.experimental_legacy_order_evidence' => true]);
         $this->artisan('checkout:capture-legacy-evidence', ['order' => $order->id, '--apply' => true])->assertFailed();
-        $this->assertDatabaseCount('legacy_reservation_order_evidence', 0);
+        $this->assertDatabaseMissing('legacy_reservation_order_evidence', ['direct_booking_order_id' => $order->id]);
         Http::assertSentCount(1);
     }
 
