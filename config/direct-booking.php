@@ -6,6 +6,7 @@ return [
     'experimental_existing_order_history_enabled' => false,
     // Research protocol only; no production setting enables this guard.
     'experimental_existing_intent_guard_enabled' => false,
+    'experimental_existing_intent_recovery_enabled' => false,
     // Research adapter: no production setting or application flow enables it.
     'experimental_existing_accounting_settlement_enabled' => false,
     'experimental_existing_receivable_creation_enabled' => false,

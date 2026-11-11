@@ -63,7 +63,11 @@ class GuardExistingCheckoutIntent
                 ? 'continue' : 'conflict';
         });
 
-        if ($decision === 'continue') return $next($request);
+        if ($decision === 'continue') {
+            $request->attributes->set('existing_checkout_intent_verified', true);
+
+            return $next($request);
+        }
         if ($decision === 'rejected' && ! $valid) {
             return response()->json(['message' => 'The given data was invalid.', 'errors' => $validator->errors()], 422)
                 ->header('Cache-Control', 'no-store, private');

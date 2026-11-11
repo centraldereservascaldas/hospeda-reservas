@@ -121,9 +121,9 @@ class ExistingReservationCheckoutController extends Controller
 
     public function store(StoreExistingReservationCheckoutRequest $request, string $code, ExistingReservationCheckoutService $checkout, DirectCheckoutPaymentService $gateway): JsonResponse
     {
-        $result = $checkout->create($code, $request->validated());
+        $result = $checkout->create($code, $request->validated(), $request->attributes->get('existing_checkout_intent_verified') === true);
         $order = $result['order'];
-        $response = ['success' => $order !== null, 'code' => $result['code']];
+        $response = ['success' => $order !== null, 'code' => $result['code'], 'replayed' => $order !== null && $result['status'] === 200];
         if ($order !== null) {
             $methods = app(ExistingReservationPaymentChannels::class)->availableMethods($gateway->availableMethods($order));
             $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;

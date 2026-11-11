@@ -22,10 +22,11 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
     {
         $this->configure();
         $this->fakeStays('success');
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true, 'direct-booking.experimental_existing_intent_recovery_enabled' => true]);
         $this->getJson('/api/existing-reservations/ZX91K/checkout-summary')
             ->assertOk()->assertJsonPath('reservation.balanceStatus', 'unrecorded_candidate')
             ->assertJsonPath('reservation.candidateBalanceCents', 101600)->assertJsonPath('reservation.paymentMethods', ['pix']);
-        $key = 'experimental-bootstrap-test-123';
+        $key = '123e4567-e89b-42d3-a456-426614174002';
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
             ->assertCreated()->assertJsonPath('success', true)->assertJsonStructure(['resume' => ['reference', 'token']]);
         $order = DirectBookingOrder::query()->sole();
@@ -42,7 +43,8 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
     {
         $this->configure();
         $this->fakeStays('failed');
-        $key = 'experimental-bootstrap-test-123';
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true, 'direct-booking.experimental_existing_intent_recovery_enabled' => true]);
+        $key = '123e4567-e89b-42d3-a456-426614174002';
         foreach (range(1, 2) as $ignored) {
             $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
                 ->assertStatus(503)->assertJsonPath('code', 'existing_receivable_unconfirmed')->assertJsonMissingPath('resume.token');
@@ -99,7 +101,8 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
     {
         $this->configure();
         $this->fakeStays('pending_inflates_paid');
-        $key = 'experimental-bootstrap-stats-123';
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true, 'direct-booking.experimental_existing_intent_recovery_enabled' => true]);
+        $key = '123e4567-e89b-42d3-a456-426614174003';
         foreach (range(1, 2) as $ignored) {
             $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
                 ->assertStatus(503)->assertJsonPath('code', 'existing_receivable_unconfirmed')->assertJsonMissingPath('resume.token');

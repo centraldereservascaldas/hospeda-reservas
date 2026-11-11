@@ -599,7 +599,8 @@ test('explicit new intent survives an ambiguous response and preserves earlier p
     view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fill(view);
-    await waitFor(() => assert.equal(payments, 1));
+    await waitFor(() => assert.equal(window.location.pathname, `/checkout/${newReference}`));
+    assert.equal(payments, 0);
     assert.equal(keys[0], keys[1]);
     cleanup();
     view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
@@ -616,7 +617,7 @@ test('explicit new intent survives an ambiguous response and preserves earlier p
     fireEvent.click(view.getByRole('button', { name: 'Iniciar nova tentativa' }));
     fill(view);
     await waitFor(() => assert.ok(view.getByText(/Já existe um pedido para esta reserva/)));
-    assert.equal(payments, 1);
+    assert.equal(payments, 0);
   } finally { cleanup(); globalThis.fetch = originalFetch; }
 });
 
@@ -743,7 +744,8 @@ test('two payment cycles retain the first order and block a duplicate after an a
     view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY93K' }));
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fill(view);
-    await waitFor(() => assert.equal(payments, 2));
+    await waitFor(() => assert.equal(window.location.pathname, `/checkout/${orders[1].reference}`));
+    assert.equal(payments, 1);
     assert.equal(keys[1], keys[2]);
     assert.notEqual(keys[0], keys[1]);
     assert.deepEqual(orders.map((order) => order.amount), [39500, 19750]);
@@ -757,6 +759,50 @@ test('two payment cycles retain the first order and block a duplicate after an a
     fill(view);
     await waitFor(() => assert.ok(view.getByText(/Já existe um pedido para esta reserva/)));
     assert.equal(orders.length, 2);
-    assert.equal(payments, 2);
+    assert.equal(payments, 1);
+  } finally { cleanup(); globalThis.fetch = originalFetch; }
+});
+
+test('replayed preparation opens protected order tracking without posting a payment', async () => {
+  const originalFetch = globalThis.fetch;
+  const reference = 'W'.repeat(40), token = 'X'.repeat(64);
+  const expiresAt = new Date(Date.now() + 86400000).toISOString();
+  const calls: Array<{ url: string; init?: Parameters<typeof fetch>[1] }> = [];
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    calls.push({ url, init });
+    if (url.includes('/checkout-summary')) return new Response(JSON.stringify({ success: true, reservation: {
+      code: 'ZY92K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
+      checkIn: '2026-11-13', checkOut: '2026-11-16', guests: 4, adults: 4, children: 0, infants: 0,
+      totalCents: 39500, candidateBalanceCents: 19750, balanceStatus: 'pending_candidate', paymentEnabled: true, paymentMethods: ['pix'], cardInstallments: [],
+    } }));
+    if (url.endsWith('/existing-reservations/ZY92K/checkout')) return new Response(JSON.stringify({
+      success: true, replayed: true, resume: { reference, token, path: `/checkout/${reference}`, expiresAt },
+      order: { publicReference: reference, status: 'pre_reservado', paymentStatus: null, quoteTotal: '197.50' },
+      payment: { enabled: true, provider: 'cielo_sandbox' },
+    }));
+    if (url.endsWith(`/checkout/${reference}`)) return new Response('{}', { status: 503 });
+    return new Response('{}', { status: 503 });
+  };
+  try {
+    window.history.replaceState(null, '', '/checkout/ZY92K');
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
+    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Cliente Exemplo' } });
+    fireEvent.change(view.getByLabelText('E-mail'), { target: { value: 'cliente@example.test' } });
+    fireEvent.change(view.getByLabelText('WhatsApp'), { target: { value: '64999999999' } });
+    fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), { target: { value: '12345678901' } });
+    fireEvent.click(view.getByRole('checkbox'));
+    fireEvent.click(view.getByRole('button', { name: /gerar pix/i }));
+    await waitFor(() => assert.ok(calls.some((call) => call.url.endsWith(`/checkout/${reference}`))));
+    const tracking = calls.find((call) => call.url.endsWith(`/checkout/${reference}`))!;
+    assert.equal((tracking.init?.headers as Record<string, string>)['X-Checkout-Resume-Token'], token);
+    assert.equal(calls.some((call) => call.url.endsWith('/payments') && call.init?.method === 'POST'), false);
+    assert.equal(window.location.pathname, `/checkout/${reference}`);
+    assert.equal(window.location.href.includes(token), false);
+    assert.equal(calls.some((call) => call.url.includes(token)), false);
+    assert.equal(JSON.parse(window.sessionStorage.getItem(`crcn.checkout.resume.${reference}`)!).token, token);
+    await waitFor(() => assert.ok(view.getByRole('heading', { name: /não foi possível consultar agora/i })));
+    assert.equal(view.queryByRole('button', { name: /gerar pix/i }), null);
   } finally { cleanup(); globalThis.fetch = originalFetch; }
 });

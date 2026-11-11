@@ -162,7 +162,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     setIntentKey(null);
     const context: CieloPaymentContext = { reference: resume.reference, amount: order.quoteTotal, credentials: { type: 'resume-token', resumeToken: resume.token } };
     window.history.replaceState(null, '', checkoutPathWithStayQuery(resume.path, window.location.search));
-    if (order.status !== 'pre_reservado' || order.paymentStatus !== null || payment.enabled !== true) {
+    if (data.replayed === true || previouslySubmitted || order.status !== 'pre_reservado' || order.paymentStatus !== null || payment.enabled !== true) {
       setActiveReference(context.reference);
       throw new Error('Acompanhe a situação deste pedido antes de tentar novamente.');
     }

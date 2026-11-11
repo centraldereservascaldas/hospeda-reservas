@@ -127,9 +127,40 @@ class ExistingReservationCheckoutTest extends TestCase
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
             ->assertCreated()->assertJsonPath('success', true)->assertJsonPath('order.quoteTotal', '197.50')
             ->assertJsonPath('payment.enabled', true)->assertJsonStructure(['resume' => ['reference', 'token', 'path']]);
-        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertOk()->assertJsonPath('success', true);
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409)->assertJsonPath('success', false);
         $this->assertDatabaseCount('direct_booking_orders', 1);
         $this->assertDatabaseHas('direct_booking_orders', ['origin' => 'stays_existing', 'stays_reservation_id' => str_repeat('c', 24), 'reservation_status' => 'booked']);
+        Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
+    }
+
+    public function test_lost_checkout_response_recovers_only_same_guarded_order_without_external_write(): void
+    {
+        $this->configureCheckout();
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true, 'direct-booking.experimental_existing_intent_recovery_enabled' => true]);
+        $key = '123e4567-e89b-42d3-a456-426614174000';
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $first = $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated()->assertJsonPath('replayed', false);
+        $retry = $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertOk()->assertJsonPath('replayed', true);
+        $this->assertSame($first->json('resume.reference'), $retry->json('resume.reference'));
+        $this->assertSame($first->json('resume.token'), $retry->json('resume.token'));
+        $payload['guest']['email'] = 'changed@example.test';
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409);
+        $this->assertDatabaseCount('direct_booking_orders', 1);
+        Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
+    }
+
+    public function test_recovery_requires_guard_and_unexpired_token(): void
+    {
+        $this->configureCheckout();
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true, 'direct-booking.experimental_existing_intent_recovery_enabled' => true]);
+        $key = '123e4567-e89b-42d3-a456-426614174001';
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => false]);
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409)->assertJsonMissingPath('resume.token');
+        config(['direct-booking.experimental_existing_intent_guard_enabled' => true]);
+        DB::table('direct_booking_orders')->update(['resume_token_expires_at' => now()->subMinute()]);
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409)->assertJsonMissingPath('resume.token');
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
     }
 
