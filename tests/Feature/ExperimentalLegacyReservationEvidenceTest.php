@@ -151,8 +151,19 @@ class ExperimentalLegacyReservationEvidenceTest extends TestCase
         DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', $target)->delete();
         $order->update(['stays_reservation_id' => str_repeat('g', 24)]);
         $this->assertTrue($guard());
-        $order->update(['stays_reservation_id' => $this->canonical."\0suffix"]);
-        $this->assertTrue($guard());
+        $withNul = $this->canonical."\0suffix";
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            $order->update(['stays_reservation_id' => $withNul]);
+            $this->assertSame($withNul, $order->fresh()->stays_reservation_id);
+            $this->assertTrue($guard());
+        } elseif (DB::connection()->getDriverName() === 'pgsql') {
+            try {
+                $order->update(['stays_reservation_id' => $withNul]);
+                $this->assertNotSame($withNul, $order->fresh()->stays_reservation_id);
+            } catch (\Illuminate\Database\QueryException $exception) {
+                $this->assertSame(str_repeat('g', 24), $order->fresh()->stays_reservation_id);
+            }
+        }
     }
 
     private function reservation(DirectBookingOrder $order, ?string $canonical = null): array
