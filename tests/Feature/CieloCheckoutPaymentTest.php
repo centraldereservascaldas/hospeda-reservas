@@ -239,13 +239,13 @@ class CieloCheckoutPaymentTest extends TestCase
             return Http::response($this->cieloPayment($paymentId, $merchantOrderId, 2), 201);
         });
         $this->submitCardPayment($order, 'website-serialized-payment-0001');
-        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+        $this->assertSame(1, DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', '!=', 'coordination-decision')->count());
         $this->assertDatabaseCount('existing_reservation_payment_cycles', 0);
 
         // Existing website orders may hold a short Stays ID; they must remain
         // reconcilable even while alias canonicalization is not implemented.
         $this->assertSame('approved', app(DirectCheckoutPaymentService::class)->reconcileCieloPaymentId($paymentId)['attempt']->status);
-        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+        $this->assertSame(1, DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', '!=', 'coordination-decision')->count());
     }
 
     public function test_website_checkout_does_not_use_reservation_lock_when_existing_rollout_is_disabled(): void
@@ -260,8 +260,25 @@ class CieloCheckoutPaymentTest extends TestCase
         Http::fake(fn (ClientRequest $request) => Http::response($this->cieloPayment('123e4567-e89b-12d3-a456-426614174060', $request['MerchantOrderId'], 2), 201));
 
         $this->submitCardPayment($order, 'website-feature-disabled-0001');
-        $this->assertDatabaseCount('existing_reservation_payment_locks', 0);
+        $this->assertSame(0, DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', '!=', 'coordination-decision')->count());
         $this->assertDatabaseCount('existing_reservation_payment_cycles', 0);
+    }
+
+    public function test_cielo_rechecks_coordination_before_creating_legacy_attempt(): void
+    {
+        Http::preventStrayRequests();
+        $this->configureCielo();
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        $order = $this->createPayableOrder();
+        $this->mock(DirectStaysReservationService::class)->shouldReceive('validateReservedOrderForPayment')->once()->andReturn(true);
+        $this->mock(\App\Services\ReservationCoordinationMode::class)->shouldReceive('isRequired')->twice()->andReturn(false, true);
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', $this->cardPayload(), [
+            'Idempotency-Key' => 'website-coordination-race-0001',
+            'X-Checkout-Resume-Token' => 'synthetic-resume-token',
+        ])->assertStatus(409)->assertJsonPath('code', 'existing_reservation_unverified');
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+        Http::assertNothingSent();
     }
 
     public function test_cielo_payment_cannot_start_while_reservation_release_is_claimed(): void
@@ -324,7 +341,7 @@ class CieloCheckoutPaymentTest extends TestCase
         $attempt = DirectBookingPaymentAttempt::query()->sole();
         $this->assertSame('pending', $attempt->gateway_status);
         $this->assertSame('synthetic-pix-code', $attempt->pix_copy_paste);
-        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+        $this->assertSame(1, DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', '!=', 'coordination-decision')->count());
     }
 
     public function test_website_short_id_cannot_charge_while_canonical_existing_order_has_active_payment(): void
@@ -392,7 +409,7 @@ class CieloCheckoutPaymentTest extends TestCase
         $this->assertSame('pending', $result['attempt']->status);
         $this->assertSame('pending', $attempt->refresh()->gateway_status);
         $this->assertSame('synthetic-pix-code', $attempt->pix_copy_paste);
-        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+        $this->assertSame(1, DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', '!=', 'coordination-decision')->count());
     }
 
     public function test_legacy_website_attempt_is_backfilled_before_gateway_reconciliation(): void
@@ -410,7 +427,7 @@ class CieloCheckoutPaymentTest extends TestCase
         $this->assertSame('pending', $result['attempt']->status);
         $this->assertSame(str_repeat('c', 24), $attempt->refresh()->stays_reservation_canonical_id);
         $this->assertSame('123e4567-e89b-12d3-a456-426614174081', $attempt->gateway_payment_id);
-        $this->assertDatabaseCount('existing_reservation_payment_locks', 1);
+        $this->assertSame(1, DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', '!=', 'coordination-decision')->count());
     }
 
     public function test_legacy_website_attempt_with_unverified_reservation_is_not_backfilled(): void

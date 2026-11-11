@@ -162,8 +162,13 @@ class ExistingReservationCheckoutService
 
                     return ['order' => $existing, 'code' => 'existing_checkout_ready', 'status' => 200];
                 }
+                $aliases = [strtolower($snapshot['_id']), strtoupper($snapshot['_id']), $reservation['id']];
+                if (DirectBookingOrder::query()->where('origin', '!=', 'stays_existing')->whereIn('stays_reservation_id', $aliases)->exists()
+                    || app(ReservationReleaseGuard::class)->hasAmbiguousOrder($aliases)) {
+                    return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
+                }
                 if (config('direct-booking.experimental_existing_order_history_enabled', false) !== true
-                    && DirectBookingOrder::query()->where('stays_reservation_id', $snapshot['_id'])->exists()) {
+                    && DirectBookingOrder::query()->whereIn('stays_reservation_id', $aliases)->exists()) {
                     return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
                 }
                 $order = DirectBookingOrder::query()->create([

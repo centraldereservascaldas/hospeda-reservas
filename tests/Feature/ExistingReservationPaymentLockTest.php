@@ -24,7 +24,7 @@ class ExistingReservationPaymentLockTest extends TestCase
         $this->assertSame(str_repeat('a', 24), $result);
         $lock->synchronized(str_repeat('a', 24), fn (string $id): string => $id);
         $lock->synchronized(str_repeat('b', 24), fn (string $id): string => $id);
-        $this->assertDatabaseCount('existing_reservation_payment_locks', 2);
+        $this->assertSame(2, DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', '!=', 'coordination-decision')->count());
         $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => str_repeat('a', 24)]);
     }
 

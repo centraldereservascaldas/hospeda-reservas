@@ -338,7 +338,9 @@ class DirectCheckoutPaymentService
             };
             $attempt = $identity !== null
                 ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $create)
-                : DB::transaction($create);
+                : (\Illuminate\Support\Facades\Schema::hasTable('existing_reservation_payment_locks')
+                    ? app(ExistingReservationPaymentLock::class)->synchronizedDecision(fn () => app(ReservationCoordinationMode::class)->isRequired($order) ? ['error' => 'existing_reservation_unverified'] : $create())
+                    : DB::transaction($create));
         } catch (UniqueConstraintViolationException) {
             $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existingAttempt !== null) {
@@ -777,7 +779,9 @@ class DirectCheckoutPaymentService
             };
             $attempt = $identity !== null
                 ? app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'], $create)
-                : DB::transaction($create);
+                : (\Illuminate\Support\Facades\Schema::hasTable('existing_reservation_payment_locks')
+                    ? app(ExistingReservationPaymentLock::class)->synchronizedDecision(fn () => app(ReservationCoordinationMode::class)->isRequired($order) ? ['error' => 'existing_reservation_unverified'] : $create())
+                    : DB::transaction($create));
         } catch (UniqueConstraintViolationException) {
             $existingAttempt = DirectBookingPaymentAttempt::query()->where('idempotency_key', $idempotencyKey)->first();
             if ($existingAttempt !== null) {

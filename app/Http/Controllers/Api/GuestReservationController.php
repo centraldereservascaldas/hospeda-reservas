@@ -10,10 +10,15 @@ use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
 use App\Services\DirectBookingCancellationRequestService;
 use App\Services\GuestStaysSyncService;
+use App\Services\ExistingReservationPaymentLock;
+use App\Services\ReservationCoordinationMode;
+use App\Services\ReservationReleaseGuard;
+use App\Services\StaysReservationIdentity;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class GuestReservationController extends Controller
 {
@@ -230,9 +235,30 @@ class GuestReservationController extends Controller
         if (! in_array($status, ['booked', 'contract'], true)) {
             return response()->json(['success' => false, 'code' => 'reservation_not_cancellable', 'message' => 'O status atual desta reserva não permite cancelamento por este fluxo.'], 409);
         }
+        if (Schema::hasColumn('existing_reservation_payment_locks', 'guest_cancel_claimed_at') || app(ReservationCoordinationMode::class)->isRequired()) {
+            $canonical = $details['_id'] ?? null;
+            $code = $details['id'] ?? null;
+            if (! is_string($canonical) || ! preg_match('/^[a-f0-9]{24}$/iD', $canonical)
+                || ! is_string($code) || ! preg_match('/^[A-Z0-9]{5}$/D', $code)
+                || ! in_array($reservationId, [$canonical, $code], true)) {
+                return response()->json(['success' => false, 'code' => 'reservation_state_unavailable', 'message' => 'Não foi possível validar a identidade da reserva. Entre em contato com a Central.'], 503);
+            }
+            $identity = ['canonical' => strtolower($canonical), 'code' => $code];
+            if (! app(StaysReservationIdentity::class)->remember($identity)
+                || ! app(ExistingReservationPaymentLock::class)->synchronized($identity['canonical'],
+                    fn (): bool => app(ReservationReleaseGuard::class)->claimGuestCancellation($identity))) {
+                return response()->json(['success' => false, 'code' => 'direct_booking_cancellation_requires_support', 'message' => 'Entre em contato com a Central para analisar o cancelamento e os pagamentos desta reserva.'], 409);
+            }
+            // Keep the claim even if this read or the subsequent PATCH is uncertain.
+            $current = $this->stays->get('/booking/reservations/'.rawurlencode($canonical));
+            if (! is_array($current) || ($current['_id'] ?? null) !== $canonical || ($current['id'] ?? null) !== $code
+                || ($current['_idclient'] ?? null) !== $clientId || ! in_array(strtolower((string) ($current['type'] ?? '')), ['booked', 'contract'], true)) {
+                return response()->json(['success' => false, 'code' => 'reservation_state_unavailable', 'message' => 'Não foi possível confirmar a reserva após registrar a solicitação. Entre em contato com a Central.'], 503);
+            }
+        }
         $response = $this->stays->request('PATCH', '/booking/reservations/'.rawurlencode($reservationId), payload: ['type' => 'canceled', 'cancelMessage' => 'Cancelamento solicitado pelo hóspede pelo site Central de Reservas Caldas Novas.']);
         if (! $response?->successful()) {
-            return response()->json(['success' => false, 'code' => 'stays_cancel_failed', 'message' => 'A Stays não confirmou o cancelamento. A reserva continua ativa; entre em contato com a Central.'], 502);
+            return response()->json(['success' => false, 'code' => 'stays_cancel_failed', 'message' => 'A Stays não confirmou o resultado do cancelamento. Entre em contato com a Central para conferir a reserva.'], 502);
         }
 
         return response()->json(['success' => true, 'reservationId' => $reservationId, 'cancellationStatus' => 'cancelled'])

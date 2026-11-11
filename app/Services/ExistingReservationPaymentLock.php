@@ -8,6 +8,22 @@ use InvalidArgumentException;
 
 class ExistingReservationPaymentLock
 {
+    /** Serialize decisions that may otherwise skip the reservation-specific lock. */
+    public function synchronizedDecision(Closure $callback): mixed
+    {
+        return DB::transaction(function () use ($callback): mixed {
+            // A non-hex key cannot collide with a canonical reservation ID.
+            $key = 'coordination-decision';
+            $timestamp = now();
+            DB::table('existing_reservation_payment_locks')->insertOrIgnore([
+                'stays_reservation_id' => $key, 'created_at' => $timestamp, 'updated_at' => $timestamp,
+            ]);
+            DB::table('existing_reservation_payment_locks')->where('stays_reservation_id', $key)->lockForUpdate()->firstOrFail();
+
+            return $callback();
+        });
+    }
+
     /**
      * Serialize database decisions for one canonical Stays reservation ID.
      *
@@ -30,7 +46,7 @@ class ExistingReservationPaymentLock
 
         $reservationId = strtolower($reservationId);
 
-        return DB::transaction(function () use ($reservationId, $callback): mixed {
+        return $this->synchronizedDecision(function () use ($reservationId, $callback): mixed {
             $timestamp = now();
             DB::table('existing_reservation_payment_locks')->insertOrIgnore([
                 'stays_reservation_id' => $reservationId,

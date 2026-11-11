@@ -144,6 +144,33 @@ class ExistingReservationCheckoutTest extends TestCase
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
     }
 
+    public function test_guest_cancellation_claim_and_checkout_are_serialized_by_canonical_reservation(): void
+    {
+        $this->configureCheckout();
+        $id = str_repeat('c', 24);
+        $identity = ['canonical' => $id, 'code' => 'ZY92K'];
+        $lock = app(\App\Services\ExistingReservationPaymentLock::class);
+        $guard = app(\App\Services\ReservationReleaseGuard::class);
+        $this->assertTrue($lock->synchronized($id, fn () => $guard->claimGuestCancellation($identity)));
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'guest-cancel-guard-123')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertStatus(409)->assertJsonPath('code', 'existing_checkout_unavailable');
+        $this->assertDatabaseCount('direct_booking_orders', 0);
+        Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
+    }
+
+    public function test_checkout_created_first_prevents_guest_cancellation_claim(): void
+    {
+        $this->configureCheckout();
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'checkout-before-cancel-123')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        $id = str_repeat('c', 24);
+        $claimed = app(\App\Services\ExistingReservationPaymentLock::class)->synchronized($id,
+            fn () => app(\App\Services\ReservationReleaseGuard::class)->claimGuestCancellation(['canonical' => $id, 'code' => 'ZY92K']));
+        $this->assertFalse($claimed);
+        $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => $id, 'guest_cancel_claimed_at' => null]);
+    }
+
     public function test_order_history_can_create_two_existing_orders_only_when_explicitly_enabled(): void
     {
         $this->configureCheckout();
