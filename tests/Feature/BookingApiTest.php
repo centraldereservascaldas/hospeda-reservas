@@ -17,6 +17,12 @@ class BookingApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->travelTo(CarbonImmutable::parse('2026-10-24T17:00:00Z'));
+    }
+
     public function test_local_price_fallback_returns_existing_response_shape(): void
     {
         config(['services.stays.client_id' => '', 'services.stays.client_secret' => '']);

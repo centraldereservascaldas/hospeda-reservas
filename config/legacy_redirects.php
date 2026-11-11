@@ -1,6 +1,14 @@
 <?php
 
 return [
+    'hosts' => [
+        'centraldereservascaldas.com',
+        'www.centraldereservascaldas.com',
+    ],
+    'paths' => [
+        'mapas-lacqua-diroma' => '/?destination=diroma',
+        'lagoa-quente-flat-service' => '/?destination=lagoa%20quente',
+    ],
     'condominiums' => [
         'thermasplace' => '6a3560da78b17e1b6cffee9b',
         'thermas-place' => '6a3560da78b17e1b6cffee9b',

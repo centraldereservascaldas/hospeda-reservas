@@ -9,6 +9,7 @@ use App\Services\DirectSaleTermsRegistry;
 use App\Services\DirectStaysReservationMatcher;
 use App\Services\DirectStaysReservationService;
 use App\Services\Payments\DirectCheckoutPaymentService;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Facades\Http;
@@ -191,6 +192,7 @@ class DirectStaysReservationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $this->travelTo(CarbonImmutable::parse('2026-10-24T17:00:00Z'));
         config([
             'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
             'direct-booking.enabled' => true,
