@@ -4,9 +4,10 @@ namespace Tests\Feature;
 
 use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
-use App\Services\ExperimentalLegacyReservationEvidence;
 use App\Services\ExistingReservationPaymentLock;
+use App\Services\ExperimentalLegacyReservationEvidence;
 use App\Services\ReservationReleaseGuard;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -59,6 +60,33 @@ class ExperimentalLegacyReservationEvidenceTest extends TestCase
         $this->assertSame(1, DB::table('legacy_reservation_order_evidence')->where('direct_booking_order_id', $order->id)->count());
         $this->assertDatabaseHas('legacy_reservation_order_evidence', ['direct_booking_order_id' => $order->id, 'canonical_id' => $this->canonical]);
         $this->assertSame($this->reference, $order->fresh()->stays_reservation_id);
+    }
+
+    public function test_command_previews_then_explicitly_captures_one_order(): void
+    {
+        $order = $this->order();
+        Http::fake(['https://stays.example.test/external/v1/booking/reservations/*' => Http::response($this->reservation($order))]);
+
+        $this->artisan('checkout:capture-legacy-evidence', ['order' => $order->id])->assertSuccessful();
+        $this->assertDatabaseCount('legacy_reservation_order_evidence', 0);
+        $this->assertDatabaseCount('existing_reservation_payment_locks', 0);
+        $this->artisan('checkout:capture-legacy-evidence', ['order' => $order->id, '--apply' => true])->assertSuccessful();
+        $this->assertDatabaseHas('legacy_reservation_order_evidence', ['direct_booking_order_id' => $order->id, 'canonical_id' => $this->canonical]);
+        $this->assertFalse(config('services.stays.experimental_legacy_order_evidence'));
+        Http::assertSentCount(2);
+    }
+
+    public function test_command_fails_closed_for_mismatch_invalid_input_and_enabled_flag(): void
+    {
+        $order = $this->order();
+        Http::fake(['https://stays.example.test/external/v1/booking/reservations/*' => Http::response([...$this->reservation($order), 'internalNote' => 'wrong'])]);
+
+        $this->artisan('checkout:capture-legacy-evidence', ['order' => $order->id, '--apply' => true])->assertFailed();
+        $this->artisan('checkout:capture-legacy-evidence', ['order' => 'invalid', '--apply' => true])->assertFailed();
+        config(['services.stays.experimental_legacy_order_evidence' => true]);
+        $this->artisan('checkout:capture-legacy-evidence', ['order' => $order->id, '--apply' => true])->assertFailed();
+        $this->assertDatabaseCount('legacy_reservation_order_evidence', 0);
+        Http::assertSentCount(1);
     }
 
     public function test_modified_order_during_get_fails_closed(): void
@@ -160,7 +188,7 @@ class ExperimentalLegacyReservationEvidenceTest extends TestCase
             try {
                 $order->update(['stays_reservation_id' => $withNul]);
                 $this->assertNotSame($withNul, $order->fresh()->stays_reservation_id);
-            } catch (\Illuminate\Database\QueryException $exception) {
+            } catch (QueryException $exception) {
                 $this->assertSame(str_repeat('g', 24), $order->fresh()->stays_reservation_id);
             }
         }

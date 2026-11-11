@@ -17,28 +17,11 @@ class ExperimentalLegacyReservationEvidence
     /** Capture immutable evidence for one website order, or fail closed. */
     public function capture(string $orderId): bool
     {
-        if (DB::transactionLevel() !== 0 || ($account = $this->accountFingerprint()) === null) {
+        $candidate = $this->candidate($orderId);
+        if ($candidate === null) {
             return false;
         }
-        $order = DirectBookingOrder::query()->find($orderId);
-        if (! $order || $order->origin !== 'website' || ! is_string($order->stays_reservation_id)
-            || ! preg_match('/^[A-Z0-9]{5}$/D', $order->stays_reservation_id)) {
-            return false;
-        }
-        $snapshot = $this->snapshot($order);
-        $reference = $order->stays_reservation_id;
-        $reservation = $this->stays->get('/booking/reservations/'.rawurlencode($reference));
-        $canonical = $reservation['_id'] ?? null;
-        if (! is_array($reservation) || ! is_string($canonical) || ! preg_match('/^[a-f0-9]{24}$/iD', $canonical)
-            || ($reservation['id'] ?? null) !== $reference) {
-            return false;
-        }
-        $verified = clone $order;
-        $verified->stays_reservation_id = $canonical;
-        if (! $this->matcher->matchesIdentity($reservation, $verified)) {
-            return false;
-        }
-        $canonical = strtolower($canonical);
+        [$snapshot, $account, $reference, $canonical] = $candidate;
 
         return $this->lock->synchronized($canonical, function () use ($orderId, $snapshot, $account, $reference, $canonical): bool {
             $current = DirectBookingOrder::query()->lockForUpdate()->find($orderId);
@@ -59,6 +42,40 @@ class ExperimentalLegacyReservationEvidence
                 && $existing->canonical_id === $canonical && $existing->account_fingerprint === $account
                 && $existing->order_snapshot_hash === $snapshot;
         });
+    }
+
+    /** Preliminary remote identity check; no evidence or lock is written. */
+    public function preview(string $orderId): bool
+    {
+        return $this->candidate($orderId) !== null;
+    }
+
+    /** @return array{string, string, string, string}|null */
+    private function candidate(string $orderId): ?array
+    {
+        if (DB::transactionLevel() !== 0 || ($account = $this->accountFingerprint()) === null) {
+            return null;
+        }
+        $order = DirectBookingOrder::query()->find($orderId);
+        if (! $order || $order->origin !== 'website' || ! is_string($order->stays_reservation_id)
+            || ! preg_match('/^[A-Z0-9]{5}$/D', $order->stays_reservation_id)) {
+            return null;
+        }
+        $snapshot = $this->snapshot($order);
+        $reference = $order->stays_reservation_id;
+        $reservation = $this->stays->get('/booking/reservations/'.rawurlencode($reference));
+        $canonical = $reservation['_id'] ?? null;
+        if (! is_array($reservation) || ! is_string($canonical) || ! preg_match('/^[a-f0-9]{24}$/iD', $canonical)
+            || ($reservation['id'] ?? null) !== $reference) {
+            return null;
+        }
+        $verified = clone $order;
+        $verified->stays_reservation_id = $canonical;
+        if (! $this->matcher->matchesIdentity($reservation, $verified)) {
+            return null;
+        }
+
+        return [$snapshot, $account, $reference, strtolower($canonical)];
     }
 
     public function accountFingerprint(): ?string
