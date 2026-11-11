@@ -165,11 +165,13 @@ test('prefills authenticated guest details, updates after session restore, and l
     await act(async () => {
       fireEvent.click(continueButton);
     });
-    assert.deepEqual(submittedGuest, {
-      fullName: 'Maria Silva (revisado)',
-      email: 'maria@example.com',
-      phone: '+5511999990000',
-    });
+    await waitFor(() =>
+      assert.deepEqual(submittedGuest, {
+        fullName: 'Maria Silva (revisado)',
+        email: 'maria@example.com',
+        phone: '+5511999990000',
+      }),
+    );
   } finally {
     checkoutApi.getCheckoutTerms = originalGetCheckoutTerms;
     checkoutApi.getCheckoutReadiness = originalGetCheckoutReadiness;
