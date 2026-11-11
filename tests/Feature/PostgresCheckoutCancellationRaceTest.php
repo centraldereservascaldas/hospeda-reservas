@@ -48,7 +48,7 @@ config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services
     'direct-booking.existing_reservation_checkout_enabled' => true, 'direct-booking.payment_provider' => 'cielo',
     'direct-booking.stays_cielo_pix_provider_id' => str_repeat('f', 24),
     'direct-booking.experimental_existing_cycle_settlement_enabled' => false,
-    'direct-booking.experimental_existing_ledger_audit_enabled' => false,
+    'direct-booking.experimental_existing_ledger_audit_enabled' => true,
     'direct-booking.experimental_existing_receivable_creation_enabled' => false]);
 $payments = Mockery::mock(App\Services\Payments\DirectCheckoutPaymentService::class);
 $payments->shouldReceive('availableMethods')->andReturn(['pix']);
@@ -56,13 +56,16 @@ app()->instance(App\Services\Payments\DirectCheckoutPaymentService::class, $paym
 $cielo = Mockery::mock(App\Services\Payments\CieloEcommerceClient::class);
 $cielo->shouldReceive('merchantId')->andReturn('test-merchant');
 app()->instance(App\Services\Payments\CieloEcommerceClient::class, $cielo);
+$audit = Mockery::mock(App\Services\ExistingReservationLedgerAudit::class);
+$audit->shouldReceive('confirmsSnapshot')->andReturnTrue();
+app()->instance(App\Services\ExistingReservationLedgerAudit::class, $audit);
 Illuminate\Support\Facades\Http::preventStrayRequests();
 Illuminate\Support\Facades\Http::fake(function (Illuminate\Http\Client\Request $request) use ($argv) {
     if ($request->method() !== 'GET') { throw new RuntimeException('Unexpected outbound write'); }
     return match (true) {
         str_contains($request->url(), '/finance/payment-providers/') => Illuminate\Support\Facades\Http::response(['_id' => str_repeat('f', 24), 'status' => 'active', 'internalName' => 'Pix API Cielo']),
         str_ends_with($request->url(), '/payments') => Illuminate\Support\Facades\Http::response([['_idpaymentProvider' => str_repeat('f', 24), '_id' => str_repeat('a', 24), 'type' => 'credit', 'status' => 'pending', '_f_val' => 197.50, 'name' => 'Pagamento da reserva']]),
-        default => Illuminate\Support\Facades\Http::response(['id' => 'ZY92K', '_id' => strtolower($argv[1]), '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24), 'type' => 'booked', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'partner' => ['name' => 'API booking.com']]),
+        default => Illuminate\Support\Facades\Http::response(['id' => 'ZY92K', '_id' => strtolower($argv[1]), '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24), 'type' => 'booked', 'checkInDate' => '2030-11-13', 'checkOutDate' => '2030-11-16', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'partner' => ['name' => 'API booking.com']]),
     };
 });
 $id = $argv[1];

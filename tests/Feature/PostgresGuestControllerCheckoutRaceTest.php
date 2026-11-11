@@ -38,7 +38,7 @@ config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services
     'direct-booking.existing_reservation_checkout_enabled' => true, 'direct-booking.payment_provider' => 'cielo',
     'direct-booking.stays_cielo_pix_provider_id' => str_repeat('f', 24),
     'direct-booking.experimental_existing_cycle_settlement_enabled' => false,
-    'direct-booking.experimental_existing_ledger_audit_enabled' => false,
+    'direct-booking.experimental_existing_ledger_audit_enabled' => true,
     'direct-booking.experimental_existing_receivable_creation_enabled' => false]);
 $payments = Mockery::mock(App\Services\Payments\DirectCheckoutPaymentService::class);
 $payments->shouldReceive('availableMethods')->andReturn(['pix']);
@@ -46,6 +46,9 @@ app()->instance(App\Services\Payments\DirectCheckoutPaymentService::class, $paym
 $cielo = Mockery::mock(App\Services\Payments\CieloEcommerceClient::class);
 $cielo->shouldReceive('merchantId')->andReturn('test-merchant');
 app()->instance(App\Services\Payments\CieloEcommerceClient::class, $cielo);
+$audit = Mockery::mock(App\Services\ExistingReservationLedgerAudit::class);
+$audit->shouldReceive('confirmsSnapshot')->andReturnTrue();
+app()->instance(App\Services\ExistingReservationLedgerAudit::class, $audit);
 Illuminate\Support\Facades\Http::preventStrayRequests();
 Illuminate\Support\Facades\Http::fake(function (Illuminate\Http\Client\Request $request) use ($argv) {
     if ($request->method() === 'PATCH' && str_contains($request->url(), '/booking/reservations/')) {
