@@ -95,39 +95,8 @@ class SpaController extends Controller
         $normalizedPath = trim((string) $path, '/');
         $legacyPaths = config('legacy_redirects.paths', []);
         $destinationPath = is_array($legacyPaths) ? ($legacyPaths[$normalizedPath] ?? null) : null;
-        $legacyHosts = array_map('mb_strtolower', config('legacy_redirects.hosts', []));
-        $isLegacyHost = in_array(mb_strtolower($request->getHost()), $legacyHosts, true);
-
-        if (! is_string($destinationPath) && ! $isLegacyHost) {
-            return null;
-        }
-
         if (! is_string($destinationPath)) {
-            $destinationPath = $normalizedPath === '' ? '/' : '/'.$normalizedPath;
-        }
-
-        if ($isLegacyHost) {
-            $canonicalUrl = config('app.url');
-            $canonicalParts = is_string($canonicalUrl) ? parse_url($canonicalUrl) : false;
-            $canonicalHost = is_array($canonicalParts) ? ($canonicalParts['host'] ?? null) : null;
-            if (! is_string($canonicalHost) || $canonicalHost === '') {
-                return null;
-            }
-
-            if (mb_strtolower($canonicalHost) === mb_strtolower($request->getHost())) {
-                if (! is_string($legacyPaths[$normalizedPath] ?? null)) {
-                    return null;
-                }
-
-                return $this->appendQueryString($destinationPath, $request->getQueryString());
-            }
-
-            $canonicalOrigin = ($canonicalParts['scheme'] ?? 'https').'://'.$canonicalHost;
-            if (isset($canonicalParts['port'])) {
-                $canonicalOrigin .= ':'.$canonicalParts['port'];
-            }
-
-            $destinationPath = $canonicalOrigin.$destinationPath;
+            return null;
         }
 
         return $this->appendQueryString($destinationPath, $request->getQueryString());
