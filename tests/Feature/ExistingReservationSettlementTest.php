@@ -19,30 +19,20 @@ class ExistingReservationSettlementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_previously_captured_card_does_not_settle_base_when_experimental_check_is_off(): void
+    public function test_previously_captured_card_settles_base_when_capture_amount_matches_pricing(): void
     {
         [$order] = $this->fixture();
-        config(['direct-booking.experimental_existing_card_amount_verification_enabled' => false]);
         $order->paymentAttempts()->first()->update(['payment_method' => 'card', 'installments' => 6,
             'amount' => '240.86', 'base_amount' => '197.50', 'processing_fee_amount' => '43.36', 'processing_fee_basis_points' => 1800]);
-        Http::preventStrayRequests();
-        Http::fake();
-        $this->assertSame('existing_card_fee_accounting_unverified', app(ExistingReservationSettlement::class)->settle($order)['code']);
-        $this->assertDatabaseCount('direct_booking_stays_actions', 0);
-        Http::assertNothingSent();
+        $this->assertSuccessfulPatchSettlement($order);
     }
 
-    public function test_experimental_card_amount_check_does_not_claim_fee_accounting_is_complete(): void
+    public function test_card_amount_check_is_applied_before_settlement(): void
     {
         [$order] = $this->fixture();
-        config(['direct-booking.experimental_existing_card_amount_verification_enabled' => true]);
         $order->paymentAttempts()->first()->update(['payment_method' => 'card', 'installments' => 6,
             'amount' => '240.86', 'base_amount' => '197.50', 'processing_fee_amount' => '43.36', 'processing_fee_basis_points' => 1800]);
-        Http::preventStrayRequests();
-        Http::fake();
-        $this->assertSame('existing_card_fee_accounting_unverified', app(ExistingReservationSettlement::class)->settle($order)['code']);
-        $this->assertDatabaseCount('direct_booking_stays_actions', 0);
-        Http::assertNothingSent();
+        $this->assertSuccessfulPatchSettlement($order);
     }
 
     public function test_experimental_card_amount_mismatch_prevents_stays_settlement(): void
@@ -56,6 +46,87 @@ class ExistingReservationSettlementTest extends TestCase
         $this->assertSame('existing_card_amount_mismatch', app(ExistingReservationSettlement::class)->settle($order)['code']);
         $this->assertDatabaseCount('direct_booking_stays_actions', 0);
         Http::assertNothingSent();
+    }
+
+    public function test_unrecorded_receivable_is_posted_as_completed_once_after_capture(): void
+    {
+        [$order, $reservation] = $this->fixture();
+        $snapshot = $order->quote_snapshot;
+        $snapshot['existing_reservation'] = array_replace($snapshot['existing_reservation'], [
+            'bootstrap_receivable' => true,
+            'receivable_creation_timing' => 'after_capture',
+            'payment_id' => null,
+            'reported_paid_cents' => 19750,
+            'reservation_type' => 'booked',
+            'partner_name' => 'api booking.com',
+        ]);
+        $order->update(['quote_snapshot' => $snapshot]);
+        $newPaymentId = str_repeat('b', 24);
+        $postedPayment = null;
+        $reservation['stats']['_f_totalPaid'] = 197.50;
+        Http::preventStrayRequests();
+        Http::fake(function (Request $request) use (&$reservation, &$postedPayment, $newPaymentId) {
+            if ($request->method() === 'POST' && str_ends_with($request->url(), '/payments')) {
+                $postedPayment = $request->data();
+                $reservation['stats']['_f_totalPaid'] = 395;
+
+                return Http::response(['_id' => $newPaymentId, ...$postedPayment]);
+            }
+            if (str_contains($request->url(), '/finance/accounting-transactions/')) {
+                return Http::response(['_id' => $newPaymentId, 'reserveId' => $reservation['_id'], 'type' => 'credit', 'paid' => true,
+                    'bankAccountId' => str_repeat('f', 24), '_mcval' => ['BRL' => 197.50], 'payment' => ['paymentDate' => '2026-11-10']]);
+            }
+            if (str_ends_with($request->url(), '/payments')) {
+                return Http::response($postedPayment === null ? [] : [$postedPayment + ['_id' => $newPaymentId, 'status' => 'completed']]);
+            }
+
+            return Http::response($reservation);
+        });
+
+        $result = app(ExistingReservationSettlement::class)->settle($order);
+        $this->assertTrue($result['ready'], $result['code']);
+        $this->assertSame('Cielo Site Externo', $postedPayment['name']);
+        $this->assertSame('completed', $postedPayment['status']);
+        $this->assertSame(197.5, (float) $postedPayment['_f_val']);
+        $this->assertSame(str_repeat('f', 24), $postedPayment['_idpaymentProvider']);
+        $this->assertSame($newPaymentId, $order->staysActions()->where('action_type', 'settle_existing_receivable')->value('external_id'));
+        $this->assertCount(1, Http::recorded(fn (Request $request) => $request->method() === 'POST'));
+        $this->assertCount(0, Http::recorded(fn (Request $request) => $request->method() === 'PATCH'));
+    }
+
+    public function test_uncertain_post_is_reconciled_read_only_and_never_submitted_twice(): void
+    {
+        [$order, $reservation] = $this->fixture();
+        $snapshot = $order->quote_snapshot;
+        $snapshot['existing_reservation'] = array_replace($snapshot['existing_reservation'], [
+            'bootstrap_receivable' => true,
+            'receivable_creation_timing' => 'after_capture',
+            'payment_id' => null,
+            'reservation_type' => 'booked',
+            'partner_name' => 'api booking.com',
+        ]);
+        $order->update(['quote_snapshot' => $snapshot]);
+        $postStarted = false;
+        Http::preventStrayRequests();
+        Http::fake(function (Request $request) use ($reservation, &$postStarted) {
+            if ($request->method() === 'POST' && str_ends_with($request->url(), '/payments')) {
+                $postStarted = true;
+
+                return Http::response([], 503);
+            }
+            if (str_ends_with($request->url(), '/payments')) {
+                return Http::response([]);
+            }
+
+            return Http::response($reservation);
+        });
+
+        $service = app(ExistingReservationSettlement::class);
+        $this->assertSame('existing_settlement_unconfirmed', $service->settle($order)['code']);
+        $this->assertSame('existing_settlement_unconfirmed', $service->settle($order)['code']);
+        $this->assertTrue($postStarted);
+        $this->assertCount(1, Http::recorded(fn (Request $request) => $request->method() === 'POST'));
+        $this->assertDatabaseHas('direct_booking_stays_actions', ['action_type' => 'settle_existing_receivable', 'status' => 'attention_required']);
     }
 
     public function test_approved_payment_settles_the_same_receivable_once_and_replays_safely(): void
@@ -650,6 +721,47 @@ class ExistingReservationSettlementTest extends TestCase
         return ['_id' => $payment['_id'], 'reserveId' => $reservation['_id'], 'bankAccountId' => str_repeat('f', 24),
             'type' => 'credit', 'paid' => $paid, '_mcval' => ['BRL' => 197.50],
             ...($paid ? ['payment' => ['paymentDate' => '2026-11-10']] : [])];
+    }
+
+    private function assertSuccessfulPatchSettlement(DirectBookingOrder $order): void
+    {
+        [, $reservation, $payment] = $this->fixtureForOrder($order);
+        $completed = false;
+        $description = null;
+        Http::preventStrayRequests();
+        Http::fake(function (Request $request) use (&$reservation, $payment, &$completed, &$description) {
+            if ($request->method() === 'PATCH' && str_contains($request->url(), '/payments/')) {
+                $completed = true;
+                $description = $request['desc'];
+                $reservation['stats']['_f_totalPaid'] = 395;
+
+                return Http::response([]);
+            }
+            if (str_contains($request->url(), '/finance/accounting-transactions/')) {
+                return Http::response($this->financial($reservation, $payment, $completed));
+            }
+            if (str_ends_with($request->url(), '/payments')) {
+                return Http::response([$completed ? array_replace($payment, ['status' => 'completed', 'paymentDate' => '2026-11-10', 'desc' => $description]) : $payment]);
+            }
+
+            return Http::response($reservation);
+        });
+        $this->assertTrue(app(ExistingReservationSettlement::class)->settle($order)['ready']);
+        Http::assertSent(fn (Request $request) => $request->method() === 'PATCH'
+            && ($request['name'] ?? null) === 'Cielo Site Externo'
+            && ! array_key_exists('_f_val', $request->data()));
+    }
+
+    private function fixtureForOrder(DirectBookingOrder $order): array
+    {
+        $reservation = ['_id' => $order->stays_reservation_id, '_idclient' => 'client', '_idlisting' => 'listing',
+            'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'type' => 'booked',
+            'partner' => ['name' => 'API booking.com'], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'stats' => ['_f_totalPaid' => 197.50]];
+        $paymentId = $order->quote_snapshot['existing_reservation']['payment_id'];
+        $payment = ['_idpaymentProvider' => str_repeat('f', 24), '_id' => $paymentId, 'type' => 'credit',
+            'status' => 'pending', '_f_val' => 197.50, 'name' => 'Pagamento da reserva'];
+
+        return [$order, $reservation, $payment];
     }
 
     private function fixture(): array

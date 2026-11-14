@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Plus, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
 import { apiFetch } from '../../services/apiFetch';
 import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
+import { isCpfDocument, isValidCpf } from '../../utils/cpf';
 
 type Person = { name: string; document: string };
 const inputClass =
@@ -11,18 +12,44 @@ const labelClass = 'block text-sm font-semibold text-neutral-800';
 export function GuestDetailsForm({
   reference,
   credentials,
+  buyer,
+  guestCapacity,
 }: {
   reference: string;
   credentials: CheckoutAccessCredentials;
+  buyer?: { name: string; email: string; phone: string; cpf: string | null } | null;
+  guestCapacity?: number | null;
 }) {
-  const [holder, setHolder] = useState({ name: '', document: '', phone: '' });
+  const [holder, setHolder] = useState({
+    name: buyer?.name ?? '',
+    email: buyer?.email ?? '',
+    document: buyer?.cpf ?? '',
+    phone: buyer?.phone ?? '',
+  });
   const [companions, setCompanions] = useState<Person[]>([]);
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const [documentError, setDocumentError] = useState('');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (state === 'sending') return;
+    if (isCpfDocument(holder.document) && !isValidCpf(holder.document)) {
+      setDocumentError('Confira o CPF: os dígitos verificadores não são válidos.');
+      return;
+    }
+    const invalidCompanionIndex = companions.findIndex(
+      (person) => isCpfDocument(person.document) && !isValidCpf(person.document),
+    );
+    if (invalidCompanionIndex !== -1) {
+      setMessage(
+        `Confira o CPF do acompanhante ${invalidCompanionIndex + 1}: os dígitos verificadores não são válidos.`,
+      );
+      setState('error');
+      return;
+    }
+    setDocumentError('');
+    setMessage('');
     setState('sending');
     try {
       const authenticated = credentials.type === 'authenticated';
@@ -38,7 +65,15 @@ export function GuestDetailsForm({
             ? { Authorization: `Bearer ${credentials.accessToken}` }
             : { 'X-Checkout-Resume-Token': credentials.resumeToken }),
         },
-        body: JSON.stringify({ holder, companions }),
+        body: JSON.stringify({
+          holder: {
+            name: holder.name,
+            document: holder.document,
+            phone: holder.phone,
+            ...(holder.email.trim() ? { email: holder.email.trim() } : {}),
+          },
+          companions,
+        }),
       });
       const result: unknown = await response.json();
       if (
@@ -97,16 +132,44 @@ export function GuestDetailsForm({
               onChange={(event) => setHolder({ ...holder, name: event.target.value })}
             />
           </label>
+          <label className={labelClass}>
+            E-mail
+            <input
+              className={inputClass}
+              type="email"
+              maxLength={254}
+              autoComplete="email"
+              value={holder.email}
+              onChange={(event) => setHolder({ ...holder, email: event.target.value })}
+            />
+          </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className={labelClass}>
-              CPF ou documento
+              CPF ou outro documento
               <input
                 className={inputClass}
                 required
                 maxLength={30}
+                aria-invalid={documentError !== ''}
+                aria-describedby={documentError ? 'holder-document-error' : undefined}
                 value={holder.document}
-                onChange={(event) => setHolder({ ...holder, document: event.target.value })}
+                onChange={(event) => {
+                  setHolder({ ...holder, document: event.target.value });
+                  setDocumentError('');
+                }}
               />
+              <span className="mt-1 block text-xs font-normal text-neutral-500">
+                Se informar CPF, verificaremos se ele é válido.
+              </span>
+              {documentError && (
+                <span
+                  id="holder-document-error"
+                  className="mt-1 block text-sm text-red-700"
+                  role="alert"
+                >
+                  {documentError}
+                </span>
+              )}
             </label>
             <label className={labelClass}>
               Telefone
@@ -175,14 +238,26 @@ export function GuestDetailsForm({
               </label>
             </fieldset>
           ))}
-          <button
-            type="button"
-            onClick={() => setCompanions((items) => [...items, { name: '', document: '' }])}
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-orange-200 px-4 text-sm font-bold text-orange-800"
-          >
-            <Plus size={17} />
-            Adicionar acompanhante
-          </button>
+          {(guestCapacity === null ||
+            guestCapacity === undefined ||
+            companions.length + 1 < guestCapacity) && (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  guestCapacity === null ||
+                  guestCapacity === undefined ||
+                  companions.length + 1 < guestCapacity
+                ) {
+                  setCompanions((items) => [...items, { name: '', document: '' }]);
+                }
+              }}
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-orange-200 px-4 text-sm font-bold text-orange-800"
+            >
+              <Plus size={17} />
+              Adicionar acompanhante
+            </button>
+          )}
         </fieldset>
         <button
           type="submit"

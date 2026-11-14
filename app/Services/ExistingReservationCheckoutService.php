@@ -18,6 +18,7 @@ class ExistingReservationCheckoutService
         private readonly ExistingReservationPaymentChannels $channels,
         private readonly DirectCheckoutPaymentService $payments,
         private readonly CieloEcommerceClient $cielo,
+        private readonly ApartmentGuestCapacity $guestCapacity,
     ) {}
 
     /** @param array<string, mixed> $input
@@ -25,9 +26,6 @@ class ExistingReservationCheckoutService
      */
     public function create(string $code, array $input): array
     {
-        if (($input['paymentMethod'] ?? null) === 'card') {
-            return $this->result(null, 'existing_card_fee_accounting_unverified', 503);
-        }
         if (config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true
             && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
             return $this->result(null, 'existing_balance_unverified', 409);
@@ -108,6 +106,7 @@ class ExistingReservationCheckoutService
             return $this->result(null, 'existing_reservation_unverified', 409);
         }
         $snapshot['reservation_code'] = $code;
+        $snapshot['apartment_max_guests'] = $this->guestCapacity->forListingId($snapshot['_idlisting']);
         $snapshot['guests'] = $reservation['guests'] ?? null;
         $reportedPaid = $this->balance->reportedPaid($reservation);
         if ($reportedPaid === null) {
@@ -127,13 +126,15 @@ class ExistingReservationCheckoutService
         $installments = $method === 'card' ? (int) $input['installments'] : null;
         $snapshot['selected_payment_method'] = $method;
         $snapshot['selected_installments'] = $installments;
-        $provider = $this->channels->verifiedProvider($snapshot['channel_provider_ids'], $method, $installments);
         $pending = array_values(array_filter($payments, fn (mixed $payment): bool => is_array($payment) && ($payment['_id'] ?? null) === $candidate['payment_id']));
+        $provider = $this->channels->verifiedProvider($snapshot['channel_provider_ids'], $method, $installments);
         if (! in_array($method, $this->channels->availableMethods($this->payments->availableMethods()), true)
-            || $provider === null || (! $bootstrap && (count($pending) !== 1 || ($pending[0]['_idpaymentProvider'] ?? null) !== $provider))) {
+            || $provider === null || (! $bootstrap && (count($pending) !== 1
+                || ($pending[0]['_idpaymentProvider'] ?? null) !== $provider))) {
             return $this->result(null, 'existing_payment_channel_unavailable', 503);
         }
-        $snapshot['pending_provider_id'] = $bootstrap ? null : $provider;
+        $snapshot['pending_provider_id'] = $provider;
+        $snapshot['receivable_creation_timing'] = $bootstrap ? 'after_capture' : 'existing_pending';
         if (! $this->ledgerAllows($snapshot)) {
             return $this->result(null, 'existing_balance_unverified', 409);
         }
@@ -175,7 +176,10 @@ class ExistingReservationCheckoutService
                     'check_in' => $snapshot['checkInDate'], 'check_out' => $snapshot['checkOutDate'], 'guests' => $guests,
                     'guest_name' => trim($input['guest']['fullName']), 'guest_email' => mb_strtolower(trim($input['guest']['email'])), 'guest_phone' => trim($input['guest']['phone']),
                     'quote_total' => sprintf('%d.%02d', intdiv($candidate['candidate_cents'], 100), $candidate['candidate_cents'] % 100), 'currency' => 'BRL',
-                    'quote_snapshot' => ['existing_reservation' => $snapshot], 'accepted_terms_version' => 'existing-booking-payment-v1',
+                    'quote_snapshot' => [
+                        'existing_reservation' => $snapshot,
+                        'apartment_max_guests' => $snapshot['apartment_max_guests'],
+                    ], 'accepted_terms_version' => 'existing-booking-payment-v1',
                     'accepted_terms_snapshot' => ['version' => 'existing-booking-payment-v1', 'payment' => 'Pagamento do saldo exibido da reserva existente.'],
                     'terms_accepted_at' => now(), 'origin' => 'stays_existing', 'expires_at' => now()->addHours(3),
                     'gateway_provider' => (string) config('direct-booking.payment_provider'), 'gateway_merchant_id' => $merchantId,
@@ -189,7 +193,7 @@ class ExistingReservationCheckoutService
         }
 
         return $created['order'] instanceof DirectBookingOrder
-            ? $this->completeUnrecordedReceivable($created['order'], $input, $created['status'])
+            ? $this->result($created['order'], 'existing_checkout_ready', $created['status'])
             : $created;
     }
 
@@ -202,6 +206,9 @@ class ExistingReservationCheckoutService
         $quote = is_array($order->quote_snapshot) ? $order->quote_snapshot : [];
         $snapshot = $quote['existing_reservation'] ?? null;
         if (! is_array($snapshot) || ($snapshot['bootstrap_receivable'] ?? false) !== true) {
+            return $this->result($order, 'existing_checkout_ready', $successStatus);
+        }
+        if (($snapshot['receivable_creation_timing'] ?? null) === 'after_capture') {
             return $this->result($order, 'existing_checkout_ready', $successStatus);
         }
         if (! $this->ledgerAllows($snapshot)) {

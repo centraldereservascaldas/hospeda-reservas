@@ -194,6 +194,8 @@ const CHECKOUT_READINESS_CACHE_MS = 15_000;
 export interface CheckoutResumeResponse {
   success: true;
   order: DirectBookingOrderSummary;
+  buyer?: { name: string; email: string; phone: string; cpf: string | null } | null;
+  guestCapacity?: number | null;
   confirmation: { reservationCode: string | null; confirmedAt: string | null } | null;
   payment: CheckoutPaymentCapabilities & {
     attempt?: CheckoutPaymentAttemptSummary | null;
@@ -376,6 +378,19 @@ const isCheckoutResumeResponse = (value: unknown): value is CheckoutResumeRespon
   isRecord(value) &&
   value.success === true &&
   isDirectBookingOrder(value.order) &&
+  (value.buyer === undefined ||
+    value.buyer === null ||
+    (isRecord(value.buyer) &&
+      typeof value.buyer.name === 'string' &&
+      typeof value.buyer.email === 'string' &&
+      typeof value.buyer.phone === 'string' &&
+      (value.buyer.cpf === null || typeof value.buyer.cpf === 'string'))) &&
+  (value.guestCapacity === undefined ||
+    value.guestCapacity === null ||
+    (typeof value.guestCapacity === 'number' &&
+      Number.isInteger(value.guestCapacity) &&
+      value.guestCapacity >= 1 &&
+      value.guestCapacity <= 50)) &&
   (value.order.status === 'confirmado'
     ? value.confirmation !== null
     : value.confirmation === null) &&

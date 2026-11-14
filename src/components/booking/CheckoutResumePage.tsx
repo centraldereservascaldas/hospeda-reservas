@@ -9,7 +9,10 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { checkoutApi } from '../../services/checkoutApi';
-import { navigateToPaymentConfirmation, navigateToPaymentRejection } from '../../utils/paymentConfirmation';
+import {
+  navigateToPaymentConfirmation,
+  navigateToPaymentRejection,
+} from '../../utils/paymentConfirmation';
 import { emitConfirmedPurchase, emitFunnelEvent } from '../../utils/measurementEvents';
 import type {
   CheckoutAccessCredentials,
@@ -25,6 +28,7 @@ import {
 } from './PixPayerIdentificationField';
 import { CieloCheckoutIframe } from './CieloCheckoutIframe';
 import { GuestDetailsForm } from './GuestDetailsForm';
+import { CheckoutFooter } from './CheckoutFooter';
 import {
   clearCheckoutResumeToken,
   getCheckoutResumeToken,
@@ -239,10 +243,32 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
   }
 
   if (order.origin === 'stays_existing') {
-    if (order.status === 'pre_reservado') return { title: 'Pagamento disponível', detail: 'Confira o saldo da sua reserva antes de pagar.', tone: 'neutral' as const };
-    if (order.status === 'pagamento_pendente') return { title: 'Pagamento pendente', detail: 'Aguardamos a confirmação do pagamento desta reserva.', tone: 'neutral' as const };
-    if (order.status === 'pagamento_recusado') return { title: 'Pagamento não aprovado', detail: 'O pagamento não foi aprovado. A reserva existente não foi cancelada por esta tentativa.', tone: 'attention' as const };
-    if (order.status === 'expirado') return { title: 'Prazo do pagamento encerrado', detail: 'O prazo deste pagamento terminou. A reserva existente não foi cancelada pelo checkout; fale com a Central.', tone: 'attention' as const };
+    if (order.status === 'pre_reservado')
+      return {
+        title: 'Pagamento disponível',
+        detail: 'Confira o saldo da sua reserva antes de pagar.',
+        tone: 'neutral' as const,
+      };
+    if (order.status === 'pagamento_pendente')
+      return {
+        title: 'Pagamento pendente',
+        detail: 'Aguardamos a confirmação do pagamento desta reserva.',
+        tone: 'neutral' as const,
+      };
+    if (order.status === 'pagamento_recusado')
+      return {
+        title: 'Pagamento não aprovado',
+        detail:
+          'O pagamento não foi aprovado. A reserva existente não foi cancelada por esta tentativa.',
+        tone: 'attention' as const,
+      };
+    if (order.status === 'expirado')
+      return {
+        title: 'Prazo do pagamento encerrado',
+        detail:
+          'O prazo deste pagamento terminou. A reserva existente não foi cancelada pelo checkout; fale com a Central.',
+        tone: 'attention' as const,
+      };
   }
 
   return statusDetails[order.status];
@@ -430,7 +456,9 @@ export function CheckoutResumePage({
         listingId: order?.listingId,
         from: order?.from,
         to: order?.to,
-        paymentMethod: paymentAttempt?.method ?? (order?.origin === 'stays_existing' ? undefined : selectedPaymentMethod),
+        paymentMethod:
+          paymentAttempt?.method ??
+          (order?.origin === 'stays_existing' ? undefined : selectedPaymentMethod),
         baseTotal: order ? Number(order.quoteTotal) : undefined,
         total: paymentAttempt ? Number(paymentAttempt.amount) : undefined,
       }}
@@ -494,7 +522,7 @@ export function CheckoutResumePage({
 
   return (
     <main
-      className="min-h-[100dvh] bg-[#f7f4ee] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-8 pb-8 text-neutral-950 print:min-h-0 print:bg-white print:px-0 print:py-0 print:!pt-0 print:!pb-0 sm:pl-[max(2rem,env(safe-area-inset-left,0px))] sm:pr-[max(2rem,env(safe-area-inset-right,0px))] sm:pt-12 sm:pb-12 [@media(max-height:400px)]:pt-3 [@media(max-height:400px)]:pb-3"
+      className="flex min-h-[100dvh] flex-col bg-[#f7f4ee] pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] pt-8 pb-8 text-neutral-950 print:min-h-0 print:bg-white print:px-0 print:py-0 print:!pt-0 print:!pb-0 sm:pl-[max(2rem,env(safe-area-inset-left,0px))] sm:pr-[max(2rem,env(safe-area-inset-right,0px))] sm:pt-12 sm:pb-12 [@media(max-height:400px)]:pt-3 [@media(max-height:400px)]:pb-3"
       style={{
         paddingTop:
           'max(0.75rem, min(2rem, calc((100dvh - 25rem) / 2)), env(safe-area-inset-top, 0px))',
@@ -502,7 +530,7 @@ export function CheckoutResumePage({
           'max(0.75rem, min(2rem, calc((100dvh - 25rem) / 2)), env(safe-area-inset-bottom, 0px))',
       }}
     >
-      <div className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-5xl flex-col print:min-h-0 print:py-5 [@media(max-height:400px)]:min-h-0">
+      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col print:py-5">
         <header className="flex items-center justify-between border-b border-neutral-300/80 pb-5 [@media(max-height:400px)]:pb-3 max-[360px]:pb-3">
           <a
             href="/"
@@ -543,11 +571,21 @@ export function CheckoutResumePage({
             <div className="min-w-0 self-start print:hidden">
               {previewGuestForm ??
                 (resumeState.kind === 'ready' && (
-                  <GuestDetailsForm reference={reference} credentials={resumeState.credentials} />
+                  <GuestDetailsForm
+                    reference={reference}
+                    credentials={resumeState.credentials}
+                    buyer={resumeState.data.buyer}
+                    guestCapacity={resumeState.data.guestCapacity}
+                  />
                 ))}
             </div>
           )}
-          <section ref={resumeSectionRef} tabIndex={focusOnMount ? -1 : undefined} aria-labelledby="checkout-resume-title" className="min-w-0 max-w-xl">
+          <section
+            ref={resumeSectionRef}
+            tabIndex={focusOnMount ? -1 : undefined}
+            aria-labelledby="checkout-resume-title"
+            className="min-w-0 max-w-xl"
+          >
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-800">
               Acompanhe seu pedido
             </p>
@@ -649,12 +687,22 @@ export function CheckoutResumePage({
                       </p>
                     </div>
                   </div>
-                  {order.origin === 'stays_existing' && (order.status === 'pre_reservado' || order.status === 'pagamento_recusado') && (paymentAttempt === null || paymentAttempt.status === 'rejected' || paymentAttempt.status === 'cancelled') && (
-                    <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950" role="status">
-                      <p>Para continuar com esta reserva, fale com nosso atendimento antes de iniciar outra tentativa.</p>
-                      {supportLink}
-                    </div>
-                  )}
+                  {order.origin === 'stays_existing' &&
+                    (order.status === 'pre_reservado' || order.status === 'pagamento_recusado') &&
+                    (paymentAttempt === null ||
+                      paymentAttempt.status === 'rejected' ||
+                      paymentAttempt.status === 'cancelled') && (
+                      <div
+                        className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+                        role="status"
+                      >
+                        <p>
+                          Para continuar com esta reserva, fale com nosso atendimento antes de
+                          iniciar outra tentativa.
+                        </p>
+                        {supportLink}
+                      </div>
+                    )}
                   {order.status === 'atencao_operacional' && paymentAttempt === null && (
                     <p
                       className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950"
@@ -704,7 +752,9 @@ export function CheckoutResumePage({
                     {order.expiresAt && !resumeState.data.confirmation && (
                       <div className="rounded-2xl bg-[#f7f4ee] p-4">
                         <dt className="text-xs font-bold uppercase tracking-wider text-neutral-500">
-                          {order.origin === 'stays_existing' ? 'Prazo deste pagamento' : 'Prazo da pré-reserva'}
+                          {order.origin === 'stays_existing'
+                            ? 'Prazo deste pagamento'
+                            : 'Prazo da pré-reserva'}
                         </dt>
                         <dd className="mt-1 font-bold">
                           {dateTimeFormatter.format(new Date(order.expiresAt))} (horário local)
@@ -865,7 +915,9 @@ export function CheckoutResumePage({
                               <h2 id="checkout-start-payment-title" className="font-extrabold">
                                 {paymentAttempt
                                   ? 'Nova tentativa Pix disponível'
-                                  : order.origin === 'stays_existing' ? 'Reserva pronta para pagamento' : 'Pré-reserva pronta para pagamento'}
+                                  : order.origin === 'stays_existing'
+                                    ? 'Reserva pronta para pagamento'
+                                    : 'Pré-reserva pronta para pagamento'}
                               </h2>
                               <p className="mt-1 text-sm leading-6 text-neutral-700">
                                 {paymentAttempt
@@ -1056,6 +1108,7 @@ export function CheckoutResumePage({
             )}
         </div>
       </div>
+      <CheckoutFooter />
     </main>
   );
 }

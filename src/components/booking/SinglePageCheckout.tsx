@@ -1,9 +1,14 @@
-import { navigateToPaymentConfirmation, navigateToPaymentRejection } from '../../utils/paymentConfirmation';
+import {
+  navigateToPaymentConfirmation,
+  navigateToPaymentRejection,
+} from '../../utils/paymentConfirmation';
 import { checkoutUrlWithStay } from '../../utils/checkoutUrl';
+import { isValidCpf } from '../../utils/cpf';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, QrCode, ShieldCheck } from 'lucide-react';
 import { LogoCRCN } from '../LogoCRCN';
 import { CheckoutSupportLink } from './CheckoutSupportLink';
+import { CheckoutFooter } from './CheckoutFooter';
 import {
   PixPayerIdentificationField,
   getPixPayerIdentification,
@@ -263,12 +268,16 @@ export function SinglePageCheckout({
       };
       preparedRef.current = context;
       setPrepared(true);
-      window.history.replaceState(null, '', checkoutUrlWithStay(response.resume.path, {
-        listingId: property.id,
-        from: checkIn,
-        to: checkOut,
-        guests,
-      }));
+      window.history.replaceState(
+        null,
+        '',
+        checkoutUrlWithStay(response.resume.path, {
+          listingId: property.id,
+          from: checkIn,
+          to: checkOut,
+          guests,
+        }),
+      );
       await clearCheckoutSubmissionKey(submission);
       if (
         !response.success ||
@@ -367,7 +376,7 @@ export function SinglePageCheckout({
     (!result || result.order.status === 'pagamento_pendente');
 
   return (
-    <main className="checkout-purchase min-h-screen pb-24 text-neutral-950">
+    <main className="checkout-purchase flex min-h-screen flex-col text-neutral-950">
       <header className="checkout-purchase-header liquid-glass px-5 py-4 sm:px-10">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <a
@@ -384,7 +393,7 @@ export function SinglePageCheckout({
           </span>
         </div>
       </header>
-      <div className="mx-auto max-w-6xl px-5 pt-8 sm:px-10 sm:pt-10">
+      <div className="mx-auto w-full max-w-6xl flex-1 px-5 pt-8 sm:px-10 sm:pt-10">
         <div className="mb-7 flex items-center gap-4 sm:mb-9">
           {!prepared && (
             <button
@@ -631,10 +640,30 @@ export function SinglePageCheckout({
                     </label>
                     <label className="text-sm font-medium sm:col-span-2">
                       CPF do responsável pela reserva
-                      <input required name="guestCpf" inputMode="numeric" autoComplete="off" pattern="[0-9]{11}" maxLength={11} value={guestCpf}
-                        onChange={(event) => setGuestCpf(event.target.value.replace(/\D/g, '').slice(0, 11))}
-                        title="Informe os 11 dígitos do CPF do responsável pela reserva." className={fieldClass} />
-                      <span className="mt-1 block text-xs text-neutral-500">Pode ser diferente do CPF de quem faz o pagamento.</span>
+                      <input
+                        required
+                        name="guestCpf"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        pattern="[0-9]{11}"
+                        maxLength={11}
+                        value={guestCpf}
+                        onChange={(event) => {
+                          const cpf = event.target.value.replace(/\D/g, '').slice(0, 11);
+                          setGuestCpf(cpf);
+                          event.currentTarget.setCustomValidity(
+                            cpf.length === 11 && !isValidCpf(cpf)
+                              ? 'Informe um CPF válido, com os dígitos verificadores corretos.'
+                              : '',
+                          );
+                        }}
+                        title="Informe os 11 dígitos do CPF do responsável pela reserva."
+                        className={fieldClass}
+                      />
+                      <span className="mt-1 block text-xs text-neutral-500">
+                        Validamos os dígitos do CPF. Pode ser diferente do CPF de quem faz o
+                        pagamento.
+                      </span>
                     </label>
                   </div>
                 </fieldset>
@@ -862,6 +891,7 @@ export function SinglePageCheckout({
           </aside>
         </div>
       </div>
+      <CheckoutFooter />
     </main>
   );
 }

@@ -126,9 +126,11 @@ class ExistingReservationCheckoutController extends Controller
         if ($order !== null) {
             $methods = app(ExistingReservationPaymentChannels::class)->availableMethods($gateway->availableMethods($order));
             $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
-            if (is_array($snapshot) && ($snapshot['bootstrap_receivable'] ?? false) === true) {
+            if (is_array($snapshot)) {
                 $selected = $snapshot['selected_payment_method'] ?? null;
-                $methods = array_values(array_filter($methods, fn (mixed $method): bool => is_string($selected) && $method === $selected));
+                if (is_string($selected)) {
+                    $methods = array_values(array_filter($methods, fn (mixed $method): bool => $method === $selected));
+                }
             }
             $response['order'] = (new DirectBookingOrderResource($order))->resolve($request);
             $response['resume'] = ['reference' => $order->public_reference, 'token' => $order->resume_token, 'path' => '/checkout/'.$order->public_reference, 'expiresAt' => $order->resume_token_expires_at?->toISOString()];

@@ -70,9 +70,9 @@ test('checkout identifies Pix accessibly and does not imply unavailable card ins
 
 test('accessible reservation details and card pricing follow the chosen installments before payment', async () => {
   const originalFetch = globalThis.fetch;
-  const methods: string[] = [];
-  globalThis.fetch = async (_input, init) => {
-    methods.push(init?.method ?? 'GET');
+  const requests: Array<{ url: string; method: string }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), method: init?.method ?? 'GET' });
     return new Response(JSON.stringify({ success: true, reservation: {
       code: 'ZX91K', listingId: 'LISTING', property: 'Apartamento Exemplo', image: null,
       checkIn: '2030-11-19', checkOut: '2030-11-22', guests: 4, adults: 4, children: 0, infants: 0,
@@ -99,7 +99,11 @@ test('accessible reservation details and card pricing follow the chosen installm
     assert.equal(pay.disabled, true);
     fireEvent.click(view.getByRole('checkbox', { name: /Confirmo o pagamento/ }));
     assert.equal(pay.disabled, false);
-    assert.deepEqual(methods, ['GET']);
+    assert.equal(requests.filter(({ url }) => url.includes('/checkout-summary')).length, 1);
+    assert.ok(requests.every(({ method }) => method === 'GET'));
+    const summary = view.getByRole('complementary', { name: 'Resumo da reserva' }).textContent ?? '';
+    assert.match(summary, /6x de até R\$\s*202,24/);
+    assert.match(summary, /1\.213,42/);
   } finally {
     cleanup();
     globalThis.fetch = originalFetch;
@@ -217,8 +221,12 @@ test('experimental unrecorded balance shows selected card price and submits only
 
 test('reservation lookup failure provides retry and a support link without a fictional payment method', async () => {
   const originalFetch = globalThis.fetch;
-  let calls = 0;
-  globalThis.fetch = async () => { calls++; return new Response('{}', { status: 503 }); };
+  const summaryRequests: string[] = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes('/checkout-summary')) summaryRequests.push(url);
+    return new Response('{}', { status: 503 });
+  };
   try {
     const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
     await waitFor(() => assert.ok(view.getByRole('alert')));
@@ -226,8 +234,9 @@ test('reservation lookup failure provides retry and a support link without a fic
     const message = new URL(support.href).searchParams.get('text')!;
     assert.ok(message.includes('ZX91K'));
     assert.equal(message.includes('Como quero pagar'), false);
+    await waitFor(() => assert.equal(summaryRequests.length, 1));
     fireEvent.click(view.getByRole('button', { name: 'Tentar novamente' }));
-    await waitFor(() => assert.equal(calls, 2));
+    await waitFor(() => assert.equal(summaryRequests.length, 2));
   } finally {
     cleanup();
     globalThis.fetch = originalFetch;

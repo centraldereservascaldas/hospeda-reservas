@@ -7,6 +7,7 @@ import { saveCheckoutResumeToken } from '../../utils/checkoutResumeStorage';
 import { formatBrazilianPhone } from '../../utils/checkoutInputFormatting';
 import {
   CieloSopCardForm,
+  formatCieloCardPayment,
   type CieloCardPricing,
   type CieloPaymentContext,
 } from './CieloSopCardForm';
@@ -16,6 +17,7 @@ import {
   getPixPayerIdentification,
 } from './PixPayerIdentificationField';
 import { CheckoutSupportLink } from './CheckoutSupportLink';
+import { CheckoutFooter } from './CheckoutFooter';
 import { LogoCRCN } from '../LogoCRCN';
 import { ArrowLeft, LockKeyhole, QrCode } from 'lucide-react';
 import {
@@ -302,7 +304,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
   if (activeReference) return <CheckoutResumePage reference={activeReference} focusOnMount />;
 
   return (
-    <main className="checkout-purchase min-h-screen pb-24 text-neutral-950">
+    <main className="checkout-purchase flex min-h-screen flex-col text-neutral-950">
       <header className="checkout-purchase-header liquid-glass px-5 py-4 sm:px-10">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <a
@@ -318,7 +320,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
           </span>
         </div>
       </header>
-      <div className="mx-auto max-w-6xl px-5 pt-7 sm:px-8 sm:pt-10">
+      <div className="mx-auto w-full max-w-6xl flex-1 px-5 pt-7 sm:px-8 sm:pt-10">
         <div className="mb-6">
           <a
             href="/minha-conta/reservas"
@@ -661,20 +663,41 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
                   )}
                 </dl>
               </div>
-              <div className="mt-5 flex justify-between gap-3 border-t border-neutral-200 pt-4 font-bold">
-                <span>
-                  {summary.paymentEnabled
-                    ? 'Pague agora'
-                    : summary.balanceStatus === 'unrecorded_candidate'
-                      ? 'Em aberto'
-                      : 'Valor em conferência'}
-                </span>
-                <span>
-                  {summary.candidateBalanceCents === null
-                    ? '—'
-                    : money(summary.candidateBalanceCents)}
-                </span>
-              </div>
+              {summary.paymentEnabled && method === 'card' && cardPricing ? (
+                <div className="mt-5 space-y-2 border-t border-neutral-200 pt-4" aria-live="polite">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-sm font-semibold text-neutral-800">Você pagará</span>
+                    <strong className="text-xl font-extrabold text-orange-800">
+                      {formatCieloCardPayment(cardPricing)}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm text-neutral-600">
+                    <span>Total final no cartão</span>
+                    <span className="font-semibold text-neutral-900">
+                      {money(cardPricing.totalCents)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-xs text-neutral-600">
+                    <span>Acréscimo do cartão</span>
+                    <span>{money(cardPricing.feeCents)}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-5 flex justify-between gap-3 border-t border-neutral-200 pt-4 font-bold">
+                  <span>
+                    {summary.paymentEnabled
+                      ? 'Pague agora'
+                      : summary.balanceStatus === 'unrecorded_candidate'
+                        ? 'Em aberto'
+                        : 'Valor em conferência'}
+                  </span>
+                  <span>
+                    {summary.candidateBalanceCents === null
+                      ? '—'
+                      : money(summary.candidateBalanceCents)}
+                  </span>
+                </div>
+              )}
               <p className="mt-4 rounded-xl bg-white/55 p-3 text-xs leading-5 text-neutral-600">
                 Confira os dados. A cobrança só será iniciada quando o pagamento estiver liberado.
               </p>
@@ -682,6 +705,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
           </div>
         )}
       </div>
+      <CheckoutFooter />
     </main>
   );
 }

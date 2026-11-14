@@ -22,12 +22,22 @@ class ExistingReservationPaymentGuard
 
         $expectedAmount = $snapshot['pending_amount_cents'] ?? null;
         $expectedPaymentId = $snapshot['payment_id'] ?? null;
-        if (! is_int($expectedAmount) || $expectedAmount <= 0
-            || ! is_string($expectedPaymentId) || $expectedPaymentId === '') {
+        if (! is_int($expectedAmount) || $expectedAmount <= 0) {
             return false;
         }
 
         $candidate = $this->balance->inspect($reservation, $payments);
+        if (($snapshot['receivable_creation_timing'] ?? null) === 'after_capture') {
+            return ($snapshot['bootstrap_receivable'] ?? false) === true
+                && $expectedPaymentId === null
+                && ($snapshot['pending_provider_id'] ?? null) === ($snapshot['channel_provider_ids']['pix'] ?? null)
+                && $candidate['status'] === 'unrecorded_candidate'
+                && $candidate['candidate_cents'] === $expectedAmount
+                && $candidate['payment_id'] === null;
+        }
+        if (! is_string($expectedPaymentId) || $expectedPaymentId === '') {
+            return false;
+        }
         $matches = array_values(array_filter($payments, fn (mixed $payment): bool => is_array($payment) && ($payment['_id'] ?? null) === $expectedPaymentId));
         $expectedProvider = $snapshot['pending_provider_id'] ?? null;
 
