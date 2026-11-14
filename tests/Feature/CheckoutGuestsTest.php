@@ -7,12 +7,19 @@ use App\Models\DirectBookingOrder;
 use App\Services\DirectStaysReservationMatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class CheckoutGuestsTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->travelTo(Carbon::parse('2026-11-03 12:00:00'));
+    }
 
     public function test_authenticated_order_saves_guests_in_matching_reservation_and_preserves_note(): void
     {
@@ -101,7 +108,7 @@ class CheckoutGuestsTest extends TestCase
             'listing_id' => 'JQ08G', 'stays_listing_id' => 'JQ08G', 'stays_client_id' => 'client-1', 'stays_reservation_id' => 'reservation-1',
             'reservation_status' => 'booked', 'payment_status' => 'approved', 'check_in' => '2026-11-10', 'check_out' => '2026-11-13',
             'guests' => ['adults' => 2, 'children' => 0, 'infants' => 0], 'guest_name' => 'Pessoa Exemplo', 'guest_email' => 'guest@example.test',
-            'guest_phone' => '11999999999', 'quote_total' => '100.00', 'currency' => 'BRL', 'quote_snapshot' => [], 'accepted_terms_version' => 'terms',
+            'guest_phone' => '11999999999', 'quote_total' => '100.00', 'currency' => 'BRL', 'quote_snapshot' => ['apartment_max_guests' => 2], 'accepted_terms_version' => 'terms',
             'accepted_terms_snapshot' => ['version' => 'terms'], 'terms_accepted_at' => now(), 'operational_events' => [],
         ]);
     }

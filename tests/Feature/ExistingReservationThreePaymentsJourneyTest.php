@@ -51,6 +51,9 @@ class ExistingReservationThreePaymentsJourneyTest extends TestCase
                 if (str_contains($request->url(), '/finance/payment-providers/')) {
                     return Http::response(['_id' => $provider, 'status' => 'active', 'internalName' => 'Cielo Site Externo']);
                 }
+                if (str_contains($request->url(), '/content/listings/')) {
+                    return Http::response(['_id' => str_repeat('e', 24), '_mstitle' => ['pt_BR' => 'Apartamento de teste']]);
+                }
                 if (str_ends_with(parse_url($request->url(), PHP_URL_PATH), '/finance/accounting-transactions')) {
                     $rows = [];
                     foreach ([...array_values($completed), ...($current ? [$current] : [])] as $item) {

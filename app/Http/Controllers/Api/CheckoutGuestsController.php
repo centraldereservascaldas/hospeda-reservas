@@ -57,6 +57,16 @@ class CheckoutGuestsController extends Controller
                 return [409, 'A reserva ainda está em confirmação. Tente novamente em instantes.'];
             }
             $path = '/booking/reservations/'.rawurlencode($order->stays_reservation_id);
+            $quoteSnapshot = is_array($order->quote_snapshot) ? $order->quote_snapshot : [];
+            $apartmentCapacity = filter_var(
+                $quoteSnapshot['apartment_max_guests'] ?? null,
+                FILTER_VALIDATE_INT,
+                ['options' => ['min_range' => 1, 'max_range' => 50]],
+            );
+            if ($apartmentCapacity !== false && $apartmentCapacity !== null
+                && count($data['companions']) + 1 > $apartmentCapacity) {
+                return [422, 'A quantidade informada não pode ser enviada. Revise os hóspedes e tente novamente.'];
+            }
             $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
             $matches = fn (array $reservation): bool => $order->origin === 'stays_existing'
                 ? is_array($snapshot) && $existingGuard->matchesReservation($reservation, $snapshot)
@@ -65,12 +75,6 @@ class CheckoutGuestsController extends Controller
             if (! is_array($reservation) || ! $matches($reservation) || ($reservation['type'] ?? null) !== 'booked') {
                 return [503, 'Não foi possível confirmar a reserva. Tente novamente.'];
             }
-            $quoteSnapshot = is_array($order->quote_snapshot) ? $order->quote_snapshot : [];
-            $apartmentCapacity = filter_var(
-                $quoteSnapshot['apartment_max_guests'] ?? null,
-                FILTER_VALIDATE_INT,
-                ['options' => ['min_range' => 1, 'max_range' => 50]],
-            );
             if ($apartmentCapacity === false || $apartmentCapacity === null) {
                 $apartmentCapacity = $guestCapacity->forListingId($order->stays_listing_id);
             }

@@ -3,11 +3,18 @@
 namespace Tests\Feature;
 
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class StaysHostedCheckoutTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->travelTo(Carbon::parse('2026-11-03 12:00:00'));
+    }
+
     /** @return array<string, mixed> */
     private function payload(): array
     {
