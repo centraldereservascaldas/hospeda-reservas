@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { afterEach } from 'node:test';
+import test, { afterEach, beforeEach, mock } from 'node:test';
 import { JSDOM } from 'jsdom';
 import type { ComponentProps } from 'react';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
@@ -816,7 +816,12 @@ test('checkout does not show internal approval identifiers to guests', async () 
   }
 });
 
+beforeEach(() => {
+  mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 3, 12) });
+});
+
 afterEach(() => {
+  mock.timers.reset();
   cleanup();
   document.body.innerHTML = '';
 });

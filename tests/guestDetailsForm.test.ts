@@ -37,7 +37,9 @@ test('guest form sends to the reservation with its credential and shows success 
       }),
     );
     fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Pessoa Teste' } });
-    fireEvent.change(view.getByLabelText('CPF ou documento'), { target: { value: '12345678909' } });
+    fireEvent.change(view.getByLabelText(/CPF ou outro documento/), {
+      target: { value: '12345678909' },
+    });
     fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '11999999999' } });
     fireEvent.click(view.getByRole('button', { name: 'Enviar dados dos hóspedes' }));
     await waitFor(() => assert.ok(view.getByText('Dados registrados na reserva.')));
