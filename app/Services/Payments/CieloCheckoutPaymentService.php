@@ -104,9 +104,6 @@ class CieloCheckoutPaymentService
 
         $input = $request->validated();
         $paymentMethod = $input['paymentMethod'];
-        if ($order->origin === 'stays_existing' && $paymentMethod === 'card') {
-            return $this->result(null, 'existing_card_fee_accounting_unverified', 'O pagamento com cartão ainda precisa de conferência. Escolha Pix ou fale com o atendimento.', 503);
-        }
         if ($order->origin === 'stays_existing' && config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true
             && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
             return $this->result(null, 'existing_balance_unverified', 'O saldo desta reserva precisa de nova conferência. Nenhuma cobrança foi iniciada.', 409);
@@ -118,8 +115,21 @@ class CieloCheckoutPaymentService
             $existingSnapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
             $snapshot = is_array($existingSnapshot) ? ($existingSnapshot['channel_provider_ids'] ?? null) : null;
             $installments = $paymentMethod === 'card' ? (int) ($input['installments'] ?? 0) : null;
-            $provider = is_array($snapshot) ? app(ExistingReservationPaymentChannels::class)->verifiedProvider($snapshot, $paymentMethod, $installments) : null;
-            if ($provider === null || ! is_array($existingSnapshot) || ($existingSnapshot['pending_provider_id'] ?? null) !== $provider) {
+            $isCardCharge = $paymentMethod === 'card'
+                && is_array($existingSnapshot)
+                && ($existingSnapshot['selected_payment_method'] ?? null) === 'card'
+                && ($existingSnapshot['selected_installments'] ?? null) === $installments
+                && is_string($existingSnapshot['pending_provider_id'] ?? null)
+                && preg_match('/^[a-f0-9]{24}$/iD', $existingSnapshot['pending_provider_id'])
+                && (($existingSnapshot['receivable_creation_timing'] ?? null) === 'after_capture'
+                    ? ($existingSnapshot['payment_id'] ?? null) === null
+                    : is_string($existingSnapshot['payment_id'] ?? null)
+                        && preg_match('/^[a-f0-9]{24}$/iD', $existingSnapshot['payment_id']));
+            $provider = is_array($snapshot)
+                ? app(ExistingReservationPaymentChannels::class)->verifiedProvider($snapshot, $paymentMethod, $installments)
+                : null;
+            if (($paymentMethod === 'card' && ! $isCardCharge) || $provider === null || ! is_array($existingSnapshot)
+                || ($existingSnapshot['pending_provider_id'] ?? null) !== $provider) {
                 return $this->result(null, 'existing_payment_channel_unavailable', 'O meio de pagamento precisa de conferência antes de continuar. Nenhuma cobrança foi iniciada.', 503);
             }
         }

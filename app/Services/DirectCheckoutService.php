@@ -119,6 +119,9 @@ class DirectCheckoutService
         if (is_numeric($liveCapacity) && (int) $liveCapacity < $guestCount) {
             return ['order' => null, 'code' => 'invalid_guest_count', 'message' => 'A quantidade de hóspedes excede a capacidade atual deste imóvel. Nenhum pedido, reserva ou cobrança foi iniciado.', 'status' => 422, 'replayed' => false];
         }
+        $guestCapacity = is_numeric($liveCapacity) && (int) $liveCapacity >= 1
+            ? min((int) $liveCapacity, 50)
+            : min((int) $property['maxGuests'], 50);
 
         $quoteListingIds = array_values(array_unique(array_filter([
             $staysListingId,
@@ -144,7 +147,9 @@ class DirectCheckoutService
         }
 
         try {
-            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $idempotencyKey, $fingerprint, $resumeTokenTtlDays): DirectBookingOrder {
+            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $guestCapacity, $idempotencyKey, $fingerprint, $resumeTokenTtlDays): DirectBookingOrder {
+                $quoteSnapshot = $quote['snapshot'];
+                $quoteSnapshot['apartment_max_guests'] = $guestCapacity;
                 $order = DirectBookingOrder::create([
                     'status' => DirectBookingOrderStatus::Cotado,
                     'idempotency_key' => $idempotencyKey,
@@ -164,7 +169,7 @@ class DirectCheckoutService
                     'guest_cpf' => $input['guest']['cpf'] ?? null,
                     'quote_total' => number_format($quote['total'], 2, '.', ''),
                     'currency' => $quote['currency'],
-                    'quote_snapshot' => $quote['snapshot'],
+                    'quote_snapshot' => $quoteSnapshot,
                     'accepted_terms_version' => $input['acceptedTermsVersion'],
                     'accepted_terms_snapshot' => $termsSnapshot,
                     'terms_accepted_at' => now(),

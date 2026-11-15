@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class PublicLegalPageControllerTest extends TestCase
 {
-    public function test_returns_404_and_noindex_when_legal_pages_are_not_approved(): void
+    public function test_returns_404_and_noindex_when_legal_pages_are_not_published(): void
     {
         $this->getJson('/api/public/legal-pages')
             ->assertOk()
@@ -25,26 +25,30 @@ class PublicLegalPageControllerTest extends TestCase
             ->assertHeader('X-Robots-Tag', 'noindex, nofollow');
     }
 
-    public function test_exposes_only_complete_approved_documents_and_escapes_html_metadata(): void
+    public function test_exposes_only_fully_reviewed_documents_with_required_sections(): void
     {
         $this->withSpaIndex('<!doctype html><html><head><title>Generic</title></head><body><div id="root"></div></body></html>');
         config([
             'app.url' => 'https://reservas.example.test',
             'legal_pages.pages' => [
-                'privacidade' => [
-                    'approved' => true,
-                    'version' => '1.0',
-                    'published_at' => '2026-10-01',
-                    'title' => 'Privacidade <script>alert(1)</script>',
-                    'sections' => [['title' => 'Dados', 'content' => 'Conteúdo em texto simples. <script>alert(2)</script>']],
-                ],
-                'termos' => [
-                    'approved' => true,
-                    'version' => '2.0',
-                    'published_at' => '2026-02-31',
-                    'title' => 'Termos incompletos',
-                    'sections' => [['title' => 'Condições', 'content' => 'Conteúdo.']],
-                ],
+                'privacidade' => $this->publishedPage(
+                    'privacidade',
+                    'Privacidade <script>alert(1)</script>',
+                    '2026-10-01',
+                    ['controller_contact', 'data_categories', 'purposes_legal_bases', 'sharing_processors',
+                        'international_transfers', 'retention_deletion', 'data_subject_rights', 'cookies_tracking',
+                        'security_incidents', 'updates'],
+                    'Conteúdo em texto simples.\\n\\n<script>alert(2)</script>',
+                ),
+                'termos' => $this->publishedPage(
+                    'termos',
+                    'Termos incompletos',
+                    '2026-02-31',
+                    ['supplier_identity_contact', 'service_roles', 'booking_confirmation', 'price_payment_conditions',
+                        'accommodation_conditions', 'payment_terms', 'changes_cancellations_refunds', 'support_complaints',
+                        'consumer_rights', 'updates'],
+                    'Conteúdo.',
+                ),
             ],
         ]);
 
@@ -56,7 +60,7 @@ class PublicLegalPageControllerTest extends TestCase
 
         $this->getJson('/api/public/legal-pages/privacidade')
             ->assertOk()
-            ->assertJsonPath('page.sections.0.content', 'Conteúdo em texto simples. <script>alert(2)</script>');
+            ->assertJsonPath('page.sections.0.content', "Conteúdo em texto simples.\n\n<script>alert(2)</script>");
         $this->getJson('/api/public/legal-pages/termos')->assertNotFound();
 
         $this->get('/privacidade')
@@ -65,6 +69,77 @@ class PublicLegalPageControllerTest extends TestCase
             ->assertSee('<link rel="canonical" href="https://reservas.example.test/privacidade" />', false)
             ->assertDontSee('<script>alert(1)</script>', false)
             ->assertDontSee('<script>alert(2)</script>', false);
+    }
+
+    public function test_does_not_publish_without_both_reviews_and_required_sections(): void
+    {
+        $privacy = $this->publishedPage(
+            'privacidade',
+            'Privacidade',
+            '2026-10-01',
+            ['controller_contact', 'data_categories', 'purposes_legal_bases', 'sharing_processors',
+                'international_transfers', 'retention_deletion', 'data_subject_rights', 'cookies_tracking',
+                'security_incidents', 'updates'],
+            'Conteúdo.',
+        );
+        $privacy['approvals']['legal']['reviewer'] = '';
+        $terms = $this->publishedPage('termos', 'Termos', '2026-10-01', ['supplier_identity_contact'], 'Conteúdo.');
+
+        config(['legal_pages.pages' => ['privacidade' => $privacy, 'termos' => $terms]]);
+
+        $this->getJson('/api/public/legal-pages')->assertExactJson(['pages' => []]);
+        $this->getJson('/api/public/legal-pages/privacidade')->assertNotFound();
+        $this->getJson('/api/public/legal-pages/termos')->assertNotFound();
+    }
+
+    public function test_invalidates_reviews_when_document_content_changes_without_a_new_version(): void
+    {
+        $privacy = $this->publishedPage(
+            'privacidade',
+            'Privacidade',
+            '2026-10-01',
+            ['controller_contact', 'data_categories', 'purposes_legal_bases', 'sharing_processors',
+                'international_transfers', 'retention_deletion', 'data_subject_rights', 'cookies_tracking',
+                'security_incidents', 'updates'],
+            'Conteúdo aprovado.',
+        );
+        $privacy['sections'][0]['content'] = 'Conteúdo alterado depois da revisão.';
+
+        config(['legal_pages.pages' => ['privacidade' => $privacy]]);
+
+        $this->getJson('/api/public/legal-pages/privacidade')->assertNotFound();
+    }
+
+    /** @param list<string> $sectionKeys
+     * @return array<string, mixed>
+     */
+    private function publishedPage(string $slug, string $title, string $publishedAt, array $sectionKeys, string $content): array
+    {
+        $version = '2.0';
+        $normalizedContent = trim(str_replace(['\\r\\n', '\\n', '\\r'], "\n", $content));
+        $sections = array_map(fn (string $key): array => [
+            'key' => $key,
+            'title' => $key === ($sectionKeys[0] ?? null) ? 'Dados' : 'Condições',
+            'content' => $normalizedContent,
+        ], $sectionKeys);
+        $contentHash = hash('sha256', json_encode([
+            'slug' => $slug,
+            'version' => $version,
+            'title' => $title,
+            'sections' => $sections,
+        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        return [
+            'status' => 'published',
+            'version' => $version,
+            'published_at' => $publishedAt,
+            'approvals' => [
+                'business' => ['reviewer' => 'Responsável da empresa', 'version' => $version, 'content_hash' => $contentHash, 'approved_at' => '2026-09-30'],
+                'legal' => ['reviewer' => 'Revisão jurídica', 'version' => $version, 'content_hash' => $contentHash, 'approved_at' => '2026-09-30'],
+            ],
+            'title' => $title,
+            'sections' => $sections,
+        ];
     }
 
     private function withSpaIndex(string $html): void

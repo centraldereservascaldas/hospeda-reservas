@@ -352,6 +352,15 @@ class BookingController extends Controller
         return response()->json([
             'success' => true,
             'order' => (new DirectBookingOrderResource($order))->resolve($request),
+            'buyer' => $confirmation === null ? null : [
+                'name' => $order->guest_name,
+                'email' => $order->guest_email,
+                'phone' => $order->guest_phone,
+                'cpf' => $order->guest_cpf,
+            ],
+            'guestCapacity' => $confirmation === null
+                ? null
+                : (is_array($order->quote_snapshot) ? ($order->quote_snapshot['apartment_max_guests'] ?? null) : null),
             'confirmation' => $confirmation,
             'payment' => [
                 'enabled' => $paymentMethods !== [],

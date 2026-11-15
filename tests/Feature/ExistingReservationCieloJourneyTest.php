@@ -39,8 +39,13 @@ class ExistingReservationCieloJourneyTest extends TestCase
         $reservationId = str_repeat('c', 24);
         $paymentId = str_repeat('a', 24);
         $gatewayId = '123e4567-e89b-12d3-a456-426614174080';
-        $providerId = $method === 'pix' ? str_repeat('f', 24) : str_repeat('6', 24);
+        $providerId = str_repeat('f', 24);
+        $noReceivable = in_array($scenario, ['unrecorded', 'unrecorded_partial'], true);
+        $staysPaymentId = $noReceivable ? str_repeat('b', 24) : $paymentId;
         $reservation = ['id' => 'ZY92K', 'partnerCode' => 'booking-partner-code', '_id' => $reservationId, '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24), 'type' => 'booked', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'partner' => ['name' => 'API booking.com']];
+        if ($noReceivable) {
+            $reservation['type'] = 'reserved';
+        }
         $reservation['stats'] = ['_f_totalPaid' => 197.50];
         if ($scenario === 'external_stats_after_qr') {
             $reservation['stats'] = ['_f_totalPaid' => 0];
@@ -54,18 +59,33 @@ class ExistingReservationCieloJourneyTest extends TestCase
         $observeContradictoryCapture = false;
         $queryNotFound = false;
         Http::preventStrayRequests();
-        Http::fake(function (Request $request) use (&$completed, &$settlementDesc, &$balanceChanged, &$delayedPendingResponse, &$declineCard, &$observeContradictoryCapture, &$queryNotFound, &$reservation, $receivable, $gatewayId, $method, $scenario, $providerId) {
+        $postedPayment = null;
+        Http::fake(function (Request $request) use (&$completed, &$settlementDesc, &$balanceChanged, &$delayedPendingResponse, &$declineCard, &$observeContradictoryCapture, &$queryNotFound, &$reservation, &$postedPayment, $receivable, $gatewayId, $method, $scenario, $providerId, $noReceivable, $staysPaymentId) {
             // RefreshDatabase wraps the test in one transaction; external calls
             // must not run inside the nested reservation-lock transaction.
             $this->assertLessThanOrEqual(1, DB::transactionLevel());
             if (str_contains($request->url(), 'stays.test')) {
                 if (str_contains($request->url(), '/finance/payment-providers/')) {
-                    return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => $method === 'pix' ? 'Cielo Site Externo' : 'Cartão API Cielo 6x']);
+                    return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => 'Cielo Site Externo']);
                 }
                 if (str_contains($request->url(), '/finance/accounting-transactions/')) {
-                    return Http::response(['_id' => $receivable['_id'], 'reserveId' => $reservation['_id'], 'type' => 'credit', 'paid' => $completed,
+                    return Http::response(['_id' => $staysPaymentId, 'reserveId' => $reservation['_id'], 'type' => 'credit', 'paid' => $completed,
                         'bankAccountId' => $providerId, '_mcval' => ['BRL' => 197.50],
                         ...($completed ? ['payment' => ['paymentDate' => now()->timezone('America/Sao_Paulo')->toDateString()]] : [])]);
+                }
+                if (str_contains($request->url(), '/content/listings/')) {
+                    return Http::response(['_id' => $reservation['_idlisting'], '_mstitle' => ['pt_BR' => 'Apartamento de teste']]);
+                }
+                if ($request->method() === 'POST' && str_ends_with($request->url(), '/payments')) {
+                    $completed = true;
+                    $postedPayment = $request->data();
+                    $reservation['stats']['_f_totalPaid'] = match ($scenario) {
+                        'unrecorded_partial' => 300,
+                        'unrecorded' => 438.36,
+                        default => 395,
+                    };
+
+                    return Http::response(['_id' => $staysPaymentId, ...$postedPayment]);
                 }
                 if ($request->method() === 'PATCH' && str_contains($request->url(), '/payments/')) {
                     $completed = true;
@@ -74,7 +94,16 @@ class ExistingReservationCieloJourneyTest extends TestCase
 
                     return Http::response([]);
                 }
+                if ($request->method() === 'PATCH' && str_contains($request->url(), '/booking/reservations/')) {
+                    $reservation['type'] = $request['type'];
+
+                    return Http::response($reservation);
+                }
                 if (str_ends_with($request->url(), '/payments')) {
+                    if ($noReceivable) {
+                        return Http::response($postedPayment === null ? [] : [array_replace($postedPayment, ['_id' => $staysPaymentId, 'status' => 'completed', 'paymentDate' => now()->timezone('America/Sao_Paulo')->toDateString()])]);
+                    }
+
                     return Http::response([$completed ? array_replace($receivable, ['status' => 'completed', 'paymentDate' => now()->timezone('America/Sao_Paulo')->toDateString(), '_idpaymentProvider' => $providerId, 'desc' => $settlementDesc]) : ($balanceChanged ? array_replace($receivable, ['_f_val' => 100]) : $receivable)]);
                 }
                 if ($request->method() === 'GET' && str_contains($request->url(), '/booking/reservations/')) {
@@ -114,15 +143,14 @@ class ExistingReservationCieloJourneyTest extends TestCase
         $created = $this->withHeader('Idempotency-Key', 'existing-order-key-123456')->postJson('/api/existing-reservations/ZY92K/checkout', [
             'expectedBalanceCents' => 19750, 'paymentMethod' => $method, ...($method === 'card' ? ['installments' => 6] : []), 'guest' => ['fullName' => 'Test Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
         ]);
-        if ($method === 'card') {
-            $created->assertStatus(503)->assertJsonPath('code', 'existing_card_fee_accounting_unverified');
-            $this->assertDatabaseCount('direct_booking_orders', 0);
-            Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
-
-            return;
-        }
         $created->assertCreated();
         $this->assertDatabaseHas('existing_reservation_payment_locks', ['stays_reservation_id' => $reservationId]);
+        if ($noReceivable) {
+            Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() !== 'GET');
+        }
+        if ($noReceivable) {
+            Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() !== 'GET');
+        }
         $reference = $created->json('resume.reference');
         $token = $created->json('resume.token');
         $balanceChanged = $scenario === 'changed';
@@ -159,13 +187,6 @@ class ExistingReservationCieloJourneyTest extends TestCase
             ? ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix', 'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']]
             : ['paymentMethod' => 'card', 'paymentMethodId' => 'cielo_credit_card', 'token' => '123e4567-e89b-12d3-a456-426614174000', 'installments' => 6, 'cardholderName' => 'Test Guest', 'cardholderEmail' => 'guest@example.test', 'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']];
         $response = $this->withHeaders(['Idempotency-Key' => 'existing-payment-key-123456', 'X-Checkout-Resume-Token' => $token])->postJson('/api/checkout/'.$reference.'/payments', $payload);
-        if ($method === 'card') {
-            $response->assertStatus(503)->assertJsonPath('code', 'existing_card_fee_accounting_unverified');
-            $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
-            Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'cieloecommerce.cielo.com.br'));
-
-            return;
-        }
         if (in_array($scenario, ['changed', 'disabled', 'approval_status_changed', 'approval_partner_changed', 'ledger_review', 'cycle_without_ledger'], true)) {
             if (in_array($scenario, ['disabled', 'cycle_without_ledger'], true)) {
                 $response->assertStatus(503)->assertJsonPath('code', 'payments_disabled');
@@ -244,19 +265,53 @@ class ExistingReservationCieloJourneyTest extends TestCase
 
             return;
         }
-        $this->assertTrue(app(DirectStaysPaymentService::class)->confirmPaidReservation($order)['ready']);
+        if ($method === 'card') {
+            $attempt = DirectBookingPaymentAttempt::query()->sole();
+            $this->assertSame('197.50', $attempt->base_amount);
+            $this->assertSame('240.86', $attempt->amount);
+            $this->assertSame('43.36', $attempt->processing_fee_amount);
+            $this->assertSame(1800, $attempt->processing_fee_basis_points);
+            Http::assertSent(fn (Request $request) => str_contains($request->url(), 'cieloecommerce.cielo.com.br')
+                && $request->method() === 'POST' && $request['Payment']['Amount'] === 24086);
+
+        }
+        $confirmation = app(DirectStaysPaymentService::class)->confirmPaidReservation($order);
+        if ($scenario === 'unrecorded_partial') {
+            $this->assertFalse($confirmation['ready']);
+            $this->assertSame('existing_balance_remaining', $confirmation['code']);
+            $this->assertSame(DirectBookingOrderStatus::AtencaoOperacional, $order->fresh()->status);
+            Http::assertNotSent(fn (Request $request) => str_contains($request->url(), '/booking/reservations/')
+                && $request->method() === 'PATCH' && ! str_contains($request->url(), '/payments/'));
+
+            return;
+        }
+        $this->assertTrue($confirmation['ready']);
         $this->assertSame(DirectBookingOrderStatus::Confirmado, $order->fresh()->status);
         $this->assertSame('ZY92K', $order->fresh()->confirmedReservationCode());
         $this->assertTrue($completed);
-        Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'POST');
-        $this->assertCount(1, Http::recorded(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'PATCH'));
-        Http::assertSent(fn (Request $request) => $request->method() === 'PATCH'
-            && ($request['name'] ?? null) === ($method === 'pix' ? 'Cielo Site Externo' : 'Cartão API Cielo 6x')
-            && ! array_key_exists('_idpaymentProvider', $request->data()));
+        if ($noReceivable) {
+            $this->assertCount(1, Http::recorded(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'POST'));
+            $this->assertSame('completed', $postedPayment['status']);
+            $this->assertSame(197.5, (float) $postedPayment['_f_val']);
+            $this->assertSame('Cielo Site Externo', $postedPayment['name']);
+            $this->assertSame($providerId, $postedPayment['_idpaymentProvider']);
+            if ($scenario === 'unrecorded') {
+                $this->assertSame(438.36, $reservation['stats']['_f_totalPaid']);
+            }
+            Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'PATCH' && str_contains($request->url(), '/payments/'));
+            Http::assertSent(fn (Request $request) => str_contains($request->url(), '/booking/reservations/')
+                && $request->method() === 'PATCH' && $request['type'] === 'booked');
+        } else {
+            Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'POST');
+            $this->assertCount(1, Http::recorded(fn (Request $request) => str_contains($request->url(), 'stays.test') && $request->method() === 'PATCH'));
+            Http::assertSent(fn (Request $request) => $request->method() === 'PATCH'
+                && ($request['name'] ?? null) === 'Cielo Site Externo'
+                && ! array_key_exists('_idpaymentProvider', $request->data()));
+        }
     }
 
     public static function paymentMethods(): array
     {
-        return ['Pix' => ['pix', 'approved'], 'cartão em 6 parcelas' => ['card', 'approved'], 'cartão recusado' => ['card', 'declined'], 'webhook antes do timeout' => ['card', 'webhook_timeout'], 'saldo alterado' => ['pix', 'changed'], 'baixa externa após QR' => ['pix', 'external_payment'], 'stats mudaram após QR' => ['pix', 'external_stats_after_qr'], 'fluxo desativado' => ['pix', 'disabled'], 'aprovação revogada' => ['pix', 'approval_revoked'], 'versão alterada' => ['pix', 'approval_changed'], 'aprovação expirada' => ['pix', 'approval_expired'], 'aprovação válida' => ['pix', 'approval_valid'], 'status alterado antes do pagamento' => ['pix', 'approval_status_changed'], 'parceiro alterado antes do pagamento' => ['pix', 'approval_partner_changed'], 'ledger divergente antes da cobrança' => ['pix', 'ledger_review'], 'ciclo sem ledger' => ['pix', 'cycle_without_ledger']];
+        return ['Pix' => ['pix', 'approved'], 'cartão em 6 parcelas' => ['card', 'approved'], 'cartão sem recebível prévio' => ['card', 'unrecorded'], 'pagamento parcial não confirma reserva' => ['card', 'unrecorded_partial'], 'cartão recusado' => ['card', 'declined'], 'webhook antes do timeout' => ['card', 'webhook_timeout'], 'saldo alterado' => ['pix', 'changed'], 'baixa externa após QR' => ['pix', 'external_payment'], 'stats mudaram após QR' => ['pix', 'external_stats_after_qr'], 'fluxo desativado' => ['pix', 'disabled'], 'aprovação revogada' => ['pix', 'approval_revoked'], 'versão alterada' => ['pix', 'approval_changed'], 'aprovação expirada' => ['pix', 'approval_expired'], 'aprovação válida' => ['pix', 'approval_valid'], 'status alterado antes do pagamento' => ['pix', 'approval_status_changed'], 'parceiro alterado antes do pagamento' => ['pix', 'approval_partner_changed'], 'ledger divergente antes da cobrança' => ['pix', 'ledger_review'], 'ciclo sem ledger' => ['pix', 'cycle_without_ledger']];
     }
 }

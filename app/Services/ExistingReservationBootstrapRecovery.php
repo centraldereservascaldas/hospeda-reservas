@@ -37,6 +37,34 @@ class ExistingReservationBootstrapRecovery
         if ($attempts->contains(fn ($attempt): bool => in_array($attempt->status, ['processing', 'pending', 'in_process'], true))) {
             return $this->report('payment_pending', $method);
         }
+        if (($snapshot['receivable_creation_timing'] ?? null) === 'after_capture') {
+            if (! is_string($order->stays_reservation_id) || ! preg_match('/^[a-f0-9]{24}$/iD', $order->stays_reservation_id)) {
+                return $this->report('reservation_identity_unverified', $method);
+            }
+            $endpoint = '/booking/reservations/'.rawurlencode($order->stays_reservation_id);
+            $reservation = $this->stays->get($endpoint);
+            $payments = $this->stays->get($endpoint.'/payments');
+            if (! is_array($reservation) || ! is_array($payments)) {
+                return $this->report('stays_unavailable', $method);
+            }
+            if (! $this->guard->matches($reservation, $payments, $snapshot)) {
+                return $this->report('receivable_changed_requires_review', $method);
+            }
+            if ($order->expires_at?->isFuture() !== true || ! $order->hasValidResumeToken($order->resume_token ?? '')) {
+                return $this->report('expired_receivable_requires_review', $method);
+            }
+            if (config('direct-booking.enabled', false) !== true
+                || config('direct-booking.payments_enabled', false) !== true
+                || config('direct-booking.existing_reservation_checkout_enabled', false) !== true) {
+                return $this->report('approval_requires_review', $method);
+            }
+            if ($attempts->isNotEmpty() || $order->status !== DirectBookingOrderStatus::PreReservado
+                || ! in_array($order->payment_status, [null, 'not_started'], true)) {
+                return $this->report('payment_retry_requires_review', $method);
+            }
+
+            return $this->report('original_session_resume_only', $method, true);
+        }
         $action = $order->staysActions()->where('action_type', 'experimental_create_receivable')->first();
         if ($action === null || $action->status !== 'succeeded' || ! is_string($action->external_id)) {
             return $this->report('receivable_reconciliation_required', $method);

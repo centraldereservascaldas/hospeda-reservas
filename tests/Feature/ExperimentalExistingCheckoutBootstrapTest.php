@@ -18,7 +18,7 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
 
     private bool $stripMarker = false;
 
-    public function test_unrecorded_balance_bootstraps_verified_pending_before_exposing_checkout(): void
+    public function test_unrecorded_balance_exposes_checkout_without_writing_before_capture(): void
     {
         $this->configure();
         $this->fakeStays('success');
@@ -30,29 +30,28 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
             ->assertCreated()->assertJsonPath('success', true)->assertJsonStructure(['resume' => ['reference', 'token']]);
         $order = DirectBookingOrder::query()->sole();
         $snapshot = $order->quote_snapshot['existing_reservation'];
-        $this->assertSame(str_repeat('a', 24), $snapshot['payment_id']);
+        $this->assertNull($snapshot['payment_id']);
+        $this->assertSame('after_capture', $snapshot['receivable_creation_timing']);
         $this->assertSame(str_repeat('f', 24), $snapshot['pending_provider_id']);
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
             ->assertOk()->assertJsonPath('success', true);
-        $this->assertCount(1, Http::recorded(fn (Request $r) => $r->method() === 'POST'));
-        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'cielo') || in_array($r->method(), ['PATCH', 'DELETE'], true));
+        Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET');
+        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'cielo'));
     }
 
-    public function test_failed_write_never_exposes_token_and_never_repeats(): void
+    public function test_unrecorded_checkout_does_not_create_or_retry_a_receivable_before_payment(): void
     {
         $this->configure();
         $this->fakeStays('failed');
         $key = 'experimental-bootstrap-test-123';
-        foreach (range(1, 2) as $ignored) {
-            $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
-                ->assertStatus(503)->assertJsonPath('code', 'existing_receivable_unconfirmed')->assertJsonMissingPath('resume.token');
-        }
+        $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
+            ->assertCreated()->assertJsonPath('success', true)->assertJsonStructure(['resume' => ['reference', 'token']]);
         $this->assertNull(DirectBookingOrder::query()->sole()->quote_snapshot['existing_reservation']['payment_id']);
-        $this->assertCount(1, Http::recorded(fn (Request $r) => $r->method() === 'POST'));
+        Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET');
     }
 
     #[DataProvider('bootstrapOriginScenarios')]
-    public function test_existing_bootstrap_receivable_never_enters_regular_path(bool $removeMarker, bool $revokeApproval): void
+    public function test_open_balance_keeps_checkout_available_but_blocks_a_second_local_order(bool $removeMarker, bool $revokeApproval): void
     {
         $this->configure();
         $this->fakeStays('success');
@@ -62,11 +61,11 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
             config(['direct-booking.experimental_existing_approved_balances' => []]);
         }
         $this->getJson('/api/existing-reservations/ZX91K/checkout-summary')
-            ->assertOk()->assertJsonPath('reservation.balanceStatus', 'review_required')->assertJsonPath('reservation.paymentEnabled', false);
+            ->assertOk()->assertJsonPath('reservation.balanceStatus', 'unrecorded_candidate')->assertJsonPath('reservation.paymentEnabled', true);
         $this->withHeader('Idempotency-Key', 'bootstrap-new-device-key-123')->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
-            ->assertStatus(409)->assertJsonPath('code', 'existing_balance_unverified');
+            ->assertStatus(409)->assertJsonPath('code', 'existing_checkout_already_started');
         $this->assertDatabaseCount('direct_booking_orders', 1);
-        $this->assertCount(1, Http::recorded(fn (Request $r) => $r->method() === 'POST'));
+        Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET');
     }
 
     public static function bootstrapOriginScenarios(): array
@@ -84,30 +83,27 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
         Http::assertNotSent(fn (Request $r) => $r->method() === 'POST');
     }
 
-    public function test_stats_change_during_receivable_creation_never_exposes_a_payment_token(): void
+    public function test_checkout_creation_never_posts_a_pending_receivable_before_payment(): void
     {
         $this->configure();
         $this->fakeStays('stats_changed');
         $this->withHeader('Idempotency-Key', 'experimental-bootstrap-test-123')->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
-            ->assertStatus(503)->assertJsonPath('code', 'existing_receivable_unconfirmed')->assertJsonMissingPath('resume.token');
+            ->assertCreated()->assertJsonPath('success', true);
         $this->assertNull(DirectBookingOrder::query()->sole()->quote_snapshot['existing_reservation']['payment_id']);
-        $this->assertDatabaseHas('direct_booking_stays_actions', ['action_type' => 'experimental_create_receivable', 'status' => 'attention_required']);
-        $this->assertCount(1, Http::recorded(fn (Request $r) => $r->method() === 'POST'));
+        Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET');
     }
 
-    public function test_pending_creation_inflating_reported_paid_stops_checkout_without_retry_or_charge(): void
+    public function test_stays_balance_already_paid_blocks_checkout_without_creating_an_order(): void
     {
         $this->configure();
         $this->fakeStays('pending_inflates_paid');
-        $key = 'experimental-bootstrap-stats-123';
-        foreach (range(1, 2) as $ignored) {
-            $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
-                ->assertStatus(503)->assertJsonPath('code', 'existing_receivable_unconfirmed')->assertJsonMissingPath('resume.token');
-        }
-        $this->assertDatabaseHas('direct_booking_stays_actions', ['action_type' => 'experimental_create_receivable', 'status' => 'attention_required']);
+        $this->getJson('/api/existing-reservations/ZX91K/checkout-summary')
+            ->assertOk()->assertJsonPath('reservation.balanceStatus', 'review_required')->assertJsonPath('reservation.paymentEnabled', false);
+        $this->withHeader('Idempotency-Key', 'experimental-bootstrap-stats-123')->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
+            ->assertStatus(409)->assertJsonPath('code', 'existing_balance_unverified')->assertJsonMissingPath('resume.token');
         $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
-        $this->assertCount(1, Http::recorded(fn (Request $r) => $r->method() === 'POST'));
-        Http::assertNotSent(fn (Request $r) => str_contains($r->url(), 'cielo') || in_array($r->method(), ['PATCH', 'DELETE'], true));
+        $this->assertDatabaseCount('direct_booking_orders', 0);
+        Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET');
     }
 
     public function test_open_balance_does_not_require_manual_balance_approval(): void
@@ -121,7 +117,7 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
         $this->withHeader('Idempotency-Key', 'experimental-bootstrap-test-123')->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
             ->assertCreated()->assertJsonPath('success', true);
         $this->assertDatabaseCount('direct_booking_orders', 1);
-        $this->assertCount(1, Http::recorded(fn (Request $r) => $r->method() === 'POST'));
+        Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET');
     }
 
     public function test_stays_open_balance_is_authoritative_over_stale_approval_metadata(): void
@@ -166,7 +162,7 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
         $reservationId = str_repeat('c', 24);
         $reservation = ['id' => 'ZX91K', '_id' => $reservationId, '_idclient' => str_repeat('d', 24), '_idlisting' => 'listing', 'type' => 'reserved', 'checkInDate' => '2030-11-19', 'checkOutDate' => '2030-11-22', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 1016], 'partner' => ['name' => 'API booking.com'], 'stats' => ['_f_totalPaid' => 0]];
         if ($mode === 'pending_inflates_paid') {
-            $reservation['stats'] = ['_f_totalPaid' => 0];
+            $reservation['stats']['_f_totalPaid'] = 1016;
         }
         $commission = ['type' => 'debit', 'status' => 'pending', '_f_val' => 152.40, 'name' => 'res. fee API booking.com'];
         $created = false;

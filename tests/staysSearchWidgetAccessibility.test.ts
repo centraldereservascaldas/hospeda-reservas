@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { afterEach } from 'node:test';
+import test, { afterEach, beforeEach, mock } from 'node:test';
 import { JSDOM } from 'jsdom';
 import type { SearchFilters } from '../src/types';
 
@@ -23,7 +23,12 @@ const { render, fireEvent, cleanup, waitFor, within } = await import('@testing-l
 const { StaysSearchWidget } = await import('../src/components/search/StaysSearchWidget.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
+beforeEach(() => {
+  mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 3, 12) });
+});
+
 afterEach(() => {
+  mock.timers.reset();
   cleanup();
   document.body.innerHTML = '';
 });

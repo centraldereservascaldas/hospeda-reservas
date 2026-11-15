@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\ValidCpf;
 use App\Services\MoneyAmount;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -38,7 +39,7 @@ class StoreCheckoutRequest extends FormRequest
             'guest.fullName' => ['required', 'string', 'max:180'],
             'guest.email' => ['required', 'email', 'max:254'],
             'guest.phone' => ['required', 'string', 'max:40'],
-            'guest.cpf' => ['nullable', 'string', 'regex:/^[0-9]{11}$/'],
+            'guest.cpf' => ['nullable', 'string', 'regex:/^[0-9]{11}$/', new ValidCpf],
             'acceptedTermsVersion' => ['required', 'string', 'max:100'],
             'acceptedTerms' => ['required', 'accepted'],
             'marketingAttribution' => ['sometimes', 'nullable', 'array:firstTouch,lastTouch'],

@@ -28,18 +28,15 @@ class ExistingReservationPaymentChannels
             return [];
         }
         $snapshot = $this->snapshot();
-        $cardIds = array_values($snapshot['cards']);
 
         return array_values(array_filter($gatewayMethods, fn (string $method): bool => match ($method) {
-            'pix' => $snapshot['pix'] !== null && ! in_array($snapshot['pix'], $cardIds, true),
-            'card' => false, // Stays accounting for the surcharge is not yet established.
+            'pix', 'card' => $snapshot['pix'] !== null,
             default => false,
         }));
     }
 
     /**
-     * The API does not document changing a receivable's provider after creation.
-     * Offer only the channel already attached to this specific receivable.
+     * Both methods settle through the active external Cielo channel in Stays.
      *
      * @param  list<string>  $gatewayMethods
      * @param  list<mixed>  $payments
@@ -64,15 +61,10 @@ class ExistingReservationPaymentChannels
             && $this->verifiedProvider($snapshot, 'pix', null) === $provider) {
             $methods[] = 'pix';
         }
-        if (in_array('card', $configured, true)) {
-            foreach (range(1, 6) as $count) {
-                if ($snapshot['cards'][$count] === $provider && $this->verifiedProvider($snapshot, 'card', $count) === $provider) {
-                    $installments[] = $count;
-                }
-            }
-            if ($installments !== []) {
-                $methods[] = 'card';
-            }
+        if (in_array('card', $configured, true)
+            && $this->verifiedProvider($snapshot, 'card', 1) === $provider) {
+            $methods[] = 'card';
+            $installments = range(1, 6);
         }
 
         return ['methods' => $methods, 'card_installments' => $installments];
@@ -90,15 +82,9 @@ class ExistingReservationPaymentChannels
         if (in_array('pix', $configured, true) && $this->verifiedProvider($snapshot, 'pix', null) !== null) {
             $methods[] = 'pix';
         }
-        if (in_array('card', $configured, true)) {
-            foreach (range(1, 6) as $count) {
-                if ($this->verifiedProvider($snapshot, 'card', $count) !== null) {
-                    $installments[] = $count;
-                }
-            }
-            if ($installments !== []) {
-                $methods[] = 'card';
-            }
+        if (in_array('card', $configured, true) && $this->verifiedProvider($snapshot, 'card', 1) !== null) {
+            $methods[] = 'card';
+            $installments = range(1, 6);
         }
 
         return ['methods' => $methods, 'card_installments' => $installments];
@@ -108,9 +94,9 @@ class ExistingReservationPaymentChannels
     public function verifiedProvider(array $snapshot, string $method, ?int $installments): ?string
     {
         $current = $this->snapshot();
-        $candidate = $method === 'pix' ? ($snapshot['pix'] ?? null) : ($snapshot['cards'][$installments ?? 0] ?? null);
-        $expected = $method === 'pix' ? $current['pix'] : ($current['cards'][$installments ?? 0] ?? null);
-        $name = $method === 'pix' ? 'Cielo Site Externo' : 'Cartão API Cielo '.$installments.'x';
+        $candidate = $snapshot['pix'] ?? null;
+        $expected = $current['pix'];
+        $name = 'Cielo Site Externo';
         if (! in_array($method, ['pix', 'card'], true) || ($method === 'card' && ($installments === null || $installments < 1 || $installments > 6))
             || ! is_string($candidate) || ! is_string($expected) || ! hash_equals($expected, $candidate)) {
             return null;

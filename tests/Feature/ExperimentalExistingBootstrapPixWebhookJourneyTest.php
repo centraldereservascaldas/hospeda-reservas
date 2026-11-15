@@ -59,11 +59,17 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
                 if (str_contains($r->url(), '/finance/payment-providers/')) {
                     return Http::response(['_id' => $providerId, 'status' => 'active', 'internalName' => 'Cielo Site Externo']);
                 }
+                if (str_contains($r->url(), '/content/listings/')) {
+                    return Http::response(['_id' => str_repeat('e', 24), '_i_maxGuests' => 4]);
+                }
                 if ($r->method() === 'POST' && str_ends_with($r->url(), '/payments')) {
                     $created = true;
+                    $settled = true;
                     $marker = $r['desc'];
+                    $settlementDesc = $r['desc'];
+                    $reservation['stats']['_f_totalPaid'] = 1016;
 
-                    return Http::response([], 200);
+                    return Http::response(['_id' => $paymentId, ...$r->data()], 200);
                 }
                 if ($r->method() === 'PATCH' && str_contains($r->url(), '/payments/')) {
                     $settled = true;
@@ -109,15 +115,11 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
         $createdOrder = $this->withHeader('Idempotency-Key', 'synthetic-bootstrap-order-123')->postJson('/api/existing-reservations/ZX91K/checkout', [
             'expectedBalanceCents' => 101600, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Synthetic Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
         ])->assertCreated();
-        $this->assertTrue($created);
+        $this->assertFalse($created);
         $this->assertFalse($settled);
         $this->assertFalse($booked);
         $this->assertSame('reserved', DirectBookingOrder::query()->sole()->reservation_status);
-        $orderId = DirectBookingOrder::query()->sole()->id;
-        Http::assertSent(fn (Request $r) => $r->method() === 'POST' && str_ends_with($r->url(), '/payments')
-            && $r['_idpaymentProvider'] === $providerId && $r['type'] === 'credit' && $r['status'] === 'pending'
-            && $r['_f_val'] === 1016 && $r['expirationDate'] === '2030-11-19'
-            && $r['desc'] === 'CRCN_EXISTING_ORDER:'.$orderId.':PENDING');
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'POST' && str_ends_with($r->url(), '/payments'));
         $reference = $createdOrder->json('resume.reference');
         $token = $createdOrder->json('resume.token');
         $this->withHeaders(['Idempotency-Key' => 'synthetic-bootstrap-pix-1234', 'X-Checkout-Resume-Token' => $token])
