@@ -29,6 +29,7 @@ import { useDialogFocus } from '../useDialogFocus';
 import { usePropertyAvailability } from './usePropertyAvailability';
 import { selectAvailabilityDay, selectAvailabilityRange } from '../../utils/propertyDateSelection';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
+import { accommodationPagePath } from '../../utils/accommodationPageUrl';
 import {
   getAccommodationIdFromPath,
   mergeSearchFiltersIntoUrl,
@@ -360,7 +361,9 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     setActiveDateField('checkOut');
   };
   const handleShare = async () => {
+    if (!property) return;
     const url = new URL(window.location.href);
+    url.pathname = accommodationPagePath(property);
     const currentFilters = parseSearchFilters(url.search);
     const search = mergeSearchFiltersIntoUrl(url.search, {
       ...currentFilters,

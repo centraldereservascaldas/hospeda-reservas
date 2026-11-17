@@ -3,6 +3,7 @@ import test, { afterEach, beforeEach, mock } from 'node:test';
 import { JSDOM } from 'jsdom';
 import type { ComponentProps } from 'react';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
+import { accommodationPagePath } from '../src/utils/accommodationPageUrl.ts';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
 Object.assign(dom.window, {
@@ -527,7 +528,7 @@ test('shares the current stay dates and guest count while preserving tracking pa
   window.history.replaceState(
     null,
     '',
-    '/apartamento/JQ08G?utm_source=share&from=2026-11-11&to=2026-11-15&guests=1',
+    '/apartamento/OUTRO?utm_source=share&from=2026-11-11&to=2026-11-15&guests=1',
   );
 
   try {
@@ -590,7 +591,7 @@ test('shares the current stay dates and guest count while preserving tracking pa
     await waitFor(() => assert.match(container.textContent || '', /Link copiado!/));
 
     const sharedUrl = new URL(copiedText);
-    assert.equal(sharedUrl.pathname, '/apartamento/JQ08G');
+    assert.equal(sharedUrl.pathname, accommodationPagePath(STAYS_NET_APARTMENTS[0]!));
     assert.equal(sharedUrl.searchParams.get('utm_source'), 'share');
     assert.equal(sharedUrl.searchParams.get('from'), '2026-11-12');
     assert.equal(sharedUrl.searchParams.get('to'), '2026-11-18');
