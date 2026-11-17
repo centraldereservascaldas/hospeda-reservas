@@ -97,6 +97,7 @@ export interface CheckoutPaymentAttemptSummary {
     | 'approved'
     | 'rejected'
     | 'cancelled'
+    | 'expired'
     | 'unknown'
     | 'attention_required';
   method: 'pix' | 'card';
@@ -281,6 +282,7 @@ const checkoutPaymentAttemptStatuses: CheckoutPaymentAttemptSummary['status'][] 
   'approved',
   'rejected',
   'cancelled',
+  'expired',
   'unknown',
   'attention_required',
 ];

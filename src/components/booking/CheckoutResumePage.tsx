@@ -107,6 +107,7 @@ const paymentAttemptStatusLabels = {
   approved: 'Pagamento aprovado',
   rejected: 'Pagamento não aprovado',
   cancelled: 'Pagamento cancelado',
+  expired: 'Pagamento expirado',
   unknown: 'Pagamento em conferência',
   attention_required: 'Pagamento em conferência',
 } as const;
