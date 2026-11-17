@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
+use App\Models\DirectBookingPaymentAttempt;
 use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
@@ -149,8 +150,9 @@ class ExistingReservationCheckoutService
         }
 
         $merchantId = $this->cielo->merchantId();
+        $cyclePreparation = app(ExistingReservationPaymentCycleRegistry::class)->prepare($snapshot['_id']);
         try {
-            $created = app(ExistingReservationPaymentLock::class)->synchronized($snapshot['_id'], function () use ($input, $fingerprint, $ttl, $snapshot, $reservation, $guests, $candidate, $merchantId): array {
+            $created = app(ExistingReservationPaymentLock::class)->synchronized($snapshot['_id'], function () use ($code, $input, $fingerprint, $ttl, $snapshot, $reservation, $guests, $candidate, $merchantId, $provider, $cyclePreparation): array {
                 if (app(ReservationReleaseGuard::class)->paymentBlocked(strtolower($snapshot['_id']), $reservation['id'])) {
                     return ['order' => null, 'code' => 'existing_checkout_unavailable', 'status' => 409];
                 }
@@ -163,9 +165,131 @@ class ExistingReservationCheckoutService
 
                     return ['order' => $existing, 'code' => 'existing_checkout_ready', 'status' => 200];
                 }
-                if (config('direct-booking.experimental_existing_order_history_enabled', false) !== true
-                    && DirectBookingOrder::query()->where('stays_reservation_id', $snapshot['_id'])->exists()) {
-                    return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
+                $reservationIds = [$snapshot['_id'], strtoupper($snapshot['_id']), $code];
+                $activeAttempts = DirectBookingPaymentAttempt::query()
+                    ->whereIn('status', ['processing', 'pending', 'in_process', 'approved', 'unknown', 'attention_required'])
+                    ->whereHas('order', fn ($query) => $query
+                        ->where('origin', 'stays_existing')
+                        ->whereIn('stays_reservation_id', $reservationIds))
+                    ->with('order')
+                    ->orderByDesc('created_at')
+                    ->orderByDesc('id')
+                    ->get();
+                $verifiedSettlements = is_array($cyclePreparation['verified'] ?? null) ? $cyclePreparation['verified'] : [];
+                $activeAttempt = $activeAttempts->first(fn (DirectBookingPaymentAttempt $attempt): bool => $attempt->status !== 'approved' || ! isset($verifiedSettlements[$attempt->id]));
+                if ($activeAttempt !== null && $activeAttempt->order instanceof DirectBookingOrder
+                    && $activeAttempt->order->hasValidResumeToken($activeAttempt->order->resume_token ?? '')) {
+                    return ['order' => $activeAttempt->order, 'code' => 'existing_checkout_ready', 'status' => 200];
+                }
+                $existingOrder = DirectBookingOrder::query()
+                    ->where('origin', 'stays_existing')
+                    ->where('stays_reservation_id', $snapshot['_id'])
+                    ->orderByDesc('created_at')
+                    ->orderByDesc('id')
+                    ->lockForUpdate()
+                    ->first();
+                if ($existingOrder !== null) {
+                    $lastAttempt = $existingOrder->paymentAttempts()
+                        ->orderByDesc('created_at')
+                        ->orderByDesc('id')
+                        ->first();
+                    $sameBalance = MoneyAmount::toCents($existingOrder->quote_total) === $candidate['candidate_cents'];
+                    $orderExpired = $existingOrder->status === DirectBookingOrderStatus::Expirado
+                        || $existingOrder->expires_at?->isPast() === true;
+                    $lastAttemptIsTerminal = $lastAttempt === null
+                        || in_array($lastAttempt->status, ['rejected', 'cancelled', 'expired'], true);
+                    $retryable = $existingOrder->status === DirectBookingOrderStatus::PagamentoRecusado
+                        && in_array($existingOrder->payment_status, ['rejected', 'cancelled'], true)
+                        && $lastAttempt !== null
+                        && in_array($lastAttempt->status, ['rejected', 'cancelled'], true);
+                    $unstarted = $existingOrder->status === DirectBookingOrderStatus::PreReservado
+                        && in_array($existingOrder->payment_status, [null, 'not_started'], true)
+                        && $lastAttempt === null;
+                    $previousSnapshot = is_array($existingOrder->quote_snapshot)
+                        ? ($existingOrder->quote_snapshot['existing_reservation'] ?? null)
+                        : null;
+                    $currentAudit = is_array($cyclePreparation['currentAudit'] ?? null)
+                        ? $cyclePreparation['currentAudit']
+                        : null;
+                    $previousReportedPaid = is_array($previousSnapshot) && is_int($previousSnapshot['reported_paid_cents'] ?? null)
+                        ? $previousSnapshot['reported_paid_cents']
+                        : null;
+                    $previousPendingAmount = is_array($previousSnapshot) && is_int($previousSnapshot['pending_amount_cents'] ?? null)
+                        ? $previousSnapshot['pending_amount_cents']
+                        : null;
+                    $currentAuditMatchesCandidate = $currentAudit !== null
+                        && (($snapshot['payment_id'] ?? null) === null
+                            ? ($currentAudit['pending_payment_id'] ?? null) === null
+                                && ($currentAudit['balance_cents'] ?? null) === $candidate['candidate_cents']
+                            : ($currentAudit['pending_payment_id'] ?? null) === $snapshot['payment_id']
+                                && ($currentAudit['pending_cents'] ?? null) === $candidate['candidate_cents']);
+                    $previousPaymentWasRecorded = $previousReportedPaid !== null && $previousPendingAmount !== null
+                        && is_int($currentAudit['paid_cents'] ?? null)
+                        && $currentAudit['paid_cents'] >= $previousReportedPaid + $previousPendingAmount;
+                    $previousCycleSettled = $lastAttempt?->status === 'approved'
+                        && isset($verifiedSettlements[$lastAttempt->id])
+                        && ($cyclePreparation['auditsDisagree'] ?? true) === false
+                        && ($currentAudit['status'] ?? null) === 'consistent_candidate'
+                        && $currentAuditMatchesCandidate
+                        && $previousPaymentWasRecorded
+                        && (($snapshot['payment_id'] ?? null) === null
+                            || ($previousSnapshot['payment_id'] ?? null) !== $snapshot['payment_id']);
+
+                    if (! $sameBalance && ! ($orderExpired && $lastAttemptIsTerminal) && ! $previousCycleSettled) {
+                        return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
+                    }
+
+                    if (! ($orderExpired && $lastAttemptIsTerminal) && ! $previousCycleSettled) {
+                        if ((! $retryable && ! $unstarted)
+                            || ! $existingOrder->hasValidResumeToken($existingOrder->resume_token ?? '')) {
+                            return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
+                        }
+
+                        $quote = is_array($existingOrder->quote_snapshot) ? $existingOrder->quote_snapshot : [];
+                        $reservationSnapshot = $quote['existing_reservation'] ?? null;
+                        if (! is_array($reservationSnapshot)
+                            || ($reservationSnapshot['reservation_code'] ?? null) !== $code
+                            || ($reservationSnapshot['pending_amount_cents'] ?? null) !== $candidate['candidate_cents']) {
+                            return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
+                        }
+
+                        $reservationSnapshot['selected_payment_method'] = $input['paymentMethod'];
+                        $reservationSnapshot['selected_installments'] = $input['paymentMethod'] === 'card' ? (int) $input['installments'] : null;
+                        $reservationSnapshot['channel_provider_ids'] = $this->channels->snapshot();
+                        $reservationSnapshot['pending_provider_id'] = $provider;
+                        $quote['existing_reservation'] = $reservationSnapshot;
+                        $updatedContactFields = [];
+                        $guestName = trim($input['guest']['fullName']);
+                        $guestEmail = mb_strtolower(trim($input['guest']['email']));
+                        $guestPhone = trim($input['guest']['phone']);
+                        if ($existingOrder->guest_name !== $guestName) {
+                            $updatedContactFields[] = 'name';
+                        }
+                        if ($existingOrder->guest_email !== $guestEmail) {
+                            $updatedContactFields[] = 'email';
+                        }
+                        if ($existingOrder->guest_phone !== $guestPhone) {
+                            $updatedContactFields[] = 'phone';
+                        }
+                        $operationalEvents = $existingOrder->operational_events ?? [];
+                        if ($updatedContactFields !== []) {
+                            $operationalEvents[] = [
+                                'event' => 'existing_checkout_contact_updated',
+                                'fields' => $updatedContactFields,
+                                'at' => now()->toISOString(),
+                            ];
+                        }
+                        $existingOrder->forceFill([
+                            'quote_snapshot' => $quote,
+                            'expires_at' => now()->addHours(3),
+                            'guest_name' => $guestName,
+                            'guest_email' => $guestEmail,
+                            'guest_phone' => $guestPhone,
+                            'operational_events' => $operationalEvents,
+                        ])->save();
+
+                        return ['order' => $existingOrder, 'code' => 'existing_checkout_ready', 'status' => 200];
+                    }
                 }
                 $order = DirectBookingOrder::query()->create([
                     'status' => DirectBookingOrderStatus::PreReservado,

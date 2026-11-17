@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Services\ExistingReservationLedgerAudit;
+use App\Services\ExistingReservationPaymentCycleRegistry;
 use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -144,17 +146,146 @@ class ExistingReservationCheckoutTest extends TestCase
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
     }
 
-    public function test_order_history_can_create_two_existing_orders_only_when_explicitly_enabled(): void
+    public function test_existing_order_is_reused_after_a_definitive_payment_decline(): void
     {
         $this->configureCheckout();
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'history-order-key-first-001')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
-        $this->withHeader('Idempotency-Key', 'history-order-key-second-01')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
-            ->assertStatus(409)->assertJsonPath('code', 'existing_checkout_already_started');
-        config(['direct-booking.experimental_existing_order_history_enabled' => true]);
-        $this->withHeader('Idempotency-Key', 'history-order-key-third-001')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
-        $this->assertDatabaseCount('direct_booking_orders', 2);
+        $order = DirectBookingOrder::query()->sole();
+        $order->forceFill(['status' => DirectBookingOrderStatus::PagamentoRecusado, 'payment_status' => 'rejected'])->save();
+        $order->paymentAttempts()->create([
+            'idempotency_key' => 'history-rejected-attempt-01', 'request_fingerprint' => str_repeat('b', 64),
+            'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'test-merchant',
+            'payment_method' => 'card', 'payment_method_id' => 'cielo_credit_card', 'status' => 'rejected',
+            'amount' => '197.50', 'base_amount' => '197.50', 'currency' => 'BRL',
+        ]);
+        $response = $this->withHeader('Idempotency-Key', 'history-order-key-second-01')
+            ->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertOk()->assertJsonPath('success', true)->assertJsonPath('order.status', 'pagamento_recusado');
+        $this->assertSame($order->public_reference, $response->json('order.publicReference'));
+        $this->withHeader('Idempotency-Key', 'history-order-key-third-001')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertOk();
+        $this->assertDatabaseCount('direct_booking_orders', 1);
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
+    }
+
+    public function test_retry_updates_reservation_contact_after_a_definitive_decline(): void
+    {
+        $this->configureCheckout();
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'retry-contact-first-order-01')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        $order = DirectBookingOrder::query()->sole();
+        $order->forceFill(['status' => DirectBookingOrderStatus::PagamentoRecusado, 'payment_status' => 'rejected'])->save();
+        $order->paymentAttempts()->create([
+            'idempotency_key' => 'retry-contact-rejected-01', 'request_fingerprint' => str_repeat('d', 64),
+            'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'test-merchant',
+            'payment_method' => 'card', 'payment_method_id' => 'cielo_credit_card', 'status' => 'rejected',
+            'amount' => '197.50', 'base_amount' => '197.50', 'currency' => 'BRL',
+        ]);
+
+        $payload['guest'] = ['fullName' => 'Novo Responsável', 'email' => 'novo@example.test', 'phone' => '64988887777'];
+        $response = $this->withHeader('Idempotency-Key', 'retry-contact-second-order-1')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertOk()->assertJsonPath('success', true);
+
+        $order->refresh();
+        $this->assertSame($order->public_reference, $response->json('order.publicReference'));
+        $this->assertSame('Novo Responsável', $order->guest_name);
+        $this->assertSame('novo@example.test', $order->guest_email);
+        $this->assertSame('64988887777', $order->guest_phone);
+        $this->assertSame(['name', 'email', 'phone'], collect($order->operational_events)->last()['fields']);
+    }
+
+    public function test_expired_terminal_order_can_be_replaced_when_current_balance_differs(): void
+    {
+        $this->configureCheckout();
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'expired-balance-first-order-1')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        $oldOrder = DirectBookingOrder::query()->sole();
+        $oldOrder->forceFill(['status' => DirectBookingOrderStatus::Expirado, 'payment_status' => 'expired', 'quote_total' => '200.00', 'expires_at' => now()->subMinute()])->save();
+
+        $response = $this->withHeader('Idempotency-Key', 'expired-balance-renew-order-1')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertCreated()->assertJsonPath('success', true)->assertJsonPath('order.quoteTotal', '197.50');
+
+        $this->assertNotSame($oldOrder->public_reference, $response->json('order.publicReference'));
+        $this->assertDatabaseCount('direct_booking_orders', 2);
+    }
+
+    public function test_disagreeing_settlement_audits_keep_approved_payment_blocked(): void
+    {
+        $this->configureCheckout();
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'audit-disagreement-order-first')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        $order = DirectBookingOrder::query()->sole();
+        $snapshot = $order->quote_snapshot;
+        $snapshot['existing_reservation']['reported_paid_cents'] = 0;
+        $snapshot['existing_reservation']['pending_amount_cents'] = 19750;
+        $snapshot['existing_reservation']['payment_id'] = str_repeat('b', 24);
+        $order->forceFill([
+            'status' => DirectBookingOrderStatus::AtencaoOperacional,
+            'payment_status' => 'approved',
+            'quote_snapshot' => $snapshot,
+        ])->save();
+        $attempt = $order->paymentAttempts()->create([
+            'idempotency_key' => 'audit-disagreement-payment-01', 'request_fingerprint' => str_repeat('e', 64),
+            'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'test-merchant',
+            'payment_method' => 'pix', 'payment_method_id' => 'cielo_pix', 'status' => 'approved',
+            'amount' => '197.50', 'base_amount' => '197.50', 'currency' => 'BRL',
+        ]);
+        $this->mock(ExistingReservationPaymentCycleRegistry::class)
+            ->shouldReceive('prepare')->once()->with(str_repeat('c', 24))->andReturn([
+                'verified' => [$attempt->id => str_repeat('a', 64)],
+                'verifiedCycles' => [],
+                'currentAudit' => [
+                    'status' => 'consistent_candidate', 'balance_cents' => 19750, 'pending_cents' => 19750,
+                    'pending_payment_id' => str_repeat('a', 24), 'pending_provider_id' => str_repeat('f', 24), 'paid_cents' => 19750,
+                ],
+                'auditsDisagree' => true,
+                'reservationId' => str_repeat('c', 24),
+            ]);
+
+        $this->withHeader('Idempotency-Key', 'audit-disagreement-order-second')
+            ->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertStatus(409)->assertJsonPath('code', 'existing_checkout_already_started');
+
+        $this->assertDatabaseCount('direct_booking_orders', 1);
+    }
+
+    public function test_existing_order_with_pending_attempt_cannot_be_reused_for_another_charge(): void
+    {
+        $this->configureCheckout();
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'active-order-key-first-001')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        $order = DirectBookingOrder::query()->sole();
+        $order->paymentAttempts()->create([
+            'idempotency_key' => 'active-order-attempt-01', 'request_fingerprint' => str_repeat('c', 64),
+            'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'test-merchant',
+            'payment_method' => 'pix', 'payment_method_id' => 'cielo_pix', 'status' => 'pending',
+            'amount' => '197.50', 'base_amount' => '197.50', 'currency' => 'BRL',
+        ]);
+        $payload['guest'] = ['fullName' => 'Novo Responsável', 'email' => 'novo@example.test', 'phone' => '64988887777'];
+        $response = $this->withHeader('Idempotency-Key', 'active-order-key-second01')
+            ->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertOk()->assertJsonPath('success', true);
+        $this->assertSame($order->public_reference, $response->json('order.publicReference'));
+        $this->assertSame('Hóspede Teste', $order->fresh()->guest_name);
+        $this->assertSame('guest@example.test', $order->fresh()->guest_email);
+        $this->assertDatabaseCount('direct_booking_orders', 1);
+        Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
+    }
+
+    public function test_expired_order_can_be_replaced_after_reservation_is_revalidated(): void
+    {
+        $this->configureCheckout();
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'expired-order-key-first-01')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        $oldOrder = DirectBookingOrder::query()->sole();
+        $oldOrder->forceFill(['status' => DirectBookingOrderStatus::Expirado, 'payment_status' => 'expired', 'expires_at' => now()->subMinute()])->save();
+
+        $response = $this->withHeader('Idempotency-Key', 'expired-order-key-second01')
+            ->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertCreated()->assertJsonPath('success', true);
+
+        $this->assertNotSame($oldOrder->public_reference, $response->json('order.publicReference'));
+        $this->assertDatabaseCount('direct_booking_orders', 2);
     }
 
     public function test_database_allows_existing_history_but_enforces_one_website_order(): void
@@ -177,10 +308,15 @@ class ExistingReservationCheckoutTest extends TestCase
     public function test_schema_rollback_refuses_to_discard_duplicate_reservation_history(): void
     {
         $this->configureCheckout();
-        config(['direct-booking.experimental_existing_order_history_enabled' => true]);
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'rollback-order-key-first-01')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
-        $this->withHeader('Idempotency-Key', 'rollback-order-key-second01')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        $first = DirectBookingOrder::query()->sole();
+        $duplicate = $first->replicate(['website_stays_reservation_id']);
+        $duplicate->forceFill([
+            'idempotency_key' => 'rollback-order-key-second01',
+            'public_reference' => str_repeat('x', 40),
+            'resume_token' => str_repeat('y', 64),
+        ])->save();
         $migration = require database_path('migrations/2026_11_10_233000_allow_existing_reservation_order_history.php');
         try {
             $migration->down();
@@ -382,7 +518,9 @@ class ExistingReservationCheckoutTest extends TestCase
         $this->configureCheckout();
         $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
         $this->withHeader('Idempotency-Key', 'existing-checkout-test-key-111')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
-        $this->withHeader('Idempotency-Key', 'existing-checkout-test-key-222')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertStatus(409)->assertJsonPath('code', 'existing_checkout_already_started');
+        $first = DirectBookingOrder::query()->sole();
+        $response = $this->withHeader('Idempotency-Key', 'existing-checkout-test-key-222')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertOk();
+        $this->assertSame($first->public_reference, $response->json('order.publicReference'));
         $this->assertDatabaseCount('direct_booking_orders', 1);
     }
 

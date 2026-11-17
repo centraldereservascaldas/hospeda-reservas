@@ -51,7 +51,7 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
     }
 
     #[DataProvider('bootstrapOriginScenarios')]
-    public function test_open_balance_keeps_checkout_available_but_blocks_a_second_local_order(bool $removeMarker, bool $revokeApproval): void
+    public function test_open_balance_reuses_the_existing_order_for_a_new_checkout_session(bool $removeMarker, bool $revokeApproval): void
     {
         $this->configure();
         $this->fakeStays('success');
@@ -62,8 +62,11 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
         }
         $this->getJson('/api/existing-reservations/ZX91K/checkout-summary')
             ->assertOk()->assertJsonPath('reservation.balanceStatus', 'unrecorded_candidate')->assertJsonPath('reservation.paymentEnabled', true);
-        $this->withHeader('Idempotency-Key', 'bootstrap-new-device-key-123')->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
-            ->assertStatus(409)->assertJsonPath('code', 'existing_checkout_already_started');
+        $firstReference = DirectBookingOrder::query()->sole()->public_reference;
+        $response = $this->withHeader('Idempotency-Key', 'bootstrap-new-device-key-123')
+            ->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
+            ->assertOk()->assertJsonPath('success', true);
+        $this->assertSame($firstReference, $response->json('order.publicReference'));
         $this->assertDatabaseCount('direct_booking_orders', 1);
         Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET');
     }

@@ -697,6 +697,8 @@ class CieloCheckoutPaymentService
                 }
             } elseif ($status === 'rejected' && $lockedOrder->status === DirectBookingOrderStatus::PagamentoPendente) {
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoRecusado, ['source' => 'cielo_authoritative_lookup', 'payment_id' => $paymentId]);
+            } elseif ($status === 'cancelled' && $lockedOrder->status === DirectBookingOrderStatus::PagamentoPendente) {
+                $lockedOrder->transitionTo(DirectBookingOrderStatus::PagamentoRecusado, ['source' => 'cielo_authoritative_cancellation', 'payment_id' => $paymentId]);
             } elseif ($status === 'expired' && in_array($lockedOrder->status, [DirectBookingOrderStatus::PagamentoPendente, DirectBookingOrderStatus::AtencaoOperacional], true)) {
                 $lockedOrder->expires_at = now();
                 $lockedOrder->transitionTo(DirectBookingOrderStatus::LiberacaoPendente, ['source' => 'cielo_unpaid_pix_expired', 'payment_id' => $paymentId]);
@@ -711,9 +713,11 @@ class CieloCheckoutPaymentService
 
             $lockedOrder->save();
 
-            if ($lockedOrder->origin === 'stays_existing' && $status === 'rejected'
-                && $lockedAttempt->payment_method === 'card') {
+            if ($lockedOrder->origin === 'stays_existing' && $status === 'rejected') {
                 app(ExistingReservationPaymentCycleRegistry::class)->closeDeclined($lockedOrder, $lockedAttempt);
+            }
+            if ($lockedOrder->origin === 'stays_existing' && in_array($status, ['cancelled', 'expired'], true)) {
+                app(ExistingReservationPaymentCycleRegistry::class)->closeCancelledOrExpired($lockedOrder, $lockedAttempt);
             }
 
             return false;

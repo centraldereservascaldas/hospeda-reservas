@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysPaymentService;
+use App\Services\ExistingReservationPaymentCycleRegistry;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -38,7 +39,7 @@ class ExistingReservationThreePaymentsJourneyTest extends TestCase
         ]);
         $reservationId = str_repeat('c', 24);
         $provider = str_repeat('f', 24);
-        $amounts = [10, 6, 4];
+        $amounts = [10, 5, 5];
         $index = 0;
         $paid = 0;
         $completed = [];
@@ -132,6 +133,16 @@ class ExistingReservationThreePaymentsJourneyTest extends TestCase
             if ($index < 2) {
                 $this->assertFalse($result['ready'], json_encode($result));
                 $this->assertSame('existing_balance_remaining', $result['code']);
+                if ($index === 0) {
+                    $settledCycleCount = DB::table('existing_reservation_payment_cycles')->where('state', 'settled')->count();
+                    $preparedCycles = app(ExistingReservationPaymentCycleRegistry::class)->prepare($reservationId);
+                    $this->assertSame(1, $settledCycleCount);
+                    $this->assertCount(1, $preparedCycles['verified'] ?? []);
+                }
+                if ($index === 2) {
+                    $previousOrder = DirectBookingOrder::query()->where('public_reference', '!=', $reference)->latest()->firstOrFail();
+                    $this->assertSame($previousOrder->quote_total, (string) $amount.'.00');
+                }
             } else {
                 $this->assertTrue($result['ready'], json_encode($result));
             }
