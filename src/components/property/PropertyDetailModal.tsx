@@ -185,9 +185,10 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   ]);
 
   useEffect(() => {
-    if (isDialog || !propertyId || !hasEditedBookingContextRef.current) return;
+    if (!propertyId || !hasEditedBookingContextRef.current) return;
 
     const currentUrl = new URL(window.location.href);
+    if (isDialog && !getAccommodationIdFromPath(currentUrl.pathname)) return;
     const currentFilters = parseSearchFilters(currentUrl.search);
     currentUrl.search = mergeSearchFiltersIntoUrl(currentUrl.search, {
       ...currentFilters,
