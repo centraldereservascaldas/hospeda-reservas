@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Services\ExistingReservationLedgerAudit;
+use App\Services\ExistingReservationPaymentCycleRegistry;
 use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -206,6 +207,46 @@ class ExistingReservationCheckoutTest extends TestCase
 
         $this->assertNotSame($oldOrder->public_reference, $response->json('order.publicReference'));
         $this->assertDatabaseCount('direct_booking_orders', 2);
+    }
+
+    public function test_disagreeing_settlement_audits_keep_approved_payment_blocked(): void
+    {
+        $this->configureCheckout();
+        $payload = ['expectedBalanceCents' => 19750, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $this->withHeader('Idempotency-Key', 'audit-disagreement-order-first')->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertCreated();
+        $order = DirectBookingOrder::query()->sole();
+        $snapshot = $order->quote_snapshot;
+        $snapshot['existing_reservation']['reported_paid_cents'] = 0;
+        $snapshot['existing_reservation']['pending_amount_cents'] = 19750;
+        $snapshot['existing_reservation']['payment_id'] = str_repeat('b', 24);
+        $order->forceFill([
+            'status' => DirectBookingOrderStatus::AtencaoOperacional,
+            'payment_status' => 'approved',
+            'quote_snapshot' => $snapshot,
+        ])->save();
+        $attempt = $order->paymentAttempts()->create([
+            'idempotency_key' => 'audit-disagreement-payment-01', 'request_fingerprint' => str_repeat('e', 64),
+            'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'test-merchant',
+            'payment_method' => 'pix', 'payment_method_id' => 'cielo_pix', 'status' => 'approved',
+            'amount' => '197.50', 'base_amount' => '197.50', 'currency' => 'BRL',
+        ]);
+        $this->mock(ExistingReservationPaymentCycleRegistry::class)
+            ->shouldReceive('prepare')->once()->with(str_repeat('c', 24))->andReturn([
+                'verified' => [$attempt->id => str_repeat('a', 64)],
+                'verifiedCycles' => [],
+                'currentAudit' => [
+                    'status' => 'consistent_candidate', 'balance_cents' => 19750, 'pending_cents' => 19750,
+                    'pending_payment_id' => str_repeat('a', 24), 'pending_provider_id' => str_repeat('f', 24), 'paid_cents' => 19750,
+                ],
+                'auditsDisagree' => true,
+                'reservationId' => str_repeat('c', 24),
+            ]);
+
+        $this->withHeader('Idempotency-Key', 'audit-disagreement-order-second')
+            ->postJson('/api/existing-reservations/ZY92K/checkout', $payload)
+            ->assertStatus(409)->assertJsonPath('code', 'existing_checkout_already_started');
+
+        $this->assertDatabaseCount('direct_booking_orders', 1);
     }
 
     public function test_existing_order_with_pending_attempt_cannot_be_reused_for_another_charge(): void
