@@ -95,4 +95,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
         && test "$(supervisorctl status apache migrations queue scheduler discovery 2>/dev/null | grep -c RUNNING)" -eq 5 \
         && curl --fail --silent http://127.0.0.1/api/ready >/dev/null
 
-CMD ["/usr/bin/supervisord", "--nodaemon", "--configuration", "/etc/supervisor/supervisord.conf"]
+CMD ["/bin/sh", "/var/www/html/docker/start-container.sh"]
