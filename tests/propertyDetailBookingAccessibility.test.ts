@@ -666,6 +666,20 @@ test('updates the address when dates change in the property dialog', async () =>
       assert.equal(new URL(window.location.href).searchParams.get('from'), '2026-11-12');
       assert.equal(new URL(window.location.href).searchParams.get('to'), '2026-11-18');
     });
+    fireEvent.click(
+      container.querySelector<HTMLButtonElement>(
+        'button[aria-controls="property-guest-selector-dialog"]',
+      )!,
+    );
+    fireEvent.click(getByRole('button', { name: 'Adicionar: Adultos' }));
+    fireEvent.click(getByRole('button', { name: 'Aplicar' }));
+    await waitFor(() => {
+      const params = new URL(window.location.href).searchParams;
+      assert.equal(params.get('guests'), '3');
+      assert.equal(params.get('adults'), '3');
+      assert.equal(params.get('from'), '2026-11-12');
+      assert.equal(params.get('to'), '2026-11-18');
+    });
   } finally {
     crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
     crcnBackendApi.calculatePrice = originalCalculatePrice;
