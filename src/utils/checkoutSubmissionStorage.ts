@@ -38,14 +38,17 @@ async function fingerprintSubmission(serializedSubmission: string): Promise<stri
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function getFingerprint(submission: CheckoutSubmission): Promise<string> {
-  return fingerprintSubmission(serializeSubmission(submission));
+async function getFingerprint(submission: CheckoutSubmission, scope?: string): Promise<string> {
+  const serializedSubmission = serializeSubmission(submission);
+
+  return fingerprintSubmission(scope ? `${scope}\n${serializedSubmission}` : serializedSubmission);
 }
 
 export async function getOrCreateCheckoutSubmissionKey(
   submission: CheckoutSubmission,
+  scope?: string,
 ): Promise<string> {
-  const fingerprint = await getFingerprint(submission);
+  const fingerprint = await getFingerprint(submission, scope);
   const memoryKey = inMemoryKeys.get(fingerprint);
   if (memoryKey) return memoryKey;
 

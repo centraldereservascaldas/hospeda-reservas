@@ -33,6 +33,7 @@ import {
   clearCheckoutResumeToken,
   getCheckoutResumeToken,
 } from '../../utils/checkoutResumeStorage';
+import { getExistingReservationCodeForResumeReference } from '../../utils/existingReservationResumeStorage';
 
 const pixIdempotencyStoragePrefix = 'crcn.checkout.pix.';
 
@@ -252,7 +253,15 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
     if (order.status === 'pagamento_pendente')
       return {
         title: 'Pagamento pendente',
-        detail: 'Aguardamos a confirmação do pagamento desta reserva.',
+        detail:
+          'Aguardamos a confirmação do pagamento desta reserva. Não tente pagar novamente enquanto verificamos o resultado.',
+        tone: 'neutral' as const,
+      };
+    if (order.status === 'pago_em_confirmacao')
+      return {
+        title: 'Pagamento aprovado, reserva em atualização',
+        detail:
+          'O pagamento foi aprovado. Estamos registrando e conferindo a baixa na Stays antes de confirmar a reserva. Não é necessário pagar novamente.',
         tone: 'neutral' as const,
       };
     if (order.status === 'pagamento_recusado')
@@ -449,6 +458,10 @@ export function CheckoutResumePage({
   const order = resumeState.kind === 'ready' ? resumeState.data.order : null;
   const paymentAttempt =
     resumeState.kind === 'ready' ? (resumeState.data.payment.attempt ?? null) : null;
+  const existingReservationCode =
+    order?.origin === 'stays_existing'
+      ? getExistingReservationCodeForResumeReference(reference)
+      : null;
   const supportLink = (
     <CheckoutSupportLink
       details={{
@@ -688,18 +701,35 @@ export function CheckoutResumePage({
                     </div>
                   </div>
                   {order.origin === 'stays_existing' &&
-                    (order.status === 'pre_reservado' || order.status === 'pagamento_recusado') &&
+                    (order.status === 'pre_reservado' ||
+                      order.status === 'pagamento_recusado' ||
+                      order.status === 'expirado' ||
+                      order.status === 'liberacao_pendente') &&
                     (paymentAttempt === null ||
                       paymentAttempt.status === 'rejected' ||
-                      paymentAttempt.status === 'cancelled') && (
+                      paymentAttempt.status === 'cancelled' ||
+                      paymentAttempt.status === 'expired') && (
                       <div
                         className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
                         role="status"
                       >
                         <p>
-                          Para continuar com esta reserva, fale com nosso atendimento antes de
-                          iniciar outra tentativa.
+                          {order.status === 'expirado' || order.status === 'liberacao_pendente'
+                            ? 'O prazo desta tentativa terminou. Consulte novamente a disponibilidade e o saldo antes de iniciar outro pagamento.'
+                            : paymentAttempt?.status === 'rejected'
+                              ? 'A Cielo não aprovou a tentativa anterior. Nenhum pagamento foi confirmado. Revise os dados antes de tentar novamente.'
+                              : 'Esta reserva ainda pode receber um pagamento. Confira os dados antes de continuar.'}
                         </p>
+                        {existingReservationCode && (
+                          <a
+                            className="inline-flex min-h-11 items-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                            href={`/checkout/${encodeURIComponent(existingReservationCode)}?retry=1&renewal=${encodeURIComponent(order.publicReference)}`}
+                          >
+                            {order.status === 'expirado' || order.status === 'liberacao_pendente'
+                              ? 'Consultar reserva e tentar novamente'
+                              : 'Revisar e tentar novamente'}
+                          </a>
+                        )}
                         {supportLink}
                       </div>
                     )}

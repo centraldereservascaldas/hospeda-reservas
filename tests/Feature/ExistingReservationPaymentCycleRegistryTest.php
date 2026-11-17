@@ -145,6 +145,110 @@ class ExistingReservationPaymentCycleRegistryTest extends TestCase
         $this->assertDatabaseHas('existing_reservation_payment_cycles', ['id' => $cycle['cycle_id'], 'state' => 'open', 'active_reservation_id' => $reservation]);
     }
 
+    public function test_authoritatively_cancelled_attempt_releases_cycle_for_a_safe_retry(): void
+    {
+        $reservation = str_repeat('a', 24);
+        $order = $this->order($reservation);
+        $order->forceFill([
+            'status' => DirectBookingOrderStatus::PagamentoPendente,
+            'payment_status' => 'pending',
+            'gateway_provider' => 'cielo',
+            'gateway_merchant_id' => 'merchant',
+        ])->save();
+        $registry = app(ExistingReservationPaymentCycleRegistry::class);
+        $cycle = $registry->open($reservation, $order->id, 'cancelled-cycle-12345678');
+        $attempt = $order->paymentAttempts()->create([
+            'idempotency_key' => 'cancelled-attempt-12345678', 'request_fingerprint' => str_repeat('b', 64),
+            'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'merchant',
+            'gateway_payment_id' => 'payment-id', 'payment_method' => 'pix', 'payment_method_id' => 'cielo_pix',
+            'status' => 'processing', 'amount' => '10.00', 'currency' => 'BRL',
+        ]);
+
+        $closed = app(ExistingReservationPaymentLock::class)->synchronized($reservation, function () use ($registry, $order, $attempt, $cycle): bool {
+            $this->assertTrue($registry->bindAttempt($cycle['cycle_id'], $order, $attempt));
+            $attempt->forceFill(['status' => 'cancelled', 'gateway_status' => 'cancelled'])->save();
+            $order->forceFill(['status' => DirectBookingOrderStatus::PagamentoRecusado, 'payment_status' => 'cancelled'])->save();
+
+            return $registry->closeCancelledOrExpired($order->fresh(), $attempt->fresh());
+        });
+
+        $this->assertTrue($closed);
+        $this->assertDatabaseHas('existing_reservation_payment_cycles', [
+            'id' => $cycle['cycle_id'], 'state' => 'declined', 'active_reservation_id' => null,
+        ]);
+    }
+
+    public function test_authoritatively_expired_pix_releases_cycle_while_stays_release_is_pending(): void
+    {
+        $reservation = str_repeat('a', 24);
+        $order = $this->order($reservation);
+        $order->forceFill([
+            'status' => DirectBookingOrderStatus::PagamentoPendente,
+            'payment_status' => 'pending',
+            'gateway_provider' => 'cielo',
+            'gateway_merchant_id' => 'merchant',
+        ])->save();
+        $registry = app(ExistingReservationPaymentCycleRegistry::class);
+        $cycle = $registry->open($reservation, $order->id, 'expired-pix-cycle-1234');
+        $attempt = $order->paymentAttempts()->create([
+            'idempotency_key' => 'expired-pix-attempt-1234', 'request_fingerprint' => str_repeat('b', 64),
+            'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'merchant',
+            'gateway_payment_id' => 'payment-id', 'payment_method' => 'pix', 'payment_method_id' => 'cielo_pix',
+            'status' => 'processing', 'amount' => '10.00', 'currency' => 'BRL',
+        ]);
+
+        $closed = app(ExistingReservationPaymentLock::class)->synchronized($reservation, function () use ($registry, $order, $attempt, $cycle): bool {
+            $this->assertTrue($registry->bindAttempt($cycle['cycle_id'], $order, $attempt));
+            $attempt->forceFill(['status' => 'expired', 'gateway_status' => 'expired'])->save();
+            $order->forceFill([
+                'status' => DirectBookingOrderStatus::LiberacaoPendente,
+                'payment_status' => 'expired',
+                'expires_at' => now(),
+            ])->save();
+
+            return $registry->closeCancelledOrExpired($order->fresh(), $attempt->fresh());
+        });
+
+        $this->assertTrue($closed);
+        $this->assertDatabaseHas('existing_reservation_payment_cycles', [
+            'id' => $cycle['cycle_id'], 'state' => 'declined', 'active_reservation_id' => null,
+        ]);
+        $this->assertSame('opened', $registry->open($reservation, $order->id, 'expired-pix-retry-12345')['status']);
+    }
+
+    public function test_authoritatively_rejected_pix_attempt_releases_cycle_for_a_safe_retry(): void
+    {
+        $reservation = str_repeat('a', 24);
+        $order = $this->order($reservation);
+        $order->forceFill([
+            'status' => DirectBookingOrderStatus::PagamentoPendente,
+            'payment_status' => 'pending',
+            'gateway_provider' => 'cielo',
+            'gateway_merchant_id' => 'merchant',
+        ])->save();
+        $registry = app(ExistingReservationPaymentCycleRegistry::class);
+        $cycle = $registry->open($reservation, $order->id, 'pix-rejected-cycle-1234');
+        $attempt = $order->paymentAttempts()->create([
+            'idempotency_key' => 'pix-rejected-attempt-1234', 'request_fingerprint' => str_repeat('b', 64),
+            'gateway_provider' => 'cielo', 'gateway_merchant_id' => 'merchant',
+            'gateway_payment_id' => 'payment-id', 'payment_method' => 'pix', 'payment_method_id' => 'cielo_pix',
+            'status' => 'processing', 'amount' => '10.00', 'currency' => 'BRL',
+        ]);
+
+        $closed = app(ExistingReservationPaymentLock::class)->synchronized($reservation, function () use ($registry, $order, $attempt, $cycle): bool {
+            $this->assertTrue($registry->bindAttempt($cycle['cycle_id'], $order, $attempt));
+            $attempt->forceFill(['status' => 'rejected', 'gateway_status' => 'rejected'])->save();
+            $order->forceFill(['status' => DirectBookingOrderStatus::PagamentoRecusado, 'payment_status' => 'rejected'])->save();
+
+            return $registry->closeDeclined($order->fresh(), $attempt->fresh());
+        });
+
+        $this->assertTrue($closed);
+        $this->assertDatabaseHas('existing_reservation_payment_cycles', [
+            'id' => $cycle['cycle_id'], 'state' => 'declined', 'active_reservation_id' => null,
+        ]);
+    }
+
     public function test_database_rejects_two_open_cycles_even_if_registry_is_bypassed(): void
     {
         $reservation = str_repeat('a', 24);

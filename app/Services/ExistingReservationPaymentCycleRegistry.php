@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -168,11 +169,43 @@ class ExistingReservationPaymentCycleRegistry
     public function closeDeclined(DirectBookingOrder $order, DirectBookingPaymentAttempt $attempt): bool
     {
         if (DB::transactionLevel() < 1 || $attempt->direct_booking_order_id !== $order->id
-            || $attempt->payment_method !== 'card' || $attempt->status !== 'rejected'
+            || $attempt->status !== 'rejected'
             || $attempt->gateway_status !== 'rejected' || ! is_string($attempt->gateway_payment_id)
             || $attempt->gateway_payment_id === '' || $attempt->gateway_provider !== $order->gateway_provider
             || ! is_string($order->gateway_merchant_id) || $order->gateway_merchant_id === ''
-            || $attempt->gateway_merchant_id !== $order->gateway_merchant_id) {
+            || $attempt->gateway_merchant_id !== $order->gateway_merchant_id
+            || $order->status !== DirectBookingOrderStatus::PagamentoRecusado
+            || $order->payment_status !== 'rejected'
+            || $attempt->paid_at !== null) {
+            return false;
+        }
+
+        return DB::table('existing_reservation_payment_cycles')->where('direct_booking_payment_attempt_id', $attempt->id)
+            ->where('direct_booking_order_id', $order->id)
+            ->where('active_reservation_id', strtolower((string) $order->stays_reservation_id))
+            ->where('state', 'open')
+            ->update(['state' => 'declined', 'active_reservation_id' => null, 'updated_at' => now()]) === 1;
+    }
+
+    /** Release a cycle only after the gateway authoritatively reports cancellation or expiry. */
+    public function closeCancelledOrExpired(DirectBookingOrder $order, DirectBookingPaymentAttempt $attempt): bool
+    {
+        $terminalStatus = $attempt->status;
+        $validOrderStatuses = match ($terminalStatus) {
+            'expired' => [DirectBookingOrderStatus::LiberacaoPendente, DirectBookingOrderStatus::Expirado],
+            'cancelled' => [DirectBookingOrderStatus::PagamentoRecusado],
+            default => [],
+        };
+        if (DB::transactionLevel() < 1 || $attempt->direct_booking_order_id !== $order->id
+            || ! in_array($terminalStatus, ['cancelled', 'expired'], true)
+            || $attempt->gateway_status !== $terminalStatus
+            || $attempt->paid_at !== null
+            || ! is_string($attempt->gateway_payment_id) || $attempt->gateway_payment_id === ''
+            || $attempt->gateway_provider !== $order->gateway_provider
+            || ! is_string($order->gateway_merchant_id) || $order->gateway_merchant_id === ''
+            || $attempt->gateway_merchant_id !== $order->gateway_merchant_id
+            || ! in_array($order->status, $validOrderStatuses, true)
+            || $order->payment_status !== $terminalStatus) {
             return false;
         }
 

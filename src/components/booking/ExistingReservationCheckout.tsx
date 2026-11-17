@@ -97,7 +97,18 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
   const [activeReference, setActiveReference] = useState<string | null>(null);
   const contextRef = useRef<CieloPaymentContext | null>(null);
   const pixKeyRef = useRef<string | null>(null);
-  const previousReference = useMemo(() => getExistingReservationResumeReference(code), [code]);
+  const [renewalGeneration] = useState(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const generation = searchParams.get('renewal');
+
+    return searchParams.get('retry') === '1' && generation && /^[A-Za-z0-9]{40}$/.test(generation)
+      ? generation
+      : null;
+  });
+  const previousReference = useMemo(
+    () => (renewalGeneration ? null : getExistingReservationResumeReference(code)),
+    [code, renewalGeneration],
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -149,21 +160,24 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
       email: guest.email.trim(),
       phone: guest.phone.trim(),
     };
-    const idempotencyKey = await getOrCreateCheckoutSubmissionKey({
-      listingId: `${code}:${summary.listingId}:${method}:${method === 'card' ? (cardPricing?.installments ?? 'unavailable') : 'single'}`,
-      from: summary.checkIn,
-      to: summary.checkOut,
-      guests: {
-        adults: summary.adults ?? 0,
-        children: summary.children ?? 0,
-        infants: summary.infants ?? 0,
-        pets: 0,
+    const idempotencyKey = await getOrCreateCheckoutSubmissionKey(
+      {
+        listingId: `${code}:${summary.listingId}:${method}:${method === 'card' ? (cardPricing?.installments ?? 'unavailable') : 'single'}`,
+        from: summary.checkIn,
+        to: summary.checkOut,
+        guests: {
+          adults: summary.adults ?? 0,
+          children: summary.children ?? 0,
+          infants: summary.infants ?? 0,
+          pets: 0,
+        },
+        quoteTotal: summary.candidateBalanceCents / 100,
+        guest: payer,
+        acceptedTermsVersion: 'existing-booking-payment-v1',
+        acceptedTerms: true,
       },
-      quoteTotal: summary.candidateBalanceCents / 100,
-      guest: payer,
-      acceptedTermsVersion: 'existing-booking-payment-v1',
-      acceptedTerms: true,
-    });
+      renewalGeneration ? `existing-reservation-renewal:${code}:${renewalGeneration}` : undefined,
+    );
     let response: Response;
     let data: unknown;
     try {
@@ -189,7 +203,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
       if (data.code === 'existing_checkout_already_started') {
         setPaymentReviewRequired(true);
         throw new Error(
-          'Já existe um pedido para esta reserva. Volte ao navegador em que ele foi iniciado ou fale com nosso atendimento antes de pagar.',
+          'Encontramos um pagamento anterior que ainda não foi encerrado com segurança. Não faça outra cobrança; acompanhe o pedido ou fale com nosso atendimento.',
         );
       }
       if (data.code === 'existing_receivable_unconfirmed') {
@@ -251,11 +265,12 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
       '',
       checkoutPathWithStayQuery(resume.path, window.location.search),
     );
-    if (
-      order.status !== 'pre_reservado' ||
-      order.paymentStatus !== null ||
-      payment.enabled !== true
-    ) {
+    const orderCanStartPayment =
+      (order.status === 'pre_reservado' &&
+        (order.paymentStatus === null || order.paymentStatus === 'not_started')) ||
+      (order.status === 'pagamento_recusado' &&
+        (order.paymentStatus === 'rejected' || order.paymentStatus === 'cancelled'));
+    if (!orderCanStartPayment || payment.enabled !== true) {
       setActiveReference(context.reference);
       throw new Error('Acompanhe a situação deste pedido antes de tentar novamente.');
     }
