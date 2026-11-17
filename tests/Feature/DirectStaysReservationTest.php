@@ -35,6 +35,8 @@ class DirectStaysReservationTest extends TestCase
                 $action = $order->staysActions()->where('action_type', 'create_reservation')->sole();
                 if ($loss === 'expired') {
                     $action->forceFill(['last_attempt_at' => now()->subMinutes(5)])->save();
+                } elseif ($loss === 'legacy_reclaim') {
+                    $action->forceFill(['attempt_count' => $action->attempt_count + 1, 'last_attempt_at' => now()])->save();
                 } else {
                     $action->forceFill(['claim_token' => (string) Str::uuid()])->save();
                 }
@@ -56,7 +58,7 @@ class DirectStaysReservationTest extends TestCase
 
     public static function lostReservationClaimCases(): array
     {
-        return [['expired'], ['replaced']];
+        return [['expired'], ['replaced'], ['legacy_reclaim']];
     }
 
     #[DataProvider('reservationStateChanges')]

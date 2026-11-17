@@ -871,6 +871,7 @@ class DirectStaysReservationService
             $timeout = max(10, (int) config('direct-booking.reservation_claim_timeout_seconds', 60));
             if ($locked->direct_booking_order_id !== $lockedOrder->id
                 || $locked->status !== 'processing' || $locked->claim_token !== $claim['token']
+                || $locked->attempt_count !== $claim['previousAttempts'] + 1
                 || ! $locked->last_attempt_at?->greaterThan(now()->subSeconds($timeout))
                 || $lockedOrder->stays_reservation_id !== null
                 || ! in_array($lockedOrder->status, [DirectBookingOrderStatus::Cotado, DirectBookingOrderStatus::AtencaoOperacional], true)
@@ -896,6 +897,7 @@ class DirectStaysReservationService
             $locked = DirectBookingStaysAction::query()->lockForUpdate()->findOrFail($action->id);
             $timeout = max(10, (int) config('direct-booking.reservation_claim_timeout_seconds', 60));
             if ($locked->status !== 'processing' || $locked->claim_token !== $claim['token']
+                || $locked->attempt_count !== $claim['previousAttempts'] + 1
                 || ! $locked->last_attempt_at?->greaterThan(now()->subSeconds($timeout))) {
                 return $this->result(false, 'reservation_claim_lost', 'A tentativa de pré-reserva perdeu sua autorização de envio.');
             }
