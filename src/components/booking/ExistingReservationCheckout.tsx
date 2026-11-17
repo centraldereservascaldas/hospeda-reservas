@@ -18,6 +18,7 @@ import {
 } from './PixPayerIdentificationField';
 import { CheckoutSupportLink } from './CheckoutSupportLink';
 import { CheckoutFooter } from './CheckoutFooter';
+import { ExistingReservationConditions } from './ExistingReservationConditions';
 import { LogoCRCN } from '../LogoCRCN';
 import { ArrowLeft, LockKeyhole, QrCode } from 'lucide-react';
 import {
@@ -582,7 +583,8 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
                       Pagamento acompanhado
                     </span>
                   </div>
-                  <label className="mt-6 flex min-h-11 items-start gap-3 border-t border-neutral-200 pt-5 text-sm">
+                  <ExistingReservationConditions />
+                  <label className="mt-4 flex min-h-11 items-start gap-3 text-sm leading-6">
                     <input
                       type="checkbox"
                       checked={accepted}
