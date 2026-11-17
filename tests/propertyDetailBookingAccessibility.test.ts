@@ -625,6 +625,54 @@ test('shares the current stay dates and guest count while preserving tracking pa
   }
 });
 
+test('updates the address when dates change in the property dialog', async () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalCalculatePrice = crcnBackendApi.calculatePrice;
+  crcnBackendApi.getAccommodationCalendar = async () =>
+    Array.from({ length: 30 }, (_, index) => ({
+      date: `2026-11-${String(index + 1).padStart(2, '0')}`,
+      avail: 1,
+    }));
+  crcnBackendApi.calculatePrice = async () => null;
+  window.history.replaceState(null, '', '/apartamento/JQ08G?from=2026-11-11&to=2026-11-15');
+  try {
+    const { container, getByRole } = render(
+      React.createElement(PropertyDetailModal, {
+        property: STAYS_NET_APARTMENTS[0]!,
+        initialCheckIn: '2026-11-11',
+        initialCheckOut: '2026-11-15',
+        initialGuests: { adults: 2, children: 0, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking: () => {},
+      }),
+    );
+    fireEvent.click(
+      container.querySelector<HTMLButtonElement>('button[aria-controls="stay-dates-dialog"]')!,
+    );
+    const calendar = getByRole('dialog', { name: 'Escolha as datas' });
+    const arrival = calendar.querySelector<HTMLButtonElement>(
+      'button[aria-label*="12 de novembro de 2026"]',
+    )!;
+    await waitFor(() => assert.equal(arrival.disabled, false));
+    fireEvent.click(arrival);
+    fireEvent.click(
+      calendar.querySelector<HTMLButtonElement>('button[aria-label*="18 de novembro de 2026"]')!,
+    );
+    fireEvent.click(getByRole('button', { name: 'Aplicar datas' }));
+    await waitFor(() => {
+      assert.equal(new URL(window.location.href).searchParams.get('from'), '2026-11-12');
+      assert.equal(new URL(window.location.href).searchParams.get('to'), '2026-11-18');
+    });
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePrice = originalCalculatePrice;
+    window.history.replaceState(null, '', '/');
+  }
+});
+
 test('announces when the browser cannot copy a property link', async () => {
   const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
   const originalCalculatePrice = crcnBackendApi.calculatePrice;
