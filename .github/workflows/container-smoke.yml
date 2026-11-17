@@ -98,11 +98,10 @@ jobs:
             sleep 2
           done
 
-          health_status=$(curl --silent --max-time 10 --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/api/health)
-          ready_status=$(curl --silent --max-time 10 --output /dev/null --write-out '%{http_code}' http://127.0.0.1:8081/api/ready)
-
-          test "$health_status" = 200
-          test "$ready_status" = 503
+          if curl --silent --max-time 5 --output /dev/null http://127.0.0.1:8081/api/health; then
+            echo 'Apache must not serve requests before migrations succeed.' >&2
+            exit 1
+          fi
           if docker exec "$UNREADY_CONTAINER_NAME" test -f /tmp/hospeda-migrations-ready; then
             echo 'Unavailable database must not produce the migrations-ready marker.' >&2
             exit 1

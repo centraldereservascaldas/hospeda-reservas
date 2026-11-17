@@ -35,6 +35,11 @@ import { emitConfirmedPurchase } from '../../utils/measurementEvents';
 import { formatCurrency } from '../../utils/formatters';
 import { formatBrazilianPhone } from '../../utils/checkoutInputFormatting';
 import { countOccupancyGuests } from '../../utils/guestCounts';
+import {
+  clearCheckoutContact,
+  readCheckoutContact,
+  saveCheckoutContact,
+} from '../../utils/checkoutDraft';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import {
   getVisiblePropertyFees,
@@ -60,7 +65,13 @@ export function SinglePageCheckout({
   onClose,
   previewOnly = false,
 }: SinglePageCheckoutProps) {
-  const [guest, setGuest] = useState(guestPrefill ?? { fullName: '', email: '', phone: '' });
+  const [guest, setGuest] = useState(
+    () => readCheckoutContact() ?? guestPrefill ?? { fullName: '', email: '', phone: '' },
+  );
+  const updateGuest = (next: typeof guest) => {
+    setGuest(next);
+    if (!previewOnly && !preparedRef.current) saveCheckoutContact(next);
+  };
   const [guestCpf, setGuestCpf] = useState('');
   const [terms, setTerms] = useState<{ version: string; fields: [string, string][] } | null>(null);
   const [readiness, setReadiness] = useState<CheckoutReadinessResponse | null>(null);
@@ -268,6 +279,7 @@ export function SinglePageCheckout({
       };
       preparedRef.current = context;
       setPrepared(true);
+      clearCheckoutContact();
       window.history.replaceState(
         null,
         '',
@@ -605,7 +617,9 @@ export function SinglePageCheckout({
                         name="guestName"
                         autoComplete="name"
                         value={guest.fullName}
-                        onChange={(event) => setGuest({ ...guest, fullName: event.target.value })}
+                        onChange={(event) =>
+                          updateGuest({ ...guest, fullName: event.target.value })
+                        }
                         className={fieldClass}
                       />
                     </label>
@@ -617,7 +631,7 @@ export function SinglePageCheckout({
                         type="email"
                         autoComplete="email"
                         value={guest.email}
-                        onChange={(event) => setGuest({ ...guest, email: event.target.value })}
+                        onChange={(event) => updateGuest({ ...guest, email: event.target.value })}
                         className={fieldClass}
                       />
                     </label>
@@ -630,7 +644,7 @@ export function SinglePageCheckout({
                         autoComplete="tel"
                         value={formatBrazilianPhone(guest.phone)}
                         onChange={(event) =>
-                          setGuest({
+                          updateGuest({
                             ...guest,
                             phone: event.target.value.replace(/\D/g, '').slice(0, 11),
                           })

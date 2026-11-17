@@ -221,7 +221,7 @@ class DirectCheckoutService
         $order->refresh();
         $reservation = null;
         if ($order->status === DirectBookingOrderStatus::Cotado || $order->status === DirectBookingOrderStatus::AtencaoOperacional) {
-            $reservation = $this->reservations->reserve($order);
+            $reservation = $this->reservations->reserve($order, revalidateBeforeCreate: $replayed);
             $order->refresh();
         }
         $ready = $order->status === DirectBookingOrderStatus::PreReservado && $order->stays_reservation_id !== null;
@@ -288,7 +288,7 @@ class DirectCheckoutService
      * @param  list<string>  $staysListingIds
      * @return array{total: float, currency: string, snapshot: array<string, mixed>}|null
      */
-    private function extractQuote(?array $response, array $staysListingIds): ?array
+    public static function extractQuote(?array $response, array $staysListingIds): ?array
     {
         if (! is_array($response)) {
             return null;
