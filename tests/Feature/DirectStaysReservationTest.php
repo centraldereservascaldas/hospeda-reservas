@@ -15,12 +15,106 @@ use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
+
+    #[DataProvider('lostReservationClaimCases')]
+    public function test_revalidation_cannot_send_after_losing_claim(string $loss): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        Http::fake(function (ClientRequest $request) use ($order, $loss) {
+            if (str_ends_with($request->url(), '/booking/search-listings')) {
+                return Http::response([['id' => 'JQ08G']]);
+            }
+            if (str_ends_with($request->url(), '/booking/calculate-price')) {
+                $action = $order->staysActions()->where('action_type', 'create_reservation')->sole();
+                if ($loss === 'expired') {
+                    $action->forceFill(['last_attempt_at' => now()->subMinutes(5)])->save();
+                } else {
+                    $action->forceFill(['claim_token' => (string) Str::uuid()])->save();
+                }
+
+                return Http::response([['_idlisting' => 'JQ08G', 'bookingPrice' => [
+                    '_mctotal' => ['BRL' => 3001], 'feesIncluded' => true, 'fees' => [],
+                ]]]);
+            }
+
+            return Http::response([], 500);
+        });
+
+        $result = app(DirectStaysReservationService::class)->reserve($order);
+
+        $this->assertSame('reservation_claim_lost', $result['code']);
+        Http::assertNotSent(fn (ClientRequest $request) => $request->method() === 'POST'
+            && str_ends_with($request->url(), '/booking/reservations'));
+    }
+
+    public static function lostReservationClaimCases(): array
+    {
+        return [['expired'], ['replaced']];
+    }
+
+    #[DataProvider('reservationStateChanges')]
+    public function test_revalidation_does_not_send_after_order_state_changes(string $change): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        Http::fake(function (ClientRequest $request) use ($order, $change) {
+            if (str_ends_with($request->url(), '/booking/search-listings')) {
+                return Http::response([['id' => 'JQ08G']]);
+            }
+            if (str_ends_with($request->url(), '/booking/calculate-price')) {
+                if ($change === 'payment') {
+                    $order->forceFill(['payment_status' => 'approved'])->save();
+                } elseif ($change === 'reservation') {
+                    $order->forceFill(['stays_reservation_id' => 'already-created'])->save();
+                } elseif ($change === 'status') {
+                    $order->forceFill(['status' => DirectBookingOrderStatus::Expirado])->save();
+                } else {
+                    DirectBookingStaysAction::query()->create(['direct_booking_order_id' => $order->id,
+                        'action_type' => 'cancel_reservation', 'status' => 'processing', 'idempotency_key' => 'cancel-'.$order->id,
+                        'request_snapshot' => [], 'attempt_count' => 1, 'last_attempt_at' => now()]);
+                }
+
+                return Http::response([['_idlisting' => 'JQ08G', 'bookingPrice' => [
+                    '_mctotal' => ['BRL' => 3001], 'feesIncluded' => true, 'fees' => [],
+                ]]]);
+            }
+
+            return Http::response([], 500);
+        });
+
+        $result = app(DirectStaysReservationService::class)->reserve($order);
+        $this->assertSame('reservation_claim_lost', $result['code']);
+        Http::assertNotSent(fn (ClientRequest $request) => str_ends_with($request->url(), '/booking/reservations'));
+    }
+
+    public static function reservationStateChanges(): array
+    {
+        return [['payment'], ['reservation'], ['status'], ['cancellation']];
+    }
+
+    public function test_failed_revalidation_does_not_change_a_replacement_claim_or_order(): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        $replacement = (string) Str::uuid();
+        Http::fake(function () use ($order, $replacement) {
+            $order->staysActions()->where('action_type', 'create_reservation')->update(['claim_token' => $replacement]);
+
+            return Http::response([]);
+        });
+
+        $result = app(DirectStaysReservationService::class)->reserve($order);
+        $this->assertSame('reservation_claim_lost', $result['code']);
+        $this->assertSame(DirectBookingOrderStatus::Cotado, $order->refresh()->status);
+        $action = $order->staysActions()->where('action_type', 'create_reservation')->sole();
+        $this->assertSame($replacement, $action->claim_token);
+        $this->assertSame('processing', $action->status);
+    }
 
     public function test_replayed_order_rechecks_availability_before_first_reservation_write(): void
     {
