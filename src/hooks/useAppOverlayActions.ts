@@ -4,6 +4,11 @@ import type { Property, SearchFilters } from '../types';
 import type { AppOverlayBookingPayload } from '../types/booking';
 import { scrollIntoViewRespectingMotion } from '../utils/motion';
 import { emitFunnelEvent } from '../utils/measurementEvents';
+import {
+  CHECKOUT_DRAFT_HISTORY_KEY,
+  NEW_CHECKOUT_PATH,
+  saveCheckoutDraft,
+} from '../utils/checkoutDraft';
 
 export const CHECKOUT_MODAL_HISTORY_ENTRY = '__crcnCheckoutModalEntry';
 
@@ -54,7 +59,12 @@ export function useAppOverlayActions({
       delete state[CHECKOUT_MODAL_HISTORY_ENTRY];
       const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       window.history.replaceState(state, '', currentUrl);
-      window.history.pushState({ ...state, [CHECKOUT_MODAL_HISTORY_ENTRY]: true }, '', currentUrl);
+      const draftId = saveCheckoutDraft(payload);
+      window.history.pushState(
+        { ...state, [CHECKOUT_MODAL_HISTORY_ENTRY]: true, [CHECKOUT_DRAFT_HISTORY_KEY]: draftId },
+        '',
+        NEW_CHECKOUT_PATH,
+      );
       setBookingPayload(payload);
     },
     [setBookingPayload],

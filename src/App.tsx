@@ -42,6 +42,8 @@ import { usePageMetadata } from './hooks/usePageMetadata';
 import { LegalDocumentPage } from './components/LegalDocumentPage';
 import { existingReservationCodeFromPath } from './utils/checkoutUrl';
 import { NotFoundPage } from './components/NotFoundPage';
+import { NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
+import { useCheckoutDraftRecovery } from './hooks/useCheckoutDraftRecovery';
 
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
@@ -50,7 +52,9 @@ const CheckoutResumePage = lazy(() =>
 );
 
 const ExistingReservationCheckout = lazy(() =>
-  import('./components/booking/ExistingReservationCheckout').then(({ ExistingReservationCheckout }) => ({ default: ExistingReservationCheckout })),
+  import('./components/booking/ExistingReservationCheckout').then(
+    ({ ExistingReservationCheckout }) => ({ default: ExistingReservationCheckout }),
+  ),
 );
 
 const RecoveryLinkConfirmationPage = lazy(() =>
@@ -66,7 +70,9 @@ const CieloCheckoutPreviewPage = lazy(() =>
 );
 
 const PaymentConfirmationPreview = lazy(() =>
-  import('./components/booking/PaymentConfirmationPreview').then(({ PaymentConfirmationPreview }) => ({ default: PaymentConfirmationPreview })),
+  import('./components/booking/PaymentConfirmationPreview').then(
+    ({ PaymentConfirmationPreview }) => ({ default: PaymentConfirmationPreview }),
+  ),
 );
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
@@ -182,8 +188,14 @@ function MarketplaceApp() {
   const [bookingPayload, setBookingPayload] = useState<AppOverlayBookingPayload | null>(null);
   const bookingPayloadRef = useRef(bookingPayload);
   bookingPayloadRef.current = bookingPayload;
-  const lastBookingPayloadRef = useRef<AppOverlayBookingPayload | null>(null);
-  if (bookingPayload) lastBookingPayloadRef.current = bookingPayload;
+  const [checkoutNavigation, setCheckoutNavigation] = useState(0);
+  const checkoutRecovery = useCheckoutDraftRecovery(
+    properties,
+    catalogLoading,
+    bookingPayload,
+    setBookingPayload,
+    checkoutNavigation,
+  );
 
   useEffect(() => {
     const handlePopState = () => {
@@ -194,8 +206,9 @@ function MarketplaceApp() {
         CHECKOUT_MODAL_HISTORY_ENTRY in state &&
         (state as Record<string, unknown>)[CHECKOUT_MODAL_HISTORY_ENTRY] === true;
 
-      if (isCheckoutModalEntry && !bookingPayloadRef.current && lastBookingPayloadRef.current) {
-        setBookingPayload(lastBookingPayloadRef.current);
+      if (window.location.pathname === NEW_CHECKOUT_PATH) {
+        setBookingPayload(null);
+        setCheckoutNavigation((value) => value + 1);
       } else if (bookingPayloadRef.current && !isCheckoutModalEntry) {
         setBookingPayload(null);
       }
@@ -501,6 +514,37 @@ function MarketplaceApp() {
         compactMobileFloating={isCondominiumView && filteredProperties.length === 0}
       />
 
+      {window.location.pathname === NEW_CHECKOUT_PATH &&
+        !bookingPayload &&
+        checkoutRecovery.status !== 'idle' && (
+          <div
+            role="status"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-white p-6"
+          >
+            <div className="max-w-md text-center">
+              <p>
+                {checkoutRecovery.status === 'loading'
+                  ? 'Conferindo disponibilidade e preço…'
+                  : 'Não foi possível recuperar esta seleção ou confirmar a disponibilidade. Volte ao imóvel e escolha as datas novamente.'}
+              </p>
+              {checkoutRecovery.status === 'error' && (
+                <button type="button" onClick={checkoutRecovery.retry} className="mt-4 underline">
+                  Tentar novamente
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.history.state?.[CHECKOUT_MODAL_HISTORY_ENTRY]) window.history.back();
+                  else window.location.assign('/');
+                }}
+                className="ml-4 mt-4 underline"
+              >
+                Voltar
+              </button>
+            </div>
+          </div>
+        )}
       <AppOverlayLayer
         currency={currency}
         filters={filters}
@@ -559,7 +603,10 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const checkoutResumeReference = /^\/checkout\/([A-Za-z0-9]{40})(?:\/(?:pagamento-confirmado|pagamento-recusado))?$/.exec(pathname)?.[1];
+  const checkoutResumeReference =
+    /^\/checkout\/([A-Za-z0-9]{40})(?:\/(?:pagamento-confirmado|pagamento-recusado))?$/.exec(
+      pathname,
+    )?.[1];
   const existingReservationCode = existingReservationCodeFromPath(pathname);
   const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
   const isPropertyPath =
@@ -582,7 +629,11 @@ export default function App() {
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
 
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/pagamento-confirmado') {
-    return <Suspense fallback={<main role="status">Carregando prévia…</main>}><PaymentConfirmationPreview /></Suspense>;
+    return (
+      <Suspense fallback={<main role="status">Carregando prévia…</main>}>
+        <PaymentConfirmationPreview />
+      </Suspense>
+    );
   }
 
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/cielo') {
@@ -617,7 +668,11 @@ export default function App() {
   }
 
   if (existingReservationCode) {
-    return <Suspense fallback={<main role="status">Consultando reserva…</main>}><ExistingReservationCheckout code={existingReservationCode} /></Suspense>;
+    return (
+      <Suspense fallback={<main role="status">Consultando reserva…</main>}>
+        <ExistingReservationCheckout code={existingReservationCode} />
+      </Suspense>
+    );
   }
 
   if (checkoutResumeReference) {

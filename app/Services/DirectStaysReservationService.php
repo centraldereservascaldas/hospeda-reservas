@@ -19,7 +19,7 @@ class DirectStaysReservationService
     ) {}
 
     /** @return array{ready: bool, code: string, message: string} */
-    public function reserve(DirectBookingOrder $order): array
+    public function reserve(DirectBookingOrder $order, bool $revalidateBeforeCreate = true): array
     {
         $order->refresh();
         if ($this->chargebackRequiresManualReview($order)) {
@@ -123,6 +123,50 @@ class DirectStaysReservationService
             }
 
             return $this->markAttention($action, $order, 'reservation_write_outcome_unknown', 'A escrita anterior não pode ser localizada com segurança; não foi repetida para evitar reserva duplicada.');
+        }
+
+        if ($revalidateBeforeCreate) {
+            $availability = $this->stays->post('/booking/search-listings', [
+                'from' => $order->check_in->toDateString(),
+                'to' => $order->check_out->toDateString(),
+                'guests' => $payload['guests'],
+                'listingId' => $order->stays_listing_id,
+                'limit' => 100,
+                'skip' => 0,
+            ]);
+            $availableListing = is_array($availability) && array_is_list($availability)
+                ? collect($availability)->first(fn (mixed $listing): bool => is_array($listing)
+                    && in_array($order->stays_listing_id, [$listing['id'] ?? null, $listing['_idlisting'] ?? null, $listing['_id'] ?? null, $listing['code'] ?? null], true))
+                : null;
+            if (! is_array($availableListing)) {
+                $result = $this->attention($order, 'availability_revalidation_failed', 'Não foi possível confirmar a disponibilidade atual. Nenhuma pré-reserva ou cobrança foi iniciada.');
+                $this->releaseUnwrittenClaim($action, $claim);
+                return $result;
+            }
+            $liveCapacity = $availableListing['_i_maxGuests'] ?? $availableListing['maxGuests'] ?? null;
+            if (is_numeric($liveCapacity) && (int) $liveCapacity < $payload['guests']) {
+                $result = $this->attention($order, 'invalid_guest_count', 'A quantidade de hóspedes excede a capacidade atual deste imóvel. Nenhuma pré-reserva ou cobrança foi iniciada.');
+                $this->releaseUnwrittenClaim($action, $claim);
+                return $result;
+            }
+            $quote = DirectCheckoutService::extractQuote($this->stays->post('/booking/calculate-price', [
+                'from' => $order->check_in->toDateString(),
+                'to' => $order->check_out->toDateString(),
+                'listingIds' => [$order->stays_listing_id],
+                'guests' => $payload['guests'],
+            ]), array_values(array_unique(array_filter([
+                $order->stays_listing_id,
+                $availableListing['id'] ?? null,
+                $availableListing['_idlisting'] ?? null,
+                $availableListing['_id'] ?? null,
+                $availableListing['code'] ?? null,
+            ], fn (mixed $id): bool => is_string($id) && $id !== ''))));
+            if ($quote === null || $quote['currency'] !== $order->currency
+                || MoneyAmount::toCents($quote['total']) !== MoneyAmount::toCents($order->quote_total)) {
+                $result = $this->attention($order, 'quote_revalidation_failed', 'Não foi possível confirmar o preço anterior. Atualize a cotação para iniciar uma nova tentativa.');
+                $this->releaseUnwrittenClaim($action, $claim);
+                return $result;
+            }
         }
 
         $response = $this->stays->request('POST', '/booking/reservations', payload: $payload);
@@ -814,6 +858,17 @@ class DirectStaysReservationService
             $locked->save();
 
             return ['ready' => false, 'claimed' => true, 'status' => 'processing', 'previousStatus' => $previousStatus, 'previousAttempts' => $previousAttempts];
+        });
+    }
+
+    /** Release only our claim, before any reservation write has been sent. */
+    private function releaseUnwrittenClaim(DirectBookingStaysAction $action, array $claim): void
+    {
+        DB::transaction(function () use ($action, $claim): void {
+            $locked = DirectBookingStaysAction::query()->lockForUpdate()->findOrFail($action->id);
+            if ($locked->status === 'processing' && $locked->attempt_count === $claim['previousAttempts'] + 1) {
+                $locked->forceFill(['status' => 'pending', 'attempt_count' => $claim['previousAttempts'], 'last_attempt_at' => null])->save();
+            }
         });
     }
 

@@ -132,6 +132,20 @@ test('closes property detail before handing the booking payload to checkout stat
 
   assert.deepEqual(hook.result.current.calls, ['set-booking-payload']);
   assert.equal(hook.result.current.bookingPayload, payload);
+  assert.equal(window.location.pathname, '/checkout/nova');
+  assert.deepEqual(
+    JSON.parse(
+      window.sessionStorage.getItem(
+        'crcn.checkout.draft.v1.' + window.history.state.__crcnCheckoutDraftId,
+      ) || 'null',
+    ),
+    {
+      propertyId: property.id,
+      checkIn: payload.checkIn,
+      checkOut: payload.checkOut,
+      guests: payload.guests,
+    },
+  );
 });
 
 test('prepends a new listing using a functional catalog update', () => {

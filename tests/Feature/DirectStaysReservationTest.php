@@ -22,6 +22,71 @@ class DirectStaysReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_replayed_order_rechecks_availability_before_first_reservation_write(): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        Http::fake(['*/booking/search-listings' => Http::response([])]);
+
+        $result = app(DirectStaysReservationService::class)->reserve($order, revalidateBeforeCreate: true);
+
+        $this->assertSame('availability_revalidation_failed', $result['code']);
+        Http::assertSent(fn (ClientRequest $request) => str_ends_with($request->url(), '/booking/search-listings')
+            && $request['listingId'] === 'JQ08G' && $request['guests'] === 2);
+        Http::assertNotSent(fn (ClientRequest $request) => $request->method() === 'POST'
+            && str_ends_with($request->url(), '/booking/reservations'));
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+    }
+
+    public function test_replayed_order_rejects_changed_quote_before_reservation_write(): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        Http::fake([
+            '*/booking/search-listings' => Http::response([['id' => 'JQ08G']]),
+            '*/booking/calculate-price' => Http::response([['_idlisting' => 'JQ08G', 'bookingPrice' => [
+                '_mctotal' => ['BRL' => 3100], 'feesIncluded' => true, 'fees' => [],
+            ]]]),
+        ]);
+
+        $result = app(DirectStaysReservationService::class)->reserve($order);
+
+        $this->assertSame('quote_revalidation_failed', $result['code']);
+        $this->assertSame('pending', $order->staysActions()->where('action_type', 'create_reservation')->sole()->status);
+        Http::assertNotSent(fn (ClientRequest $request) => $request->method() === 'POST'
+            && str_ends_with($request->url(), '/booking/reservations'));
+    }
+
+    public function test_replayed_order_accepts_quote_for_alias_from_availability(): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        Http::fake([
+            '*/booking/search-listings' => Http::response([['id' => 'JQ08G', '_id' => 'listing-internal']]),
+            '*/booking/calculate-price' => Http::response([['_idlisting' => 'listing-internal', 'bookingPrice' => [
+                '_mctotal' => ['BRL' => 3001], 'feesIncluded' => true, 'fees' => [],
+            ]]]),
+            '*/booking/reservations' => Http::response([], 400),
+        ]);
+
+        $result = app(DirectStaysReservationService::class)->reserve($order);
+
+        $this->assertSame('stays_reservation_rejected', $result['code']);
+        Http::assertSent(fn (ClientRequest $request) => $request->method() === 'POST'
+            && str_ends_with($request->url(), '/booking/reservations'));
+    }
+
+    public function test_replayed_order_rejects_reduced_live_capacity_before_reservation_write(): void
+    {
+        $order = $this->order(DirectBookingOrderStatus::Cotado);
+        Http::fake(['*/booking/search-listings' => Http::response([['id' => 'JQ08G', '_i_maxGuests' => 1]])]);
+
+        $result = app(DirectStaysReservationService::class)->reserve($order);
+
+        $this->assertSame('invalid_guest_count', $result['code']);
+        $this->assertSame('pending', $order->staysActions()->where('action_type', 'create_reservation')->sole()->status);
+        Http::assertNotSent(fn (ClientRequest $request) => $request->method() === 'POST'
+            && (str_ends_with($request->url(), '/booking/reservations') || str_ends_with($request->url(), '/booking/calculate-price')));
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
+    }
+
     public function test_new_stays_client_receives_checkout_phone_without_storing_it_in_action_snapshot(): void
     {
         config(['services.stays.base_url' => 'https://stays.test/external/v1', 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
