@@ -120,6 +120,32 @@ test('updates the matching accommodation count while changing draft filters', ()
   assert.ok(screen.getByRole('button', { name: 'Mostrar 2 acomodações' }));
 });
 
+test('offers amenities found in listing and condominium catalog data', () => {
+  const property = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    amenities: ['Piscina aquecida'],
+    listingAmenities: ['Internet Wi-Fi'],
+    propertyAmenities: ['Bar molhado'],
+  };
+
+  render(
+    React.createElement(FilterModal, {
+      isOpen: true,
+      onClose: () => {},
+      filters: createDefaultSearchFilters(),
+      properties: [{ ...property, amenities: [], listingAmenities: [], propertyAmenities: [] }],
+      amenityProperties: [property],
+      onApplyFilters: () => {},
+      onResetFilters: () => {},
+      currency: 'BRL',
+    }),
+  );
+
+  assert.ok(screen.getByRole('button', { name: 'Piscina aquecida' }));
+  assert.ok(screen.getByRole('button', { name: 'Internet Wi-Fi' }));
+  assert.ok(screen.getByRole('button', { name: 'Bar molhado' }));
+});
+
 test('filter actions remain touch-sized and stack at narrow viewports', () => {
   render(
     React.createElement(FilterModal, {

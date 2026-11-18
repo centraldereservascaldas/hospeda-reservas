@@ -90,8 +90,14 @@ function CheckoutResumeEntry({ reference }: { reference: string }) {
 }
 
 function MarketplaceApp() {
-  const { properties, setProperties, catalogLoading, catalogLoadError, retryCatalog } =
-    useAccommodationCatalog();
+  const {
+    properties,
+    catalogProperties,
+    setProperties,
+    catalogLoading,
+    catalogLoadError,
+    retryCatalog,
+  } = useAccommodationCatalog();
 
   const { savedPropertyIds, toggleSavedProperty } = useSavedPropertyIds();
 
@@ -569,6 +575,7 @@ function MarketplaceApp() {
         catalogFocusRef={catalogFocusRef}
         savedPropertyIds={savedPropertyIds}
         properties={properties}
+        catalogProperties={catalogProperties}
         hasMoreSearchResults={searchPagination.hasMore}
         isSofiaOpen={isSofiaOpen}
         isSearchOpen={isSearchOpen}

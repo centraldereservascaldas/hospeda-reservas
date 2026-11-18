@@ -3,6 +3,7 @@ import { X, Check } from 'lucide-react';
 import type { Currency, Property, SearchFilters } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { filterPropertiesBySearchFilters } from '../../utils/propertySearchFilters';
+import { getAmenityFilterIdentity, getCatalogAmenities } from '../../utils/propertyAmenities';
 import { useDialogFocus } from '../useDialogFocus';
 
 interface FilterModalProps {
@@ -10,6 +11,7 @@ interface FilterModalProps {
   onClose: () => void;
   filters: SearchFilters;
   properties: Property[];
+  amenityProperties?: Property[];
   hasMoreSearchResults?: boolean;
   onApplyFilters: (filters: SearchFilters) => void;
   onResetFilters: () => void;
@@ -30,6 +32,23 @@ const AVAILABLE_AMENITIES = [
   'Varanda',
 ];
 
+function getAvailableAmenities(properties: Property[], selectedAmenities: string[]): string[] {
+  const options = new Map<string, string>();
+  const catalogAmenities = properties.flatMap((property) =>
+    getCatalogAmenities(property.amenities, property.listingAmenities, property.propertyAmenities),
+  );
+
+  for (const amenity of [...AVAILABLE_AMENITIES, ...catalogAmenities, ...selectedAmenities]) {
+    const label = amenity.trim();
+    const identity = getAmenityFilterIdentity(label);
+    if (label && label.length <= 80 && identity && !options.has(identity)) {
+      options.set(identity, label);
+    }
+  }
+
+  return [...options.values()];
+}
+
 const PROPERTY_TYPES = [
   { id: 'all', title: 'Qualquer tipo', desc: 'Casas, vilas, cabanas e flats' },
   { id: 'entire_place', title: 'Espaço inteiro', desc: 'Um lugar só para você e seu grupo' },
@@ -42,6 +61,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   onClose,
   filters,
   properties,
+  amenityProperties = properties,
   hasMoreSearchResults = false,
   onApplyFilters,
   onResetFilters,
@@ -93,6 +113,10 @@ export const FilterModal: React.FC<FilterModalProps> = ({
     () => filterPropertiesBySearchFilters(properties, draftFilters).length,
     [draftFilters, properties],
   );
+  const availableAmenities = useMemo(
+    () => getAvailableAmenities(amenityProperties, selectedAmenities),
+    [amenityProperties, selectedAmenities],
+  );
   const matchingCountLabel = matchingCount === 1 ? 'acomodação' : 'acomodações';
 
   useEffect(() => {
@@ -132,8 +156,17 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   };
 
   const toggleAmenity = (amenity: string) => {
-    if (selectedAmenities.includes(amenity)) {
-      setSelectedAmenities(selectedAmenities.filter((a) => a !== amenity));
+    const identity = getAmenityFilterIdentity(amenity);
+    if (
+      selectedAmenities.some(
+        (selectedAmenity) => getAmenityFilterIdentity(selectedAmenity) === identity,
+      )
+    ) {
+      setSelectedAmenities(
+        selectedAmenities.filter(
+          (selectedAmenity) => getAmenityFilterIdentity(selectedAmenity) !== identity,
+        ),
+      );
     } else {
       setSelectedAmenities([...selectedAmenities, amenity]);
     }
@@ -353,8 +386,12 @@ export const FilterModal: React.FC<FilterModalProps> = ({
           <div className="pt-6">
             <h3 className="text-base font-bold text-neutral-900 mb-3">Comodidades populares</h3>
             <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2.5 sm:grid-cols-3">
-              {[...new Set([...AVAILABLE_AMENITIES, ...selectedAmenities])].map((amenity) => {
-                const isSelected = selectedAmenities.includes(amenity);
+              {availableAmenities.map((amenity) => {
+                const amenityIdentity = getAmenityFilterIdentity(amenity);
+                const isSelected = selectedAmenities.some(
+                  (selectedAmenity) =>
+                    getAmenityFilterIdentity(selectedAmenity) === amenityIdentity,
+                );
                 return (
                   <button
                     key={amenity}

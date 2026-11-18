@@ -59,6 +59,7 @@ function renderOverlayActions(options: { scrollCatalog?: () => void } = {}) {
       ...actions,
       properties,
       filters,
+      setFilters,
       isSofiaOpen,
       bookingPayload,
       secondProperty,
@@ -81,6 +82,25 @@ test('applies Sofia destination and guests without resetting other filters', asy
   assert.equal(hook.result.current.filters.checkIn, initialCheckIn);
   assert.equal(hook.result.current.isSofiaOpen, false);
   assert.equal(scrollCalls, 1);
+});
+
+test('clears the previous condominium ID when Sofia changes the destination', async () => {
+  const hook = renderOverlayActions();
+
+  await act(async () => {
+    hook.result.current.setFilters((previous) => ({
+      ...previous,
+      destination: 'diRoma',
+      destinationPropertyId: 'resort-diroma',
+    }));
+  });
+
+  await act(async () => {
+    hook.result.current.handleAssistantApplyFilters({ destination: 'Rio Quente' });
+  });
+
+  assert.equal(hook.result.current.filters.destination, 'Rio Quente');
+  assert.equal(hook.result.current.filters.destinationPropertyId, '');
 });
 
 test('selects the Sofia property only after closing its assistant', () => {
