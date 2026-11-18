@@ -1,4 +1,4 @@
-export type LegalPageSlug = 'privacidade' | 'termos' | 'cancelamento';
+export type LegalPageSlug = 'privacidade' | 'termos' | 'cancelamento' | 'contrato';
 
 export interface LegalPageSummary {
   slug: LegalPageSlug;
@@ -13,7 +13,12 @@ export interface LegalPage extends LegalPageSummary {
 }
 
 function isLegalPageSlug(value: unknown): value is LegalPageSlug {
-  return value === 'privacidade' || value === 'termos' || value === 'cancelamento';
+  return (
+    value === 'privacidade' ||
+    value === 'termos' ||
+    value === 'cancelamento' ||
+    value === 'contrato'
+  );
 }
 
 function isPublishedDate(value: unknown): value is string {

@@ -24,7 +24,7 @@ Route::get('/public/property-metadata/{id}', [PropertyMetadataController::class,
     ->where('id', '[A-Za-z0-9_-]+');
 Route::get('/public/legal-pages', [PublicLegalPageController::class, 'index']);
 Route::get('/public/legal-pages/{slug}', [PublicLegalPageController::class, 'show'])
-    ->whereIn('slug', ['privacidade', 'termos', 'cancelamento']);
+    ->whereIn('slug', ['privacidade', 'termos', 'cancelamento', 'contrato']);
 Route::get('/ready', function () {
     try {
         DB::connection()->select('SELECT 1');

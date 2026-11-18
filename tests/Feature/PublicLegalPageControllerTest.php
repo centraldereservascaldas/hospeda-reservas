@@ -6,8 +6,33 @@ use Tests\TestCase;
 
 class PublicLegalPageControllerTest extends TestCase
 {
+    public function test_contract_draft_is_not_exposed_and_preserves_the_supplied_template(): void
+    {
+        config(['legal_pages.pages.contrato.status' => 'draft']);
+        $this->getJson('/api/public/legal-pages/contrato')->assertNotFound();
+        $this->get('/contrato')->assertNotFound()->assertHeader('X-Robots-Tag', 'noindex, nofollow');
+
+        $sections = config('legal_pages.pages.contrato.sections');
+        $this->assertCount(12, $sections);
+        $content = implode("\n", array_column($sections, 'content'));
+        $this->assertStringContainsString('[Código da reserva]', $content);
+        $this->assertStringNotContainsString('{{', $content);
+        $this->assertStringContainsString('50% do valor deverá ser pago no ato da reserva', $content);
+    }
+
+    public function test_published_contract_uses_its_own_document_route(): void
+    {
+        $this->withSpaIndex('<!doctype html><html><head><title>Generic</title></head><body><div id="root"></div></body></html>');
+        $keys = array_column(config('legal_pages.pages.contrato.sections'), 'key');
+        config(['legal_pages.pages.contrato' => $this->publishedPage('contrato', 'Contrato de locação por temporada', '2026-11-18', $keys, 'Modelo de teste.')]);
+
+        $this->getJson('/api/public/legal-pages/contrato')->assertOk()->assertJsonPath('page.path', '/contrato');
+        $this->get('/contrato')->assertOk()->assertSee('Contrato de locação por temporada | CRCN', false);
+    }
+
     public function test_returns_404_and_noindex_when_legal_pages_are_not_published(): void
     {
+        config(['legal_pages.pages.contrato.status' => 'draft']);
         $this->getJson('/api/public/legal-pages')
             ->assertOk()
             ->assertExactJson(['pages' => []]);
@@ -23,6 +48,23 @@ class PublicLegalPageControllerTest extends TestCase
         $this->get('/cancelamento')
             ->assertNotFound()
             ->assertHeader('X-Robots-Tag', 'noindex, nofollow');
+    }
+
+    public function test_supplied_contract_publication_requires_authorization_for_the_exact_content(): void
+    {
+        $this->getJson('/api/public/legal-pages/contrato')->assertOk()->assertJsonPath('page.slug', 'contrato');
+        $this->assertNull(config('legal_pages.pages.contrato.approvals.legal.reviewer'));
+
+        config(['legal_pages.pages.contrato.sections.0.content' => 'Conteúdo alterado depois da autorização.']);
+        $this->getJson('/api/public/legal-pages/contrato')->assertNotFound();
+    }
+
+    public function test_business_authorization_does_not_publish_other_legal_pages(): void
+    {
+        $contract = config('legal_pages.pages.contrato');
+        $contract['status'] = 'published';
+        config(['legal_pages.pages.termos' => $contract]);
+        $this->getJson('/api/public/legal-pages/termos')->assertNotFound();
     }
 
     public function test_exposes_only_fully_reviewed_documents_with_required_sections(): void

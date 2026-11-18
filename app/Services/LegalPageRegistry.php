@@ -7,6 +7,7 @@ use DateTimeImmutable;
 class LegalPageRegistry
 {
     private const REQUIRED_SECTIONS = [
+        'contrato' => ['template_notice', 'section_1', 'section_2', 'section_3', 'section_4', 'section_5', 'section_6', 'section_7', 'section_8', 'section_9', 'section_10', 'section_11'],
         'privacidade' => [
             'controller_contact',
             'data_categories',
@@ -42,6 +43,7 @@ class LegalPageRegistry
     ];
 
     private const PAGE_PATHS = [
+        'contrato' => '/contrato',
         'privacidade' => '/privacidade',
         'termos' => '/termos',
         'cancelamento' => '/cancelamento',
@@ -132,7 +134,11 @@ class LegalPageRegistry
         }
 
         $contentHash = $this->contentHash($slug, trim($version), trim($title), $hashSections);
-        if (! $this->hasCurrentApprovals($approvals, trim($version), $publishedAt, $contentHash)) {
+        $approved = $this->hasCurrentApprovals($approvals, trim($version), $publishedAt, $contentHash);
+        if ($slug === 'contrato' && ($entry['source'] ?? null) === 'business_supplied') {
+            $approved = $approved || $this->hasPublicationAuthorization($entry['publication_authorization'] ?? null, trim($version), $publishedAt, $contentHash);
+        }
+        if (! $approved) {
             return null;
         }
 
@@ -153,6 +159,16 @@ class LegalPageRegistry
 
         return $parsedDate !== false && $parsedDate->format('Y-m-d') === $date &&
             ($errors === false || ($errors['warning_count'] === 0 && $errors['error_count'] === 0));
+    }
+
+    private function hasPublicationAuthorization(mixed $authorization, string $version, string $publishedAt, string $contentHash): bool
+    {
+        return is_array($authorization)
+            && is_string($authorization['authorized_by'] ?? null) && trim($authorization['authorized_by']) !== ''
+            && ($authorization['version'] ?? null) === $version
+            && is_string($authorization['content_hash'] ?? null) && hash_equals($contentHash, $authorization['content_hash'])
+            && is_string($authorization['authorized_at'] ?? null) && $this->isValidDate($authorization['authorized_at'])
+            && $authorization['authorized_at'] <= $publishedAt;
     }
 
     private function hasCurrentApprovals(mixed $approvals, string $version, string $publishedAt, string $contentHash): bool

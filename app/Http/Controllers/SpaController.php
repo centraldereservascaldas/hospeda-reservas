@@ -157,6 +157,7 @@ HTML;
             'privacidade' => 'privacidade',
             'termos' => 'termos',
             'cancelamento' => 'cancelamento',
+            'contrato' => 'contrato',
             default => null,
         };
     }
