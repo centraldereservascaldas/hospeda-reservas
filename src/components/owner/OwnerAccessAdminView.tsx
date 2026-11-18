@@ -287,8 +287,8 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({ acce
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-neutral-600">
               Confira a identidade por um canal oficial antes de associar uma conta do site ao
-              cadastro da Stays. A pesquisa mostra apenas nome, identificador e quantidade de
-              imóveis; a consulta considera os últimos 10 anos.
+              cadastro do sistema de reservas. A pesquisa mostra apenas nome, identificador e
+              quantidade de imóveis; a consulta considera os últimos 10 anos.
             </p>
           </div>
           <button
@@ -340,7 +340,7 @@ const orderStatusLabels: Record<DirectBookingOperationsOrder['status'], string> 
   pre_reservado: 'Pré-reserva',
   liberacao_pendente: 'Liberação pendente',
   pagamento_pendente: 'Pagamento pendente',
-  pago_em_confirmacao: 'Pago, aguardando Stays',
+  pago_em_confirmacao: 'Pago, aguardando confirmação',
   confirmado: 'Confirmado',
   concluido: 'Concluído',
   expirado: 'Expirado',
@@ -359,7 +359,7 @@ const operationsDateTime = new Intl.DateTimeFormat('pt-BR', {
   timeStyle: 'short',
 });
 const issueSourceLabels: Record<string, string> = {
-  stays: 'Stays',
+  stays: 'Reservas',
   payment: 'pagamento',
   payment_gateway: 'conciliação do gateway',
   webhook: 'notificação do gateway',
@@ -390,8 +390,8 @@ const getSuggestedNextAction = (order: DirectBookingOperationsOrder): string | n
   if (order.status === 'reembolso_pendente') {
     if (!order.staysCancellationConfirmed) {
       return order.staysReservationId
-        ? 'Consulte a Stays para confirmar que a reserva foi cancelada.'
-        : 'Localize a reserva correspondente na Stays e confirme o cancelamento antes de avançar.';
+        ? 'Consulte o sistema de reservas para confirmar que a reserva foi cancelada.'
+        : 'Localize a reserva correspondente no sistema de reservas e confirme o cancelamento antes de avançar.';
     }
 
     if (!order.gatewayRefundConfirmed) {
@@ -404,7 +404,7 @@ const getSuggestedNextAction = (order: DirectBookingOperationsOrder): string | n
   }
 
   if (order.lastEvent?.code === 'payment_state_changed_during_reservation_release') {
-    return 'A Stays confirmou o cancelamento da pré-reserva enquanto o pagamento mudava. Reconcilie o pagamento no gateway e trate a reserva com a equipe antes de informar o hóspede.';
+    return 'O sistema de reservas confirmou o cancelamento da pré-reserva enquanto o pagamento mudava. Reconcilie o pagamento no gateway e trate a reserva com a equipe antes de informar o hóspede.';
   }
 
   if (
@@ -413,27 +413,27 @@ const getSuggestedNextAction = (order: DirectBookingOperationsOrder): string | n
     order.paymentStatus === 'approved' &&
     order.staysReservationId !== null
   ) {
-    return 'Verifique a disponibilidade e a reserva na Stays. Registre a revisão do pagamento tardio quando o pedido permitir; não confirme nem cancele automaticamente.';
+    return 'Verifique a disponibilidade e a reserva no sistema de reservas. Registre a revisão do pagamento tardio quando o pedido permitir; não confirme nem cancele automaticamente.';
   }
 
   if (order.paymentApprovedWithoutConfirmedReservation) {
-    return 'Compare o pagamento aprovado no gateway com a reserva na Stays. Mantenha a confirmação ao hóspede suspensa até conciliar os dois registros.';
+    return 'Compare o pagamento aprovado no gateway com a reserva no sistema de reservas. Mantenha a confirmação ao hóspede suspensa até conciliar os dois registros.';
   }
 
   if (order.status === 'contestado') {
-    return 'Confira o estado e os prazos da contestação no gateway e reconcilie a situação da reserva na Stays antes de responder ao hóspede.';
+    return 'Confira o estado e os prazos da contestação no gateway e reconcilie a situação da reserva no sistema de reservas antes de responder ao hóspede.';
   }
 
   if (order.status === 'cancelamento_solicitado') {
-    return 'Revise a política aplicável e a solicitação do hóspede. Registre o encaminhamento manual após decidir os próximos passos na Stays e no gateway.';
+    return 'Revise a política aplicável e a solicitação do hóspede. Registre o encaminhamento manual após decidir os próximos passos no sistema de reservas e no gateway.';
   }
 
   if (order.status === 'liberacao_pendente') {
-    return 'Consulte o estado da reserva na Stays antes de repetir ou considerar concluída a liberação da pré-reserva.';
+    return 'Consulte o estado da reserva no sistema de reservas antes de repetir ou considerar concluída a liberação da pré-reserva.';
   }
 
   if (order.issue?.source === 'stays') {
-    return 'Confira a ação e a mensagem da Stays e consulte o estado atual da reserva antes de qualquer repetição.';
+    return 'Confira a ação e a mensagem do sistema de reservas e consulte o estado atual da reserva antes de qualquer repetição.';
   }
 
   if (order.issue?.source === 'payment' || order.issue?.source === 'webhook') {
@@ -445,7 +445,7 @@ const getSuggestedNextAction = (order: DirectBookingOperationsOrder): string | n
   }
 
   if (order.status === 'atencao_operacional') {
-    return 'Revise o último evento e os registros de gateway e Stays para identificar a divergência antes de agir.';
+    return 'Revise o último evento e os registros de pagamento e reserva para identificar a divergência antes de agir.';
   }
 
   return null;
@@ -495,7 +495,7 @@ const DirectBookingOperationsCard: React.FC<{
       setStaysCancellationError(
         error instanceof Error
           ? error.message
-          : 'Não foi possível confirmar o cancelamento na Stays.',
+          : 'Não foi possível confirmar o cancelamento no sistema de reservas.',
       );
     } finally {
       setVerifyingStaysCancellation(false);
@@ -600,12 +600,14 @@ const DirectBookingOperationsCard: React.FC<{
         >
           {order.paymentApprovedWithoutConfirmedReservation && (
             <li role="alert">
-              Pagamento aprovado sem reserva confirmada na Stays. Conferir antes de qualquer ação
-              com o hóspede.
+              Pagamento aprovado sem reserva confirmada no sistema de reservas. Conferir antes de
+              qualquer ação com o hóspede.
             </li>
           )}
           {order.staysActionFailed && (
-            <li role="alert">Uma ação de integração com a Stays falhou e requer conferência.</li>
+            <li role="alert">
+              Uma ação de integração com o sistema de reservas falhou e requer conferência.
+            </li>
           )}
         </ul>
       )}
@@ -684,7 +686,9 @@ const DirectBookingOperationsCard: React.FC<{
           </dd>
         </div>
         <div>
-          <dt className="font-bold uppercase tracking-wide text-neutral-500">Stays</dt>
+          <dt className="font-bold uppercase tracking-wide text-neutral-500">
+            Sistema de reservas
+          </dt>
           <dd className="mt-1 break-all font-mono font-semibold text-neutral-800">
             {order.staysReservationId ?? 'Sem reserva vinculada'}
           </dd>
@@ -765,8 +769,8 @@ const DirectBookingOperationsCard: React.FC<{
             <div className="space-y-3">
               <p className="text-xs leading-5 text-neutral-700">
                 {latePaymentCancellationReview
-                  ? 'O pagamento foi aprovado após o prazo da pré-reserva. Este registro inicia a revisão manual; não altera a Stays nem o Mercado Pago. A equipe ainda precisa cancelar a reserva na Stays e executar o estorno conforme a política aplicável.'
-                  : 'Este encaminhamento só registra a decisão e não altera a Stays nem o gateway. A equipe ainda precisará cancelar a reserva na Stays, executar o reembolso e conferir ambos.'}
+                  ? 'O pagamento foi aprovado após o prazo da pré-reserva. Este registro inicia a revisão manual; não altera o sistema de reservas nem o Mercado Pago. A equipe ainda precisa cancelar a reserva no sistema de reservas e executar o estorno conforme a política aplicável.'
+                  : 'Este encaminhamento só registra a decisão e não altera o sistema de reservas nem o gateway. A equipe ainda precisará cancelar a reserva no sistema de reservas, executar o reembolso e conferir ambos.'}
               </p>
               {manualCancellationError && (
                 <p className="text-xs font-semibold text-rose-800" role="alert">
@@ -817,8 +821,8 @@ const DirectBookingOperationsCard: React.FC<{
           aria-label="Conferências de cancelamento"
         >
           <p className="text-xs leading-5 text-orange-950">
-            O pedido só sai desta fila quando a Stays confirmar a baixa e o Mercado Pago informar o
-            estorno.
+            O pedido só sai desta fila quando o sistema de reservas confirmar a baixa e o Mercado
+            Pago informar o estorno.
           </p>
           {order.manualCancellationReview && (
             <p className="text-[11px] leading-5 text-neutral-600">
@@ -849,7 +853,7 @@ const DirectBookingOperationsCard: React.FC<{
           )}
           <dl className="grid gap-2 text-xs sm:grid-cols-2">
             <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
-              <dt className="font-bold text-neutral-600">Cancelamento na Stays</dt>
+              <dt className="font-bold text-neutral-600">Cancelamento no sistema de reservas</dt>
               <dd className="mt-1 font-semibold text-neutral-900">
                 {order.staysCancellationConfirmed
                   ? 'Confirmado na consulta'
@@ -897,8 +901,8 @@ const DirectBookingOperationsCard: React.FC<{
                   className="min-h-11 rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-50"
                 >
                   {verifyingStaysCancellation
-                    ? 'Consultando Stays…'
-                    : 'Consultar cancelamento na Stays'}
+                    ? 'Consultando reserva…'
+                    : 'Consultar cancelamento no sistema de reservas'}
                 </button>
               )}
             </div>
@@ -1051,7 +1055,9 @@ const OwnerRequestCard: React.FC<{
           if (active) {
             setOwners([]);
             setError(
-              searchError instanceof Error ? searchError.message : 'A pesquisa na Stays falhou.',
+              searchError instanceof Error
+                ? searchError.message
+                : 'A pesquisa no sistema de reservas falhou.',
             );
           }
         })
@@ -1112,7 +1118,7 @@ const OwnerRequestCard: React.FC<{
           className="mb-2 block text-sm font-bold text-neutral-800"
           htmlFor={`stays-owner-search-${request.userId}`}
         >
-          Localizar cadastro na Stays
+          Localizar cadastro no sistema de reservas
         </label>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
@@ -1130,7 +1136,8 @@ const OwnerRequestCard: React.FC<{
         </div>
         {searching && (
           <p className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
-            <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Pesquisando na Stays…
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Pesquisando no sistema de
+            reservas…
           </p>
         )}
         {!searching && query.trim().length >= 2 && owners.length === 0 && !error && (

@@ -3,7 +3,11 @@ import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useDialogFocus } from '../useDialogFocus';
 import type { StaysCalendarDay } from '../../utils/staysAvailability';
-import { isCalendarRangeAvailable } from '../../utils/staysAvailability';
+import {
+  isCalendarRangeAvailable,
+  validateCalendarRange,
+  getCalendarRangeMessage,
+} from '../../utils/staysAvailability';
 
 type DateField = 'checkIn' | 'checkOut';
 
@@ -28,6 +32,8 @@ interface PropertyDatePickerDialogProps {
   onDisplayedMonthChange: (date: Date) => void;
   onChooseDate: (date: Date) => void;
   onChooseDateRange: (checkIn: Date, checkOut: Date) => void;
+  onClear?: () => void;
+  onApply?: () => void;
   onClose: () => void;
 }
 
@@ -52,6 +58,8 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
   onDisplayedMonthChange,
   onChooseDate,
   onChooseDateRange,
+  onClear,
+  onApply,
   onClose,
 }) => {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -88,9 +96,6 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
         ? new Date(calendarYear, calendarMonth, dayOfMonth)
         : null;
     },
-  );
-  const calendarWeeks = Array.from({ length: calendarRowCount }, (_, index) =>
-    calendarCells.slice(index * 7, index * 7 + 7),
   );
   const calendarMonthLabel = displayedMonth.toLocaleDateString('pt-BR', {
     month: 'long',
@@ -129,6 +134,29 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
   }, [displayedMonth, isOpen, keyboardFocusDate]);
 
   const handleDateKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, dateValue: string) => {
+    const startingDate = new Date(`${dateValue}T12:00:00`);
+    if (['Home', 'End', 'PageUp', 'PageDown'].includes(event.key)) {
+      event.preventDefault();
+      const candidate = new Date(startingDate);
+      if (event.key === 'Home')
+        candidate.setDate(candidate.getDate() - ((candidate.getDay() + 6) % 7));
+      if (event.key === 'End')
+        candidate.setDate(candidate.getDate() + 6 - ((candidate.getDay() + 6) % 7));
+      if (event.key === 'PageUp' || event.key === 'PageDown') {
+        const day = candidate.getDate();
+        candidate.setDate(1);
+        candidate.setMonth(candidate.getMonth() + (event.key === 'PageUp' ? -1 : 1));
+        candidate.setDate(
+          Math.min(day, new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0).getDate()),
+        );
+      }
+      const value = `${candidate.getFullYear()}-${String(candidate.getMonth() + 1).padStart(2, '0')}-${String(candidate.getDate()).padStart(2, '0')}`;
+      if (isSelectableDate(value)) {
+        setKeyboardFocusDate(value);
+        onDisplayedMonthChange(new Date(candidate.getFullYear(), candidate.getMonth(), 1));
+      }
+      return;
+    }
     const dayOffset =
       event.key === 'ArrowLeft'
         ? -1
@@ -142,7 +170,6 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
     if (dayOffset === 0) return;
 
     event.preventDefault();
-    const startingDate = new Date(`${dateValue}T12:00:00`);
     for (let step = 1; step <= 31; step += 1) {
       const candidate = new Date(startingDate);
       candidate.setDate(candidate.getDate() + dayOffset * step);
@@ -219,7 +246,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
       data-dialog-focus-root
       id="stay-dates-dialog"
       tabIndex={-1}
-      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-white/25 p-0 backdrop-blur-xl animate-in fade-in duration-150 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-white/25 p-0 backdrop-blur-xl animate-in fade-in duration-150 sm:items-center sm:p-4 [@media(max-height:500px)]:p-0"
       onPointerUp={handleTouchRangePointerUp}
       onPointerMove={handleTouchRangePointerMove}
       onPointerCancel={clearTouchRange}
@@ -227,13 +254,13 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
       aria-modal="true"
       aria-labelledby="stay-dates-title"
     >
-      <div className="my-auto w-full max-w-sm rounded-3xl border border-white/90 bg-white/95 p-3 shadow-2xl backdrop-blur-2xl sm:p-5">
-        <div className="sticky top-4 z-10 -mx-3 mb-4 flex items-center justify-between rounded-t-3xl bg-white/95 px-3 py-2.5 backdrop-blur-2xl sm:-mx-5 sm:px-5">
+      <div className="flex h-[100dvh] w-full flex-col bg-white p-3 shadow-2xl sm:my-auto sm:h-auto sm:max-h-[90dvh] sm:max-w-3xl sm:rounded-3xl sm:p-5 [@media(max-height:500px)]:h-[100dvh] [@media(max-height:500px)]:max-h-[100dvh] [@media(max-height:500px)]:py-2">
+        <div className="sticky top-0 shrink-0 z-10 -mx-3 mb-4 flex items-center justify-between rounded-t-3xl bg-white/95 px-3 py-2.5 backdrop-blur-2xl sm:-mx-5 sm:px-5 [@media(max-height:500px)]:mb-1 [@media(max-height:500px)]:py-0">
           <div>
             <h2 id="stay-dates-title" className="text-lg font-bold text-neutral-900">
               Escolha as datas
             </h2>
-            <p className="mt-0.5 text-xs text-neutral-500">
+            <p className="mt-0.5 text-xs text-neutral-500 [@media(max-height:500px)]:hidden">
               Selecione entrada e saída da hospedagem
             </p>
           </div>
@@ -248,7 +275,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
           </button>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl bg-orange-50/70 p-1.5">
+        <div className="mb-4 grid shrink-0 grid-cols-2 gap-2 rounded-2xl bg-orange-50/70 p-1.5 [@media(max-height:500px)]:mb-1">
           <button
             type="button"
             aria-pressed={activeDateField === 'checkIn'}
@@ -269,7 +296,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
           </button>
         </div>
 
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex shrink-0 items-center justify-between [@media(max-height:500px)]:mb-1">
           <button
             type="button"
             onClick={() => onDisplayedMonthChange(new Date(calendarYear, calendarMonth - 1, 1))}
@@ -292,264 +319,340 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
           </button>
         </div>
 
-        <div
-          role="grid"
-          aria-label={`Calendário de ${calendarMonthLabel}`}
-          className="-mx-3 sm:mx-0"
-        >
-          <div
-            role="row"
-            className="mb-1 grid grid-cols-7 text-center text-caption font-semibold text-neutral-600"
-          >
-            {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((weekday) => (
-              <span key={weekday} role="columnheader" className="py-2">
-                {weekday}
-              </span>
-            ))}
-          </div>
-          {calendarWeeks.map((week, weekIndex) => (
-            <div
-              key={`week-${weekIndex}`}
-              role="row"
-              className="grid grid-cols-7 gap-0 text-center"
-            >
-              {week.map((date, dayIndex) => {
-                if (!date) {
-                  return (
+        <div className="-mx-3 min-h-0 flex-1 overflow-y-auto sm:mx-0">
+          <div className="grid gap-6 md:grid-cols-2">
+            {[0, 1].map((offset) => {
+              const monthDate = new Date(calendarYear, calendarMonth + offset, 1);
+              const monthLabel = monthDate.toLocaleDateString('pt-BR', {
+                month: 'long',
+                year: 'numeric',
+              });
+              const leading = (monthDate.getDay() + 6) % 7;
+              const count = new Date(calendarYear, calendarMonth + offset + 1, 0).getDate();
+              const cells = Array.from(
+                { length: Math.ceil((leading + count) / 7) * 7 },
+                (_, index) =>
+                  index >= leading && index < leading + count
+                    ? new Date(calendarYear, calendarMonth + offset, index - leading + 1)
+                    : null,
+              );
+              const weeks = Array.from({ length: cells.length / 7 }, (_, index) =>
+                cells.slice(index * 7, index * 7 + 7),
+              );
+              return (
+                <div key={offset} className={offset ? 'hidden md:block' : ''}>
+                  <h3 className="mb-2 text-center font-bold capitalize">{monthLabel}</h3>
+                  <div role="grid" aria-label={`Calendário de ${monthLabel}`} className="w-full">
                     <div
-                      key={`empty-${weekIndex}-${dayIndex}`}
-                      role="gridcell"
-                      aria-hidden="true"
-                      className="h-10"
-                    />
-                  );
-                }
-                const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                const calendarDay = calendarByDate.get(dateValue);
-                const isPast = dateValue < todayIso;
-                const isAvailableCheckIn = Boolean(
-                  calendarDay && Number(calendarDay.avail) > 0 && !calendarDay.closedToArrival,
-                );
-                const isAvailableCheckOut = Boolean(
-                  checkIn &&
-                  dateValue > checkIn &&
-                  isCalendarRangeAvailable(calendarDays, checkIn, dateValue),
-                );
-                const isUnavailableForArrival = Boolean(
-                  calendarDay && (Number(calendarDay.avail) < 1 || calendarDay.closedToArrival),
-                );
-                const isAvailableForActiveField =
-                  activeDateField === 'checkIn' ? isAvailableCheckIn : isAvailableCheckOut;
-                const isSelectedCheckIn = dateValue === checkIn && isAvailableCheckIn;
-                const isSelectedCheckOut = dateValue === checkOut && isAvailableCheckOut;
-                const isSelected = isSelectedCheckIn || isSelectedCheckOut;
-                const isSelectedForAnotherField =
-                  activeDateField === 'checkIn' ? isSelectedCheckOut : isSelectedCheckIn;
-                const isBlocked = Boolean(
-                  !isPast &&
-                  !isLoadingCalendar &&
-                  calendarAvailable &&
-                  calendarDay &&
-                  !isAvailableForActiveField &&
-                  !isSelectedForAnotherField,
-                );
-                const selectedRangeIsAvailable = Boolean(
-                  checkIn && checkOut && isCalendarRangeAvailable(calendarDays, checkIn, checkOut),
-                );
-                const isInRange = Boolean(
-                  selectedRangeIsAvailable &&
-                  checkIn &&
-                  checkOut &&
-                  dateValue > checkIn &&
-                  dateValue < checkOut,
-                );
-                const isDisabled =
-                  isPast ||
-                  isLoadingCalendar ||
-                  !calendarAvailable ||
-                  !calendarDay ||
-                  !isAvailableForActiveField;
-                const availabilityLabel = isPast
-                  ? 'data passada'
-                  : isLoadingCalendar
-                    ? 'disponibilidade sendo atualizada'
-                    : !calendarAvailable || !calendarDay
-                      ? 'disponibilidade não confirmada'
-                      : isSelectedForAnotherField
-                        ? `selecionada como ${activeDateField === 'checkIn' ? 'check-out' : 'check-in'}`
-                        : isUnavailableForArrival && isSelectedCheckOut && isAvailableCheckOut
-                          ? 'indisponível para check-in; checkout permitido'
-                          : isBlocked
-                            ? 'indisponível para esta seleção'
-                            : isUnavailableForArrival
-                              ? 'indisponível para check-in'
-                              : 'disponível';
-                const shouldShowUnavailableMark =
-                  isBlocked ||
-                  (isSelectedCheckOut && isUnavailableForArrival && isAvailableCheckOut);
-                const isTouchPreviewDate = Boolean(
-                  touchRangePreview &&
-                  dateValue >= touchRangePreview.checkIn &&
-                  dateValue <= touchRangePreview.checkOut,
-                );
-                const isTouchPreviewValid = Boolean(
-                  touchRangePreview &&
-                  isCalendarRangeAvailable(
-                    calendarDays,
-                    touchRangePreview.checkIn,
-                    touchRangePreview.checkOut,
-                  ),
-                );
-                return (
-                  <div
-                    key={dateValue}
-                    role="gridcell"
-                    aria-selected={isSelected}
-                    data-calendar-date={dateValue}
-                    onPointerDown={(event) => {
-                      if (event.pointerType !== 'touch' || activeDateField !== 'checkIn') return;
-                      if (!isSelectableDate(dateValue)) return;
-                      const drag = {
-                        pointerId: event.pointerId,
-                        checkIn: dateValue,
-                        checkOut: dateValue,
-                      };
-                      touchRangeRef.current = drag;
-                      setTouchRangePreview(drag);
-                    }}
-                    onPointerEnter={(event) => {
-                      updateTouchRangePreview(event.pointerId, dateValue);
-                    }}
-                    onPointerMove={(event) => {
-                      updateTouchRangePreview(event.pointerId, dateValue);
-                    }}
-                  >
-                    <button
-                      key={dateValue}
-                      ref={(button) => {
-                        if (button) {
-                          dayButtonRefs.current.set(dateValue, button);
-                        } else {
-                          dayButtonRefs.current.delete(dateValue);
-                        }
-                      }}
-                      type="button"
-                      disabled={isDisabled}
-                      style={{ touchAction: 'pan-y pinch-zoom' }}
-                      onKeyDown={(event) => handleDateKeyDown(event, dateValue)}
-                      aria-label={`${date.toLocaleDateString('pt-BR', {
-                        weekday: 'long',
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })}, ${availabilityLabel}`}
-                      aria-pressed={isSelected}
-                      tabIndex={dateValue === focusableCalendarDate ? 0 : -1}
-                      onClick={() => {
-                        if (suppressClickDatesRef.current.includes(dateValue)) {
-                          suppressClickDatesRef.current = [];
-                          return;
-                        }
-                        setKeyboardFocusDate(dateValue);
-                        onChooseDate(date);
-                      }}
-                      className={`h-11 w-full rounded-xl text-xs font-semibold transition ${
-                        isTouchPreviewDate
-                          ? isTouchPreviewValid
-                            ? 'bg-orange-100 text-orange-900 ring-1 ring-orange-300'
-                            : 'bg-rose-100 text-rose-900 ring-1 ring-rose-300'
-                          : isBlocked
-                            ? 'relative cursor-not-allowed bg-rose-50 text-rose-700'
-                            : isSelected
-                              ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
-                              : isInRange
-                                ? 'bg-orange-100 text-orange-900'
-                                : isDisabled
-                                  ? 'cursor-not-allowed bg-neutral-100/70 text-neutral-600'
-                                  : 'text-neutral-700 hover:bg-orange-50 hover:text-orange-800'
-                      } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-orange-600 disabled:hover:bg-inherit`}
-                      title={availabilityLabel}
+                      role="row"
+                      className="mb-1 grid grid-cols-7 text-center text-caption font-semibold text-neutral-600"
                     >
-                      {date.getDate()}
-                      {shouldShowUnavailableMark && (
-                        <span
-                          aria-hidden="true"
-                          className={`pointer-events-none absolute left-1/2 top-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 rotate-[-42deg] ${isSelectedCheckOut ? 'bg-rose-700' : 'bg-rose-500/80'}`}
-                        />
-                      )}
-                    </button>
+                      {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((weekday) => (
+                        <span key={weekday} role="columnheader" className="py-2">
+                          {weekday}
+                        </span>
+                      ))}
+                    </div>
+                    {weeks.map((week, weekIndex) => (
+                      <div
+                        key={`week-${weekIndex}`}
+                        role="row"
+                        className="grid grid-cols-7 gap-0 text-center"
+                      >
+                        {week.map((date, dayIndex) => {
+                          if (!date) {
+                            return (
+                              <div
+                                key={`empty-${weekIndex}-${dayIndex}`}
+                                role="gridcell"
+                                aria-hidden="true"
+                                className="h-10"
+                              />
+                            );
+                          }
+                          const dateValue = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                          const calendarDay = calendarByDate.get(dateValue);
+                          const isPast = dateValue < todayIso;
+                          const isAvailableCheckIn = Boolean(
+                            calendarDay &&
+                            Number(calendarDay.avail) > 0 &&
+                            !calendarDay.closedToArrival,
+                          );
+                          const isAvailableCheckOut = Boolean(
+                            checkIn &&
+                            dateValue > checkIn &&
+                            isCalendarRangeAvailable(calendarDays, checkIn, dateValue),
+                          );
+                          const isUnavailableForArrival = Boolean(
+                            calendarDay &&
+                            (Number(calendarDay.avail) < 1 || calendarDay.closedToArrival),
+                          );
+                          const isAvailableForActiveField =
+                            activeDateField === 'checkIn'
+                              ? isAvailableCheckIn
+                              : isAvailableCheckOut;
+                          const isSelectedCheckIn = dateValue === checkIn && isAvailableCheckIn;
+                          const isSelectedCheckOut = dateValue === checkOut && isAvailableCheckOut;
+                          const isSelected = isSelectedCheckIn || isSelectedCheckOut;
+                          const isSelectedForAnotherField =
+                            activeDateField === 'checkIn' ? isSelectedCheckOut : isSelectedCheckIn;
+                          const isBlocked = Boolean(
+                            !isPast &&
+                            !isLoadingCalendar &&
+                            calendarAvailable &&
+                            calendarDay &&
+                            !isAvailableForActiveField &&
+                            !isSelectedForAnotherField,
+                          );
+                          const selectedRangeIsAvailable = Boolean(
+                            checkIn &&
+                            checkOut &&
+                            isCalendarRangeAvailable(calendarDays, checkIn, checkOut),
+                          );
+                          const isInRange = Boolean(
+                            selectedRangeIsAvailable &&
+                            checkIn &&
+                            checkOut &&
+                            dateValue > checkIn &&
+                            dateValue < checkOut,
+                          );
+                          const isDisabled =
+                            isPast ||
+                            isLoadingCalendar ||
+                            !calendarAvailable ||
+                            !calendarDay ||
+                            !isAvailableForActiveField;
+                          const availabilityLabel = isPast
+                            ? 'data passada'
+                            : isLoadingCalendar
+                              ? 'disponibilidade sendo atualizada'
+                              : !calendarAvailable || !calendarDay
+                                ? 'disponibilidade não confirmada'
+                                : isSelectedForAnotherField
+                                  ? `selecionada como ${activeDateField === 'checkIn' ? 'check-out' : 'check-in'}`
+                                  : isUnavailableForArrival &&
+                                      isSelectedCheckOut &&
+                                      isAvailableCheckOut
+                                    ? 'indisponível para check-in; checkout permitido'
+                                    : isInRange
+                                      ? 'noite incluída no período selecionado'
+                                      : isBlocked
+                                        ? `indisponível para esta seleção; ${activeDateField === 'checkOut' ? getCalendarRangeMessage(validateCalendarRange(calendarDays, checkIn, dateValue)) : calendarDay?.closedToArrival ? 'entrada não permitida' : 'noite indisponível'}`
+                                        : isUnavailableForArrival
+                                          ? 'indisponível para check-in'
+                                          : 'disponível';
+                          const shouldShowUnavailableMark =
+                            (isBlocked && !isInRange) ||
+                            (isSelectedCheckOut && isUnavailableForArrival && isAvailableCheckOut);
+                          const isTouchPreviewDate = Boolean(
+                            touchRangePreview &&
+                            dateValue >= touchRangePreview.checkIn &&
+                            dateValue <= touchRangePreview.checkOut,
+                          );
+                          const isTouchPreviewValid = Boolean(
+                            touchRangePreview &&
+                            isCalendarRangeAvailable(
+                              calendarDays,
+                              touchRangePreview.checkIn,
+                              touchRangePreview.checkOut,
+                            ),
+                          );
+                          return (
+                            <div
+                              key={dateValue}
+                              role="gridcell"
+                              aria-selected={isSelected}
+                              data-calendar-date={dateValue}
+                              onPointerDown={(event) => {
+                                if (event.pointerType !== 'touch' || activeDateField !== 'checkIn')
+                                  return;
+                                if (!isSelectableDate(dateValue)) return;
+                                const drag = {
+                                  pointerId: event.pointerId,
+                                  checkIn: dateValue,
+                                  checkOut: dateValue,
+                                };
+                                touchRangeRef.current = drag;
+                                setTouchRangePreview(drag);
+                              }}
+                              onPointerEnter={(event) => {
+                                updateTouchRangePreview(event.pointerId, dateValue);
+                              }}
+                              onPointerMove={(event) => {
+                                updateTouchRangePreview(event.pointerId, dateValue);
+                              }}
+                            >
+                              <button
+                                key={dateValue}
+                                ref={(button) => {
+                                  if (button) {
+                                    dayButtonRefs.current.set(dateValue, button);
+                                  } else {
+                                    dayButtonRefs.current.delete(dateValue);
+                                  }
+                                }}
+                                type="button"
+                                disabled={isDisabled}
+                                style={{ touchAction: 'pan-y pinch-zoom' }}
+                                onKeyDown={(event) => handleDateKeyDown(event, dateValue)}
+                                aria-label={`${date.toLocaleDateString('pt-BR', {
+                                  weekday: 'long',
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric',
+                                })}, ${availabilityLabel}`}
+                                aria-pressed={isSelected}
+                                tabIndex={dateValue === focusableCalendarDate ? 0 : -1}
+                                onClick={() => {
+                                  if (suppressClickDatesRef.current.includes(dateValue)) {
+                                    suppressClickDatesRef.current = [];
+                                    return;
+                                  }
+                                  setKeyboardFocusDate(dateValue);
+                                  onChooseDate(date);
+                                }}
+                                className={`h-11 w-full rounded-xl text-xs font-semibold transition ${
+                                  isTouchPreviewDate
+                                    ? isTouchPreviewValid
+                                      ? 'bg-orange-100 text-orange-900 ring-1 ring-orange-300'
+                                      : 'bg-rose-100 text-rose-900 ring-1 ring-rose-300'
+                                    : isBlocked && !isInRange
+                                      ? 'relative cursor-not-allowed bg-rose-50 text-rose-700'
+                                      : isSelected
+                                        ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                                        : isInRange
+                                          ? 'bg-orange-100 text-orange-900'
+                                          : isDisabled
+                                            ? 'cursor-not-allowed bg-neutral-100/70 text-neutral-600'
+                                            : 'text-neutral-700 hover:bg-orange-50 hover:text-orange-800'
+                                } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-orange-600 disabled:hover:bg-inherit`}
+                                title={availabilityLabel}
+                              >
+                                {date.getDate()}
+                                {shouldShowUnavailableMark && (
+                                  <span
+                                    aria-hidden="true"
+                                    className={`pointer-events-none absolute left-1/2 top-1/2 h-px w-7 -translate-x-1/2 -translate-y-1/2 rotate-[-42deg] ${isSelectedCheckOut ? 'bg-rose-700' : 'bg-rose-500/80'}`}
+                                  />
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 space-y-3 border-t border-neutral-100 pt-3">
-          {interactionMessage && (
-            <p className="text-center text-xs text-amber-800" role="status" aria-live="polite">
-              {interactionMessage}
-            </p>
-          )}
-          {isLoadingCalendar ? (
-            <p className="text-center text-caption text-neutral-500" role="status">
-              Atualizando disponibilidade. As datas ficam bloqueadas até a confirmação.
-            </p>
-          ) : !calendarAvailable ? (
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-center text-caption text-amber-800" role="status">
-                {availabilityMessage ||
-                  'Não foi possível confirmar a disponibilidade. As datas permanecem bloqueadas.'}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 space-y-3 border-t border-neutral-100 px-3 pt-3 sm:px-0">
+            {interactionMessage && (
+              <p className="text-center text-xs text-amber-800" role="status" aria-live="polite">
+                {interactionMessage}
               </p>
-              <button
-                type="button"
-                onClick={onRetryCalendar}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white px-3 py-2 text-caption font-semibold text-neutral-700 transition hover:border-orange-300 hover:bg-orange-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
-              >
-                Tentar novamente
-              </button>
-            </div>
-          ) : (
-            <>
-              {isExtendingCalendar || calendarExtensionMessage ? (
-                <div className="flex flex-col items-center gap-2">
-                  <p
-                    className="text-center text-caption text-neutral-600"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    {calendarExtensionMessage || 'Consultando disponibilidade deste mês...'}
-                  </p>
-                  {!isExtendingCalendar && calendarExtensionMessage && (
-                    <button
-                      type="button"
-                      onClick={onRetryCalendarExtension}
-                      className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white px-3 py-2 text-caption font-semibold text-neutral-700 transition hover:border-orange-300 hover:bg-orange-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+            )}
+            {isLoadingCalendar ? (
+              <p className="text-center text-caption text-neutral-500" role="status">
+                Atualizando disponibilidade. As datas ficam bloqueadas até a confirmação.
+              </p>
+            ) : !calendarAvailable ? (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-center text-caption text-amber-800" role="status">
+                  {availabilityMessage ||
+                    'Não foi possível confirmar a disponibilidade. As datas permanecem bloqueadas.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={onRetryCalendar}
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white px-3 py-2 text-caption font-semibold text-neutral-700 transition hover:border-orange-300 hover:bg-orange-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            ) : (
+              <>
+                {isExtendingCalendar || calendarExtensionMessage ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <p
+                      className="text-center text-caption text-neutral-600"
+                      role="status"
+                      aria-live="polite"
                     >
-                      Tentar novamente
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-caption text-neutral-600">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-full border border-neutral-300 bg-white" />
-                    Disponível
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="relative h-2.5 w-2.5 rounded-full bg-rose-50">
-                      <span className="absolute left-0 top-1/2 h-px w-3 -rotate-45 bg-rose-500" />
+                      {calendarExtensionMessage || 'Consultando disponibilidade deste mês...'}
+                    </p>
+                    {!isExtendingCalendar && calendarExtensionMessage && (
+                      <button
+                        type="button"
+                        onClick={onRetryCalendarExtension}
+                        className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white px-3 py-2 text-caption font-semibold text-neutral-700 transition hover:border-orange-300 hover:bg-orange-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-500"
+                      >
+                        Tentar novamente
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-caption text-neutral-600">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full border border-neutral-300 bg-white" />
+                      Disponível
                     </span>
-                    Sem disponibilidade para check-in
-                  </span>
-                </div>
-              )}
-            </>
-          )}
-          <p className="text-center text-caption text-neutral-500">
-            {activeDateField === 'checkIn'
-              ? 'Escolha um dia disponível para o check-in. Use as setas do teclado ou, no celular, arraste até o check-out.'
-              : 'Escolha um check-out que mantenha toda a estadia disponível. Use as setas para navegar.'}
-          </p>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="relative h-2.5 w-2.5 rounded-full bg-rose-50">
+                        <span className="absolute left-0 top-1/2 h-px w-3 -rotate-45 bg-rose-500" />
+                      </span>
+                      {activeDateField === 'checkIn'
+                        ? 'Entrada indisponível'
+                        : 'Saída indisponível para este período'}
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+            <p className="text-center text-caption text-neutral-500">
+              {activeDateField === 'checkIn'
+                ? 'Toque ou clique na entrada e depois na saída. No teclado, use setas, Home, End e Page Up/Down.'
+                : 'Escolha um check-out que mantenha toda a estadia disponível. Use as setas para navegar.'}
+            </p>
+          </div>
+        </div>
+        <p
+          className="shrink-0 py-2 text-center text-sm [@media(max-height:500px)]:py-1"
+          aria-live="polite"
+        >
+          {checkIn && checkOut && isCalendarRangeAvailable(calendarDays, checkIn, checkOut)
+            ? `${formatDateLabel(checkIn)} — ${formatDateLabel(checkOut)} · ${Math.round((Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86400000)} noites`
+            : activeDateField === 'checkIn'
+              ? 'Escolha a entrada'
+              : 'Agora escolha a saída'}
+        </p>
+        <div className="flex shrink-0 items-center justify-between gap-1 border-t pt-3 pb-[env(safe-area-inset-bottom)] [@media(max-height:500px)]:pt-1">
+          <button
+            type="button"
+            onClick={onClear}
+            className="min-h-11 px-2 underline focus-visible:outline-2 focus-visible:outline-orange-600"
+          >
+            Limpar
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="min-h-11 px-2 focus-visible:outline-2 focus-visible:outline-orange-600"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={
+              !calendarAvailable ||
+              isLoadingCalendar ||
+              !isCalendarRangeAvailable(calendarDays, checkIn, checkOut)
+            }
+            className="min-h-11 rounded-xl bg-orange-600 px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-40"
+          >
+            Aplicar datas
+          </button>
         </div>
       </div>
     </div>,

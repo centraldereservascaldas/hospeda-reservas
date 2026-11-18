@@ -1,0 +1,276 @@
+{
+  "results": [
+    {
+      "profile": "mobile",
+      "variant": "before",
+      "repetition": 1,
+      "requests": [
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "firstCardMs": 2517.199999999255,
+      "cards": 30,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "mobile",
+      "variant": "after",
+      "repetition": 1,
+      "requests": [
+        {
+          "limit": 12,
+          "skip": 0
+        }
+      ],
+      "firstCardMs": 1717.2999999970198,
+      "cards": 12,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "mobile",
+      "variant": "before",
+      "repetition": 2,
+      "requests": [
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "firstCardMs": 2409.599999997765,
+      "cards": 30,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "mobile",
+      "variant": "after",
+      "repetition": 2,
+      "requests": [
+        {
+          "limit": 12,
+          "skip": 0
+        }
+      ],
+      "firstCardMs": 1721.4000000022352,
+      "cards": 12,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "mobile",
+      "variant": "before",
+      "repetition": 3,
+      "requests": [
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "firstCardMs": 2414.599999997765,
+      "cards": 30,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "mobile",
+      "variant": "after",
+      "repetition": 3,
+      "requests": [
+        {
+          "limit": 12,
+          "skip": 0
+        }
+      ],
+      "firstCardMs": 1730.7000000029802,
+      "cards": 12,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "desktop",
+      "variant": "before",
+      "repetition": 1,
+      "requests": [
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "firstCardMs": 2091.199999999255,
+      "cards": 30,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "desktop",
+      "variant": "after",
+      "repetition": 1,
+      "requests": [
+        {
+          "limit": 12,
+          "skip": 0
+        }
+      ],
+      "firstCardMs": 1430.1000000014901,
+      "cards": 12,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "desktop",
+      "variant": "before",
+      "repetition": 2,
+      "requests": [
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "firstCardMs": 2085.800000000745,
+      "cards": 30,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "desktop",
+      "variant": "after",
+      "repetition": 2,
+      "requests": [
+        {
+          "limit": 12,
+          "skip": 0
+        }
+      ],
+      "firstCardMs": 1430.3999999985099,
+      "cards": 12,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "desktop",
+      "variant": "before",
+      "repetition": 3,
+      "requests": [
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "firstCardMs": 2086.10000000149,
+      "cards": 30,
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "desktop",
+      "variant": "after",
+      "repetition": 3,
+      "requests": [
+        {
+          "limit": 12,
+          "skip": 0
+        }
+      ],
+      "firstCardMs": 1433.699999999255,
+      "cards": 12,
+      "overflow": false,
+      "errors": []
+    }
+  ],
+  "functional": [
+    {
+      "detailReturn": null,
+      "width": 320,
+      "firstPage": 12,
+      "preservedAfterFailure": 12,
+      "afterRetry": 24,
+      "final": 30,
+      "overflow": false
+    },
+    {
+      "detailReturn": {
+        "cards": 30,
+        "searchRequests": 4,
+        "scrollBefore": 11842,
+        "savedScroll": 12075,
+        "scrollAfter": 12075,
+        "focusedProperty": "test-25"
+      },
+      "width": 390,
+      "firstPage": 12,
+      "preservedAfterFailure": 12,
+      "afterRetry": 24,
+      "final": 30,
+      "overflow": false
+    },
+    {
+      "detailReturn": null,
+      "width": 768,
+      "firstPage": 12,
+      "preservedAfterFailure": 12,
+      "afterRetry": 24,
+      "final": 30,
+      "overflow": false
+    },
+    {
+      "detailReturn": null,
+      "width": 1280,
+      "firstPage": 12,
+      "preservedAfterFailure": 12,
+      "afterRetry": 24,
+      "final": 30,
+      "overflow": false
+    }
+  ],
+  "filterDialog": [
+    {
+      "width": 320,
+      "overflow": false,
+      "note": "12 acomodações entre as opções carregadas. Há outras páginas a verificar após aplicar os filtros."
+    },
+    {
+      "width": 390,
+      "overflow": false,
+      "note": "12 acomodações entre as opções carregadas. Há outras páginas a verificar após aplicar os filtros."
+    },
+    {
+      "width": 1280,
+      "overflow": false,
+      "note": "12 acomodações entre as opções carregadas. Há outras páginas a verificar após aplicar os filtros."
+    }
+  ],
+  "artifacts": {
+    "before": "index-C7oDm64a.js",
+    "afterComparison": "index-DUP_s-OX.js",
+    "finalFunctional": "index-BL9_jOY4.js"
+  },
+  "scope": "Local controlled APIs and images; no production performance or real provider latency claim."
+}

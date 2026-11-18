@@ -956,7 +956,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     searchable
                     message={
                       isLoadingResorts
-                        ? 'Carregando condomínios da Stays...'
+                        ? 'Carregando condomínios do sistema de reservas...'
                         : 'Não foi possível carregar os condomínios agora.'
                     }
                     isOpen={activeDropdown === 'resort'}

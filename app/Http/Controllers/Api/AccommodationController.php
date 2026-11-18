@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\StaysCalendarService;
 use App\Services\StaysExternalApiClient;
 use App\Services\StaysSimulator;
 use Illuminate\Contracts\Cache\LockTimeoutException;
@@ -330,7 +331,7 @@ class AccommodationController extends Controller
         return response()->json(['success' => true, 'total' => $results->count(), 'from' => null, 'to' => null, 'guests' => $guests, 'data' => $data]);
     }
 
-    public function calendar(Request $request, string $id, StaysSimulator $simulator): JsonResponse
+    public function calendar(Request $request, string $id, StaysSimulator $simulator, StaysCalendarService $calendarService): JsonResponse
     {
         $input = $request->validate(['from' => ['nullable', 'date_format:Y-m-d'], 'to' => ['nullable', 'date_format:Y-m-d']]);
         $from = $input['from'] ?? now()->toDateString();
@@ -362,12 +363,12 @@ class AccommodationController extends Controller
         if ($property === null) {
             return response()->json(['success' => false, 'message' => 'Acomodação não encontrada.'], 404);
         }
-        $calendar = $this->stays->get('/calendar/listing/'.rawurlencode((string) ($property['staysListingId'] ?? $id)), ['from' => $from, 'to' => $to]);
+        $calendar = $calendarService->get((string) ($property['staysListingId'] ?? $id), $from, $to);
         if (! is_array($calendar)) {
             return response()->json(['success' => false, 'code' => 'calendar_unavailable', 'message' => 'Não foi possível carregar a disponibilidade atualizada.'], 503);
         }
 
-        return response()->json(['success' => true, 'listingId' => $property['id'], 'staysListingId' => $property['staysListingId'] ?? null, 'currency' => 'BRL', 'data' => $calendar, 'source' => 'stays-live']);
+        return response()->json(['success' => true, 'listingId' => $property['id'], 'staysListingId' => $property['staysListingId'] ?? null, 'currency' => 'BRL', 'data' => $calendar['data'], 'meta' => $calendar['meta'], 'source' => 'stays-live'])->header('Cache-Control', 'no-store');
     }
 
     public function staysListings(): JsonResponse

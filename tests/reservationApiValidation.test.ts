@@ -310,7 +310,7 @@ test('shows an explicit fallback when an owner summary has no property count', a
     const { OwnerAccessAdminView } =
       await import('../src/components/owner/OwnerAccessAdminView.tsx');
     render(React.createElement(OwnerAccessAdminView, { accessToken: 'test-token' }));
-    const search = await screen.findByLabelText('Localizar cadastro na Stays');
+    const search = await screen.findByLabelText('Localizar cadastro no sistema de reservas');
     fireEvent.change(search, { target: { value: 'Maria' } });
     await waitFor(() => assert.ok(screen.getByRole('button', { name: /Maria da Silva/ })));
     assert.match(

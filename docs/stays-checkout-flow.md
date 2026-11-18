@@ -12,6 +12,8 @@ With Stays credentials configured, a failed/invalid live quote (including a quot
 
 ## Checkout sequence
 
+For the existing-reservation checkout prepared in PR #55, the intended public URL is `https://centraldereservascaldas.com/checkout/{reservationCode}` (for example, `https://centraldereservascaldas.com/checkout/ZX92K`). This URL assumes the public domain routes `/checkout/*` to this application; current availability and domain routing have not been verified. The PR remains a draft and the feature flags are disabled by default.
+
 1. The detail view requires a live quote before allowing the guest to continue.
 2. The checkout view carries the quote's nightly and fee-inclusion fields so its breakdown agrees with the detail view.
 3. O contrato antigo de `/api/checkout` exigia autenticação e redirecionava para o checkout hospedado da Stays. Ele foi removido.

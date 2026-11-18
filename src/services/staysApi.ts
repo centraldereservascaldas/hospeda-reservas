@@ -177,7 +177,10 @@ class StaysApiService {
       return {
         success: false,
         latencyMs,
-        message: errorMessage(status, 'Não foi possível validar a conexão real com Stays.net.'),
+        message: errorMessage(
+          status,
+          'Não foi possível verificar a conexão com o sistema de reservas.',
+        ),
       };
     }
 
@@ -189,10 +192,10 @@ class StaysApiService {
     return {
       success: true,
       latencyMs,
-      message: 'Conexão autenticada com Stays.net confirmada pelo backend.',
+      message: 'Conexão com o sistema de reservas confirmada.',
       accountInfo: {
         companyName: targetConfig.accountDomain,
-        tier: 'Stays External API',
+        tier: 'Sistema de reservas',
         version: 'v1',
         activeListings:
           typeof status.totalProperties === 'number' && Number.isFinite(status.totalProperties)
@@ -226,7 +229,7 @@ class StaysApiService {
     });
     const quote: unknown = await response.json();
     if (!response.ok || !isRecord(quote) || quote.source !== 'stays-live') {
-      throw new Error(errorMessage(quote, 'Cotação oficial da Stays indisponível.'));
+      throw new Error(errorMessage(quote, 'Não foi possível consultar o preço atualizado.'));
     }
 
     if (
@@ -243,7 +246,7 @@ class StaysApiService {
       quote.dailyRate <= 0 ||
       quote.total <= 0
     ) {
-      throw new Error('A cotação oficial da Stays retornou dados inválidos.');
+      throw new Error('Não foi possível validar o preço atualizado.');
     }
 
     const fees = Array.isArray(quote.fees) ? quote.fees : [];

@@ -1,0 +1,1181 @@
+{
+  "scope": "Controlled local APIs and SVG images; no production latency or upstream call claim",
+  "beforeAsset": "index-DGDuw0Sr.js",
+  "afterAsset": "index-UpivkTyo.js",
+  "profiles": [
+    {
+      "profile": "before-mobile",
+      "initial": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-27",
+          "to": "2026-11-29",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-12-04",
+          "to": "2026-12-06",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-10-29",
+          "to": "2027-11-01",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-16",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-04-30",
+          "to": "2027-05-03",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-02-05",
+          "to": "2027-02-09",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-01-12",
+          "to": "2027-01-16",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "initialVisibility": {},
+      "queriesAfterResume": 14,
+      "stages": [],
+      "finalRequests": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-27",
+          "to": "2026-11-29",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-12-04",
+          "to": "2026-12-06",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-10-29",
+          "to": "2027-11-01",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-16",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-04-30",
+          "to": "2027-05-03",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-02-05",
+          "to": "2027-02-09",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-01-12",
+          "to": "2027-01-16",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "after-mobile",
+      "initial": [],
+      "initialVisibility": {
+        "pet-weekend-1": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "pet-weekend-2": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "pet-weekend-3": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "pet-weekend-4": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "pet-weekend-5": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "caldas-country-1": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "caldas-country-2": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "caldas-country-3": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "caldas-country-4": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "caldas-country-5": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-1": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-2": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-3": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-4": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-5": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "catalog": {
+          "ratio": 0,
+          "intersecting": false
+        }
+      },
+      "queriesAfterResume": 0,
+      "stages": [
+        {
+          "stage": "first-visible-date",
+          "queries": 2,
+          "visibility": {
+            "pet-weekend-1": {
+              "ratio": 1,
+              "intersecting": true
+            },
+            "pet-weekend-2": {
+              "ratio": 0.3897058963775635,
+              "intersecting": true
+            },
+            "pet-weekend-3": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "pet-weekend-4": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "pet-weekend-5": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "caldas-country-1": {
+              "ratio": 0.260869562625885,
+              "intersecting": true
+            },
+            "caldas-country-2": {
+              "ratio": 0.10166240483522415,
+              "intersecting": true
+            },
+            "caldas-country-3": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "caldas-country-4": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "caldas-country-5": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "holiday-1": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "holiday-2": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "holiday-3": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "holiday-4": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "holiday-5": {
+              "ratio": 0,
+              "intersecting": false
+            },
+            "catalog": {
+              "ratio": 0,
+              "intersecting": false
+            }
+          },
+          "geometry": [
+            {
+              "key": "pet-weekend-1",
+              "rect": {
+                "x": 0,
+                "y": 344,
+                "width": 272,
+                "height": 280,
+                "top": 344,
+                "right": 272,
+                "bottom": 624,
+                "left": 0
+              },
+              "width": "272px",
+              "rootFont": "16px"
+            },
+            {
+              "key": "pet-weekend-2",
+              "rect": {
+                "x": 284,
+                "y": 344,
+                "width": 272,
+                "height": 280,
+                "top": 344,
+                "right": 556,
+                "bottom": 624,
+                "left": 284
+              },
+              "width": "272px",
+              "rootFont": "16px"
+            },
+            {
+              "key": "pet-weekend-3",
+              "rect": {
+                "x": 568,
+                "y": 344,
+                "width": 272,
+                "height": 280,
+                "top": 344,
+                "right": 840,
+                "bottom": 624,
+                "left": 568
+              },
+              "width": "272px",
+              "rootFont": "16px"
+            }
+          ]
+        },
+        {
+          "stage": "horizontal-second-date",
+          "queries": 3
+        },
+        {
+          "stage": "return-first-date",
+          "queries": 3
+        },
+        {
+          "stage": "next-collection",
+          "queries": 4
+        },
+        {
+          "stage": "thematic-catalog",
+          "queries": 6
+        }
+      ],
+      "finalRequests": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 0
+        }
+      ],
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "before-desktop",
+      "initial": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-27",
+          "to": "2026-11-29",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-12-04",
+          "to": "2026-12-06",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-03-25",
+          "to": "2027-03-28",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-09-03",
+          "to": "2027-09-06",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-10-29",
+          "to": "2027-11-01",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-19",
+          "to": "2026-11-22",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-05-26",
+          "to": "2027-05-29",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "initialVisibility": {},
+      "queriesAfterResume": 14,
+      "stages": [],
+      "finalRequests": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-27",
+          "to": "2026-11-29",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-12-04",
+          "to": "2026-12-06",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-03-25",
+          "to": "2027-03-28",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-09-03",
+          "to": "2027-09-06",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-10-29",
+          "to": "2027-11-01",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-19",
+          "to": "2026-11-22",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2027-05-26",
+          "to": "2027-05-29",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 20,
+          "skip": 20
+        }
+      ],
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "after-desktop",
+      "initial": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-27",
+          "to": "2026-11-29",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-12-04",
+          "to": "2026-12-06",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "limit": 8,
+          "skip": 0
+        }
+      ],
+      "initialVisibility": {
+        "pet-weekend-1": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-2": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-3": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-4": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-5": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "caldas-country-1": {
+          "ratio": 0.5748413801193237,
+          "intersecting": true
+        },
+        "caldas-country-2": {
+          "ratio": 0.5748413801193237,
+          "intersecting": true
+        },
+        "caldas-country-3": {
+          "ratio": 0.574841320514679,
+          "intersecting": true
+        },
+        "caldas-country-4": {
+          "ratio": 0.5748413801193237,
+          "intersecting": true
+        },
+        "caldas-country-5": {
+          "ratio": 0.574841320514679,
+          "intersecting": true
+        },
+        "holiday-1": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-2": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-3": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-4": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-5": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "catalog": {
+          "ratio": 0,
+          "intersecting": false
+        }
+      },
+      "queriesAfterResume": 6,
+      "stages": [],
+      "finalRequests": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-27",
+          "to": "2026-11-29",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-12-04",
+          "to": "2026-12-06",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        }
+      ],
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "after-fallback",
+      "initial": [],
+      "initialVisibility": {},
+      "queriesAfterResume": 0,
+      "stages": [
+        {
+          "stage": "first-visible-date",
+          "queries": 2,
+          "visibility": {},
+          "geometry": [
+            {
+              "key": "pet-weekend-1",
+              "rect": {
+                "x": 0,
+                "y": 344,
+                "width": 272,
+                "height": 280,
+                "top": 344,
+                "right": 272,
+                "bottom": 624,
+                "left": 0
+              },
+              "width": "272px",
+              "rootFont": "16px"
+            },
+            {
+              "key": "pet-weekend-2",
+              "rect": {
+                "x": 284,
+                "y": 344,
+                "width": 272,
+                "height": 280,
+                "top": 344,
+                "right": 556,
+                "bottom": 624,
+                "left": 284
+              },
+              "width": "272px",
+              "rootFont": "16px"
+            },
+            {
+              "key": "pet-weekend-3",
+              "rect": {
+                "x": 568,
+                "y": 344,
+                "width": 272,
+                "height": 280,
+                "top": 344,
+                "right": 840,
+                "bottom": 624,
+                "left": 568
+              },
+              "width": "272px",
+              "rootFont": "16px"
+            }
+          ]
+        },
+        {
+          "stage": "horizontal-second-date",
+          "queries": 3
+        },
+        {
+          "stage": "return-first-date",
+          "queries": 3
+        },
+        {
+          "stage": "next-collection",
+          "queries": 4
+        },
+        {
+          "stage": "thematic-catalog",
+          "queries": 6
+        }
+      ],
+      "finalRequests": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 20,
+          "skip": 0
+        },
+        {
+          "limit": 20,
+          "skip": 0
+        }
+      ],
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "after-save-data",
+      "initial": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-27",
+          "to": "2026-11-29",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-12-04",
+          "to": "2026-12-06",
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "limit": 8,
+          "skip": 0
+        }
+      ],
+      "initialVisibility": {
+        "pet-weekend-1": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-2": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-3": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-4": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-5": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "caldas-country-1": {
+          "ratio": 0.5748413801193237,
+          "intersecting": true
+        },
+        "caldas-country-2": {
+          "ratio": 0.5748413801193237,
+          "intersecting": true
+        },
+        "caldas-country-3": {
+          "ratio": 0.574841320514679,
+          "intersecting": true
+        },
+        "caldas-country-4": {
+          "ratio": 0.5748413801193237,
+          "intersecting": true
+        },
+        "caldas-country-5": {
+          "ratio": 0.574841320514679,
+          "intersecting": true
+        },
+        "holiday-1": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-2": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-3": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-4": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-5": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "catalog": {
+          "ratio": 0,
+          "intersecting": false
+        }
+      },
+      "queriesAfterResume": 6,
+      "stages": [],
+      "finalRequests": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-27",
+          "to": "2026-11-29",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-12-04",
+          "to": "2026-12-06",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        }
+      ],
+      "overflow": false,
+      "errors": []
+    },
+    {
+      "profile": "after-hidden",
+      "initial": [],
+      "initialVisibility": {
+        "pet-weekend-1": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-2": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-3": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-4": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "pet-weekend-5": {
+          "ratio": 1,
+          "intersecting": true
+        },
+        "caldas-country-1": {
+          "ratio": 0.5748413801193237,
+          "intersecting": true
+        },
+        "caldas-country-2": {
+          "ratio": 0.5748413801193237,
+          "intersecting": true
+        },
+        "caldas-country-3": {
+          "ratio": 0.574841320514679,
+          "intersecting": true
+        },
+        "caldas-country-4": {
+          "ratio": 0.5748413801193237,
+          "intersecting": true
+        },
+        "caldas-country-5": {
+          "ratio": 0.574841320514679,
+          "intersecting": true
+        },
+        "holiday-1": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-2": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-3": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-4": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "holiday-5": {
+          "ratio": 0,
+          "intersecting": false
+        },
+        "catalog": {
+          "ratio": 0,
+          "intersecting": false
+        }
+      },
+      "queriesAfterResume": 6,
+      "stages": [],
+      "finalRequests": [
+        {
+          "from": "2026-11-06",
+          "to": "2026-11-08",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-13",
+          "to": "2026-11-15",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-22",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-27",
+          "to": "2026-11-29",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-12-04",
+          "to": "2026-12-06",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        },
+        {
+          "from": "2026-11-20",
+          "to": "2026-11-23",
+          "guests": 1,
+          "limit": 8,
+          "skip": 0
+        }
+      ],
+      "overflow": false,
+      "errors": []
+    }
+  ]
+}

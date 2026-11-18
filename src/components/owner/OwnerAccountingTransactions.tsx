@@ -331,7 +331,7 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
                 {detailLoading && (
                   <p role="status" className="flex items-center gap-2 text-sm text-neutral-600">
                     <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
-                    Consultando detalhes na Stays…
+                    Consultando detalhes no sistema de reservas…
                   </p>
                 )}
                 {detailError && (
@@ -349,7 +349,7 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
                       <dl className="grid gap-x-8 gap-y-4 border-b border-neutral-200/80 pb-4 sm:grid-cols-2">
                         <div>
                           <dt className="text-xs font-bold text-neutral-500">
-                            Código da reserva na Stays
+                            Código da reserva no sistema de reservas
                           </dt>
                           <dd className="mt-1 text-sm font-semibold text-neutral-800">
                             {details.reservationCode || '—'}
@@ -399,8 +399,8 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
                         ) : (
                           <p className="px-2 py-3 text-sm text-neutral-500">
                             {details.ledgerEntry.type === 'credit'
-                              ? 'A API da Stays não retornou a discriminação das taxas do repasse.'
-                              : 'A API da Stays não retornou a discriminação deste lançamento.'}
+                              ? 'A API do sistema de reservas não retornou a discriminação das taxas do repasse.'
+                              : 'A API do sistema de reservas não retornou a discriminação deste lançamento.'}
                           </p>
                         )}
                         {details.ledgerEntry.type === 'credit' && (

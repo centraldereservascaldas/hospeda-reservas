@@ -69,7 +69,7 @@ test('property availability hook requests the Stays id and represents failed liv
       assert.match(container.textContent || '', /"isLoadingCalendar":false/);
     });
     assert.deepEqual(calendarRequests, [
-      [property.staysListingId || property.id, '2026-11-11', '2027-02-09'],
+      [property.staysListingId || property.id, '2026-10-13', '2027-01-11'],
     ]);
     assert.deepEqual(priceRequests, [
       {
@@ -285,5 +285,240 @@ test('property availability hides stale calendar and quote while guest or proper
   } finally {
     crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
     crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
+});
+
+test('changing arrival retains earlier future days without requesting a new calendar', async () => {
+  const original = crcnBackendApi.getAccommodationCalendar;
+  let requests = 0;
+  crcnBackendApi.getAccommodationCalendar = async () => {
+    requests += 1;
+    return [
+      { date: '2026-11-03', avail: 1 },
+      { date: '2026-11-17', avail: 1 },
+    ];
+  };
+  function Probe({ checkIn }: { checkIn: string }) {
+    const result = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn,
+      checkOut: '',
+      guests: 2,
+      todayIso: '2026-11-03',
+    });
+    return React.createElement('output', null, JSON.stringify(result.calendarDays));
+  }
+  try {
+    const { container, rerender } = render(React.createElement(Probe, { checkIn: '' }));
+    await waitFor(() => assert.match(container.textContent || '', /2026-11-03/));
+    rerender(React.createElement(Probe, { checkIn: '2026-11-17' }));
+    assert.match(container.textContent || '', /2026-11-03/);
+    assert.equal(requests, 1);
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = original;
+  }
+});
+
+test('simultaneous consumers deduplicate calendar requests and expose incomplete coverage', async () => {
+  const original = crcnBackendApi.getAccommodationCalendar;
+  let requests = 0;
+  let resolve!: (days: Array<{ date: string; avail: number }>) => void;
+  const pending = new Promise<Array<{ date: string; avail: number }>>((done) => {
+    resolve = done;
+  });
+  crcnBackendApi.getAccommodationCalendar = async () => {
+    requests += 1;
+    return pending;
+  };
+  function Probe() {
+    const result = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn: '',
+      checkOut: '',
+      guests: 2,
+      todayIso: '2026-11-04',
+    });
+    return React.createElement('output', null, result.calendarExtensionMessage);
+  }
+  try {
+    const { container } = render(
+      React.createElement('div', null, React.createElement(Probe), React.createElement(Probe)),
+    );
+    assert.equal(requests, 1);
+    await act(async () => {
+      resolve([{ date: '2026-11-04', avail: 1 }]);
+      await pending;
+    });
+    await waitFor(() =>
+      assert.match(container.textContent || '', /não têm disponibilidade confirmada/),
+    );
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = original;
+  }
+});
+
+test('calendar expiration blocks old availability and refreshes an open consumer', async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  let resolveRefresh!: (response: Response) => void;
+  globalThis.fetch = async () => {
+    requests += 1;
+    if (requests > 1)
+      return new Promise<Response>((resolve) => {
+        resolveRefresh = resolve;
+      });
+    return new Response(
+      JSON.stringify({
+        data: [{ date: '2026-12-03', avail: 1 }],
+        meta: { expiresAt: new Date(Date.now() + 80).toISOString() },
+      }),
+      { status: 200 },
+    );
+  };
+  function Probe() {
+    const result = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn: '',
+      checkOut: '',
+      guests: 2,
+      todayIso: '2026-12-03',
+    });
+    return React.createElement(
+      'output',
+      null,
+      JSON.stringify({ available: result.calendarAvailable, loading: result.isLoadingCalendar }),
+    );
+  }
+  try {
+    const { container } = render(React.createElement(Probe));
+    await waitFor(() => assert.match(container.textContent || '', /"available":true/));
+    await waitFor(() => assert.equal(requests, 2));
+    assert.match(container.textContent || '', /"available":false/);
+    await act(async () => {
+      resolveRefresh(
+        new Response(JSON.stringify({ data: [{ date: '2026-12-03', avail: 0 }] }), { status: 200 }),
+      );
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('retry after navigating beyond an incomplete initial window repairs that initial window', async () => {
+  const original = crcnBackendApi.getAccommodationCalendar;
+  const starts: Array<string | undefined> = [];
+  crcnBackendApi.getAccommodationCalendar = async (_id, from) => {
+    starts.push(from);
+    return [{ date: from!, avail: 1 }];
+  };
+  let state!: ReturnType<typeof usePropertyAvailability>;
+  function Probe() {
+    state = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn: '',
+      checkOut: '',
+      guests: 2,
+      todayIso: '2026-12-04',
+    });
+    return null;
+  }
+  try {
+    render(React.createElement(Probe));
+    await waitFor(() => assert.equal(state.calendarAvailable, true));
+    await act(async () => {
+      await state.loadCalendarThrough('2027-06-01');
+    });
+    await act(async () => {
+      state.retryCalendarExtension();
+    });
+    await waitFor(() => assert.equal(starts.length, 3));
+    assert.equal(starts[2], '2026-12-04');
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = original;
+  }
+});
+
+test('an extension expiring before the initial window triggers revalidation', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input), 'http://localhost');
+    const from = url.searchParams.get('from')!;
+    const to = url.searchParams.get('to')!;
+    const days = [];
+    for (
+      const day = new Date(`${from}T00:00:00Z`);
+      day.toISOString().slice(0, 10) <= to;
+      day.setUTCDate(day.getUTCDate() + 1)
+    ) {
+      days.push({ date: day.toISOString().slice(0, 10), avail: 1 });
+    }
+    const ttl = from === '2026-12-05' ? 10_000 : 80;
+    return new Response(
+      JSON.stringify({ data: days, meta: { expiresAt: new Date(Date.now() + ttl).toISOString() } }),
+      { status: 200 },
+    );
+  };
+  let state!: ReturnType<typeof usePropertyAvailability>;
+  function Probe() {
+    state = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn: '',
+      checkOut: '',
+      guests: 2,
+      todayIso: '2026-12-05',
+    });
+    return null;
+  }
+  try {
+    render(React.createElement(Probe));
+    await waitFor(() => assert.equal(state.calendarAvailable, true));
+    await act(async () => {
+      await state.loadCalendarThrough('2027-04-01');
+    });
+    assert.ok(state.calendarDays.some((day) => day.date === '2027-04-01'));
+    await waitFor(() =>
+      assert.equal(
+        state.calendarDays.some((day) => day.date === '2027-04-01'),
+        false,
+      ),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a partial extension does not automatically retry after its merged days rerender', async () => {
+  const original = crcnBackendApi.getAccommodationCalendar;
+  let requests = 0;
+  crcnBackendApi.getAccommodationCalendar = async (_id, from) => {
+    requests += 1;
+    return [{ date: from!, avail: 1 }];
+  };
+  let state!: ReturnType<typeof usePropertyAvailability>;
+  function Probe() {
+    const result = usePropertyAvailability({
+      property: STAYS_NET_APARTMENTS[0]!,
+      checkIn: '',
+      checkOut: '',
+      guests: 2,
+      todayIso: '2026-12-06',
+    });
+    state = result;
+    const { calendarCoverageEnd, loadCalendarThrough } = result;
+    React.useEffect(() => {
+      if (calendarCoverageEnd) void loadCalendarThrough('2027-06-01');
+    }, [loadCalendarThrough, calendarCoverageEnd]);
+    return null;
+  }
+  try {
+    render(React.createElement(Probe));
+    await waitFor(() => assert.match(state.calendarExtensionMessage, /Não foi possível consultar/));
+    assert.equal(requests, 2);
+    await act(async () => {
+      await state.loadCalendarThrough('2027-06-01');
+    });
+    assert.equal(requests, 2);
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = original;
   }
 });

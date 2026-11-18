@@ -6,6 +6,7 @@ use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreOwnerCalendarBlockRequest;
 use App\Models\OwnerAccess;
+use App\Services\StaysCalendarService;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -322,6 +323,8 @@ class OwnerDashboardController extends Controller
         if (! is_array($created) || strtolower((string) ($created['type'] ?? 'blocked')) !== 'blocked') {
             return response()->json(['success' => false, 'code' => 'calendar_block_failed', 'message' => 'A Stays não confirmou o bloqueio. Atualize o calendário antes de tentar novamente.'], 502);
         }
+
+        app(StaysCalendarService::class)->invalidate($input['listingId']);
 
         return response()->json(['success' => true, 'status' => 'blocked', 'blockId' => (string) ($created['_id'] ?? $created['id'] ?? '')], 201);
     }

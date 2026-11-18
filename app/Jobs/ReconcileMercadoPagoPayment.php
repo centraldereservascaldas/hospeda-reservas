@@ -11,6 +11,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class ReconcileMercadoPagoPayment implements ShouldQueue
@@ -77,6 +78,15 @@ class ReconcileMercadoPagoPayment implements ShouldQueue
                 'error_code' => null,
                 'processed_at' => now(),
             ])->save();
+            Log::info('checkout.webhook.reconciled', [
+                'event' => 'checkout.webhook.reconciled',
+                'correlation_id' => $webhook->id,
+                'webhook_id' => $webhook->id,
+                'gateway' => 'mercadopago',
+                'result_code' => $result['code'],
+                'http_status' => $result['status'],
+                'reconciliation_attempt' => $webhook->refresh()->reconciliation_attempts,
+            ]);
         } catch (Throwable $exception) {
             DB::transaction(function () use ($webhook): void {
                 $lockedWebhook = DirectBookingPaymentWebhook::query()->lockForUpdate()->findOrFail($webhook->id);
@@ -93,6 +103,19 @@ class ReconcileMercadoPagoPayment implements ShouldQueue
             $failureCode = $exception instanceof RequestException
                 ? 'payment_reconciliation_failed; gateway_http_status='.$exception->response->status()
                 : 'payment_reconciliation_failed';
+
+            Log::warning('checkout.webhook.reconciliation_retrying', [
+                'event' => 'checkout.webhook.reconciliation_retrying',
+                'correlation_id' => $webhook->id,
+                'webhook_id' => $webhook->id,
+                'gateway' => 'mercadopago',
+                'reason' => 'payment_reconciliation_failed',
+                'exception_class' => $exception::class,
+                'gateway_http_status' => $exception instanceof RequestException
+                    ? $exception->response->status()
+                    : null,
+                'reconciliation_attempt' => $webhook->refresh()->reconciliation_attempts,
+            ]);
 
             throw new \RuntimeException($failureCode);
         }
@@ -113,5 +136,14 @@ class ReconcileMercadoPagoPayment implements ShouldQueue
                     : 'payment_reconciliation_failed',
             ])->save();
         });
+
+        Log::error('checkout.webhook.reconciliation_failed', [
+            'event' => 'checkout.webhook.reconciliation_failed',
+            'correlation_id' => $this->webhookId,
+            'webhook_id' => $this->webhookId,
+            'gateway' => 'mercadopago',
+            'reason' => 'payment_reconciliation_failed',
+            'exception_class' => $exception !== null ? $exception::class : null,
+        ]);
     }
 }

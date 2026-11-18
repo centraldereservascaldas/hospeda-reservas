@@ -270,7 +270,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
           className="flex min-h-64 items-center justify-center rounded-3xl border border-white/70 bg-white/55 text-sm font-semibold text-neutral-600 backdrop-blur-xl"
         >
           <LoaderCircle aria-hidden="true" className="mr-2 h-5 w-5 animate-spin text-orange-600" />
-          Carregando dados da Stays…
+          Carregando dados do sistema de reservas…
         </div>
       ) : (
         dashboard && (
@@ -319,7 +319,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             {section === 'properties' && (
               <SectionCard
                 title="Minhas propriedades"
-                detail="Imóveis vinculados ao seu perfil de proprietário na Stays."
+                detail="Imóveis vinculados ao seu perfil de proprietário no sistema de reservas."
               >
                 <PropertyList rows={allProperties} />
               </SectionCard>
@@ -337,7 +337,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             {section === 'accounting' && (
               <SectionCard
                 title="Minha contabilidade"
-                detail={`Totais informados pela Stays para ${monthTitle}. Os valores não são estimativas.`}
+                detail={`Totais informados pelo sistema de reservas para ${monthTitle}. Os valores não são estimativas.`}
               >
                 <div className="mb-4 grid gap-3 sm:grid-cols-3">
                   <AmountCard
@@ -438,7 +438,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             {section === 'calendar' && (
               <SectionCard
                 title="Calendário de reservas"
-                detail="Consulte reservas e bloqueios sincronizados com a Stays e bloqueie períodos dos seus imóveis."
+                detail="Consulte reservas e bloqueios sincronizados com o sistema de reservas e bloqueie períodos dos seus imóveis."
               >
                 <form
                   className="mb-5 grid gap-3 rounded-2xl border border-orange-100 bg-orange-50/55 p-4 sm:grid-cols-2 lg:grid-cols-5"
@@ -455,7 +455,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                         to: blockTo,
                         ...(blockReason.trim() ? { reason: blockReason.trim() } : {}),
                       });
-                      setBlockSuccess('As datas foram bloqueadas na Stays.');
+                      setBlockSuccess('As datas foram bloqueadas no sistema de reservas.');
                       setBlockReason('');
                       if (month === blockFrom.slice(0, 7)) {
                         await loadDashboard();
@@ -638,15 +638,15 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                   })}
                 </div>
                 <p className="mt-3 text-xs text-neutral-500">
-                  As reservas e bloqueios exibidos vêm da Stays. Bloqueios criados aqui afetam a
-                  disponibilidade do imóvel nos canais integrados.
+                  As reservas e bloqueios exibidos vêm do sistema de reservas. Bloqueios criados
+                  aqui afetam a disponibilidade do imóvel nos canais integrados.
                 </p>
               </SectionCard>
             )}
 
             <p className="text-center text-xs text-neutral-500">
-              Informações consultadas na Stays · período de {dateText(dashboard.period.from)} a{' '}
-              {dateText(dashboard.period.to)}
+              Informações consultadas no sistema de reservas · período de{' '}
+              {dateText(dashboard.period.from)} a {dateText(dashboard.period.to)}
             </p>
           </>
         )

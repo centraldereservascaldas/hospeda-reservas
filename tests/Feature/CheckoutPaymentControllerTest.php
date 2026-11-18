@@ -7,6 +7,8 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Mockery;
 use Tests\TestCase;
 
 class CheckoutPaymentControllerTest extends TestCase
@@ -97,6 +99,29 @@ class CheckoutPaymentControllerTest extends TestCase
             'cielo_checkout_authoritative_lookup',
             collect($order->operational_events)->last()['source'],
         );
+    }
+
+    public function test_disabled_payment_attempt_is_logged_with_safe_context_only(): void
+    {
+        Log::spy();
+        $order = $this->orderForCheckout('mercadopago');
+
+        $this->postJson('/api/checkout/'.$order->public_reference.'/payments', [
+            'paymentMethod' => 'pix',
+            'paymentMethodId' => 'pix',
+        ], [
+            'Idempotency-Key' => 'attempt-key-for-disabled-pix',
+            'X-Checkout-Resume-Token' => str_repeat('b', 64),
+        ])->assertServiceUnavailable()->assertJsonPath('code', 'payments_disabled');
+
+        Log::shouldHaveReceived('log')->once()->with('warning', 'checkout.payment.blocked', Mockery::on(
+            static fn (array $context): bool => $context === [
+                'event' => 'checkout.payment.blocked',
+                'correlation_id' => $order->id,
+                'order_id' => $order->id,
+                'reason' => 'payments_disabled_or_not_ready',
+            ],
+        ));
     }
 
     public function test_cielo_checkout_cannot_switch_an_order_persisted_for_mercado_pago(): void

@@ -85,23 +85,26 @@ test('does not render personal-data fields while hosted checkout is disabled', a
   crcnBackendApi.getStaysCheckoutReadiness = async () => ({
     ready: false,
     code: 'checkout_disabled',
-    message: 'O checkout ainda não está habilitado.',
+    message: 'O checkout da Stays ainda não está habilitado.',
   });
 
   renderModal();
   await waitFor(() =>
-    assert.equal(screen.getByRole('alert').textContent, 'O checkout ainda não está habilitado.'),
+    assert.equal(
+      screen.getByRole('alert').textContent,
+      'Não foi possível confirmar a disponibilidade da reserva agora. Tente novamente em instantes.',
+    ),
   );
   assert.equal(screen.queryByLabelText('Nome e sobrenome'), null);
   assert.equal(screen.queryByLabelText('E-mail'), null);
-  assert.equal(screen.queryByRole('button', { name: 'Continuar na Stays' }), null);
+  assert.equal(screen.queryByRole('button', { name: 'Continuar para pagamento' }), null);
 });
 
 test('renders only the minimal contact fields after readiness succeeds', async () => {
   crcnBackendApi.getStaysCheckoutReadiness = async () => ({
     ready: true,
     code: null,
-    message: 'Checkout disponível.',
+    message: 'O checkout hospedado da Stays está disponível.',
   });
 
   renderModal();
@@ -113,14 +116,15 @@ test('renders only the minimal contact fields after readiness succeeds', async (
   assert.equal((screen.getByLabelText('E-mail') as HTMLInputElement).value, 'pessoa@example.test');
   assert.equal(screen.queryByLabelText('Telefone'), null);
   assert.ok(screen.getByRole('link', { name: 'Política de Privacidade' }));
-  assert.ok(screen.getByRole('button', { name: 'Continuar na Stays' }));
+  assert.ok(screen.getByRole('button', { name: 'Continuar para pagamento' }));
+  assert.doesNotMatch(document.body.textContent ?? '', /stays/i);
 });
 
 test('submits the validated stay to the backend and follows only the hosted Stays link', async () => {
   crcnBackendApi.getStaysCheckoutReadiness = async () => ({
     ready: true,
     code: null,
-    message: 'Checkout disponível.',
+    message: 'O checkout hospedado da Stays está disponível.',
   });
   let submitted: Parameters<typeof crcnBackendApi.startStaysCheckout>[0] | null = null;
   crcnBackendApi.startStaysCheckout = async (payload) => {
@@ -143,7 +147,7 @@ test('submits the validated stay to the backend and follows only the hosted Stay
 
   try {
     renderModal();
-    const continueButton = await screen.findByRole('button', { name: 'Continuar na Stays' });
+    const continueButton = await screen.findByRole('button', { name: 'Continuar para pagamento' });
     fireEvent.submit(continueButton.closest('form')!);
 
     await waitFor(() => assert.notEqual(checkoutHref, ''));

@@ -10,6 +10,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class MercadoPagoWebhookController extends Controller
@@ -24,15 +25,33 @@ class MercadoPagoWebhookController extends Controller
         $type = $request->query('type', $request->input('type'));
 
         if ($type !== 'payment' || (! is_string($paymentId) && ! is_int($paymentId)) || trim((string) $paymentId) === '') {
+            Log::warning('checkout.webhook.rejected', [
+                'event' => 'checkout.webhook.rejected',
+                'gateway' => 'mercadopago',
+                'reason' => 'invalid_notification',
+            ]);
+
             return response()->json(['success' => false, 'code' => 'invalid_notification'], 400);
         }
 
         if (! $signature->isValid($request->header('x-signature'), $requestId, $paymentId)) {
+            Log::warning('checkout.webhook.rejected', [
+                'event' => 'checkout.webhook.rejected',
+                'gateway' => 'mercadopago',
+                'reason' => 'invalid_signature',
+            ]);
+
             return response()->json(['success' => false, 'code' => 'invalid_signature'], 401);
         }
 
         $queueConnection = (string) config('services.mercadopago.webhook_queue_connection', 'database');
         if ($queueConnection === 'sync' || ! config("queue.connections.{$queueConnection}")) {
+            Log::error('checkout.webhook.queue_unavailable', [
+                'event' => 'checkout.webhook.queue_unavailable',
+                'gateway' => 'mercadopago',
+                'reason' => 'webhook_queue_unavailable',
+            ]);
+
             return response()->json(['success' => false, 'code' => 'webhook_queue_unavailable'], 503);
         }
 
@@ -73,6 +92,12 @@ class MercadoPagoWebhookController extends Controller
                 return true;
             });
             if (! $shouldRequeue) {
+                Log::info('checkout.webhook.duplicate', [
+                    'event' => 'checkout.webhook.duplicate',
+                    'gateway' => 'mercadopago',
+                    'reason' => 'already_received_or_processed',
+                ]);
+
                 return response()->json(['success' => true, 'duplicate' => true], 200);
             }
 
@@ -82,8 +107,22 @@ class MercadoPagoWebhookController extends Controller
             }
             ReconcileMercadoPagoPayment::dispatch($existingWebhookId)->onConnection($queueConnection);
 
+            Log::info('checkout.webhook.requeued', [
+                'event' => 'checkout.webhook.requeued',
+                'correlation_id' => $existingWebhookId,
+                'webhook_id' => $existingWebhookId,
+                'gateway' => 'mercadopago',
+            ]);
+
             return response()->json(['success' => true, 'requeued' => true], 202);
         }
+
+        Log::info('checkout.webhook.queued', [
+            'event' => 'checkout.webhook.queued',
+            'correlation_id' => $webhook->id,
+            'webhook_id' => $webhook->id,
+            'gateway' => 'mercadopago',
+        ]);
 
         return response()->json(['success' => true, 'received' => true], 202);
     }

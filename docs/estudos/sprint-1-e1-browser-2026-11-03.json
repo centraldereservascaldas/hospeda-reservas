@@ -1,0 +1,62 @@
+[
+  {
+    "width": 320,
+    "before": {
+      "cards": 1,
+      "overflow": false,
+      "quoted": true,
+      "pendingPrice": false
+    },
+    "after": {
+      "cards": 1,
+      "confirmed": true
+    },
+    "searches": 2,
+    "errors": []
+  },
+  {
+    "width": 390,
+    "before": {
+      "cards": 1,
+      "overflow": false,
+      "quoted": true,
+      "pendingPrice": false
+    },
+    "after": {
+      "cards": 1,
+      "confirmed": true
+    },
+    "searches": 2,
+    "errors": []
+  },
+  {
+    "width": 768,
+    "before": {
+      "cards": 1,
+      "overflow": false,
+      "quoted": true,
+      "pendingPrice": false
+    },
+    "after": {
+      "cards": 1,
+      "confirmed": true
+    },
+    "searches": 2,
+    "errors": []
+  },
+  {
+    "width": 1280,
+    "before": {
+      "cards": 1,
+      "overflow": false,
+      "quoted": true,
+      "pendingPrice": false
+    },
+    "after": {
+      "cards": 1,
+      "confirmed": true
+    },
+    "searches": 2,
+    "errors": []
+  }
+]

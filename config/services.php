@@ -48,6 +48,7 @@ return [
             )),
         ))),
         'timeout' => (int) env('STAYS_TIMEOUT', 10),
+        'calendar_cache_ttl' => (int) env('STAYS_CALENDAR_CACHE_TTL', 45),
     ],
 
     'stays_simulator' => [

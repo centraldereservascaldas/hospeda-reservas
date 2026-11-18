@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\LegalPageRegistry;
 use App\Services\PropertyMetadataResolver;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -18,14 +19,15 @@ class SpaController extends Controller
         private LegalPageRegistry $legalPages,
     ) {}
 
-    public function __invoke(?string $path = null): Response
+    public function __invoke(Request $request, ?string $path = null): Response
     {
+        $legacyDestination = $this->legacyDestination($request, $path);
+        if ($legacyDestination !== null) {
+            return redirect()->to($legacyDestination, Response::HTTP_MOVED_PERMANENTLY);
+        }
+
         $legalSlug = $this->legalSlugFromPath($path);
         $legalPage = $legalSlug === null ? null : $this->legalPages->find($legalSlug);
-        if ($legalSlug !== null && $legalPage === null) {
-            return response('Página indisponível.', 404)
-                ->header('X-Robots-Tag', 'noindex, nofollow');
-        }
 
         $indexPath = public_path('index.html');
         if (! is_file($indexPath)) {
@@ -35,6 +37,10 @@ class SpaController extends Controller
         $html = file_get_contents($indexPath);
         if ($html === false) {
             return response('Aplicação indisponível.', 503)->header('X-Robots-Tag', 'noindex, nofollow');
+        }
+
+        if ($legalSlug !== null && $legalPage === null) {
+            return $this->notFoundResponse($html);
         }
 
         if ($legalPage !== null) {
@@ -50,7 +56,73 @@ class SpaController extends Controller
             return $this->noindexResponse($html);
         }
 
-        return response()->file($indexPath);
+        if ($this->isKnownSpaPath($path)) {
+            return response()->file($indexPath);
+        }
+
+        return $this->notFoundResponse($html);
+    }
+
+    private function legacyDestination(Request $request, ?string $path): ?string
+    {
+        $normalizedPath = trim((string) $path, '/');
+        $legacyPaths = config('legacy_redirects.paths', []);
+        $destinationPath = is_array($legacyPaths) ? ($legacyPaths[$normalizedPath] ?? null) : null;
+        $isLegacyHost = in_array(mb_strtolower($request->getHost()), config('legacy_redirects.hosts', []), true);
+
+        if (! is_string($destinationPath) && ! $isLegacyHost) {
+            return null;
+        }
+
+        if (! is_string($destinationPath)) {
+            $destinationPath = $normalizedPath === '' ? '/' : '/'.$normalizedPath;
+        }
+
+        if ($isLegacyHost) {
+            $canonicalUrl = config('app.url');
+            $canonicalParts = is_string($canonicalUrl) ? parse_url($canonicalUrl) : false;
+            $canonicalHost = is_array($canonicalParts) ? ($canonicalParts['host'] ?? null) : null;
+            if (! is_string($canonicalHost) || $canonicalHost === '') {
+                return null;
+            }
+
+            if (mb_strtolower($canonicalHost) === mb_strtolower($request->getHost())) {
+                return is_string($destinationPath)
+                    ? $this->appendQueryString($destinationPath, $request->getQueryString())
+                    : null;
+            }
+
+            $canonicalOrigin = ($canonicalParts['scheme'] ?? 'https').'://'.$canonicalHost;
+            if (isset($canonicalParts['port'])) {
+                $canonicalOrigin .= ':'.$canonicalParts['port'];
+            }
+
+            $destinationPath = $canonicalOrigin.$destinationPath;
+        }
+
+        return $this->appendQueryString($destinationPath, $request->getQueryString());
+    }
+
+    private function appendQueryString(string $destination, ?string $queryString): string
+    {
+        if (! is_string($queryString) || $queryString === '') {
+            return $destination;
+        }
+
+        $destination .= str_contains($destination, '?') ? '&' : '?';
+
+        return $destination.$queryString;
+    }
+
+    private function isKnownSpaPath(?string $path): bool
+    {
+        $normalizedPath = trim((string) $path, '/');
+
+        return $normalizedPath === ''
+            || $normalizedPath === 'search'
+            || preg_match('~^[a-z]{2}(?:/search)?$~i', $normalizedPath) === 1
+            || $normalizedPath === 'auth/confirm'
+            || preg_match('~^(?:checkout|reservar)/[a-zA-Z0-9_-]+(?:/.*)?$~i', $normalizedPath) === 1;
     }
 
     /**
@@ -121,6 +193,16 @@ HTML;
         $html = Str::replaceFirst('</head>', '<meta name="robots" content="noindex, nofollow" /></head>', $html);
 
         return response($html)
+            ->header('Content-Type', 'text/html; charset=utf-8')
+            ->header('X-Robots-Tag', 'noindex, nofollow');
+    }
+
+    private function notFoundResponse(string $html): Response
+    {
+        $html = preg_replace('~<meta\b(?=[^>]*\bname\s*=\s*(["\'])robots\1)[^>]*>\s*~i', '', $html) ?? $html;
+        $html = Str::replaceFirst('</head>', '<meta name="robots" content="noindex, nofollow" /></head>', $html);
+
+        return response($html, Response::HTTP_NOT_FOUND)
             ->header('Content-Type', 'text/html; charset=utf-8')
             ->header('X-Robots-Tag', 'noindex, nofollow');
     }

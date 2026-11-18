@@ -122,12 +122,12 @@ const statusDetails: Record<
   },
   pago_em_confirmacao: {
     title: 'Pagamento recebido',
-    detail: 'Estamos verificando a confirmação da reserva na Stays.',
+    detail: 'Estamos verificando a confirmação da sua reserva.',
     tone: 'neutral',
   },
   confirmado: {
     title: 'Reserva confirmada',
-    detail: 'A confirmação da reserva foi registrada após a verificação na Stays.',
+    detail: 'Sua reserva foi confirmada. Confira os detalhes abaixo.',
     tone: 'positive',
   },
   atencao_operacional: {
@@ -147,7 +147,7 @@ const statusDetails: Record<
   },
   liberacao_pendente: {
     title: 'Liberação em andamento',
-    detail: 'Estamos verificando a liberação da pré-reserva na Stays.',
+    detail: 'Estamos verificando a liberação da sua pré-reserva.',
     tone: 'attention',
   },
   cancelamento_solicitado: {
@@ -213,7 +213,7 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
     return {
       title: 'Pagamento estornado',
       detail: order.reservationConfirmed
-        ? 'O gateway informa o estorno. O último registro da Stays indica a reserva como confirmada, e a equipe está revisando a situação da hospedagem.'
+        ? 'O gateway informa o estorno. A reserva ainda consta como confirmada, e a equipe está revisando a situação da hospedagem.'
         : 'O gateway informa o estorno. A equipe está revisando a situação do pedido e da reserva.',
       tone: 'attention' as const,
     };
@@ -222,7 +222,7 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
     return {
       title: 'Pagamento contestado',
       detail: order.reservationConfirmed
-        ? 'O gateway informa uma contestação. O último registro da Stays indica a reserva como confirmada; a equipe está revisando a situação da hospedagem.'
+        ? 'O gateway informa uma contestação. A reserva ainda consta como confirmada; a equipe está revisando a situação da hospedagem.'
         : 'O gateway informa uma contestação. A equipe está revisando a situação do pedido e da reserva.',
       tone: 'attention' as const,
     };
@@ -492,7 +492,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
             </h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-neutral-600 [@media(max-height:400px)]:hidden max-[360px]:hidden">
               Consulte o estado registrado pela Central de Reservas. A confirmação só aparece depois
-              da verificação da reserva na Stays.
+              da confirmação da sua reserva.
             </p>
 
             <div className="mt-8 rounded-3xl border border-neutral-200 bg-white p-5 shadow-[0_18px_60px_-36px_rgba(37,30,18,0.35)] sm:p-7 [@media(max-height:400px)]:mt-2 [@media(max-height:400px)]:p-3 max-[360px]:mt-4 max-[360px]:p-4">
@@ -644,7 +644,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                         id="checkout-confirmation-title"
                         className="font-extrabold text-emerald-950"
                       >
-                        Confirmação registrada na Stays
+                        Reserva confirmada
                       </h2>
                       {resumeState.data.confirmation.reservationCode && (
                         <div>
@@ -799,7 +799,7 @@ export function CheckoutResumePage({ reference, accessToken }: CheckoutResumePag
                               <p className="mt-1 text-sm leading-6 text-neutral-700">
                                 {paymentAttempt
                                   ? 'A tentativa anterior foi encerrada. Você pode solicitar outro Pix enquanto a pré-reserva estiver válida.'
-                                  : 'A cobrança Pix só será solicitada quando você continuar. A confirmação da estadia depende da validação posterior na Stays.'}
+                                  : 'A cobrança Pix só será solicitada quando você continuar. Depois do pagamento, aguarde a confirmação da sua reserva.'}
                               </p>
                             </div>
                             {paymentStartError && (

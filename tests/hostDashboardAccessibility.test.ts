@@ -56,7 +56,7 @@ test('owner dashboard exposes the selected section and announces loading', () =>
       assert.match(sectionButton.className, /sm:min-h-11/);
     }
     assert.equal(overview.getAttribute('aria-current'), 'page');
-    assert.equal(loading.textContent, 'Carregando dados da Stays…');
+    assert.equal(loading.textContent, 'Carregando dados do sistema de reservas…');
     assert.equal(loading.getAttribute('aria-live'), 'polite');
 
     fireEvent.click(calendar);
@@ -68,9 +68,12 @@ test('owner dashboard exposes the selected section and announces loading', () =>
 });
 
 test('calendar reduces mobile cell height and exposes reservation status to assistive technology', async () => {
+  const month = new Date().toISOString().slice(0, 7);
+  const [year, monthNumber] = month.split('-').map(Number);
+  const monthEnd = new Date(Date.UTC(year!, monthNumber!, 0)).toISOString().slice(0, 10);
   const originalGetOwnerDashboard = crcnBackendApi.getOwnerDashboard;
   crcnBackendApi.getOwnerDashboard = async () => ({
-    period: { from: '2026-10-01', to: '2026-10-31' },
+    period: { from: `${month}-01`, to: monthEnd },
     ownerName: 'Fixture QA',
     totals: { debit: 0, credit: 1200 },
     properties: [
@@ -91,8 +94,8 @@ test('calendar reduces mobile cell height and exposes reservation status to assi
         propertyTitle: 'Apartamento Lago Azul',
         propertyImage: '',
         guestName: 'Hóspede Fixture',
-        checkIn: '2026-10-20',
-        checkOut: '2026-10-23',
+        checkIn: `${month}-20`,
+        checkOut: `${month}-23`,
         status: 'confirmed',
         paymentStatus: 'unknown',
         total: 1200,
@@ -105,8 +108,8 @@ test('calendar reduces mobile cell height and exposes reservation status to assi
     const { getByRole, container } = render(
       React.createElement(HostDashboardView, { accessToken: 'test-token' }),
     );
-    await new Promise((resolve) => setTimeout(resolve, 0));
     fireEvent.click(getByRole('button', { name: 'Calendário' }));
+    await waitFor(() => assert.ok(container.querySelector('[role="img"]')));
 
     const calendar = container.querySelector('.grid-cols-7');
     assert.ok(calendar);
@@ -288,7 +291,7 @@ test('owner access search exposes touch-sized, announced selections without appr
     const { findByLabelText, findByRole, getByRole } = render(
       React.createElement(OwnerAccessAdminView, { accessToken: 'test-token' }),
     );
-    const search = await findByLabelText('Localizar cadastro na Stays');
+    const search = await findByLabelText('Localizar cadastro no sistema de reservas');
     assert.match(search.className, /min-h-11/);
     fireEvent.change(search, { target: { value: 'qa' } });
 
