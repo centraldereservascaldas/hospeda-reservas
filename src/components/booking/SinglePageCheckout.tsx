@@ -745,9 +745,32 @@ export function SinglePageCheckout({
                   <h2 id="conditions-title" className="mb-3 text-xl font-bold">
                     Antes de confirmar
                   </h2>
+                  <p className="mb-3 text-sm leading-6 text-neutral-600">
+                    Clique para consultar as informações antes de pagar.
+                  </p>
+                  <details className="mb-2 rounded-xl border border-neutral-300/90 bg-white/55 p-4">
+                    <summary className="min-h-6 cursor-pointer rounded-sm text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700">
+                      Condições de pagamento
+                    </summary>
+                    <div className="mt-4 space-y-2 text-sm leading-6 text-neutral-600">
+                      <p>
+                        Confira apartamento, datas, número de hóspedes e o valor final da hospedagem
+                        no resumo desta página antes de continuar.
+                      </p>
+                      <p>
+                        No Pix, não há acréscimo. No cartão, confira a quantidade de parcelas, o
+                        valor de cada parcela, o acréscimo e o total final exibidos antes de
+                        confirmar.
+                      </p>
+                      <p>
+                        Gerar um Pix não significa que ele foi pago. Aguarde a confirmação do
+                        pagamento na página de acompanhamento.
+                      </p>
+                    </div>
+                  </details>
                   {terms && (
                     <details className="rounded-xl border border-neutral-300/90 bg-white/55 p-4">
-                      <summary className="cursor-pointer text-sm font-semibold">
+                      <summary className="min-h-6 cursor-pointer rounded-sm text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700">
                         Condições da hospedagem e cancelamento
                       </summary>
                       <dl className="mt-4 space-y-3 text-sm">
@@ -762,6 +785,27 @@ export function SinglePageCheckout({
                       </dl>
                     </details>
                   )}
+                  <details className="mt-2 rounded-xl border border-neutral-300/90 bg-white/55 p-4">
+                    <summary className="min-h-6 cursor-pointer rounded-sm text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700">
+                      Alterações, cancelamento e reembolso
+                    </summary>
+                    <div className="mt-4 space-y-2 text-sm leading-6 text-neutral-600">
+                      <p>
+                        Os prazos e as condições aplicáveis à sua estadia são os apresentados em
+                        “Condições da hospedagem e cancelamento” acima. Confira essas informações
+                        antes de aceitar a reserva.
+                      </p>
+                      <p>
+                        Para solicitar uma alteração, cancelamento ou reembolso, fale com nosso
+                        atendimento. A solicitação precisa ser analisada; ela não confirma um
+                        cancelamento ou estorno.
+                      </p>
+                      <p>
+                        Se tiver dúvidas sobre as condições ou os dados da hospedagem, use o
+                        atendimento por WhatsApp antes de pagar.
+                      </p>
+                    </div>
+                  </details>
                   <label className="mt-4 flex min-h-11 items-start gap-3 text-sm leading-6">
                     <input
                       type="checkbox"
