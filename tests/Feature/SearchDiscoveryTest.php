@@ -48,12 +48,13 @@ class SearchDiscoveryTest extends TestCase
         $response->assertOk()->assertHeader('Content-Type', 'application/xml; charset=utf-8')
             ->assertSee('https://centraldereservascaldas.com/destinos/caldas-novas', false)
             ->assertSee('https://centraldereservascaldas.com/apartamento/APPROVED', false)
+            ->assertSee('https://centraldereservascaldas.com/contrato', false)
             ->assertDontSee('DRAFT', false)->assertDontSee('INVALID', false)->assertDontSee('checkout', false)
             ->assertDontSee('privacidade', false)->assertDontSee('from=', false)->assertDontSee('untrusted.example', false);
         $xml = simplexml_load_string($response->getContent());
         $this->assertNotFalse($xml);
         $coreUrls = array_filter(iterator_to_array($xml->children(), false), fn ($url) => ! str_contains((string) $url->loc, '/blog/'));
-        $this->assertCount(5, $coreUrls);
+        $this->assertCount(6, $coreUrls);
         Http::assertNothingSent();
     }
 
