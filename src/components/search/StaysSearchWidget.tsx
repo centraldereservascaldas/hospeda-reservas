@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useId } from 'react';
+import React, { useState, useEffect, useRef, useId, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Calendar as CalendarIcon,
@@ -15,6 +15,8 @@ import { SearchFilters } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { countOccupancyGuests } from '../../utils/guestCounts';
 import { emitFunnelEvent } from '../../utils/measurementEvents';
+import { CalendarMonthGrid } from './CalendarMonthGrid';
+import { GuestCounterList, type GuestCounts } from './GuestCounterList';
 
 interface StaysSearchWidgetProps {
   onSearchInApp: (searchParams: {
@@ -55,6 +57,11 @@ export const fromBrDate = (brDate: string): string => {
 
 interface LiquidDatePickerProps {
   label: string;
+  hero?: boolean;
+  collapsed?: boolean;
+  summaryValue?: string;
+  rangeEnd?: string;
+  emptyLabel?: string;
   value: string;
   minDate: string;
   isOpen: boolean;
@@ -75,6 +82,11 @@ const addDaysToIsoDate = (dateValue: string, days: number) => {
 
 const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
   label,
+  hero = false,
+  collapsed = false,
+  summaryValue,
+  rangeEnd = '',
+  emptyLabel = 'Selecione a data',
   value,
   minDate,
   isOpen,
@@ -88,34 +100,34 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
-  const touchRangeRef = useRef<{ pointerId: number; checkIn: string; checkOut: string } | null>(
-    null,
-  );
-  const suppressClickDatesRef = useRef<string[]>([]);
   const [keyboardFocusDate, setKeyboardFocusDate] = useState<string | null>(null);
-  const [touchRangePreview, setTouchRangePreview] = useState<{
-    checkIn: string;
-    checkOut: string;
-  } | null>(null);
+  const [pendingRangeStart, setPendingRangeStart] = useState<string | null>(null);
+  const [previewRangeEnd, setPreviewRangeEnd] = useState<string | null>(null);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const date = value ? new Date(`${value}T12:00:00`) : new Date();
     return new Date(date.getFullYear(), date.getMonth(), 1);
   });
-  const [position, setPosition] = useState({ left: 8, top: 8, width: 320, maxHeight: 440 });
+  const [position, setPosition] = useState({ left: 8, top: 8, width: hero ? 850 : 320, maxHeight: 540 });
 
-  const updatePosition = () => {
+  const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
-    const gutter = window.innerWidth <= 336 ? 0 : 8;
-    const width = Math.min(320, window.innerWidth - gutter * 2);
+    const gutter = window.innerWidth <= 639 ? 16 : 8;
+    const rootStyles = getComputedStyle(document.documentElement);
+    const remSize = Number.parseFloat(rootStyles.fontSize) || 16;
+    const calendarWidth =
+      (Number.parseFloat(rootStyles.getPropertyValue('--search-calendar-width')) || 53.125) * remSize;
+    const width = Math.min(hero ? calendarWidth : 320, window.innerWidth - gutter * 2);
     const maxHeight = Math.max(0, window.innerHeight - 16);
-    const height = Math.min(440, maxHeight);
-    const left = Math.max(gutter, Math.min(rect.left, window.innerWidth - width - gutter));
+    const height = Math.min(hero ? 540 : 440, maxHeight);
+    const left = hero
+      ? Math.max(gutter, (window.innerWidth - width) / 2)
+      : Math.max(gutter, Math.min(rect.left, window.innerWidth - width - gutter));
     const below = rect.bottom + 8;
     const top = below + height <= window.innerHeight ? below : Math.max(8, rect.top - height - 8);
     setPosition({ left, top, width, maxHeight });
-  };
+  }, [hero]);
 
   const handleCalendarKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key !== 'Tab') return;
@@ -179,26 +191,57 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
-  const monthStart = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
-  const leadingDays = (monthStart.getDay() + 6) % 7;
-  const calendarDays = Array.from(
-    { length: 42 },
-    (_, index) =>
-      new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), index - leadingDays + 1),
+  const getFocusableDateForMonth = (monthOffset: number): string | undefined => {
+    const month = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + monthOffset, 1);
+    const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
+    if (keyboardFocusDate?.startsWith(prefix) && keyboardFocusDate >= minDate) return keyboardFocusDate;
+    if (value.startsWith(prefix) && value >= minDate) return value;
+
+    const leadingDays = month.getDay();
+    return Array.from({ length: 42 }, (_, index) =>
+      isoDate(new Date(month.getFullYear(), month.getMonth(), index - leadingDays + 1)),
+    ).find((dateValue) => dateValue.startsWith(prefix) && dateValue >= minDate);
+  };
+
+  const registerDateButton = (dateValue: string) => (button: HTMLButtonElement | null) => {
+    if (button) dateButtonRefs.current.set(dateValue, button);
+    else dateButtonRefs.current.delete(dateValue);
+  };
+
+  const renderCalendarMonth = (monthOffset: number) => (
+    <CalendarMonthGrid
+      key={monthOffset}
+      month={new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + monthOffset, 1)}
+      minDate={minDate}
+      selectedStart={value}
+      selectedEnd={rangeEnd}
+      pendingStart={pendingRangeStart}
+      previewEnd={previewRangeEnd}
+      onPreviewDate={setPreviewRangeEnd}
+      focusDate={getFocusableDateForMonth(monthOffset)}
+      onSelectDate={(dateValue) => {
+        setPreviewRangeEnd(null);
+        setKeyboardFocusDate(dateValue);
+        if (hero && onRangeChange) {
+          if (pendingRangeStart && dateValue > pendingRangeStart) {
+            onRangeChange(pendingRangeStart, dateValue);
+            setPendingRangeStart(null);
+          } else {
+            setPendingRangeStart(dateValue);
+            onChange(dateValue);
+          }
+          return;
+        }
+        onChange(dateValue);
+        onClose();
+        triggerRef.current?.focus();
+      }}
+      onDateKeyDown={handleDateKeyDown}
+      registerDateButton={registerDateButton}
+    />
   );
-  const monthTitle = visibleMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-  const visibleMonthPrefix = `${visibleMonth.getFullYear()}-${String(visibleMonth.getMonth() + 1).padStart(2, '0')}-`;
-  const isFocusableDate = (dateValue: string) =>
-    dateValue.startsWith(visibleMonthPrefix) && dateValue >= minDate;
-  const selectedOrFirstFocusableDate =
-    (keyboardFocusDate && isFocusableDate(keyboardFocusDate) ? keyboardFocusDate : '') ||
-    (value && isFocusableDate(value) ? value : '') ||
-    calendarDays
-      .filter((date) => date.getMonth() === visibleMonth.getMonth())
-      .map(isoDate)
-      .find((dateValue) => dateValue >= minDate);
 
   useEffect(() => {
     if (!isOpen || !keyboardFocusDate) return;
@@ -237,82 +280,41 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
     }
   };
 
-  const updateTouchRangePreview = (pointerId: number, dateValue: string) => {
-    const drag = touchRangeRef.current;
-    if (!drag || drag.pointerId !== pointerId || dateValue < drag.checkIn) return;
-    const nextRange = { ...drag, checkOut: dateValue };
-    touchRangeRef.current = nextRange;
-    setTouchRangePreview(nextRange);
-  };
+  const shownValue = value ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR') : emptyLabel;
+  const triggerDescription = hero && collapsed
+    ? summaryValue || 'Insira as datas'
+    : shownValue;
 
-  const handleTouchRangePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (touchRangeRef.current?.pointerId !== event.pointerId) return;
-    const target = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>('[data-calendar-selectable]');
-    const dateValue = target?.dataset.calendarDay;
-    if (dateValue && target?.dataset.calendarSelectable === 'true') {
-      updateTouchRangePreview(event.pointerId, dateValue);
-    }
-  };
-
-  const handleTouchRangePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = touchRangeRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-
-    const target = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>('[data-calendar-selectable]');
-    const checkOut = target?.dataset.calendarDay;
-    if (
-      checkOut &&
-      target?.dataset.calendarSelectable === 'true' &&
-      checkOut > drag.checkIn &&
-      onRangeChange
-    ) {
-      onRangeChange(drag.checkIn, checkOut);
-      onClose();
-      triggerRef.current?.focus();
-      suppressClickDatesRef.current = [drag.checkIn, checkOut];
-      window.setTimeout(() => {
-        suppressClickDatesRef.current = [];
-      }, 0);
-    }
-
-    touchRangeRef.current = null;
-    setTouchRangePreview(null);
-  };
-
-  const clearTouchRange = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (touchRangeRef.current?.pointerId !== event.pointerId) return;
-    touchRangeRef.current = null;
-    setTouchRangePreview(null);
-  };
-
-  const shownValue = value
-    ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR')
-    : 'Selecione a data';
+  useEffect(() => {
+    if (isOpen) updatePosition();
+  }, [collapsed, isOpen, updatePosition]);
 
   return (
     <>
       <button
         ref={triggerRef}
         type="button"
-        aria-label={`${label} ${shownValue}`}
+        aria-label={`${hero && collapsed ? 'Quando' : label} ${triggerDescription}`}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         onClick={() => {
           const date = value ? new Date(`${value}T12:00:00`) : new Date();
           setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
           setKeyboardFocusDate(value || null);
-          touchRangeRef.current = null;
-          setTouchRangePreview(null);
+          setPendingRangeStart(null);
           onOpen();
         }}
-        className={`min-h-11 w-full pl-10 pr-3 py-3 liquid-glass-input rounded-2xl border border-white/80 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-left text-xs sm:text-sm font-bold text-neutral-900 transition-all outline-none cursor-pointer shadow-xs min-w-0 ${value ? '' : 'text-neutral-400'}`}
+        className={`${hero ? `flex w-full min-w-0 flex-col items-start justify-center text-left ${collapsed ? 'min-h-9 rounded-xl px-2 py-0.5' : 'min-h-16 rounded-xl px-2 py-1'}` : 'min-h-11 w-full rounded-2xl border border-white/80 px-3 py-3 pl-10 text-left text-xs font-bold shadow-xs liquid-glass-input outline-none transition-all focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 sm:text-sm'} cursor-pointer text-neutral-900`}
       >
-        <span aria-hidden="true">
-          {value ? (
+        {hero && !collapsed && (
+          <span className="mb-1 block truncate text-base font-bold leading-tight text-neutral-700">
+            {label === 'Entrada (Check-in)' ? 'Entrada (Check-in)' : 'Saída'}
+          </span>
+        )}
+        <span aria-hidden="true" className={hero ? `block truncate leading-tight text-neutral-900 ${collapsed ? 'text-[length:var(--search-date-value-font-size)] font-normal text-neutral-500' : 'text-3xl font-semibold'}` : undefined}>
+          {hero && collapsed ? (
+            triggerDescription
+          ) : value ? (
             shownValue
           ) : (
             <>
@@ -330,168 +332,55 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
             data-dialog-focus-portal
             role="dialog"
             aria-label={`Calendário de ${label.toLowerCase()}`}
-            className="fixed z-[1000] overflow-y-auto overscroll-contain rounded-3xl border border-white/90 bg-white/80 p-4 [@media(max-width:639px)]:p-1 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl"
+            className="search-popover-enter fixed z-[1000] overflow-y-auto overscroll-contain rounded-3xl border border-white/90 bg-white/80 p-4 [@media(max-width:639px)]:p-1 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl"
             style={{
               left: position.left,
               top: position.top,
               width: position.width,
               maxHeight: position.maxHeight,
             }}
-            onPointerMove={handleTouchRangePointerMove}
-            onPointerUp={handleTouchRangePointerUp}
-            onPointerCancel={clearTouchRange}
           >
-            <div className="mb-3 flex items-center justify-between gap-2">
+            {hero && (
+              <div role="tablist" aria-label="Tipo de data" className="mx-auto mb-5 flex w-fit items-center rounded-full bg-neutral-100 p-1">
+                <button type="button" role="tab" aria-selected="true" className="min-h-10 rounded-full bg-white px-8 text-sm font-semibold text-neutral-900 shadow-sm">Datas</button>
+                <button type="button" role="tab" aria-selected="false" disabled title="A busca flexível ainda não está disponível para os condomínios." className="min-h-10 cursor-not-allowed rounded-full px-8 text-sm font-semibold text-neutral-400">Flexível</button>
+              </div>
+            )}
+            <div className="mb-3 grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-2 sm:gap-3">
               <button
                 type="button"
                 onKeyDown={handleCalendarKeyDown}
-                onClick={() =>
-                  setVisibleMonth(
-                    new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1),
-                  )
-                }
-                className="liquid-glass-button flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-700 transition hover:text-orange-600"
+                onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
+                className="liquid-glass-button mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-700 transition hover:text-orange-600"
                 aria-label="Mês anterior"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <h3 aria-live="polite" className="text-sm font-extrabold capitalize text-neutral-900">
-                {monthTitle}
-              </h3>
+              <div className={`grid min-w-0 ${hero && window.innerWidth > 639 ? 'grid-cols-2 gap-6' : 'grid-cols-1'}`}>
+                {renderCalendarMonth(0)}
+                {hero && window.innerWidth > 639 && renderCalendarMonth(1)}
+              </div>
               <button
                 type="button"
-                onClick={() =>
-                  setVisibleMonth(
-                    new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1),
-                  )
-                }
-                className="liquid-glass-button flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-700 transition hover:text-orange-600"
+                onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+                className="liquid-glass-button mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-700 transition hover:text-orange-600"
                 aria-label="Próximo mês"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
-
-            <div
-              role="grid"
-              aria-label={`Calendário de ${monthTitle}`}
-              style={{ touchAction: onRangeChange ? 'pan-y pinch-zoom' : undefined }}
-            >
-              <div
-                role="row"
-                className="mb-1 grid grid-cols-7 text-center text-[11px] font-bold text-neutral-600"
-              >
-                {['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'].map((day) => (
-                  <span key={day} role="columnheader" className="py-2">
-                    {day}
-                  </span>
-                ))}
-              </div>
-              {Array.from({ length: 6 }, (_, weekIndex) => (
-                <div
-                  key={`week-${weekIndex}`}
-                  role="row"
-                  className="grid grid-cols-7 gap-0 text-center"
-                >
-                  {calendarDays.slice(weekIndex * 7, weekIndex * 7 + 7).map((date) => {
-                    const dateValue = isoDate(date);
-                    const isCurrentMonth = date.getMonth() === visibleMonth.getMonth();
-                    const isSelected = dateValue === value;
-                    const isToday = dateValue === isoDate(new Date());
-                    const isBeforeMinimum = dateValue < minDate;
-                    const isTouchPreviewDate = Boolean(
-                      touchRangePreview &&
-                      dateValue >= touchRangePreview.checkIn &&
-                      dateValue <= touchRangePreview.checkOut,
-                    );
-                    return (
-                      <div
-                        key={dateValue}
-                        role="gridcell"
-                        aria-selected={isSelected || isTouchPreviewDate}
-                        data-calendar-day={dateValue}
-                        data-calendar-selectable={isCurrentMonth && !isBeforeMinimum}
-                        onPointerDown={(event) => {
-                          if (
-                            event.pointerType !== 'touch' ||
-                            !onRangeChange ||
-                            !isCurrentMonth ||
-                            isBeforeMinimum
-                          ) {
-                            return;
-                          }
-                          if (typeof event.currentTarget.setPointerCapture === 'function') {
-                            event.currentTarget.setPointerCapture(event.pointerId);
-                          }
-                          const range = {
-                            pointerId: event.pointerId,
-                            checkIn: dateValue,
-                            checkOut: dateValue,
-                          };
-                          touchRangeRef.current = range;
-                          setTouchRangePreview(range);
-                        }}
-                        onPointerEnter={(event) => {
-                          if (!isCurrentMonth || isBeforeMinimum) return;
-                          updateTouchRangePreview(event.pointerId, dateValue);
-                        }}
-                        onPointerMove={(event) => {
-                          if (!isCurrentMonth || isBeforeMinimum) return;
-                          updateTouchRangePreview(event.pointerId, dateValue);
-                        }}
-                      >
-                        <button
-                          ref={(button) => {
-                            if (button) dateButtonRefs.current.set(dateValue, button);
-                            else dateButtonRefs.current.delete(dateValue);
-                          }}
-                          type="button"
-                          disabled={!isCurrentMonth || isBeforeMinimum}
-                          onKeyDown={(event) => handleDateKeyDown(event, dateValue)}
-                          onClick={() => {
-                            if (suppressClickDatesRef.current.includes(dateValue)) {
-                              suppressClickDatesRef.current = [];
-                              return;
-                            }
-                            setKeyboardFocusDate(dateValue);
-                            onChange(dateValue);
-                            onClose();
-                            triggerRef.current?.focus();
-                          }}
-                          aria-label={date.toLocaleDateString('pt-BR', {
-                            weekday: 'long',
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                          })}
-                          aria-pressed={isSelected}
-                          data-calendar-day={dateValue}
-                          tabIndex={dateValue === selectedOrFirstFocusableDate ? 0 : -1}
-                          className={`aspect-square min-h-11 w-full rounded-xl text-xs font-semibold transition-all focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-orange-600 disabled:cursor-not-allowed ${
-                            isSelected
-                              ? 'liquid-glass-accent text-white shadow-md'
-                              : isTouchPreviewDate
-                                ? 'bg-orange-100 text-orange-900'
-                                : isCurrentMonth && !isBeforeMinimum
-                                  ? `hover:bg-orange-500/15 hover:text-orange-700 ${isToday ? 'ring-1 ring-orange-400/60 text-orange-700' : 'text-neutral-800'}`
-                                  : 'text-neutral-600'
-                          }`}
-                        >
-                          {date.getDate()}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
             <div className="mt-3 flex items-center justify-between gap-2 border-t border-neutral-200/70 pt-3">
-              {onRangeChange && (
-                <p className="text-[11px] text-neutral-500">
-                  No celular, arraste da entrada até a saída.
-                </p>
+              {hero && onRangeChange && (
+                <div aria-label="Flexibilidade das datas" className="flex flex-wrap items-center gap-2">
+                  <button type="button" aria-pressed="true" className="min-h-10 rounded-full border border-neutral-900 px-4 text-xs font-semibold text-neutral-900">Datas exatas</button>
+                  {[1, 2, 3, 7, 14].map((days) => (
+                    <button key={days} type="button" disabled title="A busca com flexibilidade de datas ainda não está disponível." className="min-h-10 cursor-not-allowed rounded-full border border-neutral-200 px-4 text-xs font-semibold text-neutral-400">
+                      ± {days} {days === 1 ? 'dia' : 'dias'}
+                    </button>
+                  ))}
+                </div>
               )}
-              <button
+              {!hero && <button
                 type="button"
                 onKeyDown={handleCalendarKeyDown}
                 onClick={() => {
@@ -506,7 +395,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
                 className="min-h-11 rounded-full px-4 text-xs font-bold text-orange-700 transition hover:bg-orange-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Hoje
-              </button>
+              </button>}
             </div>
           </div>,
           document.body,
@@ -600,7 +489,7 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
       !query || option.label.toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR')),
   );
   const currentLabel =
-    options.find((option) => option.value === value)?.label || selectedLabel || placeholder;
+    selectedLabel || options.find((option) => option.value === value)?.label || placeholder;
   const selectedIndex = visibleOptions.findIndex((option) => option.value === value);
 
   useEffect(() => {
@@ -653,7 +542,7 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
             data-dialog-focus-portal
             role="group"
             aria-label="Opções de filtro"
-            className="fixed z-[1000] overflow-hidden rounded-2xl border border-white/90 bg-white/78 p-2 text-neutral-800 shadow-[0_18px_55px_-16px_rgba(15,23,42,0.24)] backdrop-blur-2xl"
+            className="search-popover-enter fixed z-[1000] overflow-hidden rounded-2xl border border-white/90 bg-white/78 p-2 text-neutral-800 shadow-[0_18px_55px_-16px_rgba(15,23,42,0.24)] backdrop-blur-2xl"
             style={{
               left: position.left,
               top: position.top,
@@ -742,9 +631,11 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   onSearchInApp,
   currentFilters,
   surpriseMe = false,
+  variant = 'hero',
   className = '',
   onOpenAssistant,
 }) => {
+  const isHero = variant === 'hero';
   // Dates in ISO format YYYY-MM-DD for native input
   const today = isoDate(new Date());
 
@@ -752,8 +643,11 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   const [checkOut, setCheckOut] = useState<string>(currentFilters?.checkOut || '');
   const [persons, setPersons] = useState<string>(
     currentFilters?.guests
-      ? String(currentFilters.guests.adults + currentFilters.guests.children)
+      ? String(countOccupancyGuests(currentFilters.guests))
       : '2',
+  );
+  const [guestCounts, setGuestCounts] = useState<GuestCounts>(
+    currentFilters?.guests ?? { adults: 1, children: 0, infants: 0, pets: 0 },
   );
   const [selectedResort, setSelectedResort] = useState<string>(currentFilters?.destination || '');
   const [selectedResortId, setSelectedResortId] = useState<string>(
@@ -762,6 +656,9 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   const fieldId = useId().replace(/:/g, '');
   const [activeDatePicker, setActiveDatePicker] = useState<'checkIn' | 'checkOut' | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<'resort' | 'guests' | null>(null);
+  const guestTriggerRef = useRef<HTMLButtonElement>(null);
+  const guestPopoverRef = useRef<HTMLDivElement>(null);
+  const [guestPopoverPosition, setGuestPopoverPosition] = useState({ left: 8, top: 8, width: 400, maxHeight: 500 });
   const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
   const [isLoadingResorts, setIsLoadingResorts] = useState(true);
   const [searchValidationMessage, setSearchValidationMessage] = useState('');
@@ -770,8 +667,14 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   const syncedCheckOut = currentFilters?.checkOut || '';
   const syncedAdults = currentFilters?.guests?.adults;
   const syncedChildren = currentFilters?.guests?.children;
+  const syncedInfants = currentFilters?.guests?.infants;
+  const syncedPets = currentFilters?.guests?.pets;
   const hasSyncedGuests = syncedAdults !== undefined && syncedChildren !== undefined;
-  const syncedGuestCount = (syncedAdults ?? 0) + (syncedChildren ?? 0);
+  const syncedGuestCount = countOccupancyGuests({
+    adults: syncedAdults ?? 1,
+    children: syncedChildren ?? 0,
+    infants: syncedInfants ?? 0,
+  });
   const syncedDestination = currentFilters?.destination;
   const syncedDestinationPropertyId = currentFilters?.destinationPropertyId || '';
 
@@ -782,6 +685,12 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     setCheckOut(syncedCheckOut);
     if (hasSyncedGuests && syncedGuestCount >= 1 && syncedGuestCount <= 17) {
       setPersons(String(syncedGuestCount));
+      setGuestCounts({
+        adults: syncedAdults ?? 1,
+        children: syncedChildren ?? 0,
+        infants: syncedInfants ?? 0,
+        pets: syncedPets ?? 0,
+      });
     }
     if (syncedDestination !== undefined) {
       setSelectedResort(syncedDestination);
@@ -792,7 +701,11 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     syncedCheckIn,
     syncedCheckOut,
     hasSyncedGuests,
+    syncedAdults,
+    syncedChildren,
     syncedGuestCount,
+    syncedInfants,
+    syncedPets,
     syncedDestination,
     syncedDestinationPropertyId,
   ]);
@@ -812,6 +725,53 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     };
   }, []);
 
+  useEffect(() => {
+    if (activeDropdown !== 'guests') return;
+    const updatePosition = () => {
+      const trigger = guestTriggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const gutter = 12;
+      const width = Math.min(400, window.innerWidth - gutter * 2);
+      const left = Math.max(gutter, Math.min(rect.right - width, window.innerWidth - width - gutter));
+      const belowTop = rect.bottom + 12;
+      const belowSpace = Math.max(0, window.innerHeight - belowTop - gutter);
+      const aboveSpace = Math.max(0, rect.top - 12 - gutter);
+      const maxHeight = Math.min(500, Math.max(belowSpace, aboveSpace));
+      const top = belowSpace >= Math.min(360, maxHeight)
+        ? belowTop
+        : Math.max(gutter, rect.top - maxHeight - 12);
+      setGuestPopoverPosition({ left, top, width, maxHeight });
+    };
+    const focusFrame = window.requestAnimationFrame(() => {
+      updatePosition();
+      guestPopoverRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    });
+    const handleOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!guestTriggerRef.current?.contains(target) && !guestPopoverRef.current?.contains(target)) {
+        setActiveDropdown(null);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActiveDropdown(null);
+        guestTriggerRef.current?.focus();
+      }
+    };
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    document.addEventListener('pointerdown', handleOutsideClick);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+      document.removeEventListener('pointerdown', handleOutsideClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [activeDropdown]);
+
   // Form submission handler
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -830,10 +790,12 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       return;
     }
     setSearchValidationMessage('');
-    const personCount = parseInt(persons, 10) || 2;
+    const personCount = isHero ? countOccupancyGuests(guestCounts) : parseInt(persons, 10) || 2;
     const currentGuests = currentFilters?.guests;
-    const guests = currentGuests
-      ? personCount === currentGuests.adults + currentGuests.children
+    const guests = isHero
+      ? guestCounts
+      : currentGuests
+      ? personCount === countOccupancyGuests(currentGuests)
         ? currentGuests
         : {
             adults: personCount,
@@ -870,18 +832,35 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     })),
   ];
   const selectedGuestOption = guestOptions.find((option) => option.value === persons);
-  const selectedGuestLabel = selectedGuestOption
-    ? currentFilters?.guests.infants
-      ? `${selectedGuestOption.label} + ${currentFilters.guests.infants} bebê${currentFilters.guests.infants === 1 ? '' : 's'}`
-      : selectedGuestOption.label
-    : undefined;
+  const selectedOccupancyCount = countOccupancyGuests(guestCounts);
+  const selectedGuestLabel = isHero
+    ? [
+        `${selectedOccupancyCount} ${selectedOccupancyCount === 1 ? 'hóspede' : 'hóspedes'}`,
+        guestCounts.pets > 0 ? `${guestCounts.pets} ${guestCounts.pets === 1 ? 'pet' : 'pets'}` : '',
+      ].filter(Boolean).join(' · ')
+    : selectedGuestOption
+      ? currentFilters?.guests.infants
+        ? `${selectedGuestOption.label} + ${currentFilters.guests.infants} bebê${currentFilters.guests.infants === 1 ? '' : 's'}`
+        : selectedGuestOption.label
+      : undefined;
+  const dateRangeSummary = checkIn
+    ? `${new Date(`${checkIn}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}${checkOut ? ` - ${new Date(`${checkOut}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}` : ''}`
+    : 'Insira as datas';
 
   return (
     <div className={`w-full transition-all ${className}`}>
       {/* Container in Liquid Glass */}
-      <div className="relative rounded-3xl liquid-glass-card border border-white/85 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.07)] p-4 sm:p-7 max-[400px]:p-3 [@media(max-height:400px)]:p-0">
+      <div
+        className={`relative ${isHero ? 'rounded-[2rem] border border-neutral-200 bg-neutral-100 p-0 shadow-[0_12px_35px_-18px_rgba(15,23,42,0.3)] backdrop-blur-xl sm:rounded-full sm:p-0' : 'rounded-3xl liquid-glass-card border border-white/85 p-4 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.07)] sm:p-7 max-[400px]:p-3 [@media(max-height:400px)]:p-0'}`}
+      >
         {/* Search widget heading */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-5 pb-3 border-b border-white/60 sm:pb-3.5 max-[400px]:gap-2 max-[400px]:mb-2 max-[400px]:pb-2 [@media(max-height:400px)]:hidden">
+        <div
+          className={
+            isHero
+              ? 'hidden'
+              : 'mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-white/60 pb-3 sm:mb-5 sm:pb-3.5 max-[400px]:mb-2 max-[400px]:gap-2 max-[400px]:pb-2 [@media(max-height:400px)]:hidden'
+          }
+        >
           <div className="flex flex-1 items-center gap-2 text-sm text-neutral-800 font-bold [@media(max-height:400px)]:text-xs">
             <Sparkles className="w-4 h-4 text-orange-500 flex-shrink-0" />
             <span>
@@ -916,8 +895,14 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
         <form
           role="search"
           id="widgetStaysSearchForm"
+          data-search-variant={isHero ? 'hero' : 'standard'}
+          data-active-search-segment={isHero ? (activeDatePicker ? 'when' : activeDropdown === 'resort' ? 'where' : activeDropdown === 'guests' ? 'guests' : undefined) : undefined}
           onSubmit={handleSubmit}
-          className="space-y-3 sm:space-y-4"
+          className={
+            isHero
+              ? 'grid grid-cols-1 items-stretch gap-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]'
+              : 'space-y-3 sm:space-y-4'
+          }
         >
           {/* Stays widget required placement token */}
           <input type="hidden" name="wpl" value="" />
@@ -929,23 +914,36 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
           <input name="checkOut" value={checkOut} type="hidden" />
           <input name="checkin" value={checkIn} type="hidden" />
           <input name="checkout" value={checkOut} type="hidden" />
-          <input name="adults" value={persons} type="hidden" />
+          <input name="persons" value={isHero ? selectedOccupancyCount : persons} type="hidden" />
+          <input name="adults" value={isHero ? guestCounts.adults : currentFilters?.guests.adults ?? persons} type="hidden" />
+          <input name="children" value={isHero ? guestCounts.children : currentFilters?.guests.children ?? 0} type="hidden" />
+          <input name="infants" value={isHero ? guestCounts.infants : currentFilters?.guests.infants ?? 0} type="hidden" />
+          <input name="pets" value={isHero ? guestCounts.pets : currentFilters?.guests.pets ?? 0} type="hidden" />
           {selectedResort && <input name="q" value={selectedResort} type="hidden" />}
           {selectedResortId && <input name="propertyId" value={selectedResortId} type="hidden" />}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 items-center max-[400px]:gap-y-0 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:grid-cols-2 [@media(max-width:479px)_and_(max-height:400px)]:grid-cols-2 [@media(min-width:480px)_and_(max-width:639px)_and_(max-height:400px)]:grid-cols-4 [@media(max-width:639px)_and_(max-height:400px)]:gap-1 [@media(max-width:479px)_and_(max-height:400px)]:gap-0">
+          <div
+            data-search-fields={isHero ? '' : undefined}
+            className={`${isHero ? 'contents' : 'grid grid-cols-1 items-center gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-12 max-[400px]:gap-y-0 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:grid-cols-2 [@media(max-width:479px)_and_(max-height:400px)]:grid-cols-2 [@media(min-width:480px)_and_(max-width:639px)_and_(max-height:400px)]:grid-cols-4 [@media(max-width:639px)_and_(max-height:400px)]:gap-1 [@media(max-width:479px)_and_(max-height:400px)]:gap-0'}`}
+          >
             {/* Resort / Destination Selector */}
             {!surpriseMe && (
-              <div className="lg:col-span-3 min-w-0 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-2 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1">
+              <div
+                data-search-segment="where"
+                data-search-active={isHero && activeDropdown === 'resort' ? 'true' : undefined}
+                className={`${isHero ? 'min-w-0 border-b border-neutral-200 px-3 py-2 sm:border-b-0 sm:border-r sm:px-4 lg:col-span-3' : 'min-w-0 lg:col-span-3 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-2 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1'}`}
+              >
                 <span
                   id={`${fieldId}-resort-label`}
-                  className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:sr-only"
+                  className={`mb-1.5 block truncate text-xs font-extrabold text-neutral-800 ${isHero ? 'normal-case tracking-normal' : 'uppercase tracking-wider [@media(max-width:639px)_and_(max-height:400px)]:sr-only'}`}
                 >
-                  Complexo / Resort
+                  {isHero ? 'Onde' : 'Complexo / Resort'}
                 </span>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500">
-                    <Building2 className="w-4 h-4 text-orange-600 flex-shrink-0" />
+                  <div
+                    className={`${isHero ? 'hidden' : 'pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3.5 text-neutral-500'}`}
+                  >
+                    <Building2 className="h-4 w-4 flex-shrink-0 text-orange-600" />
                   </div>
                   <LiquidSelect
                     labelId={`${fieldId}-resort-label`}
@@ -960,7 +958,10 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                         : 'Não foi possível carregar os condomínios agora.'
                     }
                     isOpen={activeDropdown === 'resort'}
-                    onOpen={() => setActiveDropdown('resort')}
+                    onOpen={() => {
+                      setActiveDatePicker(null);
+                      setActiveDropdown('resort');
+                    }}
                     onClose={() => setActiveDropdown(null)}
                     onChange={(option) => {
                       setSelectedResortId(option.value);
@@ -971,102 +972,209 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
               </div>
             )}
 
-            {/* Arrival / Check-in */}
             {!surpriseMe && (
-              <div className="lg:col-span-3 min-w-0 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-1 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1">
-                <span
-                  aria-hidden="true"
-                  className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:hidden"
-                >
-                  <span className="max-[400px]:hidden">Entrada (Check-in)</span>
-                  <span className="hidden max-[400px]:inline">Entrada</span>
-                </span>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500 group-focus-within:text-orange-600">
-                    <CalendarIcon className="w-4 h-4 flex-shrink-0" />
-                  </div>
-                  <LiquidDatePicker
-                    label="Entrada (Check-in)"
-                    value={checkIn}
-                    minDate={today}
-                    isOpen={activeDatePicker === 'checkIn'}
-                    onOpen={() => setActiveDatePicker('checkIn')}
-                    onClose={() => setActiveDatePicker(null)}
-                    onChange={(newCheckIn) => {
-                      setSearchValidationMessage('');
-                      setCheckIn(newCheckIn);
-                      if (newCheckIn >= checkOut) {
-                        setCheckOut(addDaysToIsoDate(newCheckIn, 1));
-                      }
-                    }}
-                    onRangeChange={(newCheckIn, newCheckOut) => {
-                      setSearchValidationMessage('');
-                      setCheckIn(newCheckIn);
-                      setCheckOut(newCheckOut);
-                    }}
-                  />
-                </div>
-              </div>
-            )}
+              <div
+                data-search-segment="when"
+                data-search-active={isHero && activeDatePicker ? 'true' : undefined}
+                className={
+                  isHero
+                    ? 'min-w-0 px-3 py-2 sm:px-4 lg:col-span-1'
+                    : 'contents'
+                }
+              >
+                {isHero && <span className="mb-1.5 block text-xs font-semibold">Quando</span>}
+                <div className={isHero ? 'grid grid-cols-1 gap-0' : 'contents'}>
+                  {/* Arrival / Check-in */}
+                  {!surpriseMe && (
+                    <div
+                      className={`${isHero ? 'min-w-0' : 'min-w-0 lg:col-span-3 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-1 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1'}`}
+                    >
+                      {!isHero && <span
+                        aria-hidden="true"
+                        className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:hidden"
+                      >
+                        <span className="max-[400px]:hidden">Entrada (Check-in)</span>
+                        <span className="hidden max-[400px]:inline">Entrada</span>
+                      </span>}
+                      <div className="relative group">
+                        <div
+                          className={`${isHero ? 'hidden' : 'pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3.5 text-neutral-500 group-focus-within:text-orange-600'}`}
+                        >
+                          <CalendarIcon className="w-4 h-4 flex-shrink-0" />
+                        </div>
+                        <LiquidDatePicker
+                          label="Entrada (Check-in)"
+                          hero={isHero}
+                          collapsed={isHero}
+                          summaryValue={dateRangeSummary}
+                          rangeEnd={checkOut}
+                          emptyLabel={isHero ? 'Entrada' : undefined}
+                          value={checkIn}
+                          minDate={today}
+                          isOpen={activeDatePicker === 'checkIn'}
+                          onOpen={() => {
+                            setActiveDropdown(null);
+                            setActiveDatePicker('checkIn');
+                          }}
+                          onClose={() => {
+                            setActiveDatePicker(null);
+                          }}
+                          onChange={(newCheckIn) => {
+                            setSearchValidationMessage('');
+                            setCheckIn(newCheckIn);
+                            if (newCheckIn >= checkOut) {
+                              setCheckOut(isHero ? '' : addDaysToIsoDate(newCheckIn, 1));
+                            }
+                          }}
+                          onRangeChange={(newCheckIn, newCheckOut) => {
+                            setSearchValidationMessage('');
+                            setCheckIn(newCheckIn);
+                            setCheckOut(newCheckOut);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
 
-            {/* Departure / Checkout */}
-            {!surpriseMe && (
-              <div className="lg:col-span-3 min-w-0 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-1 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1">
-                <span
-                  aria-hidden="true"
-                  className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:hidden"
-                >
-                  <span className="max-[400px]:hidden">Saída (Checkout)</span>
-                  <span className="hidden max-[400px]:inline">Saída</span>
-                </span>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500 group-focus-within:text-orange-600">
-                    <CalendarIcon className="w-4 h-4 flex-shrink-0" />
-                  </div>
-                  <LiquidDatePicker
-                    label="Saída (Checkout)"
-                    value={checkOut}
-                    minDate={checkIn ? addDaysToIsoDate(checkIn, 1) : today}
-                    isOpen={activeDatePicker === 'checkOut'}
-                    onOpen={() => setActiveDatePicker('checkOut')}
-                    onClose={() => setActiveDatePicker(null)}
-                    onChange={(newCheckOut) => {
-                      setSearchValidationMessage('');
-                      setCheckOut(newCheckOut);
-                    }}
-                  />
+                  {/* Departure / Checkout */}
+                  {!surpriseMe && !isHero && (
+                    <div
+                      className={`${isHero ? 'min-w-0' : 'min-w-0 lg:col-span-3 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-1 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1'}`}
+                    >
+                      {!isHero && <span
+                        aria-hidden="true"
+                        className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:hidden"
+                      >
+                        <span className="max-[400px]:hidden">
+                          Saída (Checkout)
+                        </span>
+                        <span className="hidden max-[400px]:inline">Saída</span>
+                      </span>}
+                      <div className="relative group">
+                        <div
+                          className={`${isHero ? 'hidden' : 'pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3.5 text-neutral-500 group-focus-within:text-orange-600'}`}
+                        >
+                          <CalendarIcon className="w-4 h-4 flex-shrink-0" />
+                        </div>
+                        <LiquidDatePicker
+                          label="Saída (Checkout)"
+                          hero={isHero}
+                          emptyLabel={isHero ? 'Saída' : undefined}
+                          value={checkOut}
+                          minDate={checkIn ? addDaysToIsoDate(checkIn, 1) : today}
+                          isOpen={activeDatePicker === 'checkOut'}
+                          onOpen={() => {
+                            setActiveDropdown(null);
+                            setActiveDatePicker('checkOut');
+                          }}
+                          onClose={() => {
+                            setActiveDatePicker(null);
+                          }}
+                          onChange={(newCheckOut) => {
+                            setSearchValidationMessage('');
+                            setCheckOut(newCheckOut);
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {/* Guest Count (Persons: 1 to 17) */}
             <div
-              className={`${surpriseMe ? 'lg:col-span-4' : 'lg:col-span-3'} min-w-0 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-2 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1`}
+              data-search-segment={isHero ? 'guests' : undefined}
+              data-search-active={isHero && activeDropdown === 'guests' ? 'true' : undefined}
+              className={`${isHero ? 'flex min-w-0 items-center gap-3 px-3 py-2 sm:px-4' : `${surpriseMe ? 'lg:col-span-4' : 'lg:col-span-3'} min-w-0 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-2 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1`}`}
             >
               <span
                 id={`${fieldId}-guests-label`}
-                className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:sr-only"
+                className={`mb-1.5 block truncate text-xs font-extrabold text-neutral-800 ${isHero ? 'normal-case tracking-normal' : 'uppercase tracking-wider [@media(max-width:639px)_and_(max-height:400px)]:sr-only'}`}
               >
-                Hóspedes
+                {isHero ? 'Quem' : 'Hóspedes'}
               </span>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 z-10 pl-3.5 flex items-center pointer-events-none text-neutral-500">
-                  <Users className="w-4 h-4 text-orange-600 flex-shrink-0" />
-                </div>
-                <LiquidSelect
-                  labelId={`${fieldId}-guests-label`}
-                  value={persons}
-                  selectedLabel={selectedGuestLabel}
-                  placeholder="Hóspedes"
-                  options={guestOptions}
-                  isOpen={activeDropdown === 'guests'}
-                  onOpen={() => setActiveDropdown('guests')}
-                  onClose={() => setActiveDropdown(null)}
-                  onChange={(option) => {
-                    if (option.value) setPersons(option.value);
-                  }}
-                />
+              <div
+                className={`relative min-w-0 flex-1 ${isHero ? '' : ''}`}
+                data-guest-picker={isHero ? '' : undefined}
+              >
+                {!isHero && (
+                  <div className="pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3.5 text-neutral-500">
+                    <Users className="w-4 h-4 text-orange-600 flex-shrink-0" />
+                  </div>
+                )}
+                {isHero ? (
+                  <>
+                <button
+                      ref={guestTriggerRef}
+                      type="button"
+                      aria-haspopup="dialog"
+                      aria-expanded={activeDropdown === 'guests'}
+                      aria-label={`Quem: ${selectedGuestLabel || '1 Pessoa'}`}
+                      onClick={() => {
+                        setActiveDatePicker(null);
+                        setActiveDropdown(activeDropdown === 'guests' ? null : 'guests');
+                      }}
+                      className="flex min-h-8 w-full items-center rounded-xl text-left text-[length:var(--search-date-value-font-size)] text-neutral-700 transition hover:text-neutral-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                    >
+                      {selectedGuestLabel || '1 Pessoa'}
+                    </button>
+                    {activeDropdown === 'guests' && (
+                      createPortal(
+                        <div
+                          ref={guestPopoverRef}
+                          role="dialog"
+                          aria-label="Selecionar hóspedes"
+                          className="search-popover-enter fixed z-[1100] overflow-y-auto overscroll-contain rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] sm:p-5"
+                          style={{
+                            left: guestPopoverPosition.left,
+                            top: guestPopoverPosition.top,
+                            width: guestPopoverPosition.width,
+                            maxHeight: guestPopoverPosition.maxHeight,
+                          }}
+                        >
+                          <GuestCounterList
+                            compact
+                            counts={guestCounts}
+                            onChange={(nextCounts) => {
+                              setGuestCounts(nextCounts);
+                              setPersons(String(countOccupancyGuests(nextCounts)));
+                            }}
+                          />
+                        </div>,
+                        document.body,
+                      )
+                    )}
+                  </>
+                ) : (
+                  <LiquidSelect
+                    labelId={`${fieldId}-guests-label`}
+                    value={persons}
+                    selectedLabel={selectedGuestLabel}
+                    placeholder="Hóspedes"
+                    options={guestOptions}
+                    isOpen={activeDropdown === 'guests'}
+                    onOpen={() => {
+                      setActiveDatePicker(null);
+                      setActiveDropdown('guests');
+                    }}
+                    onClose={() => setActiveDropdown(null)}
+                    onChange={(option) => {
+                      if (option.value) setPersons(option.value);
+                    }}
+                  />
+                )}
               </div>
+              {isHero && (
+                <button
+                  type="submit"
+                  aria-label="Buscar hospedagens"
+                  className={`flex h-12 shrink-0 items-center justify-center rounded-full bg-orange-600 text-white transition-all hover:bg-orange-700 active:scale-95 ${activeDropdown || activeDatePicker ? 'w-auto gap-2 px-4' : 'w-12'}`}
+                >
+                  <Search className="h-5 w-5 stroke-[2.5]" aria-hidden="true" />
+                  <span className={activeDropdown || activeDatePicker ? 'text-sm font-bold' : 'sr-only'}>Buscar</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1077,25 +1185,42 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
           )}
 
           {/* Action Row */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 [@media(max-width:639px)_and_(max-height:400px)]:pt-1 [@media(max-width:479px)_and_(max-height:400px)]:pt-0 [@media(max-width:479px)_and_(max-height:400px)]:-mt-2 [@media(max-width:639px)_and_(max-height:400px)]:gap-1">
-            <div className="flex items-center gap-2 text-xs text-neutral-700 font-medium [@media(max-width:639px)_and_(max-height:400px)]:hidden">
+          <div
+            data-search-action={isHero ? '' : undefined}
+            className={`${isHero ? 'hidden' : 'flex flex-col items-center justify-between gap-3 pt-2 sm:flex-row [@media(max-width:639px)_and_(max-height:400px)]:gap-1 [@media(max-width:639px)_and_(max-height:400px)]:pt-1 [@media(max-width:479px)_and_(max-height:400px)]:-mt-2 [@media(max-width:479px)_and_(max-height:400px)]:pt-0'}`}
+          >
+            <div
+              className={
+                isHero
+                  ? 'hidden'
+                  : 'flex items-center gap-2 text-xs font-medium text-neutral-700 [@media(max-width:639px)_and_(max-height:400px)]:hidden'
+              }
+            >
               <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
               <span>
                 Escolha as datas para conferir preço e disponibilidade; reserve no checkout seguro.
               </span>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto [@media(max-width:639px)_and_(max-height:400px)]:w-full">
+            <div
+              className={
+                isHero
+                  ? 'contents'
+                  : 'flex w-full items-center gap-2 sm:w-auto [@media(max-width:639px)_and_(max-height:400px)]:w-full'
+              }
+            >
               <button
                 type="submit"
-                className="min-h-11 w-full whitespace-nowrap sm:w-auto px-2 sm:px-8 py-3 sm:py-3.5 rounded-2xl liquid-glass-accent text-white font-extrabold text-sm shadow-md shadow-orange-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2.5 [@media(max-width:639px)_and_(max-height:400px)]:text-xs"
+                className={`${isHero ? 'min-h-11 w-full rounded-full bg-orange-600 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700 active:scale-95 sm:w-auto' : 'flex min-h-11 w-full cursor-pointer items-center justify-center gap-2.5 whitespace-nowrap rounded-2xl px-2 py-3 text-sm font-extrabold text-white shadow-md shadow-orange-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] liquid-glass-accent sm:w-auto sm:px-8 sm:py-3.5 [@media(max-width:639px)_and_(max-height:400px)]:text-xs'}`}
               >
                 {surpriseMe ? (
                   <Sparkles className="w-4 h-4 stroke-[2.5]" />
                 ) : (
                   <Search className="w-4 h-4 stroke-[2.5]" />
                 )}
-                <span>{surpriseMe ? 'Surpreenda-me' : 'Pesquisar Disponibilidade'}</span>
+                <span>
+                  {surpriseMe ? 'Surpreenda-me' : isHero ? 'Buscar' : 'Pesquisar Disponibilidade'}
+                </span>
               </button>
             </div>
           </div>

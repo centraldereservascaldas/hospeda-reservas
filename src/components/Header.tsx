@@ -149,20 +149,22 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Official Company Logo: Central de Reservas Caldas Novas */}
           <button
             onClick={() => setCurrentView('explore')}
-            className="group -ml-1 flex flex-shrink-0 cursor-pointer items-center rounded-2xl p-1 focus:outline-none"
+            className="group -ml-1 hidden flex-shrink-0 cursor-pointer items-center rounded-2xl p-1 focus:outline-none sm:flex"
             title="Central de Reservas Caldas Novas"
           >
             <LogoCRCN size="md" variant="light" responsiveText={true} />
           </button>
 
           {/* Central Search Bar with min-w-0 so it never forces overflow */}
-          <div className="flex-1 min-w-0 max-w-xl mx-1 sm:mx-4 lg:mx-6">
+          <div className={`flex-1 min-w-0 max-w-xl mx-1 sm:mx-4 lg:mx-6 ${currentView === 'explore' ? 'sm:invisible' : ''}`}>
             <button
               onClick={onOpenSearch}
               aria-label={`Buscar hospedagens: ${searchSummaryText || 'Caldas Novas & Região'}`}
-              className="min-h-11 w-full flex items-center justify-between pl-3 sm:pl-4 pr-1.5 sm:pr-2 py-1.5 sm:py-2 rounded-full liquid-glass-pill hover:bg-white/90 border border-neutral-200/90 shadow-[0_5px_18px_-12px_rgba(15,23,42,0.4),inset_0_1px_1.5px_rgba(255,255,255,0.9)] hover:shadow-lg transition-all cursor-pointer group min-w-0 max-[360px]:justify-center max-[360px]:px-0"
+              className="min-h-14 sm:min-h-11 w-full flex items-center justify-center sm:justify-between pl-3 sm:pl-4 pr-1.5 sm:pr-2 py-1.5 sm:py-2 rounded-full liquid-glass-pill hover:bg-white/90 border border-neutral-200/90 shadow-[0_5px_18px_-12px_rgba(15,23,42,0.4),inset_0_1px_1.5px_rgba(255,255,255,0.9)] hover:shadow-lg transition-all cursor-pointer group min-w-0"
             >
-              <div className="flex items-center divide-x divide-neutral-200 text-xs sm:text-sm font-semibold text-neutral-800 min-w-0 truncate">
+              <Search aria-hidden="true" className="ml-3 h-4 w-4 shrink-0 text-neutral-900 sm:hidden" />
+              <span className="truncate px-2 text-xs font-semibold text-neutral-900 sm:hidden">{searchSummaryText || 'Inicie sua busca'}</span>
+              <div className="hidden items-center divide-x divide-neutral-200 text-xs sm:flex sm:text-sm font-semibold text-neutral-800 min-w-0 truncate">
                 <span className="pr-2 sm:pr-3 text-neutral-900 font-bold truncate min-w-0 max-[360px]:hidden">
                   {searchSummaryText ? searchSummaryText : 'Caldas Novas & Região'}
                 </span>
@@ -173,14 +175,14 @@ export const Header: React.FC<HeaderProps> = ({
                   Hóspedes?
                 </span>
               </div>
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center text-white flex-shrink-0 ml-1.5 sm:ml-2 group-hover:scale-105 shadow-sm shadow-orange-500/30 transition-transform">
+              <div className="hidden w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 sm:flex items-center justify-center text-white flex-shrink-0 ml-1.5 sm:ml-2 group-hover:scale-105 shadow-sm shadow-orange-500/30 transition-transform">
                 <Search className="h-4 w-4 stroke-[2.5]" />
               </div>
             </button>
           </div>
 
           {/* Right section: Currency and User Menu */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 lg:gap-3 flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 sm:gap-2.5 lg:gap-3 flex-shrink-0">
             {/* Currency selector dropdown */}
             <div className="relative flex-shrink-0" ref={currencyRef}>
               <button

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LoaderCircle, RefreshCw, Search, Sparkles } from 'lucide-react';
+import { LoaderCircle, RefreshCw } from 'lucide-react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type {
   Currency,
@@ -269,29 +269,7 @@ export function MainContentRouter({
             </p>
           )}
           {!isCondominiumView && (
-            <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 min-[400px]:hidden [@media(max-height:400px)]:mb-1 [@media(max-height:400px)]:grid">
-              <button
-                type="button"
-                onClick={onOpenSearch}
-                aria-label="Pesquisar datas e hóspedes"
-                className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-2xl border border-orange-200 bg-white/85 px-3 text-sm font-bold text-neutral-800 shadow-sm transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-              >
-                <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-orange-700" />
-                <span className="truncate">Datas e hóspedes</span>
-              </button>
-              <button
-                type="button"
-                onClick={onOpenAssistant}
-                aria-label="Falar com Sofia, assistente virtual"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-orange-200 bg-white/85 px-3 text-sm font-bold text-orange-800 shadow-sm transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-              >
-                <Sparkles aria-hidden="true" className="h-4 w-4 shrink-0" />
-                <span>Sofia</span>
-              </button>
-            </div>
-          )}
-          {!isCondominiumView && (
-            <div className="mb-4 sm:mb-8 max-[399px]:hidden [@media(max-height:400px)]:hidden">
+            <div className="mx-auto mb-8 hidden w-full max-w-[var(--search-bar-width)] sm:block [@media(max-height:400px)]:hidden">
               <StaysSearchWidget
                 variant="hero"
                 currentFilters={filters}

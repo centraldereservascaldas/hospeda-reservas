@@ -3,9 +3,6 @@ import {
   X,
   Search,
   MapPin,
-  Calendar as CalendarIcon,
-  Plus,
-  Minus,
   Sparkles,
   ExternalLink,
 } from 'lucide-react';
@@ -13,6 +10,8 @@ import { SearchFilters } from '../../types';
 import { StaysSearchWidget, toBrDate } from './StaysSearchWidget';
 import { useDialogFocus } from '../useDialogFocus';
 import { countOccupancyGuests } from '../../utils/guestCounts';
+import { SearchDateCalendar } from './SearchDateCalendar';
+import { GuestCounterList } from './GuestCounterList';
 
 function toLocalIsoDate(date: Date): string {
   const year = date.getFullYear();
@@ -20,13 +19,6 @@ function toLocalIsoDate(date: Date): string {
   const day = String(date.getDate()).padStart(2, '0');
 
   return `${year}-${month}-${day}`;
-}
-
-function addDaysToIsoDate(dateValue: string, days: number): string {
-  const date = new Date(`${dateValue}T12:00:00`);
-  date.setDate(date.getDate() + days);
-
-  return toLocalIsoDate(date);
 }
 
 interface SearchModalProps {
@@ -72,8 +64,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [infants, setInfants] = useState(filters.guests.infants);
   const [pets, setPets] = useState(filters.guests.pets);
   const [searchError, setSearchError] = useState('');
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 639px)');
+    const update = () => setMobile(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   const todayIso = toLocalIsoDate(new Date());
-  const checkOutMin = checkIn ? addDaysToIsoDate(checkIn, 1) : todayIso;
   const totalGuests = countOccupancyGuests({ adults, children, infants });
   const tabs = [
     { id: 'destination', label: 'Destino' },
@@ -211,6 +209,43 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const brCheckIn = toBrDate(checkIn);
   const brCheckOut = toBrDate(checkOut);
   const externalStaysUrl = `https://www.centraldereservascaldas.com.br/pt/search?from=${encodeURIComponent(brCheckIn)}&to=${encodeURIComponent(brCheckOut)}&persons=${encodeURIComponent(Math.max(1, totalGuests))}&wpl=`;
+
+  if (mobile) {
+    const steps = [
+      { id: 'destination' as const, label: 'Onde', summary: destination || 'Todos os condomínios' },
+      { id: 'dates' as const, label: 'Quando', summary: checkIn && checkOut ? `${toBrDate(checkIn)} - ${toBrDate(checkOut)}` : 'Adicionar datas' },
+      { id: 'guests' as const, label: 'Quem', summary: `${totalGuests} ${totalGuests === 1 ? 'hóspede' : 'hóspedes'}${pets ? ` · ${pets} pet${pets === 1 ? '' : 's'}` : ''}` },
+    ];
+    return (
+      <div className="fixed inset-0 z-[100] bg-neutral-100">
+        <div ref={dialogRef} data-dialog-focus-root role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-mobile-title`} tabIndex={-1} className="flex h-dvh flex-col">
+          <header className="flex h-20 shrink-0 items-center justify-between px-5">
+            <h2 id={`${fieldId}-mobile-title`} className="text-base font-bold">Buscar hospedagens</h2>
+            <button ref={closeButtonRef} type="button" aria-label="Fechar busca de hospedagens" onClick={onClose} className={`flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white shadow-sm ${focusRing}`}><X className="h-5 w-5" /></button>
+          </header>
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-4">
+            {steps.map((step) => activeTab === step.id ? (
+              <section key={step.id} className="min-h-0 rounded-3xl bg-white p-6 shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
+                <h3 className="mb-5 text-2xl font-bold">{step.label}?</h3>
+                {step.id === 'destination' && <div className="space-y-4">
+                  <label className="sr-only" htmlFor={`${fieldId}-mobile-destination`}>Buscar condomínio ou destino</label>
+                  <input id={`${fieldId}-mobile-destination`} value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="Buscar condomínio ou destino" className="min-h-14 w-full rounded-xl border border-neutral-300 px-4 text-sm focus-visible:outline-2 focus-visible:outline-orange-600" />
+                  <p className="text-sm font-semibold">Destinos sugeridos</p>
+                  <div className="max-h-[38dvh] space-y-1 overflow-y-auto">{popularDestinations.map((item) => <button key={item.name} type="button" onClick={() => { setDestination(item.query); setActiveTab('dates'); }} className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><MapPin className="h-5 w-5" /></span><span><span className="block text-sm font-semibold">{item.name}</span><span className="block text-xs text-neutral-500">{item.subtitle}</span></span></button>)}</div>
+                </div>}
+                {step.id === 'dates' && <div className="max-h-[48dvh] overflow-y-auto"><p className="mb-4 text-sm text-neutral-600">{checkIn && !checkOut ? 'Selecione a saída' : 'Selecione entrada e saída'}</p><SearchDateCalendar checkIn={checkIn} checkOut={checkOut} minDate={todayIso} onDatesChange={(from, to) => { setCheckIn(from); setCheckOut(to); setSearchError(''); }} />{searchError && <p role="alert" className="text-sm text-red-700">{searchError}</p>}</div>}
+                {step.id === 'guests' && <GuestCounterList counts={{ adults, children, infants, pets }} onChange={(counts) => { setAdults(counts.adults); setChildren(counts.children); setInfants(counts.infants); setPets(counts.pets); }} />}
+              </section>
+            ) : <button key={step.id} type="button" onClick={() => setActiveTab(step.id)} className="flex min-h-14 shrink-0 items-center justify-between gap-4 rounded-2xl bg-white px-6 text-sm shadow-sm"><span className="text-neutral-500">{step.label}</span><span className="truncate font-semibold">{step.summary}</span></button>)}
+          </div>
+          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-neutral-200 bg-neutral-100 p-4">
+            <button type="button" onClick={handleClear} className="min-h-11 px-2 text-sm font-semibold underline">Limpar tudo</button>
+            {activeTab === 'guests' ? <button type="button" onClick={handleApply} className="min-h-12 rounded-xl bg-orange-700 px-6 text-sm font-bold text-white">Buscar</button> : <button type="button" onClick={() => { if (activeTab === 'dates' && Boolean(checkIn) !== Boolean(checkOut)) { setSearchError('Escolha a entrada e a saída para continuar.'); return; } setActiveTab(activeTab === 'destination' ? 'dates' : 'guests'); }} className="min-h-12 rounded-xl bg-neutral-900 px-6 text-sm font-bold text-white">Avançar</button>}
+          </footer>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 [@media(max-height:400px)]:pt-2 sm:pt-16 px-4 bg-neutral-950/70 backdrop-blur-md animate-in fade-in duration-200">
@@ -420,57 +455,31 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 Selecione as datas da sua estadia
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 [@media(max-height:400px)]:gap-2">
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor={`${fieldId}-check-in`}
-                    className="text-xs font-semibold text-neutral-600"
-                  >
-                    Data de Check-in
-                  </label>
-                  <div className="relative">
-                    <CalendarIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                    <input
-                      id={`${fieldId}-check-in`}
-                      type="date"
-                      min={todayIso}
-                      value={checkIn}
-                      onChange={(e) => {
-                        const nextCheckIn = e.target.value;
-                        setCheckIn(nextCheckIn);
-                        if (nextCheckIn && checkOut && checkOut <= nextCheckIn) {
-                          setCheckOut(addDaysToIsoDate(nextCheckIn, 1));
-                        }
-                        setSearchError('');
-                      }}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-neutral-300 focus:border-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none"
-                    />
-                  </div>
+              <div aria-label="Período da hospedagem" className="grid grid-cols-2 gap-3">
+                <div className="min-w-0 rounded-2xl border border-neutral-200 px-4 py-3">
+                  <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">Entrada</p>
+                  <p className="mt-1 truncate text-[length:var(--search-date-value-font-size)] font-semibold text-neutral-900">
+                    {checkIn ? toBrDate(checkIn) : 'Adicionar data'}
+                  </p>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor={`${fieldId}-check-out`}
-                    className="text-xs font-semibold text-neutral-600"
-                  >
-                    Data de Check-out
-                  </label>
-                  <div className="relative">
-                    <CalendarIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                    <input
-                      id={`${fieldId}-check-out`}
-                      type="date"
-                      min={checkOutMin}
-                      value={checkOut}
-                      onChange={(e) => {
-                        setCheckOut(e.target.value);
-                        setSearchError('');
-                      }}
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-neutral-300 focus:border-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none"
-                    />
-                  </div>
+                <div className="min-w-0 rounded-2xl border border-neutral-200 px-4 py-3">
+                  <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">Saída</p>
+                  <p className="mt-1 truncate text-[length:var(--search-date-value-font-size)] font-semibold text-neutral-900">
+                    {checkOut ? toBrDate(checkOut) : 'Adicionar data'}
+                  </p>
                 </div>
               </div>
+
+              <SearchDateCalendar
+                checkIn={checkIn}
+                checkOut={checkOut}
+                minDate={todayIso}
+                onDatesChange={(nextCheckIn, nextCheckOut) => {
+                  setCheckIn(nextCheckIn);
+                  setCheckOut(nextCheckOut);
+                  setSearchError('');
+                }}
+              />
 
               {searchError && (
                 <p role="alert" className="text-sm font-semibold text-red-700">
@@ -512,139 +521,15 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
           {/* TAB 3: GUESTS */}
           {activeTab === 'guests' && (
-            <div className="space-y-5 divide-y divide-neutral-100">
-              {/* Adults */}
-              <div className="flex items-center justify-between pt-2">
-                <div>
-                  <p className="text-sm font-bold text-neutral-900">Adultos</p>
-                  <p className="text-xs text-neutral-500">13 anos ou mais</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    aria-label="Diminuir número de adultos"
-                    disabled={adults <= 1}
-                    onClick={() => setAdults(Math.max(1, adults - 1))}
-                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
-                  <span
-                    aria-live="polite"
-                    className="w-6 text-center font-bold text-sm text-neutral-900"
-                  >
-                    {adults}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Aumentar número de adultos"
-                    onClick={() => setAdults(adults + 1)}
-                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Children */}
-              <div className="flex items-center justify-between pt-4">
-                <div>
-                  <p className="text-sm font-bold text-neutral-900">Crianças</p>
-                  <p className="text-xs text-neutral-500">2 a 12 anos</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    aria-label="Diminuir número de crianças"
-                    disabled={children <= 0}
-                    onClick={() => setChildren(Math.max(0, children - 1))}
-                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
-                  <span
-                    aria-live="polite"
-                    className="w-6 text-center font-bold text-sm text-neutral-900"
-                  >
-                    {children}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Aumentar número de crianças"
-                    onClick={() => setChildren(children + 1)}
-                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Infants */}
-              <div className="flex items-center justify-between pt-4">
-                <div>
-                  <p className="text-sm font-bold text-neutral-900">Bebês</p>
-                  <p className="text-xs text-neutral-500">Menos de 2 anos</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    aria-label="Diminuir número de bebês"
-                    disabled={infants <= 0}
-                    onClick={() => setInfants(Math.max(0, infants - 1))}
-                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
-                  <span
-                    aria-live="polite"
-                    className="w-6 text-center font-bold text-sm text-neutral-900"
-                  >
-                    {infants}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Aumentar número de bebês"
-                    onClick={() => setInfants(infants + 1)}
-                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Pets */}
-              <div className="flex items-center justify-between pt-4">
-                <div>
-                  <p className="text-sm font-bold text-neutral-900">Animais de estimação</p>
-                  <p className="text-xs text-neutral-500">Cães ou gatos de assistência ou viagem</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    aria-label="Diminuir número de animais de estimação"
-                    disabled={pets <= 0}
-                    onClick={() => setPets(Math.max(0, pets - 1))}
-                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 disabled:opacity-30 disabled:cursor-not-allowed hover:border-neutral-900 transition-colors ${focusRing}`}
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
-                  <span
-                    aria-live="polite"
-                    className="w-6 text-center font-bold text-sm text-neutral-900"
-                  >
-                    {pets}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Aumentar número de animais de estimação"
-                    onClick={() => setPets(pets + 1)}
-                    className={`h-11 w-11 shrink-0 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 hover:border-neutral-900 transition-colors ${focusRing}`}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
+            <GuestCounterList
+              counts={{ adults, children, infants, pets }}
+              onChange={(counts) => {
+                setAdults(counts.adults);
+                setChildren(counts.children);
+                setInfants(counts.infants);
+                setPets(counts.pets);
+              }}
+            />
           )}
         </div>
 
