@@ -9,6 +9,7 @@ import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, QrCode, ShieldCheck } f
 import { LogoCRCN } from '../LogoCRCN';
 import { CheckoutSupportLink } from './CheckoutSupportLink';
 import { CheckoutFooter } from './CheckoutFooter';
+import { CheckoutContractLink } from './CheckoutContractLink';
 import {
   PixPayerIdentificationField,
   getPixPayerIdentification,
@@ -806,6 +807,7 @@ export function SinglePageCheckout({
                       </p>
                     </div>
                   </details>
+                  <CheckoutContractLink />
                   <label className="mt-4 flex min-h-11 items-start gap-3 text-sm leading-6">
                     <input
                       type="checkbox"

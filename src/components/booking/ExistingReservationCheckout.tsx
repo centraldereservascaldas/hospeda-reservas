@@ -18,6 +18,7 @@ import {
 } from './PixPayerIdentificationField';
 import { CheckoutSupportLink } from './CheckoutSupportLink';
 import { CheckoutFooter } from './CheckoutFooter';
+import { CheckoutContractLink } from './CheckoutContractLink';
 import { ExistingReservationConditions } from './ExistingReservationConditions';
 import { LogoCRCN } from '../LogoCRCN';
 import { ArrowLeft, LockKeyhole, QrCode } from 'lucide-react';
@@ -584,6 +585,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
                     </span>
                   </div>
                   <ExistingReservationConditions />
+                  <CheckoutContractLink />
                   <label className="mt-4 flex min-h-11 items-start gap-3 text-sm leading-6">
                     <input
                       type="checkbox"

@@ -617,13 +617,15 @@ export default function App() {
   const isCheckoutPath = /^\/checkout\/[a-zA-Z0-9_-]+(?:\/.*)?$/i.test(normalizedPathname);
   const isLocalizedCatalogPath = /^\/(?:[a-z]{2}(?:\/search)?|search)$/i.test(normalizedPathname);
   const legalSlug =
-    normalizedPathname === '/privacidade'
-      ? 'privacidade'
-      : normalizedPathname === '/termos'
-        ? 'termos'
-        : normalizedPathname === '/cancelamento'
-          ? 'cancelamento'
-          : null;
+    normalizedPathname === '/contrato'
+      ? 'contrato'
+      : normalizedPathname === '/privacidade'
+        ? 'privacidade'
+        : normalizedPathname === '/termos'
+          ? 'termos'
+          : normalizedPathname === '/cancelamento'
+            ? 'cancelamento'
+            : null;
 
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);

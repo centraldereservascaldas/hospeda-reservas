@@ -3,9 +3,29 @@
 return [
     /*
     | Public legal pages require a complete structure and recorded business
-    | and legal review for the exact version before publication.
+    | and legal review for the exact version before publication. The supplied
+    | rental contract may instead carry explicit, content-bound authorization
+    | from the business; this does not represent a legal review.
     */
     'pages' => [
+        'contrato' => [
+            'status' => 'published',
+            'version' => '2026-11-18.1',
+            'published_at' => '2026-11-18',
+            'source' => 'business_supplied',
+            'publication_authorization' => [
+                'authorized_by' => 'Responsável da Central de Reservas Caldas Novas — autorização expressa de publicação',
+                'authorized_at' => '2026-11-18',
+                'version' => '2026-11-18.1',
+                'content_hash' => 'f6488dc9d85a4c516cfb86fab69d2df157447a8f163b7e511e8ad6eb74861df8',
+            ],
+            'approvals' => [
+                'business' => ['reviewer' => null, 'version' => null, 'content_hash' => null, 'approved_at' => null],
+                'legal' => ['reviewer' => null, 'version' => null, 'content_hash' => null, 'approved_at' => null],
+            ],
+            'title' => 'Contrato de locação por temporada e confirmação de reserva',
+            'sections' => json_decode(file_get_contents(resource_path('data/rental-contract.json')), true, flags: JSON_THROW_ON_ERROR),
+        ],
         'privacidade' => [
             'status' => 'draft',
             'version' => '0.1',
