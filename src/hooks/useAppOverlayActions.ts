@@ -73,11 +73,23 @@ export function useAppOverlayActions({
   const handleAssistantApplyFilters = useCallback(
     (suggested: AppOverlaySuggestedFilters) => {
       if (suggested.destination || suggested.guests) {
-        setFilters((previous) => ({
-          ...previous,
-          ...(suggested.destination ? { destination: suggested.destination } : {}),
-          ...(suggested.guests ? { guests: { ...previous.guests, adults: suggested.guests } } : {}),
-        }));
+        setFilters((previous) => {
+          const isNewDestination =
+            suggested.destination !== undefined && suggested.destination !== previous.destination;
+
+          return {
+            ...previous,
+            ...(suggested.destination
+              ? {
+                  destination: suggested.destination,
+                  ...(isNewDestination ? { destinationPropertyId: '' } : {}),
+                }
+              : {}),
+            ...(suggested.guests
+              ? { guests: { ...previous.guests, adults: suggested.guests } }
+              : {}),
+          };
+        });
       }
       setIsSofiaOpen(false);
       scrollCatalog();

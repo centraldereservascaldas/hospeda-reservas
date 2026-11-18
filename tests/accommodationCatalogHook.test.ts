@@ -55,11 +55,13 @@ test('uses only synchronized cache, filters stale image URLs, and replaces it wi
     const { result } = renderHook(() => useAccommodationCatalog());
     assert.equal(result.current.properties.length, 1);
     assert.equal(result.current.properties[0]?.id, cachedProperty.id);
+    assert.equal(result.current.catalogProperties[0]?.title, cachedProperty.title);
     assert.deepEqual(result.current.properties[0]?.images, ['https://example.com/cover.jpg']);
     assert.equal(result.current.catalogLoading, true);
 
     await act(async () => resolveCatalog([liveProperty]));
     await waitFor(() => assert.equal(result.current.properties[0]?.title, 'Acomodação atualizada'));
+    assert.equal(result.current.catalogProperties[0]?.title, 'Acomodação atualizada');
     assert.equal(result.current.catalogLoading, false);
     assert.equal(result.current.catalogLoadError, false);
     assert.equal(localStorage.getItem('hospeda_properties_source'), 'stays-live');
@@ -71,6 +73,7 @@ test('uses only synchronized cache, filters stale image URLs, and replaces it wi
     const addedProperty = { ...liveProperty, id: 'new-live-listing' };
     act(() => result.current.setProperties([addedProperty]));
     assert.equal(result.current.properties[0]?.id, 'new-live-listing');
+    assert.equal(result.current.catalogProperties[0]?.id, liveProperty.id);
     assert.equal(
       JSON.parse(localStorage.getItem('hospeda_properties') || '[]')[0].id,
       cachedProperty.id,

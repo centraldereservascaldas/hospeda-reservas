@@ -58,6 +58,7 @@ export interface AppOverlayLayerProps {
   catalogFocusRef: RefObject<HTMLElement | null>;
   savedPropertyIds: string[];
   properties: Property[];
+  catalogProperties: Property[];
   hasMoreSearchResults?: boolean;
   isSofiaOpen: boolean;
   isSearchOpen: boolean;
@@ -93,6 +94,7 @@ export function AppOverlayLayer({
   catalogFocusRef,
   savedPropertyIds,
   properties,
+  catalogProperties,
   hasMoreSearchResults = false,
   isSofiaOpen,
   isSearchOpen,
@@ -193,6 +195,7 @@ export function AppOverlayLayer({
           }
           currency={currency}
           properties={properties}
+          amenityProperties={catalogProperties}
         />
       </DeferredModal>
 

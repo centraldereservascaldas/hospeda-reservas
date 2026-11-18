@@ -52,6 +52,7 @@ function createOverlayProps(): AppOverlayLayerProps {
     catalogFocusRef: React.createRef<HTMLElement>(),
     savedPropertyIds: [],
     properties: [],
+    catalogProperties: [],
     isSofiaOpen: false,
     isSearchOpen: false,
     isFilterOpen: false,

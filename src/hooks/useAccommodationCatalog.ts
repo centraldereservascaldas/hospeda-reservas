@@ -5,7 +5,10 @@ import { crcnBackendApi } from '../services/crcnBackendApi';
 import { readAccommodationCatalogCache } from '../utils/accommodationCatalogCache';
 
 export function useAccommodationCatalog() {
-  const [properties, setCatalogProperties] = useState<Property[]>(readAccommodationCatalogCache);
+  const [catalogProperties, setCatalogProperties] = useState<Property[]>(
+    readAccommodationCatalogCache,
+  );
+  const [properties, setDisplayedProperties] = useState<Property[]>(() => catalogProperties);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogLoadError, setCatalogLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -14,7 +17,7 @@ export function useAccommodationCatalog() {
   const setProperties: Dispatch<SetStateAction<Property[]>> = useCallback((value) => {
     externallyUpdated.current = true;
     setCatalogLoadError(false);
-    setCatalogProperties(value);
+    setDisplayedProperties(value);
   }, []);
 
   const retryCatalog = useCallback(() => {
@@ -28,7 +31,8 @@ export function useAccommodationCatalog() {
       .getAccommodations()
       .then((list) => {
         if (cancelled) return;
-        if (!externallyUpdated.current) setCatalogProperties(list);
+        setCatalogProperties(list);
+        if (!externallyUpdated.current) setDisplayedProperties(list);
         setCatalogLoadError(false);
       })
       .catch((error) => {
@@ -44,5 +48,12 @@ export function useAccommodationCatalog() {
     };
   }, [loadAttempt]);
 
-  return { properties, setProperties, catalogLoading, catalogLoadError, retryCatalog };
+  return {
+    properties,
+    catalogProperties,
+    setProperties,
+    catalogLoading,
+    catalogLoadError,
+    retryCatalog,
+  };
 }
