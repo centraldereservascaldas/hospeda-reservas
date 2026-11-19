@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { X, Check } from 'lucide-react';
 import type { Currency, Property, SearchFilters } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
@@ -18,43 +18,74 @@ interface FilterModalProps {
   currency: Currency;
 }
 
-const AVAILABLE_AMENITIES = [
-  'Wi-Fi',
-  'Piscina',
-  'Ar-condicionado',
-  'Hidromassagem',
-  'Cozinha ou copa',
-  'Estacionamento',
-  'Churrasqueira',
-  'Parque aquático',
-  'Sauna',
-  'Academia',
-  'Varanda',
-];
+function useSelectedOptionBounds(selectedValue: string, options: number) {
+  const groupRef = useRef<HTMLDivElement>(null);
+  const [bounds, setBounds] = useState({ left: 0, top: 0, width: 0, height: 0, ready: false });
+
+  useLayoutEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
+
+    const update = () => {
+      const selectedButton = [
+        ...group.querySelectorAll<HTMLButtonElement>('[data-shared-option]'),
+      ].find((button) => button.dataset.sharedOption === selectedValue);
+      if (!selectedButton) return;
+
+      const groupRect = group.getBoundingClientRect();
+      const buttonRect = selectedButton.getBoundingClientRect();
+      setBounds({
+        left: buttonRect.left - groupRect.left,
+        top: buttonRect.top - groupRect.top,
+        width: buttonRect.width,
+        height: buttonRect.height,
+        ready: true,
+      });
+    };
+
+    update();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(update);
+    observer.observe(group);
+    return () => observer.disconnect();
+  }, [options, selectedValue]);
+
+  return { groupRef, bounds };
+}
 
 function getAvailableAmenities(properties: Property[], selectedAmenities: string[]): string[] {
-  const options = new Map<string, string>();
-  const catalogAmenities = properties.flatMap((property) =>
-    getCatalogAmenities(property.amenities, property.listingAmenities, property.propertyAmenities),
-  );
+  const options = new Map<string, { label: string; count: number }>();
 
-  for (const amenity of [...AVAILABLE_AMENITIES, ...catalogAmenities, ...selectedAmenities]) {
-    const label = amenity.trim();
-    const identity = getAmenityFilterIdentity(label);
-    if (label && label.length <= 80 && identity && !options.has(identity)) {
-      options.set(identity, label);
+  for (const property of properties) {
+    const amenities = getCatalogAmenities(
+      property.amenities,
+      property.listingAmenities,
+      property.propertyAmenities,
+    );
+    for (const amenity of amenities) {
+      const label = amenity.trim();
+      const identity = getAmenityFilterIdentity(label);
+      if (!label || label.length > 80 || !identity) continue;
+      const current = options.get(identity);
+      options.set(identity, { label: current?.label ?? label, count: (current?.count ?? 0) + 1 });
     }
   }
 
-  return [...options.values()];
-}
+  for (const amenity of selectedAmenities) {
+    const label = amenity.trim();
+    const identity = getAmenityFilterIdentity(label);
+    if (label && identity && !options.has(identity)) {
+      options.set(identity, { label, count: 0 });
+    }
+  }
 
-const PROPERTY_TYPES = [
-  { id: 'all', title: 'Qualquer tipo', desc: 'Casas, vilas, cabanas e flats' },
-  { id: 'entire_place', title: 'Espaço inteiro', desc: 'Um lugar só para você e seu grupo' },
-  { id: 'cabin', title: 'Cabanas & Chalés', desc: 'Refúgios na montanha ou floresta' },
-  { id: 'villa', title: 'Vilas de luxo', desc: 'Espaços amplos com serviços exclusivos' },
-];
+  return [...options.values()]
+    .sort(
+      (first, second) =>
+        second.count - first.count || first.label.localeCompare(second.label, 'pt-BR'),
+    )
+    .map(({ label }) => label);
+}
 
 export const FilterModal: React.FC<FilterModalProps> = ({
   isOpen,
@@ -74,39 +105,38 @@ export const FilterModal: React.FC<FilterModalProps> = ({
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600';
   const [minPrice, setMinPrice] = useState(filters.minPrice);
   const [maxPrice, setMaxPrice] = useState(filters.maxPrice);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>(filters.propertyTypes);
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>(filters.amenities);
   const [minBedrooms, setMinBedrooms] = useState(filters.minBedrooms);
+  const [minBeds, setMinBeds] = useState(filters.minBeds ?? 0);
   const [minBaths, setMinBaths] = useState(filters.minBaths);
-  const [superhostOnly, setSuperhostOnly] = useState(filters.superhostOnly);
-  const [instantBookOnly, setInstantBookOnly] = useState(filters.instantBookOnly);
+  const [selectedPropertyTypes, setSelectedPropertyTypes] = useState(filters.propertyTypes);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
-  const propertyTypesKey = filters.propertyTypes.join('\u0000');
   const amenitiesKey = filters.amenities.join('\u0000');
+  const [showAllAmenities, setShowAllAmenities] = useState(false);
 
   const draftFilters = useMemo(
     () => ({
       ...filters,
       minPrice,
       maxPrice,
-      propertyTypes: selectedTypes,
       amenities: selectedAmenities,
       minBedrooms,
+      minBeds,
       minBaths,
-      superhostOnly,
-      instantBookOnly,
+      propertyTypes: selectedPropertyTypes,
+      superhostOnly: false,
+      instantBookOnly: false,
     }),
     [
       filters,
-      instantBookOnly,
       maxPrice,
+      minBeds,
       minBaths,
       minBedrooms,
       minPrice,
       selectedAmenities,
-      selectedTypes,
-      superhostOnly,
+      selectedPropertyTypes,
     ],
   );
   const matchingCount = useMemo(
@@ -118,42 +148,40 @@ export const FilterModal: React.FC<FilterModalProps> = ({
     [amenityProperties, selectedAmenities],
   );
   const matchingCountLabel = matchingCount === 1 ? 'acomodação' : 'acomodações';
+  const bedroomOptions = [0, 1, 2, 3, 4, 5];
+  const bedOptions = [0, 1, 2, 3, 4, 5];
+  const bathroomOptions = [0, 1, 2, 3, 4];
+  const bedroomSelection = useSelectedOptionBounds(String(minBedrooms), bedroomOptions.length);
+  const bedSelection = useSelectedOptionBounds(String(minBeds), bedOptions.length);
+  const bathroomSelection = useSelectedOptionBounds(String(minBaths), bathroomOptions.length);
 
   useEffect(() => {
     const currentFilters = filtersRef.current;
     setMinPrice(currentFilters.minPrice);
     setMaxPrice(currentFilters.maxPrice);
-    setSelectedTypes(currentFilters.propertyTypes);
     setSelectedAmenities(currentFilters.amenities);
     setMinBedrooms(currentFilters.minBedrooms);
+    setMinBeds(currentFilters.minBeds ?? 0);
     setMinBaths(currentFilters.minBaths);
-    setSuperhostOnly(currentFilters.superhostOnly);
-    setInstantBookOnly(currentFilters.instantBookOnly);
+    setSelectedPropertyTypes(currentFilters.propertyTypes);
   }, [
     filters.minPrice,
     filters.maxPrice,
-    propertyTypesKey,
     amenitiesKey,
     filters.minBedrooms,
+    filters.minBeds,
     filters.minBaths,
-    filters.superhostOnly,
-    filters.instantBookOnly,
+    filters.propertyTypes,
     isOpen,
   ]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen) {
+      setShowAllAmenities(false);
+    }
+  }, [isOpen]);
 
-  const toggleType = (id: string) => {
-    if (id === 'all') {
-      setSelectedTypes([]);
-      return;
-    }
-    if (selectedTypes.includes(id)) {
-      setSelectedTypes(selectedTypes.filter((t) => t !== id));
-    } else {
-      setSelectedTypes([...selectedTypes, id]);
-    }
-  };
+  if (!isOpen) return null;
 
   const toggleAmenity = (amenity: string) => {
     const identity = getAmenityFilterIdentity(amenity);
@@ -177,12 +205,13 @@ export const FilterModal: React.FC<FilterModalProps> = ({
       ...filters,
       minPrice,
       maxPrice,
-      propertyTypes: selectedTypes,
       amenities: selectedAmenities,
       minBedrooms,
+      minBeds,
       minBaths,
-      superhostOnly,
-      instantBookOnly,
+      propertyTypes: selectedPropertyTypes,
+      superhostOnly: false,
+      instantBookOnly: false,
     });
     onClose();
   };
@@ -190,12 +219,11 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   const handleClear = () => {
     setMinPrice(0);
     setMaxPrice(5000);
-    setSelectedTypes([]);
     setSelectedAmenities([]);
     setMinBedrooms(0);
+    setMinBeds(0);
     setMinBaths(0);
-    setSuperhostOnly(false);
-    setInstantBookOnly(false);
+    setSelectedPropertyTypes([]);
     onResetFilters();
   };
 
@@ -232,19 +260,26 @@ export const FilterModal: React.FC<FilterModalProps> = ({
           {/* Price Range */}
           <div>
             <h3 className="text-base font-bold text-neutral-900 mb-1">Faixa de preço</h3>
-            <p className="text-xs text-neutral-500 mb-4">
-              Limites em reais por noite, antes de taxas
+            <p className="mb-4 text-sm leading-5 text-neutral-600">
+              Limites em reais por noite, antes de taxas.
             </p>
 
+            {!filters.checkIn || !filters.checkOut ? (
+              <p className="mb-4 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs leading-5 text-neutral-600">
+                Sem datas, os valores são referências e não confirmam disponibilidade. Escolha um
+                período para consultar preços reais.
+              </p>
+            ) : null}
+
             <div className="grid grid-cols-1 gap-4 min-[400px]:grid-cols-2">
-              <div className="min-w-0 border border-neutral-300 rounded-2xl p-3 focus-within:border-neutral-900 transition-colors">
+              <div className="min-w-0 rounded-2xl border border-neutral-300 bg-white px-4 py-3 transition-colors focus-within:border-neutral-900">
                 <label
                   htmlFor={`${fieldId}-min-price`}
-                  className="text-[11px] uppercase font-bold text-neutral-600 block"
+                  className="mb-1 block text-xs font-semibold text-neutral-600"
                 >
                   Preço mínimo por noite
                 </label>
-                <div className="flex min-w-0 items-center gap-1 font-semibold text-neutral-900">
+                <div className="flex min-h-10 min-w-0 items-center gap-2 font-semibold text-neutral-900">
                   <span className="text-xs text-neutral-500">R$</span>
                   <input
                     id={`${fieldId}-min-price`}
@@ -255,19 +290,19 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                     onChange={(e) =>
                       setMinPrice(Math.min(maxPrice, 5000, Math.max(0, Number(e.target.value))))
                     }
-                    className="min-h-11 w-full min-w-0 text-sm outline-none font-bold focus-visible:ring-2 focus-visible:ring-orange-600"
+                    className="min-h-10 w-full min-w-0 text-base font-semibold outline-none focus-visible:ring-2 focus-visible:ring-orange-600"
                   />
                 </div>
               </div>
 
-              <div className="min-w-0 border border-neutral-300 rounded-2xl p-3 focus-within:border-neutral-900 transition-colors">
+              <div className="min-w-0 rounded-2xl border border-neutral-300 bg-white px-4 py-3 transition-colors focus-within:border-neutral-900">
                 <label
                   htmlFor={`${fieldId}-max-price`}
-                  className="text-[11px] uppercase font-bold text-neutral-600 block"
+                  className="mb-1 block text-xs font-semibold text-neutral-600"
                 >
                   Preço máximo por noite
                 </label>
-                <div className="flex min-w-0 items-center gap-1 font-semibold text-neutral-900">
+                <div className="flex min-h-10 min-w-0 items-center gap-2 font-semibold text-neutral-900">
                   <span className="text-xs text-neutral-500">R$</span>
                   <input
                     id={`${fieldId}-max-price`}
@@ -278,7 +313,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                     onChange={(e) =>
                       setMaxPrice(Math.min(5000, Math.max(minPrice, Number(e.target.value))))
                     }
-                    className="min-h-11 w-full min-w-0 text-sm outline-none font-bold focus-visible:ring-2 focus-visible:ring-orange-600"
+                    className="min-h-10 w-full min-w-0 text-base font-semibold outline-none focus-visible:ring-2 focus-visible:ring-orange-600"
                   />
                 </div>
               </div>
@@ -290,36 +325,9 @@ export const FilterModal: React.FC<FilterModalProps> = ({
             </div>
           </div>
 
-          {/* Type of place */}
-          <div className="pt-6">
-            <h3 className="text-base font-bold text-neutral-900 mb-4">Tipo de acomodação</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {PROPERTY_TYPES.map((type) => {
-                const isSelected =
-                  type.id === 'all' ? selectedTypes.length === 0 : selectedTypes.includes(type.id);
-                return (
-                  <button
-                    key={type.id}
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => toggleType(type.id)}
-                    className={`text-left p-3.5 rounded-2xl border transition-all cursor-pointer ${focusRing} ${
-                      isSelected
-                        ? 'border-neutral-900 bg-neutral-50/80 ring-1 ring-neutral-900'
-                        : 'border-neutral-200 hover:border-neutral-400'
-                    }`}
-                  >
-                    <p className="text-sm font-semibold text-neutral-900">{type.title}</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">{type.desc}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Rooms and Beds */}
           <div className="pt-6 space-y-4">
-            <h3 className="text-base font-bold text-neutral-900">Quartos e banheiros</h3>
+            <h3 className="text-base font-bold text-neutral-900">Quartos e camas</h3>
 
             <div>
               <p
@@ -329,19 +337,71 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                 Quartos mínimos
               </p>
               <div
+                ref={bedroomSelection.groupRef}
                 role="group"
                 aria-labelledby={`${fieldId}-bedrooms-label`}
-                className="grid grid-cols-2 gap-2 py-1 min-[480px]:grid-cols-3 sm:grid-cols-6"
+                className="relative grid grid-cols-2 gap-2 py-1 min-[480px]:grid-cols-3 sm:grid-cols-6"
               >
-                {[0, 1, 2, 3, 4, 5].map((num) => (
+                <span
+                  aria-hidden="true"
+                  className={`filter-shared-selection ${bedroomSelection.bounds.ready ? 'filter-shared-selection--ready' : ''}`}
+                  style={{
+                    width: bedroomSelection.bounds.width,
+                    height: bedroomSelection.bounds.height,
+                    transform: `translate3d(${bedroomSelection.bounds.left}px, ${bedroomSelection.bounds.top}px, 0)`,
+                  }}
+                />
+                {bedroomOptions.map((num) => (
                   <button
                     key={num}
+                    data-shared-option={num}
                     type="button"
                     aria-pressed={minBedrooms === num}
                     onClick={() => setMinBedrooms(num)}
-                    className={`min-h-11 min-w-0 whitespace-normal break-words px-1 leading-tight rounded-full text-xs font-semibold border transition-all cursor-pointer ${focusRing} ${
+                    className={`relative z-10 min-h-11 min-w-0 whitespace-normal break-words rounded-full border px-1 leading-tight text-xs font-semibold transition-colors cursor-pointer ${focusRing} ${
                       minBedrooms === num
-                        ? 'bg-neutral-900 text-white border-neutral-900'
+                        ? 'border-transparent text-white'
+                        : 'border-neutral-200 text-neutral-700 hover:border-neutral-900'
+                    }`}
+                  >
+                    {num === 0 ? 'Qualquer' : `${num}+`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p
+                id={`${fieldId}-beds-label`}
+                className="text-xs font-semibold text-neutral-700 mb-2"
+              >
+                Camas mínimas
+              </p>
+              <div
+                ref={bedSelection.groupRef}
+                role="group"
+                aria-labelledby={`${fieldId}-beds-label`}
+                className="relative grid grid-cols-2 gap-2 py-1 min-[480px]:grid-cols-3 sm:grid-cols-6"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`filter-shared-selection ${bedSelection.bounds.ready ? 'filter-shared-selection--ready' : ''}`}
+                  style={{
+                    width: bedSelection.bounds.width,
+                    height: bedSelection.bounds.height,
+                    transform: `translate3d(${bedSelection.bounds.left}px, ${bedSelection.bounds.top}px, 0)`,
+                  }}
+                />
+                {bedOptions.map((num) => (
+                  <button
+                    key={num}
+                    data-shared-option={num}
+                    type="button"
+                    aria-pressed={minBeds === num}
+                    onClick={() => setMinBeds(num)}
+                    className={`relative z-10 min-h-11 min-w-0 whitespace-normal break-words rounded-full border px-1 leading-tight text-xs font-semibold transition-colors cursor-pointer ${focusRing} ${
+                      minBeds === num
+                        ? 'border-transparent text-white'
                         : 'border-neutral-200 text-neutral-700 hover:border-neutral-900'
                     }`}
                   >
@@ -359,19 +419,30 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                 Banheiros mínimos
               </p>
               <div
+                ref={bathroomSelection.groupRef}
                 role="group"
                 aria-labelledby={`${fieldId}-baths-label`}
-                className="grid grid-cols-2 gap-2 py-1 min-[480px]:grid-cols-3 sm:grid-cols-5"
+                className="relative grid grid-cols-2 gap-2 py-1 min-[480px]:grid-cols-3 sm:grid-cols-5"
               >
-                {[0, 1, 2, 3, 4].map((num) => (
+                <span
+                  aria-hidden="true"
+                  className={`filter-shared-selection ${bathroomSelection.bounds.ready ? 'filter-shared-selection--ready' : ''}`}
+                  style={{
+                    width: bathroomSelection.bounds.width,
+                    height: bathroomSelection.bounds.height,
+                    transform: `translate3d(${bathroomSelection.bounds.left}px, ${bathroomSelection.bounds.top}px, 0)`,
+                  }}
+                />
+                {bathroomOptions.map((num) => (
                   <button
                     key={num}
+                    data-shared-option={num}
                     type="button"
                     aria-pressed={minBaths === num}
                     onClick={() => setMinBaths(num)}
-                    className={`min-h-11 min-w-0 whitespace-normal break-words px-1 leading-tight rounded-full text-xs font-semibold border transition-all cursor-pointer ${focusRing} ${
+                    className={`relative z-10 min-h-11 min-w-0 whitespace-normal break-words rounded-full border px-1 leading-tight text-xs font-semibold transition-colors cursor-pointer ${focusRing} ${
                       minBaths === num
-                        ? 'bg-neutral-900 text-white border-neutral-900'
+                        ? 'border-transparent text-white'
                         : 'border-neutral-200 text-neutral-700 hover:border-neutral-900'
                     }`}
                   >
@@ -385,120 +456,59 @@ export const FilterModal: React.FC<FilterModalProps> = ({
           {/* Amenities */}
           <div className="pt-6">
             <h3 className="text-base font-bold text-neutral-900 mb-3">Comodidades populares</h3>
+            {availableAmenities.length === 0 ? (
+              <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm leading-5 text-neutral-600">
+                A Stays não retornou comodidades para as hospedagens disponíveis. O filtro ficará
+                disponível quando esses dados forem sincronizados.
+              </p>
+            ) : null}
             <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2.5 sm:grid-cols-3">
-              {availableAmenities.map((amenity) => {
-                const amenityIdentity = getAmenityFilterIdentity(amenity);
-                const isSelected = selectedAmenities.some(
-                  (selectedAmenity) =>
-                    getAmenityFilterIdentity(selectedAmenity) === amenityIdentity,
-                );
-                return (
-                  <button
-                    key={amenity}
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => toggleAmenity(amenity)}
-                    className={`flex min-h-11 min-w-0 items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left cursor-pointer ${focusRing} ${
-                      isSelected
-                        ? 'border-neutral-900 bg-neutral-900 text-white'
-                        : 'border-neutral-200 text-neutral-700 hover:border-neutral-400'
-                    }`}
-                  >
-                    <div
-                      className={`w-4 h-4 rounded-sm flex items-center justify-center border ${
-                        isSelected ? 'border-white bg-white text-neutral-900' : 'border-neutral-300'
+              {(showAllAmenities ? availableAmenities : availableAmenities.slice(0, 6)).map(
+                (amenity) => {
+                  const amenityIdentity = getAmenityFilterIdentity(amenity);
+                  const isSelected = selectedAmenities.some(
+                    (selectedAmenity) =>
+                      getAmenityFilterIdentity(selectedAmenity) === amenityIdentity,
+                  );
+                  return (
+                    <button
+                      key={amenity}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => toggleAmenity(amenity)}
+                      className={`flex min-h-11 min-w-0 items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left cursor-pointer ${focusRing} ${
+                        isSelected
+                          ? 'border-neutral-900 bg-neutral-900 text-white'
+                          : 'border-neutral-200 text-neutral-700 hover:border-neutral-400'
                       }`}
                     >
-                      {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                    </div>
-                    <span className="min-w-0 flex-1 whitespace-normal break-words">{amenity}</span>
-                  </button>
-                );
-              })}
+                      <div
+                        className={`w-4 h-4 rounded-sm flex items-center justify-center border ${
+                          isSelected
+                            ? 'border-white bg-white text-neutral-900'
+                            : 'border-neutral-300'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
+                      <span className="min-w-0 flex-1 whitespace-normal break-words">
+                        {amenity}
+                      </span>
+                    </button>
+                  );
+                },
+              )}
             </div>
-          </div>
-
-          {/* Booking Options */}
-          <div className="pt-6 space-y-4">
-            <h3 className="text-base font-bold text-neutral-900">Opções de reserva</h3>
-
-            <div className="flex min-w-0 flex-col items-stretch gap-2 min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between">
-              <div className="min-w-0">
-                <p
-                  id={`${fieldId}-instant-book-label`}
-                  className="break-words text-sm font-semibold text-neutral-900"
-                >
-                  Reserva Imediata
-                </p>
-                <p
-                  id={`${fieldId}-instant-book-description`}
-                  className="break-words text-xs text-neutral-500"
-                >
-                  Espaços que você pode reservar sem esperar aprovação
-                </p>
-              </div>
+            {availableAmenities.length > 10 && (
               <button
                 type="button"
-                role="switch"
-                aria-checked={instantBookOnly}
-                aria-labelledby={`${fieldId}-instant-book-label`}
-                aria-describedby={`${fieldId}-instant-book-description`}
-                onClick={() => setInstantBookOnly(!instantBookOnly)}
-                className={`inline-flex h-11 w-11 shrink-0 self-end cursor-pointer items-center justify-center rounded-full min-[400px]:self-auto ${focusRing}`}
+                aria-expanded={showAllAmenities}
+                onClick={() => setShowAllAmenities((isShowingAll) => !isShowingAll)}
+                className={`mt-4 min-h-11 rounded-lg px-3 text-sm font-semibold text-neutral-800 underline underline-offset-4 hover:text-neutral-600 ${focusRing}`}
               >
-                <span
-                  aria-hidden="true"
-                  className={`relative inline-flex h-6 w-11 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                    instantBookOnly ? 'bg-neutral-900' : 'bg-neutral-200'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      instantBookOnly ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </span>
+                {showAllAmenities ? 'Mostrar menos' : 'Mostrar todas as comodidades'}
               </button>
-            </div>
-
-            <div className="flex min-w-0 flex-col items-stretch gap-2 min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between">
-              <div className="min-w-0">
-                <p
-                  id={`${fieldId}-superhost-label`}
-                  className="break-words text-sm font-semibold text-neutral-900"
-                >
-                  Apenas Superhosts
-                </p>
-                <p
-                  id={`${fieldId}-superhost-description`}
-                  className="break-words text-xs text-neutral-500"
-                >
-                  Hospede-se com anfitriões reconhecidos por excelência
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={superhostOnly}
-                aria-labelledby={`${fieldId}-superhost-label`}
-                aria-describedby={`${fieldId}-superhost-description`}
-                onClick={() => setSuperhostOnly(!superhostOnly)}
-                className={`inline-flex h-11 w-11 shrink-0 self-end cursor-pointer items-center justify-center rounded-full min-[400px]:self-auto ${focusRing}`}
-              >
-                <span
-                  aria-hidden="true"
-                  className={`relative inline-flex h-6 w-11 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                    superhostOnly ? 'bg-neutral-900' : 'bg-neutral-200'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      superhostOnly ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </span>
-              </button>
-            </div>
+            )}
           </div>
         </div>
 

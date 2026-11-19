@@ -3,12 +3,6 @@ import type { SearchFilters } from '../../types';
 import { CATEGORIES } from '../../data/mockProperties';
 import { formatCurrency } from '../../utils/formatters';
 
-const PROPERTY_TYPE_LABELS: Record<string, string> = {
-  entire_place: 'Espaço inteiro',
-  cabin: 'Cabana ou chalé',
-  villa: 'Vila',
-};
-
 interface ActiveSearchFiltersProps {
   filters: SearchFilters;
   activeFilterCount: number;
@@ -44,18 +38,20 @@ export function ActiveSearchFilters({
   if (!hasTripCriteria && !selectedCategory && !hasPropertyFilters) return null;
 
   return (
-    <div data-active-criteria className="mb-6 space-y-3 text-xs">
+    <div data-active-criteria className="mb-6 space-y-4 text-sm sm:space-y-3">
       {hasTripCriteria && (
         <div
           role="group"
           aria-label="Critérios da viagem"
-          className="flex flex-wrap items-center gap-x-1 gap-y-1.5 sm:gap-2"
+          className="flex min-w-0 flex-wrap items-center gap-2"
         >
-          <span className="w-full font-extrabold text-neutral-800 sm:w-auto">Sua viagem:</span>
+          <span className="w-full font-semibold text-neutral-700 sm:w-auto">Sua viagem:</span>
           {hasDestinationFilter && (
-            <span className="-my-px flex items-center gap-1.5 rounded-full border border-white/80 px-1 py-0 font-bold text-neutral-900 shadow-xs liquid-glass-pill sm:my-0 sm:px-3 sm:py-1.5">
+            <span className="inline-flex min-h-12 max-w-full min-w-0 items-center gap-1 rounded-full border border-neutral-200/80 bg-white/75 py-0 pl-3 pr-1 font-semibold text-neutral-900 shadow-sm sm:min-h-10">
               <MapPin aria-hidden="true" className="h-3.5 w-3.5 text-orange-500" />
-              <span>{filters.destination || 'Condomínio selecionado'}</span>
+              <span className="min-w-0 truncate">
+                {filters.destination || 'Condomínio selecionado'}
+              </span>
               <RemoveFilterButton
                 label={filters.destination ? 'destino' : 'condomínio selecionado'}
                 onClick={onRemoveDestination}
@@ -80,9 +76,9 @@ export function ActiveSearchFilters({
         <div
           role="group"
           aria-label="Categoria selecionada"
-          className="flex flex-wrap items-center gap-x-1 gap-y-1.5 sm:gap-2"
+          className="flex min-w-0 flex-wrap items-center gap-2"
         >
-          <span className="w-full font-extrabold text-neutral-800 sm:w-auto">Categoria:</span>
+          <span className="w-full font-semibold text-neutral-700 sm:w-auto">Categoria:</span>
           <FilterChip
             label={selectedCategory.label}
             onRemove={() => onChange({ ...filters, category: 'all' })}
@@ -93,7 +89,7 @@ export function ActiveSearchFilters({
         <div
           role="group"
           aria-label="Filtros do imóvel ativos"
-          className="flex flex-wrap items-center gap-x-1 gap-y-1.5 sm:gap-2"
+          className="flex min-w-0 flex-wrap items-center gap-2"
         >
           <span className="sr-only font-extrabold text-neutral-800 sm:not-sr-only sm:w-auto">
             Filtros do imóvel:
@@ -111,18 +107,28 @@ export function ActiveSearchFilters({
               }
             />
           )}
-          {filters.propertyTypes.map((type) => (
-            <FilterChip
-              key={type}
-              label={PROPERTY_TYPE_LABELS[type] || type}
-              onRemove={() =>
-                onChange({
-                  ...filters,
-                  propertyTypes: filters.propertyTypes.filter((item) => item !== type),
-                })
-              }
-            />
-          ))}
+          {filters.propertyTypes.map((propertyType) => {
+            const label =
+              propertyType === 'entire_place'
+                ? 'Espaço inteiro'
+                : propertyType === 'private_room'
+                  ? 'Quarto privativo'
+                  : propertyType === 'shared_room'
+                    ? 'Quarto compartilhado'
+                    : propertyType;
+            return (
+              <FilterChip
+                key={propertyType}
+                label={label}
+                onRemove={() =>
+                  onChange({
+                    ...filters,
+                    propertyTypes: filters.propertyTypes.filter((item) => item !== propertyType),
+                  })
+                }
+              />
+            );
+          })}
           {filters.amenities.map((amenity) => (
             <FilterChip
               key={amenity}
@@ -141,22 +147,16 @@ export function ActiveSearchFilters({
               onRemove={() => onChange({ ...filters, minBedrooms: defaultFilters.minBedrooms })}
             />
           )}
+          {(filters.minBeds ?? 0) > 0 && (
+            <FilterChip
+              label={`${filters.minBeds ?? 0}+ camas`}
+              onRemove={() => onChange({ ...filters, minBeds: 0 })}
+            />
+          )}
           {filters.minBaths > defaultFilters.minBaths && (
             <FilterChip
               label={`${filters.minBaths}+ banheiros`}
               onRemove={() => onChange({ ...filters, minBaths: defaultFilters.minBaths })}
-            />
-          )}
-          {filters.superhostOnly && (
-            <FilterChip
-              label="Apenas Superhost"
-              onRemove={() => onChange({ ...filters, superhostOnly: false })}
-            />
-          )}
-          {filters.instantBookOnly && (
-            <FilterChip
-              label="Reserva Imediata"
-              onRemove={() => onChange({ ...filters, instantBookOnly: false })}
             />
           )}
           <button
@@ -213,8 +213,11 @@ function formatGuests(guests: SearchFilters['guests']): string {
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="-my-px flex items-center gap-1.5 rounded-full border border-white/80 px-1 py-0 font-bold text-neutral-900 shadow-xs liquid-glass-pill sm:my-0 sm:px-3 sm:py-1.5">
-      <span>{label}</span>
+    <span
+      title={label}
+      className="inline-flex min-h-12 max-w-full min-w-0 items-center gap-1 rounded-full border border-neutral-200/80 bg-white/75 py-0 pl-3 pr-1 font-semibold text-neutral-900 shadow-sm sm:min-h-10"
+    >
+      <span className="min-w-0 truncate">{label}</span>
       <RemoveFilterButton label={label} onClick={onRemove} />
     </span>
   );

@@ -107,8 +107,9 @@ test('search modal keeps its mobile controls touch-sized and clear of input text
     /\[@media\(max-height:400px\)\]:space-y-3/,
   );
   assert.match(
-    getByLabelText('Data de Check-in').parentElement?.parentElement?.parentElement?.className ?? '',
-    /\[@media\(max-height:400px\)\]:gap-2/,
+    getByRole('grid', { name: 'Calendário de novembro de 2026' }).parentElement?.parentElement
+      ?.className ?? '',
+    /grid-cols-1/,
   );
   const presets = [
     getByRole('button', { name: /Próximo fim de semana/ }),
@@ -133,7 +134,7 @@ test('searching with dates applies guest filters and requests live availability'
   const searches: AccommodationWidgetSearchParams[] = [];
   const applied: SearchFilters[] = [];
   let closeCount = 0;
-  const { getByLabelText, getByRole } = render(
+  const { getByRole } = render(
     React.createElement(SearchModal, {
       isOpen: true,
       onClose: () => {
@@ -147,14 +148,19 @@ test('searching with dates applies guest filters and requests live availability'
   );
 
   fireEvent.click(getByRole('tab', { name: 'Datas' }));
-  fireEvent.change(getByLabelText('Data de Check-in'), { target: { value: '2027-05-01' } });
-  fireEvent.change(getByLabelText('Data de Check-out'), { target: { value: '2027-05-04' } });
-  fireEvent.click(getByRole('button', { name: 'Buscar hospedagens termais' }));
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-24"]')!,
+  );
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-27"]')!,
+  );
+  fireEvent.click(getByRole('button', { name: 'Buscar Reserva' }));
 
   assert.equal(searches.length, 1);
   assert.deepEqual(searches[0], {
-    checkIn: '2027-05-01',
-    checkOut: '2027-05-04',
+    checkIn: '2026-11-24',
+    checkOut: '2026-11-27',
+    dateFlexibility: 0,
     persons: 1,
     guests: { adults: 1, children: 0, infants: 0, pets: 0 },
     destination: '',
@@ -178,14 +184,18 @@ test('resynchronizes destination and dates when external search filters change w
   );
 
   fireEvent.click(getByRole('tab', { name: 'Datas' }));
-  fireEvent.change(getByLabelText('Data de Check-in'), { target: { value: '2027-05-10' } });
-  fireEvent.change(getByLabelText('Data de Check-out'), { target: { value: '2027-05-12' } });
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-24"]')!,
+  );
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-26"]')!,
+  );
 
   const restoredFilters: SearchFilters = {
     ...initialFilters,
     destination: 'Rio Quente',
-    checkIn: '2027-05-01',
-    checkOut: '2027-05-04',
+    checkIn: '2026-11-20',
+    checkOut: '2026-11-22',
     guests: { adults: 2, children: 1, infants: 1, pets: 1 },
   };
   rerender(
@@ -199,8 +209,14 @@ test('resynchronizes destination and dates when external search filters change w
     }),
   );
 
-  assert.equal((getByLabelText('Data de Check-in') as HTMLInputElement).value, '2027-05-01');
-  assert.equal((getByLabelText('Data de Check-out') as HTMLInputElement).value, '2027-05-04');
+  assert.equal(
+    document.querySelector('button[data-calendar-day="2026-11-20"]')?.getAttribute('aria-pressed'),
+    'true',
+  );
+  assert.equal(
+    document.querySelector('button[data-calendar-day="2026-11-22"]')?.getAttribute('aria-pressed'),
+    'true',
+  );
   assert.ok(getByRole('tab', { name: 'Hóspedes (4)' }));
   fireEvent.click(getByRole('tab', { name: 'Destino' }));
   assert.equal(
@@ -211,7 +227,7 @@ test('resynchronizes destination and dates when external search filters change w
 
 test('keeps the search open and explains incomplete or reversed dates', () => {
   let searchCount = 0;
-  const { getByLabelText, getByRole, queryByRole } = render(
+  const { getByRole, queryByRole } = render(
     React.createElement(SearchModal, {
       isOpen: true,
       onClose: () => {},
@@ -225,11 +241,12 @@ test('keeps the search open and explains incomplete or reversed dates', () => {
   );
 
   fireEvent.click(getByRole('tab', { name: 'Datas' }));
-  fireEvent.change(getByLabelText('Data de Check-in'), { target: { value: '2027-05-04' } });
-  fireEvent.change(getByLabelText('Data de Check-out'), { target: { value: '2027-05-01' } });
-  fireEvent.click(getByRole('button', { name: 'Buscar hospedagens termais' }));
+  fireEvent.click(
+    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-24"]')!,
+  );
+  fireEvent.click(getByRole('button', { name: 'Buscar Reserva' }));
 
-  assert.ok(getByRole('alert').textContent?.includes('check-out posterior ao check-in'));
+  assert.ok(getByRole('alert').textContent?.includes('Escolha datas futuras'));
   assert.equal(searchCount, 0);
   assert.ok(queryByRole('dialog', { name: 'Buscar hospedagens' }));
 });

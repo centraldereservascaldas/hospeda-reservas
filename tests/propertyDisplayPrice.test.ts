@@ -65,14 +65,16 @@ test('marks converted display currencies as approximate while keeping BRL exact'
   assert.match(formatCurrency(100, 'EUR'), /^≈\s/);
 });
 
-test('an expired quote loses its total and requires explicit revalidation', () => {
+test('an expired search quote stays visible while explicit-date checkout still revalidates it', () => {
   const expired = {
     ...quotedProperty,
     calculatedPrice: { ...quotedProperty.calculatedPrice, expiresAt: 1 },
   };
   assert.deepEqual(getPropertyDisplayPrice(expired, true, true), {
-    kind: 'pending',
-    message: 'Cotação expirada; atualize a disponibilidade',
+    kind: 'quote',
+    amount: 550,
+    detail: 'Total da estadia • 2 noites',
+    dailyRate: 250,
   });
   assert.equal(getPropertyDisplayPrice(expired, false, true).kind, 'select-dates');
 });

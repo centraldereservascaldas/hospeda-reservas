@@ -1,9 +1,12 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Heart, Star, Sparkles } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Heart, Star } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
-import { getPropertyDisplayPrice } from '../../utils/propertyDisplayPrice';
+import {
+  getConfirmedPropertyQuote,
+  getPropertyDisplayPrice,
+} from '../../utils/propertyDisplayPrice';
 import { getPropertyCardImageSources, CATALOG_IMAGE_SIZES } from '../../utils/propertyImageSources';
 import { accommodationPagePath } from '../../utils/accommodationPageUrl';
 
@@ -113,10 +116,18 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   };
 
   const displayPrice = getPropertyDisplayPrice(property, hasSearchDates, showTotalWithTaxes);
-  const hasConfirmedAvailability = availabilityConfirmed && displayPrice.kind === 'quote';
+  const hasConfirmedAvailability =
+    availabilityConfirmed && getConfirmedPropertyQuote(property) !== null;
+  const sixInstallmentAmount =
+    displayPrice.kind === 'quote' &&
+    showTotalWithTaxes &&
+    currency === 'BRL' &&
+    property.calculatedPrice
+      ? getSixInstallmentAmount(property.calculatedPrice.totalAmount)
+      : null;
 
   return (
-    <article className="group relative flex flex-col cursor-pointer transition-transform duration-200 p-2 sm:p-2.5 rounded-3xl liquid-glass border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-xl hover:-translate-y-1 transition-all">
+    <article className="group relative mx-2 flex flex-col cursor-pointer transition-transform duration-200 rounded-3xl border border-white/80 p-2 liquid-glass shadow-[0_4px_20px_rgba(0,0,0,0.03)] transition-all hover:-translate-y-1 hover:shadow-xl sm:mx-0 sm:p-2.5 md:p-3">
       <button
         type="button"
         data-property-detail-trigger={property.id}
@@ -135,7 +146,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         {/* Photo Carousel Container */}
         <div
           ref={photoCarouselRef}
-          className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-neutral-100/60 border border-white/80 shadow-2xs group-hover:shadow-md transition-all duration-300"
+          className="relative aspect-[4/3] w-full overflow-hidden rounded-[1.35rem] bg-neutral-100/60 border border-white/80 shadow-2xs group-hover:shadow-md transition-all duration-300"
           style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
         >
           {/* Images */}
@@ -158,25 +169,20 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
                 : `Salvar ${displayTitle} nos favoritos`
             }
             aria-pressed={isSaved}
-            className="pointer-events-auto absolute top-3 right-3 z-20 flex min-h-11 min-w-11 items-center justify-center rounded-full liquid-glass-button border border-white/40 bg-black/25 text-white shadow-sm transition-all hover:scale-115 hover:bg-black/45 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            className="pointer-events-auto absolute top-3 right-3 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-white/90 bg-white/95 text-neutral-900 shadow-md transition-all hover:scale-105 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
           >
             <Heart
-              className={`w-4 h-4 transition-colors duration-200 stroke-[2.2] ${
+              className={`h-5 w-5 transition-colors duration-200 stroke-[2.2] ${
                 isSaved
                   ? 'fill-orange-500 text-orange-500 stroke-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]'
-                  : 'stroke-white hover:stroke-orange-300'
+                  : 'stroke-neutral-900 hover:stroke-orange-700'
               }`}
             />
           </button>
 
-          {/* Badge: highlight preferred listings or certified host */}
+          {/* Host badge */}
           <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-3.75rem)] pointer-events-none">
-            {property.staysSynced && property.isGuestFavorite ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full liquid-glass text-caption font-black text-neutral-900 shadow-sm border border-white/90 truncate">
-                <Sparkles className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
-                <span className="truncate">Preferido dos hóspedes</span>
-              </span>
-            ) : property.staysSynced && property.isSuperhost ? (
+            {property.staysSynced && property.isSuperhost ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full liquid-glass text-caption font-bold text-neutral-900 shadow-sm border border-white/90 truncate">
                 <span className="truncate">Anfitrião destaque</span>
               </span>
@@ -239,10 +245,10 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         </div>
 
         {/* Info Content with High Legibility */}
-        <div className="mt-3 px-1 flex flex-col gap-0.5 text-xs">
+        <div className="mt-4 flex flex-col gap-2 px-2 pb-2 text-sm sm:mt-3 sm:gap-1 sm:pb-1">
           {/* Title & Rating */}
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-extrabold text-neutral-950 text-sm sm:text-base leading-snug line-clamp-1 group-hover:text-orange-600 transition-colors">
+            <h3 className="font-extrabold text-neutral-950 text-base leading-snug line-clamp-1 group-hover:text-orange-600 transition-colors">
               <a
                 href={accommodationPagePath(property)}
                 className="pointer-events-auto rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
@@ -275,7 +281,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           </div>
 
           {/* Location & Caldas Novas • GO */}
-          <p className="text-neutral-500 font-medium text-caption truncate mt-0.5">
+          <p className="text-neutral-500 font-medium text-sm truncate">
             {property.location.city} • {property.location.state}
           </p>
 
@@ -291,7 +297,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           )}
 
           {/* Room & Guest capacity */}
-          <p className="text-neutral-700 font-semibold text-caption mt-0.5">
+          <p className="text-neutral-700 font-semibold text-sm">
             {property.bedrooms} {property.bedrooms === 1 ? 'quarto' : 'quartos'} •{' '}
             {property.maxGuests} hóspedes {property.beds ? `• ${property.beds} camas` : ''}
           </p>
@@ -299,16 +305,16 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           {/* Search total pricing */}
           <div id={priceDescriptionId} className="mt-1 flex items-baseline gap-1">
             {displayPrice.kind === 'quote' || displayPrice.kind === 'reference' ? (
-              <div className="flex flex-col">
-                <span className="font-black text-base sm:text-lg text-neutral-950">
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-base font-black text-neutral-950 sm:text-lg">
                   {formatCurrency(displayPrice.amount, currency)}
                 </span>
-                <span className="text-caption font-semibold text-neutral-600">
+                <span className="text-caption font-medium text-neutral-600">
                   {displayPrice.detail}
                 </span>
-                {displayPrice.kind === 'quote' && displayPrice.dailyRate !== undefined && (
-                  <span className="text-caption font-semibold text-neutral-600">
-                    {formatCurrency(displayPrice.dailyRate, currency)} por noite
+                {sixInstallmentAmount !== null && (
+                  <span className="inline-flex w-fit items-center rounded-full border border-neutral-200 bg-white/75 px-2 py-1 text-caption font-semibold text-neutral-600">
+                    6x {formatCurrency(sixInstallmentAmount, 'BRL')}
                   </span>
                 )}
                 {displayPrice.kind === 'reference' && (
@@ -326,3 +332,13 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
     </article>
   );
 };
+
+function getSixInstallmentAmount(total: number): number | null {
+  const totalCents = Math.round(total * 100);
+  if (!Number.isSafeInteger(totalCents) || totalCents < 1) return null;
+
+  const totalWithCardRateCents = Math.ceil((totalCents * 10_000) / (10_000 - 1_800));
+  if (Math.floor(totalWithCardRateCents / 6) < 500) return null;
+
+  return Math.ceil(totalWithCardRateCents / 6) / 100;
+}

@@ -7,6 +7,7 @@ const DEFAULTS: SearchFilters = {
   destinationPropertyId: '',
   checkIn: '',
   checkOut: '',
+  dateFlexibility: 0,
   guests: { adults: 1, children: 0, infants: 0, pets: 0 },
   category: 'all',
   minPrice: 0,
@@ -14,13 +15,14 @@ const DEFAULTS: SearchFilters = {
   propertyTypes: [],
   amenities: [],
   minBedrooms: 0,
+  minBeds: 0,
   minBaths: 0,
   superhostOnly: false,
   instantBookOnly: false,
 };
 
 const CATEGORY_IDS = new Set(CATEGORIES.map(({ id }) => id));
-const PROPERTY_TYPE_IDS = new Set(['entire_place', 'cabin', 'villa']);
+const PROPERTY_TYPE_IDS = new Set(['entire_place', 'private_room', 'cabin', 'villa']);
 const SEARCH_PARAMETER_KEYS = [
   'from',
   'to',
@@ -28,24 +30,58 @@ const SEARCH_PARAMETER_KEYS = [
   'checkOut',
   'checkin',
   'checkout',
+  'date_picker_type',
+  'flexDays',
   'guests',
   'persons',
   'adults',
   'children',
   'infants',
   'pets',
+  'query',
   'destination',
   'propertyId',
   'category',
   'minPrice',
   'maxPrice',
-  'type',
+  'price_min',
+  'price_max',
   'amenity',
+  'amenities[]',
   'minBedrooms',
+  'minBeds',
   'minBaths',
+  'min_bedrooms',
+  'min_beds',
+  'min_bathrooms',
+  'type',
+  'property_type',
   'superhost',
+  'superhostOnly',
   'instantBook',
+  'instant_book',
+  'instantBookOnly',
 ];
+
+export function buildCondominiumDirectoryUrl(search: string): string {
+  const params = new URLSearchParams();
+  new URLSearchParams(search).forEach((value, key) => {
+    if (key.toLowerCase().startsWith('utm_')) params.append(key, value);
+  });
+  const query = params.toString();
+
+  return query ? `/condominios?${query}` : '/condominios';
+}
+
+export function buildHomeUrl(search: string): string {
+  const params = new URLSearchParams();
+  new URLSearchParams(search).forEach((value, key) => {
+    if (key.toLowerCase().startsWith('utm_')) params.append(key, value);
+  });
+  const query = params.toString();
+
+  return query ? `/?${query}` : '/';
+}
 
 function firstValue(params: URLSearchParams, ...keys: string[]): string | null {
   for (const key of keys) {
@@ -71,10 +107,6 @@ function isValidDate(value: string | null): value is string {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-}
-
-function parseBoolean(value: string | null): boolean {
-  return value === '1' || value?.toLowerCase() === 'true';
 }
 
 function parseList(
@@ -114,17 +146,21 @@ export function parseSearchFilters(search: string): SearchFilters {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
   const filters = createDefaultSearchFilters();
 
-  const checkIn = firstValue(params, 'from', 'checkIn', 'checkin');
-  const checkOut = firstValue(params, 'to', 'checkOut', 'checkout');
+  const checkIn = firstValue(params, 'checkin', 'from', 'checkIn');
+  const checkOut = firstValue(params, 'checkout', 'to', 'checkOut');
   if (isValidDate(checkIn) && isValidDate(checkOut) && checkOut > checkIn) {
     filters.checkIn = checkIn;
     filters.checkOut = checkOut;
   }
 
+  const flexDays = params.get('flexDays');
+  filters.dateFlexibility = flexDays === '1' ? 1 : flexDays === '2' ? 2 : 0;
+
   const guestsParam = firstValue(params, 'persons', 'guests');
   const totalGuests = guestsParam === null ? null : parseInteger(guestsParam, -1, 1, 17);
   const adultsParam = params.get('adults');
   const childrenParam = params.get('children');
+  const infants = parseInteger(params.get('infants'), 0, 0, 17);
   const children = parseInteger(childrenParam, 0, 0, 17);
   const adults =
     adultsParam === null
@@ -134,29 +170,43 @@ export function parseSearchFilters(search: string): SearchFilters {
       : parseInteger(adultsParam, 1, 1, 17);
   filters.guests.adults = adults;
   filters.guests.children = Math.min(children, 17 - adults);
-  filters.guests.infants = parseInteger(params.get('infants'), 0, 0, 17);
+  filters.guests.infants = Math.min(infants, 17 - adults - filters.guests.children);
   filters.guests.pets = parseInteger(params.get('pets'), 0, 0, 17);
 
-  const destination = params.get('destination')?.trim() ?? '';
+  const destination = firstValue(params, 'query', 'destination')?.trim() ?? '';
   filters.destination = destination.slice(0, 160);
   filters.destinationPropertyId = (params.get('propertyId')?.trim() ?? '').slice(0, 100);
 
   const category = params.get('category');
   if (category && CATEGORY_IDS.has(category)) filters.category = category;
 
-  const minPrice = parsePrice(params.get('minPrice'), 0);
-  const maxPrice = parsePrice(params.get('maxPrice'), 5000);
+  const minPrice = parsePrice(firstValue(params, 'price_min', 'minPrice'), 0);
+  const maxPrice = parsePrice(firstValue(params, 'price_max', 'maxPrice'), 5000);
   if (minPrice <= maxPrice) {
     filters.minPrice = minPrice;
     filters.maxPrice = maxPrice;
   }
 
-  filters.propertyTypes = parseList(params, 'type', PROPERTY_TYPE_IDS);
-  filters.amenities = parseList(params, 'amenity', undefined, getAmenityFilterIdentity);
-  filters.minBedrooms = parseInteger(params.get('minBedrooms'), 0, 0, 30);
-  filters.minBaths = parseInteger(params.get('minBaths'), 0, 0, 30);
-  filters.superhostOnly = parseBoolean(params.get('superhost'));
-  filters.instantBookOnly = parseBoolean(params.get('instantBook'));
+  filters.propertyTypes = [
+    ...new Set([
+      ...parseList(params, 'property_type', PROPERTY_TYPE_IDS),
+      ...parseList(params, 'type', PROPERTY_TYPE_IDS),
+    ]),
+  ].slice(0, 20);
+  filters.amenities = [
+    ...new Map(
+      [...parseList(params, 'amenities[]'), ...parseList(params, 'amenity')].map((amenity) => [
+        getAmenityFilterIdentity(amenity),
+        amenity,
+      ]),
+    ).values(),
+  ].slice(0, 20);
+  filters.minBedrooms = parseInteger(firstValue(params, 'min_bedrooms', 'minBedrooms'), 0, 0, 30);
+  filters.minBeds = parseInteger(firstValue(params, 'min_beds', 'minBeds'), 0, 0, 30);
+  filters.minBaths = parseInteger(firstValue(params, 'min_bathrooms', 'minBaths'), 0, 0, 30);
+  // Legacy booking flags are ignored until their values are backed by trustworthy catalog data.
+  filters.superhostOnly = false;
+  filters.instantBookOnly = false;
 
   return filters;
 }
@@ -175,34 +225,35 @@ export function serializeSearchFilters(filters: SearchFilters): string {
     isValidDate(filters.checkOut) &&
     filters.checkOut > filters.checkIn
   ) {
-    params.set('from', filters.checkIn);
-    params.set('to', filters.checkOut);
+    params.set('checkin', filters.checkIn);
+    params.set('checkout', filters.checkOut);
   }
 
-  const totalGuests = filters.guests.adults + filters.guests.children;
-  if (totalGuests !== 1) params.set('guests', String(totalGuests));
+  if (filters.checkIn && filters.checkOut && filters.dateFlexibility)
+    params.set('flexDays', String(filters.dateFlexibility));
+
   if (filters.guests.adults !== 1) params.set('adults', String(filters.guests.adults));
   if (filters.guests.children > 0) params.set('children', String(filters.guests.children));
   if (filters.guests.infants > 0) params.set('infants', String(filters.guests.infants));
   if (filters.guests.pets > 0) params.set('pets', String(filters.guests.pets));
 
-  if (filters.destination) params.set('destination', filters.destination);
+  if (filters.destination) params.set('query', filters.destination);
   if (filters.destinationPropertyId) params.set('propertyId', filters.destinationPropertyId);
   if (filters.category !== 'all' && CATEGORY_IDS.has(filters.category))
     params.set('category', filters.category);
-  if (filters.minPrice > 0) params.set('minPrice', String(filters.minPrice));
-  if (filters.maxPrice < 5000) params.set('maxPrice', String(filters.maxPrice));
+  if (filters.minPrice > 0) params.set('price_min', String(filters.minPrice));
+  if (filters.maxPrice < 5000) params.set('price_max', String(filters.maxPrice));
   for (const propertyType of filters.propertyTypes) {
-    if (PROPERTY_TYPE_IDS.has(propertyType)) params.append('type', propertyType);
+    if (propertyType.trim() && propertyType.length <= 80)
+      params.append('property_type', propertyType);
   }
   for (const amenity of filters.amenities) {
-    if (amenity.trim() && amenity.length <= 80) params.append('amenity', amenity);
+    if (amenity.trim() && amenity.length <= 80) params.append('amenities[]', amenity);
   }
-  if (filters.minBedrooms > 0) params.set('minBedrooms', String(filters.minBedrooms));
-  if (filters.minBaths > 0) params.set('minBaths', String(filters.minBaths));
-  if (filters.superhostOnly) params.set('superhost', 'true');
-  if (filters.instantBookOnly) params.set('instantBook', 'true');
-
+  if (filters.minBedrooms > 0) params.set('min_bedrooms', String(filters.minBedrooms));
+  const minBeds = filters.minBeds ?? 0;
+  if (minBeds > 0) params.set('min_beds', String(minBeds));
+  if (filters.minBaths > 0) params.set('min_bathrooms', String(filters.minBaths));
   return params.toString();
 }
 

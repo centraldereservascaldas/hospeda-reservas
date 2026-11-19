@@ -553,14 +553,14 @@ test('shares the current stay dates and guest count while preserving tracking pa
     fireEvent.click(dateTrigger);
     const calendar = getByRole('dialog', { name: 'Escolha as datas' });
     const checkInDate = calendar.querySelector<HTMLButtonElement>(
-      'button[aria-label*="12 de novembro de 2026"]',
+      'button[aria-label*="22 de novembro de 2026"]',
     );
     assert.ok(checkInDate);
     await waitFor(() => assert.equal(checkInDate.disabled, false));
     fireEvent.click(checkInDate);
 
     const checkOutDate = calendar.querySelector<HTMLButtonElement>(
-      'button[aria-label*="18 de novembro de 2026"]',
+      'button[aria-label*="28 de novembro de 2026"]',
     );
     assert.ok(checkOutDate);
     await waitFor(() => assert.equal(checkOutDate.disabled, false));
@@ -578,9 +578,8 @@ test('shares the current stay dates and guest count while preserving tracking pa
 
     await waitFor(() => {
       const currentUrl = new URL(window.location.href);
-      assert.equal(currentUrl.searchParams.get('from'), '2026-11-12');
-      assert.equal(currentUrl.searchParams.get('to'), '2026-11-18');
-      assert.equal(currentUrl.searchParams.get('guests'), '4');
+      assert.equal(currentUrl.searchParams.get('checkin'), '2026-11-22');
+      assert.equal(currentUrl.searchParams.get('checkout'), '2026-11-28');
       assert.equal(currentUrl.searchParams.get('adults'), '3');
       assert.equal(currentUrl.searchParams.get('children'), '1');
     });
@@ -593,9 +592,8 @@ test('shares the current stay dates and guest count while preserving tracking pa
     const sharedUrl = new URL(copiedText);
     assert.equal(sharedUrl.pathname, accommodationPagePath(STAYS_NET_APARTMENTS[0]!));
     assert.equal(sharedUrl.searchParams.get('utm_source'), 'share');
-    assert.equal(sharedUrl.searchParams.get('from'), '2026-11-12');
-    assert.equal(sharedUrl.searchParams.get('to'), '2026-11-18');
-    assert.equal(sharedUrl.searchParams.get('guests'), '4');
+    assert.equal(sharedUrl.searchParams.get('checkin'), '2026-11-22');
+    assert.equal(sharedUrl.searchParams.get('checkout'), '2026-11-28');
     assert.equal(sharedUrl.searchParams.get('adults'), '3');
     assert.equal(sharedUrl.searchParams.get('children'), '1');
 
@@ -608,9 +606,9 @@ test('shares the current stay dates and guest count while preserving tracking pa
 
     await waitFor(() => {
       const returnedUrl = new URL(window.location.href);
-      assert.equal(returnedUrl.searchParams.get('from'), '2026-11-12');
-      assert.equal(returnedUrl.searchParams.get('to'), '2026-11-18');
-      assert.equal(returnedUrl.searchParams.get('guests'), '4');
+      assert.equal(returnedUrl.searchParams.get('checkin'), '2026-11-22');
+      assert.equal(returnedUrl.searchParams.get('checkout'), '2026-11-28');
+      assert.equal(returnedUrl.searchParams.get('adults'), '3');
       assert.equal(returnedUrl.searchParams.get('utm_source'), 'share');
     });
   } finally {
@@ -654,17 +652,17 @@ test('updates the address when dates change in the property dialog', async () =>
     );
     const calendar = getByRole('dialog', { name: 'Escolha as datas' });
     const arrival = calendar.querySelector<HTMLButtonElement>(
-      'button[aria-label*="12 de novembro de 2026"]',
+      'button[aria-label*="22 de novembro de 2026"]',
     )!;
     await waitFor(() => assert.equal(arrival.disabled, false));
     fireEvent.click(arrival);
     fireEvent.click(
-      calendar.querySelector<HTMLButtonElement>('button[aria-label*="18 de novembro de 2026"]')!,
+      calendar.querySelector<HTMLButtonElement>('button[aria-label*="28 de novembro de 2026"]')!,
     );
     fireEvent.click(getByRole('button', { name: 'Aplicar datas' }));
     await waitFor(() => {
-      assert.equal(new URL(window.location.href).searchParams.get('from'), '2026-11-12');
-      assert.equal(new URL(window.location.href).searchParams.get('to'), '2026-11-18');
+      assert.equal(new URL(window.location.href).searchParams.get('checkin'), '2026-11-22');
+      assert.equal(new URL(window.location.href).searchParams.get('checkout'), '2026-11-28');
     });
     fireEvent.click(
       container.querySelector<HTMLButtonElement>(
@@ -675,10 +673,9 @@ test('updates the address when dates change in the property dialog', async () =>
     fireEvent.click(getByRole('button', { name: 'Aplicar' }));
     await waitFor(() => {
       const params = new URL(window.location.href).searchParams;
-      assert.equal(params.get('guests'), '3');
       assert.equal(params.get('adults'), '3');
-      assert.equal(params.get('from'), '2026-11-12');
-      assert.equal(params.get('to'), '2026-11-18');
+      assert.equal(params.get('checkin'), '2026-11-22');
+      assert.equal(params.get('checkout'), '2026-11-28');
     });
   } finally {
     crcnBackendApi.getAccommodationCalendar = originalGetCalendar;

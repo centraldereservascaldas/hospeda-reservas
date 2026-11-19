@@ -15,6 +15,7 @@ Object.assign(globalThis, {
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup } = await import('@testing-library/react');
 const { Header } = await import('../src/components/Header.tsx');
+const { readFileSync } = await import('node:fs');
 
 test('header compacts only on short mobile viewports while preserving its touch target sizing', () => {
   const { container } = render(
@@ -41,6 +42,73 @@ test('header compacts only on short mobile viewports while preserving its touch 
       button.className.includes('min-h-11'),
     ),
   );
+});
+
+test('compact desktop search reserves space for the currency and account controls', () => {
+  const { container } = render(
+    React.createElement(Header, {
+      onOpenSearch: () => {},
+      currentView: 'explore',
+      compactSearch: true,
+      setCurrentView: () => {},
+      currency: 'BRL',
+      setCurrency: () => {},
+      tripsCount: 0,
+      isAccountConnected: false,
+      onOpenAccount: () => {},
+      onSignOut: async () => {},
+      ownerAccessStatus: 'none',
+      ownerRequestLoading: false,
+      onRequestOwnerAccess: async () => {},
+      isOwnerAdmin: false,
+    }),
+  );
+
+  const search = container.querySelector<HTMLElement>('[data-shared-search="compact"]');
+  const currency = container.querySelector('button[aria-label^="Moeda de exibição BRL"]');
+  const account = container.querySelector('button[aria-label="Minha Conta"]');
+  const stylesheet = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+
+  assert.equal(search?.dataset.compactSearch, 'true');
+  assert.ok(search?.className.includes('header-compact-search'));
+  assert.ok(currency);
+  assert.ok(account);
+  assert.match(stylesheet, /calc\(100vw - var\(--header-edge-spacing\) \* 2 - 32rem\)/);
+  assert.match(stylesheet, /--header-compact-search-width: 16rem/);
+  assert.match(stylesheet, /--header-compact-search-width: 22rem/);
+  assert.match(stylesheet, /calc\(100vw - var\(--header-edge-spacing\) \* 2 - 36rem\)/);
+});
+
+test('mobile search prompt has prominent text and a larger search icon', () => {
+  const { container } = render(
+    React.createElement(Header, {
+      onOpenSearch: () => {},
+      currentView: 'explore',
+      setCurrentView: () => {},
+      currency: 'BRL',
+      setCurrency: () => {},
+      tripsCount: 0,
+      isAccountConnected: false,
+      onOpenAccount: () => {},
+      onSignOut: async () => {},
+      ownerAccessStatus: 'none',
+      ownerRequestLoading: false,
+      onRequestOwnerAccess: async () => {},
+      isOwnerAdmin: false,
+    }),
+  );
+
+  const searchButton = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Iniciar busca"]',
+  );
+  assert.ok(searchButton);
+  const searchIcon = searchButton.querySelector('svg');
+  const searchLabel = searchButton.querySelector('span.text-base');
+
+  assert.ok(searchIcon?.classList.contains('h-6'));
+  assert.ok(searchIcon?.classList.contains('w-6'));
+  assert.equal(searchLabel?.textContent, 'Iniciar busca');
+  assert.ok(searchLabel?.classList.contains('font-bold'));
 });
 
 afterEach(() => {

@@ -96,63 +96,16 @@ test('explore route renders the property catalog and delegates selection', () =>
   assert.deepEqual(selectedProperties, [STAYS_NET_APARTMENTS[0]!.id]);
 });
 
-test('mobile explore layout keeps search and Sofia actions through 390px while deferring the full search form', () => {
-  let openedSearch = 0;
-  let openedAssistant = 0;
-  const { getAllByRole, getByRole } = render(
-    React.createElement(MainContentRouter, {
-      ...createRouterProps({
-        onOpenSearch: () => {
-          openedSearch += 1;
-        },
-        onOpenAssistant: () => {
-          openedAssistant += 1;
-        },
-      }),
-    }),
-  );
-
-  const searchButton = getByRole('button', { name: 'Pesquisar datas e hóspedes' });
-  const assistantButton = getAllByRole('button', {
-    name: 'Falar com Sofia, assistente virtual',
-  })[0]!;
-  const inlineSearch = getByRole('search');
-
-  assert.equal(searchButton.textContent, 'Datas e hóspedes');
-  assert.match(searchButton.className, /min-h-11/);
-  assert.match(searchButton.parentElement?.className ?? '', /min-\[400px\]:hidden/);
-  assert.match(
-    inlineSearch.parentElement?.parentElement?.parentElement?.className ?? '',
-    /max-\[399px\]:hidden/,
-  );
-
-  fireEvent.click(searchButton);
-  fireEvent.click(assistantButton);
-
-  assert.equal(openedSearch, 1);
-  assert.equal(openedAssistant, 1);
-});
-
-test('short landscape explore layout replaces the tall inline search with compact actions', () => {
-  const { getAllByRole, getByRole } = render(
+test('explore content leaves search and assistant actions to the shared header', () => {
+  const { getByRole, queryByRole } = render(
     React.createElement(MainContentRouter, {
       ...createRouterProps(),
     }),
   );
 
-  const searchButton = getByRole('button', { name: 'Pesquisar datas e hóspedes' });
-  const assistantButton = getAllByRole('button', {
-    name: 'Falar com Sofia, assistente virtual',
-  })[0]!;
-  const inlineSearch = getByRole('search');
-
-  assert.match(searchButton.parentElement?.className ?? '', /\[@media\(max-height:400px\)\]:grid/);
-  assert.match(searchButton.parentElement?.className ?? '', /\[@media\(max-height:400px\)\]:mb-1/);
-  assert.match(
-    inlineSearch.parentElement?.parentElement?.parentElement?.className ?? '',
-    /\[@media\(max-height:400px\)\]:hidden/,
-  );
-  assert.ok(assistantButton);
+  assert.ok(getByRole('main'));
+  assert.equal(queryByRole('search'), null);
+  assert.equal(queryByRole('button', { name: 'Falar com Sofia, assistente virtual' }), null);
 });
 
 test('simulated catalogue shows its warning before the search and results', () => {
@@ -172,13 +125,9 @@ test('simulated catalogue shows its warning before the search and results', () =
     status.textContent,
     'Ambiente de simulação: preços e disponibilidade são fictícios. Reservas e pagamentos não são realizados.',
   );
-  assert.match(status.className, /max-height:400px/);
-  assert.match(status.className, /max-\[400px\]:text-xs/);
-  assert.match(status.className, /max-width:639px/);
-  assert.match(
-    getByRole('search').querySelector('.grid')?.className ?? '',
-    /\[@media\(min-width:480px\)_and_\(max-width:639px\)_and_\(max-height:400px\)\]:grid-cols-4/,
-  );
+  const catalog = document.getElementById('stays-apartments-catalog');
+  assert.ok(catalog);
+  assert.ok(status.compareDocumentPosition(catalog) & Node.DOCUMENT_POSITION_FOLLOWING);
 });
 
 test('trips route lazy loads the existing trips view with its empty state', async () => {

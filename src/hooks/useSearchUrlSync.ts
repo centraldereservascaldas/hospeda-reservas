@@ -4,7 +4,11 @@ import { mergeSearchFiltersIntoUrl } from '../utils/searchUrlState';
 
 export function useSearchUrlSync(filters: SearchFilters): void {
   useEffect(() => {
-    const search = mergeSearchFiltersIntoUrl(window.location.search, filters);
+    const filtersForUrl =
+      window.location.pathname.replace(/\/$/, '') === '/condominios'
+        ? { ...filters, category: 'all' }
+        : filters;
+    const search = mergeSearchFiltersIntoUrl(window.location.search, filtersForUrl);
     const nextSearch = search ? `?${search}` : '';
     if (nextSearch === window.location.search) return;
 

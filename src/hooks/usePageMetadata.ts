@@ -5,6 +5,9 @@ const GENERIC_TITLE = 'Central de Reservas Caldas Novas - Hospedagens e Parques 
 const GENERIC_DESCRIPTION =
   'Consulte hospedagens em Caldas Novas e região. Compare localização, capacidade e regras e selecione datas e hóspedes para verificar preços e disponibilidade.';
 const CHECKOUT_TITLE = 'Acompanhe seu pedido | CRCN';
+const CONDOMINIUMS_TITLE = 'Condomínios em Caldas Novas e região | CRCN';
+const CONDOMINIUMS_DESCRIPTION =
+  'Conheça os condomínios de Caldas Novas, compare localização e estrutura e encontre acomodações para a sua viagem.';
 const CLIENT_NAVIGATION_EVENT = 'crcn:navigation';
 
 interface ApprovedPropertyMetadata {
@@ -164,6 +167,17 @@ export function usePageMetadata(initialPathname: string): void {
       normalizedPathname === '/termos' ||
       normalizedPathname === '/cancelamento'
     ) {
+      return;
+    }
+
+    if (normalizedPathname === '/condominios') {
+      applyMetadata({
+        title: CONDOMINIUMS_TITLE,
+        description: CONDOMINIUMS_DESCRIPTION,
+        canonicalUrl: `${getHomeCanonical().replace(/\/$/, '')}/condominios`,
+        imageUrl: null,
+        noindex: false,
+      });
       return;
     }
 

@@ -200,6 +200,7 @@ export interface SearchFilters {
   destinationPropertyId?: string;
   checkIn: string;
   checkOut: string;
+  dateFlexibility?: 0 | 1 | 2;
   guests: {
     adults: number;
     children: number;
@@ -212,6 +213,7 @@ export interface SearchFilters {
   propertyTypes: string[];
   amenities: string[];
   minBedrooms: number;
+  minBeds?: number;
   minBaths: number;
   superhostOnly: boolean;
   instantBookOnly: boolean;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { afterEach } from 'node:test';
+import test, { afterEach, beforeEach, mock } from 'node:test';
 import { JSDOM } from 'jsdom';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
@@ -18,7 +18,12 @@ const { ActiveSearchFilters } = await import('../src/components/search/ActiveSea
 const { createDefaultSearchFilters } = await import('../src/utils/searchUrlState.ts');
 const { useSearchUrlSync } = await import('../src/hooks/useSearchUrlSync.ts');
 
+beforeEach(() => {
+  mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 3, 12) });
+});
+
 afterEach(() => {
+  mock.timers.reset();
   cleanup();
   document.body.innerHTML = '';
 });
@@ -33,8 +38,8 @@ test('names destination removal and preserves remaining filters until reset', ()
     guests: { adults: 3, children: 1, infants: 0, pets: 1 },
     minPrice: 100,
     amenities: ['Piscina'],
-    superhostOnly: true,
-    instantBookOnly: true,
+    superhostOnly: false,
+    instantBookOnly: false,
   };
   const changes: (typeof selectedFilters)[] = [];
   let destinationRemovalRequested = false;
@@ -60,13 +65,9 @@ test('names destination removal and preserves remaining filters until reset', ()
   fireEvent.click(screen.getByRole('button', { name: 'Remover filtro: destino' }));
   assert.equal(destinationRemovalRequested, true);
 
-  fireEvent.click(screen.getByRole('button', { name: 'Remover filtro: Apenas Superhost' }));
-  assert.equal(changes[0]?.superhostOnly, false);
-  assert.equal(changes[0]?.instantBookOnly, true);
-
   fireEvent.click(screen.getByRole('button', { name: 'Limpar filtros' }));
   assert.equal(clearFiltersRequested, true);
-  assert.equal(changes.length, 1);
+  assert.equal(changes.length, 0);
 });
 
 test('renders nothing when no destination or counted filter is active', () => {
@@ -130,7 +131,7 @@ test('keeps active property filters compact on mobile while preserving full-size
   );
 
   const group = screen.getByRole('group', { name: 'Filtros do imóvel ativos' });
-  assert.match(group.className, /gap-x-1 gap-y-1\.5 sm:gap-2/);
+  assert.match(group.className, /gap-2/);
   assert.match(screen.getByText('Filtros do imóvel:').className, /sr-only.*sm:not-sr-only/);
   for (const filter of ['Espaço inteiro', 'Wi-Fi', 'Piscina', '2+ quartos']) {
     assert.match(
@@ -287,9 +288,10 @@ test('removing an amenity chip updates the shared URL and preserves trip and cat
 
     const query = new URL(window.location.href).searchParams;
     assert.equal(query.has('amenity'), false);
-    assert.equal(query.get('from'), '2026-11-11');
-    assert.equal(query.get('to'), '2026-11-14');
-    assert.equal(query.get('guests'), '3');
+    assert.equal(query.get('checkin'), '2026-11-11');
+    assert.equal(query.get('checkout'), '2026-11-14');
+    assert.equal(query.get('adults'), '2');
+    assert.equal(query.get('children'), '1');
     assert.equal(query.get('category'), 'pools_24h');
   } finally {
     window.history.replaceState({}, '', originalUrl);

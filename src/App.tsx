@@ -4,6 +4,7 @@
  */
 
 import { lazy, Suspense, useEffect, useState, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Property, SearchFilters, Currency } from './types';
 import { Header } from './components/Header';
 import { AuthCallbackNotice } from './components/account/AuthCallbackNotice';
@@ -20,8 +21,16 @@ import { getAuthCallbackError } from './utils/authCallback';
 import { MainContentRouter } from './components/MainContentRouter';
 import { AppOverlayLayer } from './components/AppOverlayLayer';
 import type { AppOverlayBookingPayload } from './types/booking';
-import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
+import {
+  buildHomeUrl,
+  buildCondominiumDirectoryUrl,
+  createDefaultSearchFilters,
+  getAccommodationIdFromPath,
+  parseSearchFilters,
+} from './utils/searchUrlState';
+import { StaysSearchWidget } from './components/search/StaysSearchWidget';
 import { useSearchUrlSync } from './hooks/useSearchUrlSync';
+import { PAGE_METADATA_NAVIGATION_EVENT, usePageMetadata } from './hooks/usePageMetadata';
 import type { CondominiumSummary } from './utils/condominiumCatalog';
 import { useAccommodationCatalog } from './hooks/useAccommodationCatalog';
 import { useExploreCatalogViewModel } from './hooks/useExploreCatalogViewModel';
@@ -38,7 +47,6 @@ import { useSavedPropertyIds } from './hooks/useSavedPropertyIds';
 import { CHECKOUT_MODAL_HISTORY_ENTRY, useAppOverlayActions } from './hooks/useAppOverlayActions';
 import { focusWithoutScrolling } from './utils/focus';
 import { countOccupancyGuests } from './utils/guestCounts';
-import { usePageMetadata } from './hooks/usePageMetadata';
 import { LegalDocumentPage } from './components/LegalDocumentPage';
 import { existingReservationCodeFromPath } from './utils/checkoutUrl';
 import { NotFoundPage } from './components/NotFoundPage';
@@ -103,9 +111,58 @@ function MarketplaceApp() {
 
   // Currency & Display preferences
   const [currency, setCurrency] = useState<Currency>('BRL');
-  const [showTotalWithTaxes, setShowTotalWithTaxes] = useState<boolean>(true);
+  const showTotalWithTaxes = true;
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [currentView, setCurrentView] = useState<MainView>('explore');
+  const [isDesktopSearchCompact, setIsDesktopSearchCompact] = useState(false);
+  useEffect(() => {
+    let compact = false;
+    const desktop = window.matchMedia?.('(min-width: 640px)');
+    const update = () => {
+      const position = window.scrollY;
+      const next = Boolean(desktop?.matches) && (compact ? position > 1 : position > 32);
+      if (next !== compact) {
+        compact = next;
+        const supportsSharedTransition =
+          typeof (document as Document & { startViewTransition?: (update: () => void) => unknown })
+            .startViewTransition === 'function' &&
+          Boolean(document.querySelector('[data-shared-search="expanded"]')) &&
+          Boolean(document.querySelector('[data-shared-search="compact"]')) &&
+          !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+
+        if (!supportsSharedTransition) {
+          setIsDesktopSearchCompact(next);
+          return;
+        }
+
+        const transitionDocument = document as Document & {
+          startViewTransition?: (update: () => void) => unknown;
+          activeViewTransition?: unknown;
+        };
+        const applyState = () => {
+          if (compact === next) setIsDesktopSearchCompact(next);
+        };
+
+        if (transitionDocument.activeViewTransition) {
+          setIsDesktopSearchCompact(next);
+          return;
+        }
+
+        try {
+          transitionDocument.startViewTransition?.(() => flushSync(applyState));
+        } catch {
+          setIsDesktopSearchCompact(next);
+        }
+      }
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    desktop?.addEventListener('change', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      desktop?.removeEventListener('change', update);
+    };
+  }, []);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
   const currentViewRef = useRef(currentView);
   currentViewRef.current = currentView;
@@ -237,11 +294,26 @@ function MarketplaceApp() {
   };
 
   // Search & Filter State
-  const [filters, setFilters] = useState<SearchFilters>(() =>
-    parseSearchFilters(window.location.search),
-  );
+  const [filters, setFilters] = useState<SearchFilters>(() => {
+    const initialFilters = parseSearchFilters(window.location.search);
+    return window.location.pathname.replace(/\/$/, '') === '/condominios'
+      ? { ...initialFilters, category: 'condominiums' }
+      : initialFilters;
+  });
   const defaultFilters = createDefaultSearchFilters();
   useSearchUrlSync(filters);
+  useEffect(() => {
+    const restoreFiltersFromLocation = () => {
+      const nextFilters = parseSearchFilters(window.location.search);
+      setFilters(
+        window.location.pathname.replace(/\/$/, '') === '/condominios'
+          ? { ...nextFilters, category: 'condominiums' }
+          : nextFilters,
+      );
+    };
+    window.addEventListener('popstate', restoreFiltersFromLocation);
+    return () => window.removeEventListener('popstate', restoreFiltersFromLocation);
+  }, []);
   const {
     handleSelectProperty,
     handleClosePropertyDetail,
@@ -256,7 +328,7 @@ function MarketplaceApp() {
   });
 
   const {
-    handleStaysWidgetSearch,
+    handleStaysWidgetSearch: searchAccommodations,
     retryLastSearch,
     availabilitySearchState,
     searchPagination,
@@ -266,6 +338,17 @@ function MarketplaceApp() {
     setFilters,
     restoreSearchFromUrlRef,
   });
+
+  const handleStaysWidgetSearch: typeof searchAccommodations = (...args) => {
+    if (
+      window.location.pathname !== '/s/homes' &&
+      !getAccommodationIdFromPath(window.location.pathname)
+    ) {
+      window.history.pushState(window.history.state, '', `/s/homes${window.location.search}`);
+      window.dispatchEvent(new Event(PAGE_METADATA_NAVIGATION_EVENT));
+    }
+    return searchAccommodations(...args);
+  };
 
   const {
     filteredProperties,
@@ -288,6 +371,7 @@ function MarketplaceApp() {
     void handleStaysWidgetSearch({
       checkIn: filters.checkIn,
       checkOut: filters.checkOut,
+      dateFlexibility: filters.dateFlexibility,
       persons: countOccupancyGuests(filters.guests),
       guests: filters.guests,
     });
@@ -309,11 +393,51 @@ function MarketplaceApp() {
     void handleStaysWidgetSearch({
       checkIn: filters.checkIn,
       checkOut: filters.checkOut,
+      dateFlexibility: filters.dateFlexibility,
       persons: countOccupancyGuests(guests),
       guests,
       destination: filters.destination,
       propertyId: filters.destinationPropertyId,
     });
+  };
+
+  const handleSelectCategory = (categoryId: string) => {
+    const isCondominiumRoute = window.location.pathname.replace(/\/$/, '') === '/condominios';
+    if ((categoryId === 'condominiums') === isCondominiumRoute) {
+      setFilters((current) => ({ ...current, category: categoryId }));
+      return;
+    }
+
+    const navigate = () => {
+      window.history.pushState(
+        window.history.state,
+        '',
+        categoryId === 'condominiums'
+          ? buildCondominiumDirectoryUrl(window.location.search)
+          : buildHomeUrl(window.location.search),
+      );
+      setFilters({ ...createDefaultSearchFilters(), category: categoryId });
+      setViewMode('grid');
+      window.dispatchEvent(new Event(PAGE_METADATA_NAVIGATION_EVENT));
+    };
+    const transitionDocument = document as Document & {
+      startViewTransition?: (update: () => void) => unknown;
+      activeViewTransition?: unknown;
+    };
+    if (
+      typeof transitionDocument.startViewTransition === 'function' &&
+      !transitionDocument.activeViewTransition &&
+      !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
+    ) {
+      try {
+        transitionDocument.startViewTransition(() => flushSync(navigate));
+        return;
+      } catch {
+        navigate();
+        return;
+      }
+    }
+    navigate();
   };
 
   const handleClearSearchFilters = () => {
@@ -334,6 +458,7 @@ function MarketplaceApp() {
       propertyTypes: [],
       amenities: [],
       minBedrooms: defaultFilters.minBedrooms,
+      minBeds: defaultFilters.minBeds ?? 0,
       minBaths: defaultFilters.minBaths,
       superhostOnly: false,
       instantBookOnly: false,
@@ -349,6 +474,7 @@ function MarketplaceApp() {
       propertyTypes: [],
       amenities: [],
       minBedrooms: defaultFilters.minBedrooms,
+      minBeds: defaultFilters.minBeds ?? 0,
       minBaths: defaultFilters.minBaths,
       superhostOnly: false,
       instantBookOnly: false,
@@ -382,7 +508,7 @@ function MarketplaceApp() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 selection:bg-orange-500/20 selection:text-orange-950">
+    <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 [overflow-anchor:none] selection:bg-orange-500/20 selection:text-orange-950">
       {authCallbackNotice && (
         <AuthCallbackNotice
           message={authCallbackNotice}
@@ -400,6 +526,17 @@ function MarketplaceApp() {
         setCurrency={setCurrency}
         tripsCount={reservations.filter((r) => r.status === 'confirmed').length}
         searchSummaryText={filters.destination || undefined}
+        compactSearch={currentView === 'explore' && isDesktopSearchCompact}
+        searchDateSummary={
+          filters.checkIn && filters.checkOut
+            ? `${new Date(`${filters.checkIn}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })} - ${new Date(`${filters.checkOut}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}`
+            : 'Qualquer dia'
+        }
+        searchGuestSummary={`${countOccupancyGuests(filters.guests)} ${countOccupancyGuests(filters.guests) === 1 ? 'hóspede' : 'hóspedes'}`}
+        onCreateListing={() => setIsCreateListingOpen(true)}
+        categories={availableCategories}
+        selectedCategory={filters.category}
+        onSelectCategory={handleSelectCategory}
         accountName={String(
           accountSession?.user.user_metadata?.full_name ||
             accountSession?.user.user_metadata?.name ||
@@ -414,26 +551,28 @@ function MarketplaceApp() {
         ownerRequestLoading={ownerRequestLoading}
         onRequestOwnerAccess={handleRequestOwnerAccess}
         isOwnerAdmin={isOwnerAdmin}
+        toolbar={
+          currentView === 'explore' ? (
+            <CategoryBar
+              availableCategories={availableCategories}
+              selectedCategory={filters.category}
+              onSelectCategory={handleSelectCategory}
+              onOpenFilters={() => setIsFilterOpen(true)}
+              activeFilterCount={activeFilterCount}
+              isCondominiumView={isCondominiumView}
+              compact={isDesktopSearchCompact}
+              searchBar={
+                <StaysSearchWidget
+                  variant="hero"
+                  currentFilters={filters}
+                  onSearchInApp={handleStaysWidgetSearch}
+                  onOpenAssistant={() => setIsSofiaOpen(true)}
+                />
+              }
+            />
+          ) : null
+        }
       />
-
-      {/* Category Bar & Controls (Visible only on Explore view) */}
-      {currentView === 'explore' && (
-        <CategoryBar
-          availableCategories={availableCategories}
-          selectedCategory={filters.category}
-          onSelectCategory={(catId) => {
-            setFilters({ ...filters, category: catId });
-            if (catId === 'condominiums') setViewMode('grid');
-          }}
-          onOpenFilters={() => setIsFilterOpen(true)}
-          activeFilterCount={activeFilterCount}
-          showTotalWithTaxes={showTotalWithTaxes}
-          setShowTotalWithTaxes={setShowTotalWithTaxes}
-          viewMode={viewMode}
-          setViewMode={setViewMode}
-          isCondominiumView={isCondominiumView}
-        />
-      )}
 
       <MainContentRouter
         currentView={currentView}
@@ -481,7 +620,6 @@ function MarketplaceApp() {
         onClearCatalogFilters={handleClearCatalogFilters}
         onSearchInApp={handleStaysWidgetSearch}
         onOpenSuggestedProperty={handleOpenSuggestedProperty}
-        onOpenAssistant={() => setIsSofiaOpen(true)}
         onSelectCondominium={setSelectedCondominium}
         onToggleSave={toggleSavedProperty}
         onSelectProperty={handleSelectProperty}
@@ -703,6 +841,8 @@ export default function App() {
 
   if (
     normalizedPathname !== '/' &&
+    normalizedPathname !== '/condominios' &&
+    normalizedPathname !== '/s/homes' &&
     !legalSlug &&
     normalizedPathname !== '/auth/confirm' &&
     !isPropertyPath &&

@@ -314,12 +314,18 @@ class AccommodationApiTest extends TestCase
                 '_mstitle' => ['pt_BR' => 'Segundo anúncio com comodidades'],
                 'amenities' => [['_id' => 'amenity-kitchen']],
             ]], 200),
-            'https://crcn.stays.net/external/v1/content/properties*' => Http::response([[
+            'https://crcn.stays.net/external/v1/content/properties/property-live-amenities' => Http::response([
                 '_id' => 'property-live-amenities',
                 'amenities' => [['_id' => 'amenity-pool']],
-            ], [
+            ], 200),
+            'https://crcn.stays.net/external/v1/content/properties/property-live-amenities-2' => Http::response([
                 '_id' => 'property-live-amenities-2',
                 'amenities' => [['_id' => 'amenity-parking']],
+            ], 200),
+            'https://crcn.stays.net/external/v1/content/properties*' => Http::response([[
+                '_id' => 'property-live-amenities',
+            ], [
+                '_id' => 'property-live-amenities-2',
             ]], 200),
             'https://crcn.stays.net/external/v1/translation/listing-amenities' => Http::response([[
                 '_id' => 'amenity-wifi',
@@ -348,7 +354,7 @@ class AccommodationApiTest extends TestCase
             ->assertJsonPath('data.1.listingAmenities.0', 'Cozinha completa')
             ->assertJsonPath('data.1.propertyAmenities.0', 'Estacionamento');
 
-        Http::assertSentCount(4);
+        Http::assertSentCount(6);
     }
 
     public function test_empty_live_catalog_does_not_fall_back_to_inactive_local_listings(): void

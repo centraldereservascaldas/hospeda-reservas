@@ -54,13 +54,13 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.5.12'
+          php-version: '8.5'
           extensions: ctype, mbstring, openssl, pdo_sqlite, sqlite3
           coverage: none
           tools: composer:v2
 
       - name: Verify PHP version
-        run: test "$(php -r 'echo PHP_VERSION;')" = '8.5.12'
+        run: test "$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')" = '8.5'
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
@@ -104,13 +104,13 @@ jobs:
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.5.12'
+          php-version: '8.5'
           extensions: ctype, mbstring, openssl, pdo_pgsql
           coverage: none
           tools: composer:v2
 
       - name: Verify PHP version
-        run: test "$(php -r 'echo PHP_VERSION;')" = '8.5.12'
+        run: test "$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')" = '8.5'
 
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress

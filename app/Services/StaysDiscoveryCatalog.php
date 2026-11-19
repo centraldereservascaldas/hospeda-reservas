@@ -189,7 +189,10 @@ class StaysDiscoveryCatalog
     /** @param array<string, mixed> $property */
     public function propertyPath(array $property): string
     {
-        return route('condominiums.show', ['id' => $property['canonicalSlug'] ?? $property['slug']], absolute: false);
+        return route('condominiums.show', [
+            'id' => ($property['shortId'] ?? '') ?: $property['id'],
+            'slug' => $property['canonicalSlug'] ?? $property['slug'],
+        ], absolute: false);
     }
 
     /** @param array<string, array<string, mixed>> $properties

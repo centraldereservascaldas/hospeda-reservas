@@ -22,8 +22,8 @@ test('combines catalog filters and rejects properties that miss any selected cri
     amenities: ['piscina', 'Wi-Fi'],
     minBedrooms: 2,
     minBaths: 2,
-    superhostOnly: true,
-    instantBookOnly: true,
+    superhostOnly: false,
+    instantBookOnly: false,
   };
 
   assert.deepEqual(filterPropertiesBySearchFilters([property], filters), [property]);
@@ -51,11 +51,11 @@ test('combines catalog filters and rejects properties that miss any selected cri
   assert.deepEqual(filterPropertiesBySearchFilters([property], { ...filters, minBaths: 3 }), []);
   assert.deepEqual(
     filterPropertiesBySearchFilters([{ ...property, isSuperhost: false }], filters),
-    [],
+    [{ ...property, isSuperhost: false }],
   );
   assert.deepEqual(
     filterPropertiesBySearchFilters([{ ...property, instantBook: false }], filters),
-    [],
+    [{ ...property, instantBook: false }],
   );
   assert.deepEqual(
     filterPropertiesBySearchFilters([property], { ...filters, amenities: ['piscina', 'sauna'] }),
@@ -76,7 +76,7 @@ test('counts active filters using the existing filter-pill rules', () => {
       superhostOnly: true,
       instantBookOnly: true,
     }),
-    8,
+    6,
   );
 });
 
