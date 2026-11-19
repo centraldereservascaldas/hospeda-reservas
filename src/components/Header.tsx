@@ -328,11 +328,9 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Search
                 aria-hidden="true"
-                className="mr-2 h-5 w-5 shrink-0 text-orange-700 sm:hidden"
+                className="mr-3 h-6 w-6 shrink-0 text-orange-700 sm:hidden"
               />
-              <span className="text-sm font-semibold text-neutral-800 sm:hidden">
-                Iniciar busca
-              </span>
+              <span className="text-base font-bold text-neutral-900 sm:hidden">Iniciar busca</span>
               <div className="hidden min-w-0 items-center text-neutral-800 sm:flex sm:text-sm">
                 <span className="pr-2 sm:pr-3 text-neutral-900 font-bold truncate min-w-0 max-[360px]:hidden">
                   {searchSummaryText ? searchSummaryText : 'Caldas Novas & Região'}

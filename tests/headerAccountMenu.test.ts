@@ -79,6 +79,38 @@ test('compact desktop search reserves space for the currency and account control
   assert.match(stylesheet, /calc\(100vw - var\(--header-edge-spacing\) \* 2 - 36rem\)/);
 });
 
+test('mobile search prompt has prominent text and a larger search icon', () => {
+  const { container } = render(
+    React.createElement(Header, {
+      onOpenSearch: () => {},
+      currentView: 'explore',
+      setCurrentView: () => {},
+      currency: 'BRL',
+      setCurrency: () => {},
+      tripsCount: 0,
+      isAccountConnected: false,
+      onOpenAccount: () => {},
+      onSignOut: async () => {},
+      ownerAccessStatus: 'none',
+      ownerRequestLoading: false,
+      onRequestOwnerAccess: async () => {},
+      isOwnerAdmin: false,
+    }),
+  );
+
+  const searchButton = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Iniciar busca"]',
+  );
+  assert.ok(searchButton);
+  const searchIcon = searchButton.querySelector('svg');
+  const searchLabel = searchButton.querySelector('span.text-base');
+
+  assert.ok(searchIcon?.classList.contains('h-6'));
+  assert.ok(searchIcon?.classList.contains('w-6'));
+  assert.equal(searchLabel?.textContent, 'Iniciar busca');
+  assert.ok(searchLabel?.classList.contains('font-bold'));
+});
+
 afterEach(() => {
   cleanup();
   document.body.innerHTML = '';
