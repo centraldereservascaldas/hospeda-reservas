@@ -6,7 +6,7 @@ export function createPartnerReservationClient({enabled=false,fetchImpl=fetch}={
     async create({fields,customer}) {
       if(enabled!==true)throw new ConnectorError('reservation_creation_disabled','Criação de pré-reservas desativada.',503);
       const required=['idImovel','entrada','saida','horaEntrada','horaSaida','totalCartao','totalDinheiro','BaseConsulta'];
-      if(!fields||required.some(key=>typeof fields[key]!=='string'||!fields[key]||fields[key].length>100||/[<>\r\n]/.test(fields[key]))||!/^\d+$/.test(fields.idImovel)||!/^\d+$/.test(fields.BaseConsulta))throw new ConnectorError('invalid_reservation_context','Contexto do formulário incompleto.',409);
+      if(!fields||required.some(key=>typeof fields[key]!=='string'||!fields[key]||fields[key].length>100||/[<>\r\n]/.test(fields[key]))||!/^\d+$/.test(fields.idImovel)||!/^[A-Za-z0-9]{1,12}$/.test(fields.BaseConsulta))throw new ConnectorError('invalid_reservation_context','Contexto do formulário incompleto.',409);
       if(!customer||typeof customer.name!=='string'||!customer.name.trim()||!/^\d{11}$/.test(customer.cpf||'')||!/^\d{10,13}$/.test(customer.phone||''))throw new ConnectorError('invalid_customer','Dados do titular incompletos.',422);
       const body=new URLSearchParams({Ajax:'Ajax',Controller:'reservaOnline',Action:'reservarImovelParceiro'});
       const allowed=[...required,'entradaAntecipada','saidaProrrogada','roupasCama','acessoLagoa','idCliente','atendimento','ID_ORCA','usuario','refParceiro','refFornecedor'];

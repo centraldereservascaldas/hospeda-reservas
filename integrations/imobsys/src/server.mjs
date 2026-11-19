@@ -6,6 +6,7 @@ import { createPartnerReservationClient } from './partner-reservation-client.mjs
 import { createCieloSandboxClient } from './cielo-sandbox-client.mjs';
 import { reconcileSandboxPayment } from './sandbox-reconciliation.mjs';
 import { inspectPartnerContract } from './partner-reservation-check.mjs';
+import { parseReservationContext } from './partner-reservation-context.mjs';
 import { openSandboxOrderStore } from './sandbox-order-store.mjs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createAdminProvider, parseAdminAvailability } from './admin-provider.mjs';
@@ -43,9 +44,12 @@ const checkoutFlow=createPartnerCheckoutFlow({
    const search={from:query.from,to:query.to,guests:query.guests};
    const result=await (browserQueue.status().connected?browserQueue.query(search):adminProvider.availability(search));
    const quote=checkoutQuote(query,result);
-   const fields=input.reservationInput?.fields;
    const parts=query.propertyId.split('-');
-   if(!fields||fields.idImovel!==parts[3]||fields.BaseConsulta!==parts[2]||fields.entrada!==query.from||fields.saida!==query.to||Math.round(Number(fields.totalDinheiro)*100)!==quote.pix.totalCents)throw new Error('Reservation context mismatch.');
+   const request=new URLSearchParams({Ajax:'Ajax',Controller:'parceiro',action:'buscaPrecos',periodo:`${query.from},${query.to}`,e1:'0',s1:'0',ImovRef:parts[3],BaseConsulta:parts[2]});
+   const response=await fetch('https://reservascrcn.com.br/',{method:'POST',redirect:'error',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:request,signal:AbortSignal.timeout(15000)});
+   if(!response.ok)throw new Error('Partner quote unavailable.');
+   const fields=parseReservationContext(await response.text(),{reference:parts[3],from:query.from,to:query.to,baseCents:quote.pix.totalCents});
+   input.reservationInput={...input.reservationInput,fields:{...fields,idCliente:input.reservationInput?.fields?.idCliente||'new'}};
    return quote;
  },
  verifyReservation:async(reservation,quote)=>{
