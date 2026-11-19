@@ -1,4 +1,11 @@
 import http from 'node:http';
+import { handleCheckoutHttp } from './checkout-http.mjs';
+import { openCheckoutOperationStore } from './checkout-operation-store.mjs';
+import { createPartnerCheckoutFlow } from './partner-checkout-flow.mjs';
+import { createPartnerReservationClient } from './partner-reservation-client.mjs';
+import { createCieloSandboxClient } from './cielo-sandbox-client.mjs';
+import { reconcileSandboxPayment } from './sandbox-reconciliation.mjs';
+import { inspectPartnerContract } from './partner-reservation-check.mjs';
 import { openSandboxOrderStore } from './sandbox-order-store.mjs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createAdminProvider, parseAdminAvailability } from './admin-provider.mjs';
@@ -24,6 +31,30 @@ const sessionReceiver = createSessionReceiver();
 try {const previous=JSON.parse(await readFile(`${root}/data/admin-control.json`,'utf8'));if(previous.port===port&&/^[a-f0-9]{64}$/.test(previous.controlKey))sessionReceiver.controlKey=previous.controlKey;}catch{}
 await mkdir(`${root}/data`,{recursive:true});
 const sellerStore = openSandboxOrderStore(`${root}/data/sandbox-orders.sqlite`);
+const operations=openCheckoutOperationStore(`${root}/data/checkout-operations.sqlite`);
+const sandboxConfigured=!!process.env.CIELO_SANDBOX_MERCHANT_ID&&!!process.env.CIELO_SANDBOX_MERCHANT_KEY;
+const cielo=sandboxConfigured?createCieloSandboxClient({merchantId:process.env.CIELO_SANDBOX_MERCHANT_ID,merchantKey:process.env.CIELO_SANDBOX_MERCHANT_KEY}):null;
+const checkoutFlow=createPartnerCheckoutFlow({
+ enabled:process.env.IMOBSYS_SANDBOX_FLOW_ENABLED==='true'&&sandboxConfigured,
+ operations,sellerStore,cielo,
+ reservations:createPartnerReservationClient({enabled:process.env.IMOBSYS_RESERVATION_CREATION_ENABLED==='true'}),
+ quoteProvider:async input=>{
+   const query=validateCheckoutQuery({propertyId:input.propertyId,from:input.from,to:input.to,guests:String(input.guests)});
+   const search={from:query.from,to:query.to,guests:query.guests};
+   const result=await (browserQueue.status().connected?browserQueue.query(search):adminProvider.availability(search));
+   const quote=checkoutQuote(query,result);
+   const fields=input.reservationInput?.fields;
+   const parts=query.propertyId.split('-');
+   if(!fields||fields.idImovel!==parts[3]||fields.BaseConsulta!==parts[2]||fields.entrada!==query.from||fields.saida!==query.to||Math.round(Number(fields.totalDinheiro)*100)!==quote.pix.totalCents)throw new Error('Reservation context mismatch.');
+   return quote;
+ },
+ verifyReservation:async(reservation,quote)=>{
+   const response=await fetch(reservation.contractUrl,{redirect:'error',signal:AbortSignal.timeout(15000)});
+   if(!response.ok)return false;
+   inspectPartnerContract(await response.text(),{reference:reservation.reference,baseCents:quote.pix.totalCents});
+   return true;
+ },
+});
 // Only a local bootstrap key and public encryption key are written. Never the upstream session.
 await writeFile(`${root}/data/admin-control.json`,JSON.stringify({port,controlKey:sessionReceiver.controlKey,publicKey:sessionReceiver.publicKey}));
 
@@ -68,6 +99,7 @@ const server = http.createServer(async (req, res) => {
     if (!hosts.includes(req.headers.host)) return json(403, { success: false, code: 'host_not_allowed' });
     if (req.headers.origin && !hosts.some((host) => req.headers.origin === `http://${host}`)) return json(403, { success: false, code: 'origin_not_allowed' });
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
+    if(await handleCheckoutHttp({req,res,url,authorize:request=>request.headers['x-local-control']===sessionReceiver.controlKey,flow:checkoutFlow,operations,sellerStore,reconcile:async item=>{if(!cielo)throw Error('Sandbox unavailable');await reconcileSandboxPayment({client:cielo,store:sellerStore,order:item.payload.order,paymentId:item.payload.paymentId});operations.advance(item.id,'awaiting_seller_confirmation',{});}}))return;
     if(['/seller-orders','/seller-orders.js'].includes(url.pathname)&&req.method==='GET') {
       const isScript=url.pathname.endsWith('.js');
       const content=await readFile(`${root}/public/seller-orders.${isScript?'js':'html'}`);
