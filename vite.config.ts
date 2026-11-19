@@ -10,6 +10,10 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
     proxy: {
+      '/imobsys': {
+        target: 'http://127.0.0.1:8012',
+        rewrite: (path) => path.replace(/^\/imobsys/, ''),
+      },
       '/api': backendTarget,
       '/external/v1': backendTarget,
       '/destinos': backendTarget,

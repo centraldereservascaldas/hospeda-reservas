@@ -4,6 +4,11 @@
  */
 
 import { lazy, Suspense, useEffect, useState, useRef } from 'react';
+const ImobsysIntegrationPreview = lazy(() =>
+  import('./components/booking/ImobsysIntegrationPreview').then((module) => ({
+    default: module.ImobsysIntegrationPreview,
+  })),
+);
 import { Property, SearchFilters, Currency } from './types';
 import { Header } from './components/Header';
 import { AuthCallbackNotice } from './components/account/AuthCallbackNotice';
@@ -629,6 +634,14 @@ export default function App() {
 
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+
+  if (checkoutPreviewAllowed && pathname === '/integracao/imobsys') {
+    return (
+      <Suspense fallback={<main role="status">Carregando parceiros…</main>}>
+        <ImobsysIntegrationPreview />
+      </Suspense>
+    );
+  }
 
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/pagamento-confirmado') {
     return (

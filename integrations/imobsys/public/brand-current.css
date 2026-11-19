@@ -1,0 +1,19 @@
+@font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:300 800;font-display:swap;src:url('/assets/plus-jakarta-sans-latin.woff2') format('woff2')}
+:root{font-family:"Plus Jakarta Sans",sans-serif;--orange:#f97316;--navy:#18181b;color:#262626}
+body{color:#262626;background:radial-gradient(circle at 10% 8%,#fb923c38 0,transparent 40%),radial-gradient(circle at 90% 10%,#38bdf838 0,transparent 40%),radial-gradient(circle at 50% 32%,#fed7aa40 0,transparent 45%),radial-gradient(circle at 85% 70%,#fb923c2e 0,transparent 45%),radial-gradient(circle at 15% 80%,#38bdf833 0,transparent 40%),radial-gradient(circle at 50% 95%,#fef08a2e 0,transparent 50%),#f8fafc;background-attachment:fixed}
+.brand{gap:12px}.brand img{width:58px;height:58px;padding:4px;border:1px solid #e5e5e5e6;border-radius:15.2px;box-shadow:0 5px 16px -10px #0f172a80}
+.brand .brand-type{display:flex;flex-direction:column;align-items:center;text-align:center;line-height:1;gap:5px}
+.brand-type strong{font-size:16px;letter-spacing:.12em;font-weight:900;color:#171717;white-space:nowrap}
+.brand-type>span{font-size:10px;letter-spacing:.14em;font-weight:800;color:#ea580c;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.brand-type>span::before,.brand-type>span::after{content:"";width:10px;height:1px;background:#f97316b3}
+.brand-type small{font-size:11px;font-weight:800;letter-spacing:.13em;color:#c2410c;white-space:nowrap}
+.top{background:#ffffffb8;border-bottom-color:#ffffff94;box-shadow:0 6px 22px #20324707;backdrop-filter:blur(22px)}
+h1{color:#171717;font-weight:800}h1 span{color:#f97316}.section-heading h2{font-size:24px;font-weight:800;color:#171717}
+.search-glass button{background:linear-gradient(135deg,#f97316f0,#ea580cfa);border:1px solid #ffffff73;border-radius:16px;box-shadow:0 10px 28px -4px #ea580c61,inset 0 1.5px 2px #ffffff99;font-weight:800;font-size:14px}
+.card h3,.card-price{color:#171717}.card-price strong{font-weight:800}.photo-button{border-radius:16px}
+.details-link{color:#c2410c}.period[aria-pressed=true]{border-color:#fb923c;background:#fff7ed}.eyebrow{color:#c2410c}
+@media(max-width:720px){.brand img{width:50px;height:50px}.brand-type strong{font-size:12px}.brand-type>span{font-size:8px}.brand-type small{font-size:8px}.brand .brand-type{gap:4px}.search-glass button{font-size:12px}.section-heading h2{font-size:22px}}
+
+.photo-button{aspect-ratio:4/3;border:1px solid #ffffffe6;box-shadow:0 10px 28px -18px #0f172ab3}.photo-button:hover img{transform:scale(1.05)}
+
+@media(max-width:767px){.brand .brand-type{display:none}.brand img{width:58px;height:58px}}
