@@ -196,10 +196,14 @@ test('syncs filter updates to the URL without dropping path, hash, or unrelated 
   }
 });
 
-
 test('round-trips supported flexible date windows and rejects unsupported values', () => {
   for (const days of [1, 2] as const) {
-    const filters = { ...createDefaultSearchFilters(), checkIn: '2027-01-10', checkOut: '2027-01-13', dateFlexibility: days };
+    const filters = {
+      ...createDefaultSearchFilters(),
+      checkIn: '2027-01-10',
+      checkOut: '2027-01-13',
+      dateFlexibility: days,
+    };
     const query = serializeSearchFilters(filters);
     assert.equal(new URLSearchParams(query).get('flexDays'), String(days));
     assert.equal(parseSearchFilters(query).dateFlexibility, days);
@@ -207,11 +211,21 @@ test('round-trips supported flexible date windows and rejects unsupported values
   assert.equal(parseSearchFilters('?flexDays=14').dateFlexibility, 0);
 });
 
-
 test('keeps the default search URL clean and preserves unrelated parameters', () => {
   const defaults = createDefaultSearchFilters();
   assert.equal(serializeSearchFilters(defaults), '');
   assert.equal(mergeSearchFiltersIntoUrl('', defaults), '');
-  assert.equal(mergeSearchFiltersIntoUrl('?utm_source=share&adults=1&children=0&infants=0&pets=0&date_picker_type=calendar', defaults), 'utm_source=share');
-  assert.equal(new URLSearchParams(serializeSearchFilters({ ...defaults, guests: { ...defaults.guests, adults: 2 } })).get('adults'), '2');
+  assert.equal(
+    mergeSearchFiltersIntoUrl(
+      '?utm_source=share&adults=1&children=0&infants=0&pets=0&date_picker_type=calendar',
+      defaults,
+    ),
+    'utm_source=share',
+  );
+  assert.equal(
+    new URLSearchParams(
+      serializeSearchFilters({ ...defaults, guests: { ...defaults.guests, adults: 2 } }),
+    ).get('adults'),
+    '2',
+  );
 });

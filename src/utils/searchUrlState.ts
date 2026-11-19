@@ -204,7 +204,9 @@ export function parseSearchFilters(search: string): SearchFilters {
   filters.minBedrooms = parseInteger(firstValue(params, 'min_bedrooms', 'minBedrooms'), 0, 0, 30);
   filters.minBeds = parseInteger(firstValue(params, 'min_beds', 'minBeds'), 0, 0, 30);
   filters.minBaths = parseInteger(firstValue(params, 'min_bathrooms', 'minBaths'), 0, 0, 30);
-  filters.superhostOnly = ['true', '1'].includes(firstValue(params, 'superhost', 'superhostOnly') ?? '');
+  filters.superhostOnly = ['true', '1'].includes(
+    firstValue(params, 'superhost', 'superhostOnly') ?? '',
+  );
   filters.instantBookOnly = ['true', '1'].includes(
     firstValue(params, 'instant_book', 'instantBook', 'instantBookOnly') ?? '',
   );
@@ -231,7 +233,8 @@ export function serializeSearchFilters(filters: SearchFilters): string {
     params.set('checkout', filters.checkOut);
   }
 
-  if (filters.checkIn && filters.checkOut && filters.dateFlexibility) params.set('flexDays', String(filters.dateFlexibility));
+  if (filters.checkIn && filters.checkOut && filters.dateFlexibility)
+    params.set('flexDays', String(filters.dateFlexibility));
 
   params.set('adults', String(filters.guests.adults));
   params.set('children', String(filters.guests.children));
@@ -245,7 +248,8 @@ export function serializeSearchFilters(filters: SearchFilters): string {
   if (filters.minPrice > 0) params.set('price_min', String(filters.minPrice));
   if (filters.maxPrice < 5000) params.set('price_max', String(filters.maxPrice));
   for (const propertyType of filters.propertyTypes) {
-    if (propertyType.trim() && propertyType.length <= 80) params.append('property_type', propertyType);
+    if (propertyType.trim() && propertyType.length <= 80)
+      params.append('property_type', propertyType);
   }
   for (const amenity of filters.amenities) {
     if (amenity.trim() && amenity.length <= 80) params.append('amenities[]', amenity);
@@ -257,8 +261,11 @@ export function serializeSearchFilters(filters: SearchFilters): string {
   if (filters.superhostOnly) params.set('superhost', 'true');
   if (filters.instantBookOnly) params.set('instant_book', 'true');
 
-  const hasDefaultGuests = filters.guests.adults === 1 && filters.guests.children === 0 &&
-    filters.guests.infants === 0 && filters.guests.pets === 0;
+  const hasDefaultGuests =
+    filters.guests.adults === 1 &&
+    filters.guests.children === 0 &&
+    filters.guests.infants === 0 &&
+    filters.guests.pets === 0;
   if (params.size === 5 && hasDefaultGuests) return '';
 
   return params.toString();

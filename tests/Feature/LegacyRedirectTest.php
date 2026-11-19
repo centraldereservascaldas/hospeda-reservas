@@ -25,7 +25,7 @@ class LegacyRedirectTest extends TestCase
 
         foreach (config('legacy_redirects.condominiums') as $slug => $id) {
             $this->get('/'.$slug, ['Host' => 'untrusted.example'])->assertStatus(301)
-                ->assertRedirect('https://centraldereservascaldas.com/condominios/nome-atual-'.$id);
+                ->assertRedirect('https://centraldereservascaldas.com/pt/building/'.$id.'/nome-atual-'.$id);
         }
     }
 

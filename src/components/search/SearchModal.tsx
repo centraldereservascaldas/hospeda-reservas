@@ -1,10 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import {
-  X,
-  Search,
-  MapPin,
-  Sparkles,
-} from 'lucide-react';
+import { X, Search, MapPin, Sparkles } from 'lucide-react';
 import { SearchFilters } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { StaysSearchWidget, toBrDate } from './StaysSearchWidget';
@@ -59,7 +54,19 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   );
   const [destination, setDestination] = useState(filters.destination);
   const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
-  useEffect(() => { if (!isOpen) return; let active = true; crcnBackendApi.getResorts().then((items) => { if (active) setResorts(items); }).catch(() => {}); return () => { active = false; }; }, [isOpen]);
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    crcnBackendApi
+      .getResorts()
+      .then((items) => {
+        if (active) setResorts(items);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [isOpen]);
   const [checkIn, setCheckIn] = useState(filters.checkIn);
   const [checkOut, setCheckOut] = useState(filters.checkOut);
   const [dateFlexibility, setDateFlexibility] = useState<0 | 1 | 2>(filters.dateFlexibility ?? 0);
@@ -121,11 +128,26 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
   if (!isOpen) return null;
 
-  const normalizedQuery = destination.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-  const popularDestinations = resorts.map((resort) => {
-    const name = resort.name.replace(/^CRCN\s*[-–]\s*/i, '');
-    return { name, subtitle: 'Condomínio', query: resort.name };
-  }).filter((item) => !normalizedQuery || item.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(normalizedQuery)).slice(0, 8);
+  const normalizedQuery = destination
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+  const popularDestinations = resorts
+    .map((resort) => {
+      const name = resort.name.replace(/^CRCN\s*[-–]\s*/i, '');
+      return { name, subtitle: 'Condomínio', query: resort.name };
+    })
+    .filter(
+      (item) =>
+        !normalizedQuery ||
+        item.name
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .includes(normalizedQuery),
+    )
+    .slice(0, 8);
 
   const handleApply = () => {
     const hasPartialDateRange = Boolean(checkIn) !== Boolean(checkOut);
@@ -182,42 +204,206 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     });
   };
 
-
   if (mobile) {
     const steps = [
       { id: 'destination' as const, label: 'Onde', summary: destination || 'Todos os condomínios' },
-      { id: 'dates' as const, label: 'Quando', summary: checkIn && checkOut ? `${toBrDate(checkIn)} - ${toBrDate(checkOut)}` : 'Adicionar datas' },
-      { id: 'guests' as const, label: 'Quem', summary: `${totalGuests} ${totalGuests === 1 ? 'hóspede' : 'hóspedes'}${pets ? ` · ${pets} pet${pets === 1 ? '' : 's'}` : ''}` },
+      {
+        id: 'dates' as const,
+        label: 'Quando',
+        summary:
+          checkIn && checkOut ? `${toBrDate(checkIn)} - ${toBrDate(checkOut)}` : 'Adicionar datas',
+      },
+      {
+        id: 'guests' as const,
+        label: 'Quem',
+        summary: `${totalGuests} ${totalGuests === 1 ? 'hóspede' : 'hóspedes'}${pets ? ` · ${pets} pet${pets === 1 ? '' : 's'}` : ''}`,
+      },
     ];
     return (
       <div className="fixed inset-0 z-[100] bg-neutral-100">
-        <div ref={dialogRef} data-dialog-focus-root role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-mobile-title`} tabIndex={-1} className="flex h-dvh flex-col">
+        <div
+          ref={dialogRef}
+          data-dialog-focus-root
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={`${fieldId}-mobile-title`}
+          tabIndex={-1}
+          className="flex h-dvh flex-col"
+        >
           <header className="flex h-20 shrink-0 items-center justify-between px-5">
-            <h2 id={`${fieldId}-mobile-title`} className="text-base font-bold">Buscar hospedagens</h2>
-            <button ref={closeButtonRef} type="button" aria-label="Fechar busca de hospedagens" onClick={onClose} className={`flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white shadow-sm ${focusRing}`}><X className="h-5 w-5" /></button>
+            <h2 id={`${fieldId}-mobile-title`} className="text-base font-bold">
+              Buscar hospedagens
+            </h2>
+            <button
+              ref={closeButtonRef}
+              type="button"
+              aria-label="Fechar busca de hospedagens"
+              onClick={onClose}
+              className={`flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white shadow-sm ${focusRing}`}
+            >
+              <X className="h-5 w-5" />
+            </button>
           </header>
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-4">
-            {steps.map((step) => activeTab === step.id ? (
-              <section key={step.id} className="min-h-0 rounded-3xl bg-white p-6 shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200">
-                <h3 className="mb-5 text-2xl font-bold">{step.label}?</h3>
-                {step.id === 'destination' && <div className="space-y-4">
-                  <label className="sr-only" htmlFor={`${fieldId}-mobile-destination`}>Buscar condomínio ou destino</label>
-                  <input id={`${fieldId}-mobile-destination`} value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="Buscar condomínio ou destino" className="min-h-14 w-full rounded-xl border border-neutral-300 px-4 text-sm focus-visible:outline-2 focus-visible:outline-orange-600" />
-                  <button type="button" onClick={() => { setDestination(''); setActiveTab('dates'); }} className="flex min-h-14 w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-orange-600">
-                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><MapPin className="h-5 w-5" /></span>
-                    <span><span className="block text-sm font-semibold">Todos os condomínios</span><span className="block text-xs text-neutral-500">Buscar em todos os empreendimentos</span></span>
-                  </button>
-                  <p className="text-sm font-semibold">Destinos sugeridos</p>
-                  <div className="max-h-[38dvh] space-y-1 overflow-y-auto">{popularDestinations.map((item) => <button key={item.name} type="button" onClick={() => { setDestination(item.query); setActiveTab('dates'); }} className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><MapPin className="h-5 w-5" /></span><span><span className="block text-sm font-semibold">{item.name}</span><span className="block text-xs text-neutral-500">{item.subtitle}</span></span></button>)}</div>
-                </div>}
-                {step.id === 'dates' && <div className="max-h-[48dvh] overflow-y-auto"><p className="mb-4 text-sm text-neutral-600">{checkIn && !checkOut ? 'Selecione a saída' : 'Selecione entrada e saída'}</p><div className="mb-3 flex flex-wrap gap-2" aria-label="Flexibilidade das datas">{([0, 1, 2] as const).map((days) => <button key={days} type="button" aria-pressed={dateFlexibility === days} onClick={() => setDateFlexibility(days)} className={`rounded-full border px-4 py-2 text-sm ${dateFlexibility === days ? 'border-neutral-900' : 'border-neutral-300'}`}>{days === 0 ? 'Datas exatas' : `± ${days} ${days === 1 ? 'dia' : 'dias'}`}</button>)}</div><SearchDateCalendar checkIn={checkIn} checkOut={checkOut} minDate={todayIso} onDatesChange={(from, to) => { setCheckIn(from); setCheckOut(to); setSearchError(''); }} />{searchError && <p role="alert" className="text-sm text-red-700">{searchError}</p>}</div>}
-                {step.id === 'guests' && <GuestCounterList counts={{ adults, children, infants, pets }} onChange={(counts) => { setAdults(counts.adults); setChildren(counts.children); setInfants(counts.infants); setPets(counts.pets); }} />}
-              </section>
-            ) : <button key={step.id} type="button" onClick={() => setActiveTab(step.id)} className="flex min-h-14 shrink-0 items-center justify-between gap-4 rounded-2xl bg-white px-6 text-sm shadow-sm"><span className="text-neutral-500">{step.label}</span><span className="truncate font-semibold">{step.summary}</span></button>)}
+            {steps.map((step) =>
+              activeTab === step.id ? (
+                <section
+                  key={step.id}
+                  className="min-h-0 rounded-3xl bg-white p-6 shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
+                >
+                  <h3 className="mb-5 text-2xl font-bold">{step.label}?</h3>
+                  {step.id === 'destination' && (
+                    <div className="space-y-4">
+                      <label className="sr-only" htmlFor={`${fieldId}-mobile-destination`}>
+                        Buscar condomínio ou destino
+                      </label>
+                      <input
+                        id={`${fieldId}-mobile-destination`}
+                        value={destination}
+                        onChange={(event) => setDestination(event.target.value)}
+                        placeholder="Buscar condomínio ou destino"
+                        className="min-h-14 w-full rounded-xl border border-neutral-300 px-4 text-sm focus-visible:outline-2 focus-visible:outline-orange-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDestination('');
+                          setActiveTab('dates');
+                        }}
+                        className="flex min-h-14 w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-orange-600"
+                      >
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                          <MapPin className="h-5 w-5" />
+                        </span>
+                        <span>
+                          <span className="block text-sm font-semibold">Todos os condomínios</span>
+                          <span className="block text-xs text-neutral-500">
+                            Buscar em todos os empreendimentos
+                          </span>
+                        </span>
+                      </button>
+                      <p className="text-sm font-semibold">Destinos sugeridos</p>
+                      <div className="max-h-[38dvh] space-y-1 overflow-y-auto">
+                        {popularDestinations.map((item) => (
+                          <button
+                            key={item.name}
+                            type="button"
+                            onClick={() => {
+                              setDestination(item.query);
+                              setActiveTab('dates');
+                            }}
+                            className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50"
+                          >
+                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                              <MapPin className="h-5 w-5" />
+                            </span>
+                            <span>
+                              <span className="block text-sm font-semibold">{item.name}</span>
+                              <span className="block text-xs text-neutral-500">
+                                {item.subtitle}
+                              </span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {step.id === 'dates' && (
+                    <div className="max-h-[48dvh] overflow-y-auto">
+                      <p className="mb-4 text-sm text-neutral-600">
+                        {checkIn && !checkOut ? 'Selecione a saída' : 'Selecione entrada e saída'}
+                      </p>
+                      <div
+                        className="mb-3 flex flex-wrap gap-2"
+                        aria-label="Flexibilidade das datas"
+                      >
+                        {([0, 1, 2] as const).map((days) => (
+                          <button
+                            key={days}
+                            type="button"
+                            aria-pressed={dateFlexibility === days}
+                            onClick={() => setDateFlexibility(days)}
+                            className={`rounded-full border px-4 py-2 text-sm ${dateFlexibility === days ? 'border-neutral-900' : 'border-neutral-300'}`}
+                          >
+                            {days === 0
+                              ? 'Datas exatas'
+                              : `± ${days} ${days === 1 ? 'dia' : 'dias'}`}
+                          </button>
+                        ))}
+                      </div>
+                      <SearchDateCalendar
+                        checkIn={checkIn}
+                        checkOut={checkOut}
+                        minDate={todayIso}
+                        onDatesChange={(from, to) => {
+                          setCheckIn(from);
+                          setCheckOut(to);
+                          setSearchError('');
+                        }}
+                      />
+                      {searchError && (
+                        <p role="alert" className="text-sm text-red-700">
+                          {searchError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {step.id === 'guests' && (
+                    <GuestCounterList
+                      counts={{ adults, children, infants, pets }}
+                      onChange={(counts) => {
+                        setAdults(counts.adults);
+                        setChildren(counts.children);
+                        setInfants(counts.infants);
+                        setPets(counts.pets);
+                      }}
+                    />
+                  )}
+                </section>
+              ) : (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => setActiveTab(step.id)}
+                  className="flex min-h-14 shrink-0 items-center justify-between gap-4 rounded-2xl bg-white px-6 text-sm shadow-sm"
+                >
+                  <span className="text-neutral-500">{step.label}</span>
+                  <span className="truncate font-semibold">{step.summary}</span>
+                </button>
+              ),
+            )}
           </div>
           <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-neutral-200 bg-neutral-100 p-4">
-            <button type="button" onClick={handleClear} className="min-h-11 px-2 text-sm font-semibold underline">Limpar tudo</button>
-            {activeTab === 'guests' ? <button type="button" onClick={handleApply} className="min-h-12 rounded-xl bg-orange-700 px-6 text-sm font-bold text-white">Buscar</button> : <button type="button" onClick={() => { if (activeTab === 'dates' && Boolean(checkIn) !== Boolean(checkOut)) { setSearchError('Escolha a entrada e a saída para continuar.'); return; } setActiveTab(activeTab === 'destination' ? 'dates' : 'guests'); }} className="min-h-12 rounded-xl bg-neutral-900 px-6 text-sm font-bold text-white">Avançar</button>}
+            <button
+              type="button"
+              onClick={handleClear}
+              className="min-h-11 px-2 text-sm font-semibold underline"
+            >
+              Limpar tudo
+            </button>
+            {activeTab === 'guests' ? (
+              <button
+                type="button"
+                onClick={handleApply}
+                className="min-h-12 rounded-xl bg-orange-700 px-6 text-sm font-bold text-white"
+              >
+                Buscar
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  if (activeTab === 'dates' && Boolean(checkIn) !== Boolean(checkOut)) {
+                    setSearchError('Escolha a entrada e a saída para continuar.');
+                    return;
+                  }
+                  setActiveTab(activeTab === 'destination' ? 'dates' : 'guests');
+                }}
+                className="min-h-12 rounded-xl bg-neutral-900 px-6 text-sm font-bold text-white"
+              >
+                Avançar
+              </button>
+            )}
           </footer>
         </div>
       </div>
@@ -435,13 +621,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
               <div aria-label="Período da hospedagem" className="grid grid-cols-2 gap-3">
                 <div className="min-w-0 rounded-2xl border border-neutral-200 px-4 py-3">
-                  <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">Entrada</p>
+                  <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">
+                    Entrada
+                  </p>
                   <p className="mt-1 truncate text-[length:var(--search-date-value-font-size)] font-semibold text-neutral-900">
                     {checkIn ? toBrDate(checkIn) : 'Adicionar data'}
                   </p>
                 </div>
                 <div className="min-w-0 rounded-2xl border border-neutral-200 px-4 py-3">
-                  <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">Saída</p>
+                  <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">
+                    Saída
+                  </p>
                   <p className="mt-1 truncate text-[length:var(--search-date-value-font-size)] font-semibold text-neutral-900">
                     {checkOut ? toBrDate(checkOut) : 'Adicionar data'}
                   </p>

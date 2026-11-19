@@ -261,7 +261,7 @@ export function useAccommodationSearch({
         ...previous,
         checkIn: searchParams.surpriseMe ? '' : searchParams.checkIn,
         checkOut: searchParams.surpriseMe ? '' : searchParams.checkOut,
-        dateFlexibility: searchParams.surpriseMe ? 0 : searchParams.dateFlexibility ?? 0,
+        dateFlexibility: searchParams.surpriseMe ? 0 : (searchParams.dateFlexibility ?? 0),
         destination: searchParams.surpriseMe ? '' : searchParams.destination || '',
         destinationPropertyId: searchParams.surpriseMe ? '' : searchParams.propertyId || '',
         guests: searchParams.guests ?? {
