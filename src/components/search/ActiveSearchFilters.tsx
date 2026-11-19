@@ -3,12 +3,6 @@ import type { SearchFilters } from '../../types';
 import { CATEGORIES } from '../../data/mockProperties';
 import { formatCurrency } from '../../utils/formatters';
 
-const PROPERTY_TYPE_LABELS: Record<string, string> = {
-  entire_place: 'Espaço inteiro',
-  cabin: 'Cabana ou chalé',
-  villa: 'Vila',
-};
-
 interface ActiveSearchFiltersProps {
   filters: SearchFilters;
   activeFilterCount: number;
@@ -111,18 +105,6 @@ export function ActiveSearchFilters({
               }
             />
           )}
-          {filters.propertyTypes.map((type) => (
-            <FilterChip
-              key={type}
-              label={PROPERTY_TYPE_LABELS[type] || type}
-              onRemove={() =>
-                onChange({
-                  ...filters,
-                  propertyTypes: filters.propertyTypes.filter((item) => item !== type),
-                })
-              }
-            />
-          ))}
           {filters.amenities.map((amenity) => (
             <FilterChip
               key={amenity}
@@ -141,22 +123,16 @@ export function ActiveSearchFilters({
               onRemove={() => onChange({ ...filters, minBedrooms: defaultFilters.minBedrooms })}
             />
           )}
+          {(filters.minBeds ?? 0) > 0 && (
+            <FilterChip
+              label={`${filters.minBeds ?? 0}+ camas`}
+              onRemove={() => onChange({ ...filters, minBeds: 0 })}
+            />
+          )}
           {filters.minBaths > defaultFilters.minBaths && (
             <FilterChip
               label={`${filters.minBaths}+ banheiros`}
               onRemove={() => onChange({ ...filters, minBaths: defaultFilters.minBaths })}
-            />
-          )}
-          {filters.superhostOnly && (
-            <FilterChip
-              label="Apenas Superhost"
-              onRemove={() => onChange({ ...filters, superhostOnly: false })}
-            />
-          )}
-          {filters.instantBookOnly && (
-            <FilterChip
-              label="Reserva Imediata"
-              onRemove={() => onChange({ ...filters, instantBookOnly: false })}
             />
           )}
           <button

@@ -12,8 +12,6 @@ import {
   Fish,
   Tent,
   SlidersHorizontal,
-  Map,
-  Grid,
   GlassWater,
   MapPin,
   Users,
@@ -33,12 +31,14 @@ interface CategoryBarProps {
   onSelectCategory: (categoryId: string) => void;
   onOpenFilters: () => void;
   activeFilterCount: number;
-  showTotalWithTaxes: boolean;
-  setShowTotalWithTaxes: (show: boolean) => void;
-  viewMode: 'grid' | 'map';
-  setViewMode: (mode: 'grid' | 'map') => void;
+  showTotalWithTaxes?: boolean;
+  setShowTotalWithTaxes?: (show: boolean) => void;
+  viewMode?: 'grid' | 'map';
+  setViewMode?: (mode: 'grid' | 'map') => void;
   availableCategories: CategoryOption[];
   isCondominiumView?: boolean;
+  searchBar?: React.ReactNode;
+  compact?: boolean;
 }
 
 export const CategoryBar: React.FC<CategoryBarProps> = ({
@@ -46,12 +46,10 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   onSelectCategory,
   onOpenFilters,
   activeFilterCount,
-  showTotalWithTaxes,
-  setShowTotalWithTaxes,
-  viewMode,
-  setViewMode,
   availableCategories,
   isCondominiumView = false,
+  searchBar,
+  compact = false,
 }) => {
   const toolbarRowRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
@@ -155,14 +153,14 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   };
 
   return (
-    <div className="sticky top-16 sm:top-20 z-30 liquid-glass border-b border-white/50 backdrop-blur-2xl shadow-[0_4px_20px_rgba(0,0,0,0.02)] [@media(max-width:639px)_and_(max-height:400px)]:top-14">
+    <div aria-hidden={compact || undefined} inert={compact || undefined} className={`border-t border-white/50 transition-[transform,opacity] duration-300 motion-reduce:transition-none ${compact ? 'sm:pointer-events-none sm:-translate-y-3 sm:opacity-0' : ''}`}>
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2 [@media(max-height:400px)]:py-0 [@media(max-width:639px)_and_(max-height:400px)]:py-0">
         <div
           ref={toolbarRowRef}
-          className={`grid w-full items-center gap-2 [@media(max-width:639px)_and_(max-height:400px)]:gap-0 ${isCondominiumView ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_auto]'}`}
+          className="mx-auto grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:max-w-[calc(var(--search-bar-width)+6rem)] sm:gap-3 [@media(max-width:639px)_and_(max-height:400px)]:gap-0"
         >
           {/* Exibe apenas cartões inteiros; as setas alternam páginas sem cortar rótulos. */}
-          <div className="flex min-w-0 max-w-full flex-none items-center justify-center justify-self-center gap-2 sm:gap-4">
+          <div className="flex min-w-0 max-w-full flex-none items-center justify-center justify-self-center gap-2 sm:hidden">
             {categoryPage > 0 && (
               <button
                 type="button"
@@ -243,9 +241,10 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             )}
           </div>
 
+          <div data-shared-search="expanded" style={{ viewTransitionName: compact ? 'none' : 'shared-search-bar' }} className="hidden min-w-0 w-full max-w-[var(--search-bar-width)] sm:block">{searchBar}</div>
+
           {/* Action buttons on the right: Filters, Tax Toggle, Map view */}
-          {!isCondominiumView && (
-            <div
+          <div
               ref={actionsRef}
               className="col-start-2 flex flex-shrink-0 items-center justify-self-end gap-1 sm:gap-3"
             >
@@ -268,54 +267,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
                 )}
               </button>
 
-              {/* Toggle Total with taxes */}
-              <div className="hidden lg:flex items-center gap-1.5 sm:gap-3 px-2 sm:px-4 py-2 sm:py-2.5 rounded-2xl liquid-glass-card border border-white/80 text-xs font-semibold text-neutral-800 shadow-xs">
-                <span className="hidden lg:inline whitespace-nowrap">Exibir total da estadia</span>
-                <span className="lg:hidden whitespace-nowrap">Total + taxas</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-label="Exibir total da estadia"
-                  title="Exibir total da estadia"
-                  aria-checked={showTotalWithTaxes}
-                  onClick={() => setShowTotalWithTaxes(!showTotalWithTaxes)}
-                  className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-900"
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border border-neutral-300 transition-colors duration-200 ease-in-out ${
-                      showTotalWithTaxes ? 'bg-neutral-900' : 'bg-neutral-200'
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                        showTotalWithTaxes ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                    />
-                  </span>
-                </button>
-              </div>
-
-              {/* Toggle Grid vs Map button */}
-              <button
-                onClick={() => setViewMode(viewMode === 'grid' ? 'map' : 'grid')}
-                aria-label={viewMode === 'grid' ? 'Ver mapa' : 'Ver lista'}
-                className="flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-2xl px-2 text-xs font-bold text-white shadow-md liquid-glass-dark transition-all hover:scale-105 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300 sm:px-4"
-              >
-                {viewMode === 'grid' ? (
-                  <>
-                    <Map className="w-3.5 h-3.5 text-orange-400" />
-                    <span className="hidden sm:inline">Ver mapa</span>
-                  </>
-                ) : (
-                  <>
-                    <Grid className="w-3.5 h-3.5 text-orange-400" />
-                    <span className="hidden sm:inline">Ver lista</span>
-                  </>
-                )}
-              </button>
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

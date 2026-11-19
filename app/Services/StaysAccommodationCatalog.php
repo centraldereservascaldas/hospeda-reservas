@@ -93,7 +93,7 @@ class StaysAccommodationCatalog
 
     public function key(): string
     {
-        return 'stays.accommodation-catalog.v2:'.hash('sha256', json_encode([
+        return 'stays.accommodation-catalog.v4:'.hash('sha256', json_encode([
             config('services.stays.base_url'), config('services.stays.client_id'),
         ], JSON_THROW_ON_ERROR));
     }

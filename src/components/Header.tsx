@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Search,
@@ -13,6 +13,7 @@ import {
   ChevronDown,
   LogOut,
   ShieldCheck,
+  Building, Waves, GlassWater, MapPin, Users, PawPrint, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Currency } from '../types';
 import { LogoCRCN } from './LogoCRCN';
@@ -25,6 +26,14 @@ interface HeaderProps {
   setCurrency: (c: Currency) => void;
   tripsCount: number;
   searchSummaryText?: string;
+  compactSearch?: boolean;
+  searchDateSummary?: string;
+  searchGuestSummary?: string;
+  onCreateListing?: () => void;
+  toolbar?: React.ReactNode;
+  categories?: Array<{ id: string; label: string; icon: string }>;
+  selectedCategory?: string;
+  onSelectCategory?: (id: string) => void;
   accountName?: string;
   accountEmail?: string;
   isAccountConnected: boolean;
@@ -46,6 +55,14 @@ export const Header: React.FC<HeaderProps> = ({
   setCurrency,
   tripsCount,
   searchSummaryText,
+  compactSearch = false,
+  searchDateSummary = 'Qualquer dia',
+  searchGuestSummary = 'Hóspedes?',
+  onCreateListing,
+  toolbar,
+  categories = [],
+  selectedCategory,
+  onSelectCategory,
   accountName,
   accountEmail,
   isAccountConnected,
@@ -58,7 +75,17 @@ export const Header: React.FC<HeaderProps> = ({
   isOwnerAdmin,
 }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 640px)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 640px)');
+    const update = () => setIsDesktop(media.matches);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   const [isCurrencyMenuOpen, setIsCurrencyMenuOpen] = useState(false);
+  const categoryNavigationRef = useRef<HTMLDivElement>(null);
+  const categoryIndicatorReadyRef = useRef(false);
+  const [categoryIndicator, setCategoryIndicator] = useState({ left: 0, top: 0, width: 0, height: 0, ready: false });
   const menuRef = useRef<HTMLDivElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const localAccountButtonRef = useRef<HTMLButtonElement>(null);
@@ -68,6 +95,34 @@ export const Header: React.FC<HeaderProps> = ({
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState('');
   const currencyTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useLayoutEffect(() => {
+    const navigation = categoryNavigationRef.current;
+    if (!navigation || currentView !== 'explore' || !selectedCategory) return;
+
+    const updateCategoryIndicator = () => {
+      const selectedButton = Array.from(
+        navigation.querySelectorAll<HTMLButtonElement>('[data-header-category-id]'),
+      ).find((button) => button.dataset.headerCategoryId === selectedCategory);
+      if (!selectedButton) return;
+
+      const navigationBounds = navigation.getBoundingClientRect();
+      const buttonBounds = selectedButton.getBoundingClientRect();
+      setCategoryIndicator({
+        left: buttonBounds.left - navigationBounds.left + navigation.scrollLeft,
+        top: buttonBounds.top - navigationBounds.top + navigation.scrollTop,
+        width: buttonBounds.width,
+        height: buttonBounds.height,
+        ready: true,
+      });
+      categoryIndicatorReadyRef.current = true;
+    };
+
+    updateCategoryIndicator();
+    const observer = new ResizeObserver(updateCategoryIndicator);
+    observer.observe(navigation);
+    return () => observer.disconnect();
+  }, [categories, currentView, selectedCategory]);
 
   const toggleAccountMenu = () => {
     if (isUserMenuOpen) {
@@ -144,19 +199,47 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-50 liquid-glass border-b border-neutral-200/80 shadow-[0_8px_30px_-24px_rgba(15,23,42,0.45)] backdrop-blur-2xl">
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[var(--header-expanded-width)] px-[var(--header-edge-spacing)]">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4 [@media(max-width:639px)_and_(max-height:400px)]:h-14">
           {/* Official Company Logo: Central de Reservas Caldas Novas */}
           <button
-            onClick={() => setCurrentView('explore')}
-            className="group -ml-1 hidden flex-shrink-0 cursor-pointer items-center rounded-2xl p-1 focus:outline-none sm:flex"
+            onClick={() => {
+              const params = new URLSearchParams();
+              new URLSearchParams(window.location.search).forEach((value, key) => {
+                if (key.toLowerCase().startsWith('utm_')) params.append(key, value);
+              });
+              const query = params.toString();
+              window.location.assign(query ? `/?${query}` : '/');
+            }}
+            className={`group hidden flex-shrink-0 cursor-pointer items-center rounded-2xl transition-transform duration-[400ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 sm:flex ${compactSearch ? 'sm:-translate-x-[max(0px,calc((100vw_-_var(--header-expanded-width))_/2))]' : ''}`}
             title="Central de Reservas Caldas Novas"
           >
             <LogoCRCN size="md" variant="light" responsiveText={true} />
           </button>
 
           {/* Central Search Bar with min-w-0 so it never forces overflow */}
-          <div className={`flex-1 min-w-0 max-w-xl mx-1 sm:mx-4 lg:mx-6 ${currentView === 'explore' ? 'sm:invisible' : ''}`}>
+          {currentView === 'explore' && <div aria-hidden={compactSearch || undefined} inert={compactSearch || undefined} className={`hidden min-w-0 flex-1 items-center gap-1 transition-[opacity,transform] duration-300 motion-reduce:transition-none sm:flex ${compactSearch ? 'sm:pointer-events-none sm:-translate-y-3 sm:opacity-0' : ''}`} aria-label="Categorias de hospedagem">
+            <button type="button" aria-label="Rolar categorias para trás" onClick={(event) => event.currentTarget.nextElementSibling?.scrollBy({ left: -300, behavior: 'smooth' })} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-600 hover:bg-white"><ChevronLeft className="h-4 w-4" /></button>
+            <div ref={categoryNavigationRef} className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <span
+                aria-hidden="true"
+                className={`header-category-selection ${categoryIndicator.ready && categoryIndicatorReadyRef.current ? 'header-category-selection--ready' : ''}`}
+                style={{
+                  left: categoryIndicator.left,
+                  top: categoryIndicator.top,
+                  width: categoryIndicator.width,
+                  height: categoryIndicator.height,
+                }}
+              />
+              {categories.map((category) => {
+                const icons: Record<string, React.ElementType> = { Building, Waves, GlassWater, MapPin, Users, PawPrint, Sparkles };
+                const Icon = icons[category.icon] || Sparkles;
+                return <button key={category.id} data-header-category-id={category.id} type="button" aria-pressed={selectedCategory === category.id} onClick={() => onSelectCategory?.(category.id)} className={`relative z-10 flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 text-left text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-orange-600 ${selectedCategory === category.id ? 'text-orange-700' : 'text-neutral-600 hover:bg-white/70'}`}><Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="max-w-28">{category.label}</span></button>;
+              })}
+            </div>
+            <button type="button" aria-label="Rolar categorias para frente" onClick={(event) => event.currentTarget.previousElementSibling?.scrollBy({ left: 300, behavior: 'smooth' })} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-600 hover:bg-white"><ChevronRight className="h-4 w-4" /></button>
+          </div>}
+          <div data-shared-search="compact" style={{ viewTransitionName: currentView === 'explore' && compactSearch ? 'shared-search-bar' : 'none' }} aria-hidden={currentView === 'explore' && !compactSearch && isDesktop ? true : undefined} inert={currentView === 'explore' && !compactSearch && isDesktop ? true : undefined} className={`flex-1 min-w-0 max-w-xl mx-1 sm:mx-4 lg:mx-6 ${currentView === 'explore' ? `sm:absolute sm:left-1/2 sm:!mx-0 sm:w-[min(var(--header-compact-search-width),38vw)] sm:-translate-x-1/2 sm:transition-[opacity,transform] sm:duration-[400ms] sm:ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${compactSearch ? 'sm:translate-y-0 sm:opacity-100' : 'sm:pointer-events-none sm:translate-y-16 sm:opacity-0'}` : ''}`}>
             <button
               onClick={onOpenSearch}
               aria-label={`Buscar hospedagens: ${searchSummaryText || 'Caldas Novas & Região'}`}
@@ -169,10 +252,10 @@ export const Header: React.FC<HeaderProps> = ({
                   {searchSummaryText ? searchSummaryText : 'Caldas Novas & Região'}
                 </span>
                 <span className="hidden md:inline px-2.5 sm:px-3 text-neutral-600 font-medium whitespace-nowrap">
-                  Qualquer semana
+                  {searchDateSummary}
                 </span>
                 <span className="hidden lg:inline pl-2.5 sm:pl-3 text-neutral-500 font-normal whitespace-nowrap">
-                  Hóspedes?
+                  {searchGuestSummary}
                 </span>
               </div>
               <div className="hidden w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 sm:flex items-center justify-center text-white flex-shrink-0 ml-1.5 sm:ml-2 group-hover:scale-105 shadow-sm shadow-orange-500/30 transition-transform">
@@ -182,7 +265,10 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right section: Currency and User Menu */}
-          <div className="hidden sm:flex items-center gap-1.5 sm:gap-2.5 lg:gap-3 flex-shrink-0">
+          <div className={`relative hidden items-center gap-1.5 transition-transform duration-[400ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none sm:flex sm:gap-2.5 lg:gap-3 flex-shrink-0 ${compactSearch ? 'sm:translate-x-[max(0px,calc((100vw_-_var(--header-expanded-width))_/2))]' : ''}`}>
+            <div aria-hidden={!compactSearch || undefined} inert={!compactSearch || undefined} className={`absolute right-full mr-3 hidden transition-opacity duration-[400ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none min-[1440px]:block ${compactSearch ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
+              <button type="button" onClick={onCreateListing} className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-xs font-semibold text-neutral-900 hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-orange-600">Anuncie seu imóvel</button>
+            </div>
             {/* Currency selector dropdown */}
             <div className="relative flex-shrink-0" ref={currencyRef}>
               <button
@@ -511,6 +597,7 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
+      {toolbar && <div className={`search-toolbar-collapse ${compactSearch ? 'search-toolbar-collapse--compact' : ''}`}><div>{toolbar}</div></div>}
     </header>
   );
 };

@@ -71,6 +71,29 @@ class StaysContentReadCacheTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_property_details_are_cached_and_keep_only_public_amenity_fields(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake([
+            '*content/properties/property' => Http::response([
+                '_id' => 'property',
+                '_mstitle' => ['pt_BR' => 'Condomínio'],
+                'amenities' => [['_id' => 'pool']],
+                'ownerEmail' => 'private@example.test',
+            ]),
+        ]);
+        $cache = app(StaysContentReadCache::class);
+
+        $this->assertSame([
+            '_id' => 'property',
+            '_mstitle' => ['pt_BR' => 'Condomínio'],
+            'amenities' => [['_id' => 'pool']],
+        ], $cache->getPropertyDetails('property'));
+        $cache->getPropertyDetails('property');
+
+        Http::assertSentCount(1);
+    }
+
     public function test_fresh_auxiliary_lists_expire_after_five_minutes_and_are_isolated_by_account(): void
     {
         $this->freezeTime();

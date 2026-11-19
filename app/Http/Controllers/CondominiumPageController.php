@@ -31,7 +31,11 @@ class CondominiumPageController extends Controller
         $property = $snapshot['properties'][$id] ?? null;
         if ($property === null) {
             foreach ($snapshot['properties'] as $candidate) {
-                if ($this->catalog->propertyPath($candidate) === '/condominios/'.$id || in_array($id, $candidate['aliases'] ?? [], true)) {
+                if (
+                    $id === ($candidate['canonicalSlug'] ?? '')
+                    || $id === ($candidate['slug'] ?? '')
+                    || in_array($id, $candidate['aliases'] ?? [], true)
+                ) {
                     $property = $candidate;
                     break;
                 }
@@ -49,13 +53,18 @@ class CondominiumPageController extends Controller
         }
         abort_if($property === null || $property['listingIds'] === [], 404);
         $path = $this->catalog->propertyPath($property);
-        if ($slug !== null || '/condominios/'.$id !== $path) {
-            return redirect($this->pages->origin().$path, 301);
+        if (request()->getPathInfo() !== $path) {
+            $query = http_build_query(request()->query());
+            $destination = $this->pages->origin().$path.($query !== '' ? '?'.$query : '');
+
+            return redirect($destination, 301);
         }
         $listings = array_values(array_intersect_key($snapshot['listings'], array_flip($property['listingIds'])));
+        $faqs = $this->frequentlyAskedQuestions($property, count($listings));
 
         return $this->render('seo.condominium', $property['name'].' em '.$property['city'].' | Acomodações CRCN', Str::limit(preg_replace('/\s+/u', ' ', $property['description']) ?? '', 160), $path, $property['indexable'], [
             'property' => $property, 'listings' => $listings,
+            'faqs' => $faqs,
             'catalog' => $this->catalog,
             'searchUrl' => '/?'.http_build_query(['propertyId' => $property['id'], 'destination' => $property['name']]).'#stays-apartments-catalog',
         ]);
@@ -73,6 +82,17 @@ class CondominiumPageController extends Controller
                 'url' => $this->pages->origin().$path, 'image' => $property['images'],
                 'address' => ['@type' => 'PostalAddress', 'addressLocality' => $property['city'], 'addressRegion' => $property['state']],
             ];
+            if (($data['faqs'] ?? []) !== []) {
+                $graph['@graph'][] = [
+                    '@type' => 'FAQPage',
+                    '@id' => $this->pages->origin().$path.'#perguntas-frequentes',
+                    'mainEntity' => array_map(fn (array $faq): array => [
+                        '@type' => 'Question',
+                        'name' => $faq['question'],
+                        'acceptedAnswer' => ['@type' => 'Answer', 'text' => $faq['answer']],
+                    ], $data['faqs']),
+                ];
+            }
         }
         $response = response()->view($view, [...$data, 'title' => $title, 'description' => $description,
             'canonical' => $this->pages->origin().$path, 'indexable' => $indexable,
@@ -83,5 +103,42 @@ class CondominiumPageController extends Controller
         }
 
         return $response;
+    }
+
+    /**
+     * @param  array<string, mixed>  $property
+     * @return list<array{question: string, answer: string}>
+     */
+    private function frequentlyAskedQuestions(array $property, int $listingCount): array
+    {
+        $name = $property['name'];
+        $faqs = [[
+            'question' => 'Quantas acomodações do '.$name.' posso consultar?',
+            'answer' => 'O catálogo da Central de Reservas informa '.($listingCount === 1 ? '1 acomodação' : $listingCount.' acomodações').' vinculada'.($listingCount === 1 ? '' : 's').' ao '.$name.'. A disponibilidade depende das datas escolhidas e deve ser confirmada na busca.',
+        ], [
+            'question' => 'Como consultar a disponibilidade do '.$name.'?',
+            'answer' => 'Escolha as datas da viagem na busca de hospedagens para consultar as acomodações vinculadas ao '.$name.', os valores e a disponibilidade para o período.',
+        ]];
+
+        $knownAmenities = [
+            ['pattern' => '/wi[\s-]?fi/iu', 'label' => 'Wi-Fi', 'question' => 'O '.$name.' tem Wi-Fi?'],
+            ['pattern' => '/piscin/iu', 'label' => 'piscina', 'question' => 'O '.$name.' tem piscina?'],
+            ['pattern' => '/hidromass|\bhidro\b/iu', 'label' => 'hidromassagem', 'question' => 'O '.$name.' tem hidromassagem?'],
+            ['pattern' => '/ar[\s-]?condicionado/iu', 'label' => 'ar-condicionado', 'question' => 'O '.$name.' oferece ar-condicionado?'],
+            ['pattern' => '/estacionamento|vaga de garagem/iu', 'label' => 'estacionamento', 'question' => 'O '.$name.' tem estacionamento?'],
+            ['pattern' => '/\bsauna\b/iu', 'label' => 'sauna', 'question' => 'O '.$name.' tem sauna?'],
+        ];
+        $amenities = implode(' ', $property['amenities'] ?? []);
+        foreach ($knownAmenities as $amenity) {
+            if (preg_match($amenity['pattern'], $amenities) !== 1) {
+                continue;
+            }
+            $faqs[] = [
+                'question' => $amenity['question'],
+                'answer' => 'Sim. O cadastro público do '.$name.' informa '.$amenity['label'].' entre as comodidades do empreendimento. Confira também os detalhes da acomodação escolhida, pois os itens disponíveis podem variar entre unidades.',
+            ];
+        }
+
+        return array_slice($faqs, 0, 6);
     }
 }

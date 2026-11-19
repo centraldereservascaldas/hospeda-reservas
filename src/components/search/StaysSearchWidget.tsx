@@ -23,6 +23,7 @@ interface StaysSearchWidgetProps {
     checkIn: string;
     checkOut: string;
     persons: number;
+    dateFlexibility?: 0 | 1 | 2;
     guests?: SearchFilters['guests'];
     destination?: string;
     propertyId?: string;
@@ -69,6 +70,8 @@ interface LiquidDatePickerProps {
   onClose: () => void;
   onChange: (value: string) => void;
   onRangeChange?: (checkIn: string, checkOut: string) => void;
+  dateFlexibility?: 0 | 1 | 2;
+  onFlexibilityChange?: (days: 0 | 1 | 2) => void;
 }
 
 const isoDate = (date: Date) =>
@@ -79,6 +82,16 @@ const addDaysToIsoDate = (dateValue: string, days: number) => {
   date.setDate(date.getDate() + days);
   return isoDate(date);
 };
+
+function usePopoverPresence(isOpen: boolean) {
+  const [retained, setRetained] = useState(isOpen);
+  useEffect(() => {
+    if (isOpen) { setRetained(true); return; }
+    const timer = window.setTimeout(() => setRetained(false), 140);
+    return () => window.clearTimeout(timer);
+  }, [isOpen]);
+  return isOpen || retained;
+}
 
 const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
   label,
@@ -94,7 +107,10 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
   onClose,
   onChange,
   onRangeChange,
+  dateFlexibility = 0,
+  onFlexibilityChange,
 }) => {
+  const popoverPresent = usePopoverPresence(isOpen);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -161,7 +177,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
   };
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || hero) return;
     updatePosition();
     const focusFrame = window.requestAnimationFrame(() => {
       popoverRef.current
@@ -191,7 +207,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
       document.removeEventListener('pointerdown', handlePointerDown);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, updatePosition]);
+  }, [isOpen, updatePosition, hero]);
 
   const getFocusableDateForMonth = (monthOffset: number): string | undefined => {
     const month = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + monthOffset, 1);
@@ -286,8 +302,8 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
     : shownValue;
 
   useEffect(() => {
-    if (isOpen) updatePosition();
-  }, [collapsed, isOpen, updatePosition]);
+    if (isOpen && !hero) updatePosition();
+  }, [collapsed, isOpen, updatePosition, hero]);
 
   return (
     <>
@@ -325,11 +341,14 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
         </span>
       </button>
 
-      {isOpen &&
+      {popoverPresent && !hero &&
         createPortal(
           <div
             ref={popoverRef}
             data-dialog-focus-portal
+            aria-hidden={!isOpen}
+            inert={!isOpen}
+            data-closing={!isOpen || undefined}
             role="dialog"
             aria-label={`Calendário de ${label.toLowerCase()}`}
             className="search-popover-enter fixed z-[1000] overflow-y-auto overscroll-contain rounded-3xl border border-white/90 bg-white/80 p-4 [@media(max-width:639px)]:p-1 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl"
@@ -372,10 +391,9 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
             <div className="mt-3 flex items-center justify-between gap-2 border-t border-neutral-200/70 pt-3">
               {hero && onRangeChange && (
                 <div aria-label="Flexibilidade das datas" className="flex flex-wrap items-center gap-2">
-                  <button type="button" aria-pressed="true" className="min-h-10 rounded-full border border-neutral-900 px-4 text-xs font-semibold text-neutral-900">Datas exatas</button>
-                  {[1, 2, 3, 7, 14].map((days) => (
-                    <button key={days} type="button" disabled title="A busca com flexibilidade de datas ainda não está disponível." className="min-h-10 cursor-not-allowed rounded-full border border-neutral-200 px-4 text-xs font-semibold text-neutral-400">
-                      ± {days} {days === 1 ? 'dia' : 'dias'}
+                  {([0, 1, 2, 3, 7, 14] as const).map((days) => (
+                    <button key={days} type="button" disabled={days > 2} aria-pressed={dateFlexibility === days} onClick={() => { if (days <= 2) onFlexibilityChange?.(days as 0 | 1 | 2); }} title={days > 2 ? 'Ainda não disponível' : undefined} className={`min-h-10 rounded-full border px-4 text-xs font-semibold ${dateFlexibility === days ? 'border-neutral-900 text-neutral-900' : days > 2 ? 'cursor-not-allowed border-neutral-200 text-neutral-400' : 'border-neutral-300 text-neutral-700 hover:border-neutral-900'}`}>
+                      {days === 0 ? 'Datas exatas' : `± ${days} ${days === 1 ? 'dia' : 'dias'}`}
                     </button>
                   ))}
                 </div>
@@ -420,6 +438,8 @@ interface LiquidSelectProps {
   onChange: (option: LiquidOption) => void;
   searchable?: boolean;
   message?: string;
+  advanceOnSelect?: boolean;
+  sharedPanel?: boolean;
 }
 
 const LiquidSelect: React.FC<LiquidSelectProps> = ({
@@ -434,7 +454,10 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
   onChange,
   searchable,
   message,
+  advanceOnSelect = false,
+  sharedPanel = false,
 }) => {
+  const popoverPresent = usePopoverPresence(isOpen);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -458,7 +481,7 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
   };
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || sharedPanel) return;
     const frame = window.requestAnimationFrame(updatePosition);
     const closeOnOutside = (event: PointerEvent) => {
       const target = event.target as Node;
@@ -478,7 +501,7 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
       document.removeEventListener('pointerdown', closeOnOutside);
       document.removeEventListener('keydown', closeOnEscape);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, sharedPanel]);
 
   useEffect(() => {
     if (isOpen) setQuery('');
@@ -493,18 +516,18 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
   const selectedIndex = visibleOptions.findIndex((option) => option.value === value);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || sharedPanel) return;
     const frame = window.requestAnimationFrame(() => {
       if (searchable) searchInputRef.current?.focus();
       else (optionRefs.current[selectedIndex] || optionRefs.current[0])?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [isOpen, searchable, selectedIndex]);
+  }, [isOpen, searchable, selectedIndex, sharedPanel]);
 
   const selectOption = (option: LiquidOption) => {
     onChange(option);
     onClose();
-    triggerRef.current?.focus();
+    if (!advanceOnSelect) triggerRef.current?.focus();
   };
 
   const moveOptionFocus = (index: number, direction: -1 | 1) => {
@@ -535,11 +558,14 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
         />
       </button>
 
-      {isOpen &&
+      {popoverPresent && !sharedPanel &&
         createPortal(
           <div
             ref={menuRef}
             data-dialog-focus-portal
+            aria-hidden={!isOpen}
+            inert={!isOpen}
+            data-closing={!isOpen || undefined}
             role="group"
             aria-label="Opções de filtro"
             className="search-popover-enter fixed z-[1000] overflow-hidden rounded-2xl border border-white/90 bg-white/78 p-2 text-neutral-800 shadow-[0_18px_55px_-16px_rgba(15,23,42,0.24)] backdrop-blur-2xl"
@@ -627,6 +653,124 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
   );
 };
 
+interface SharedCalendarContentProps {
+  checkIn: string;
+  checkOut: string;
+  today: string;
+  dateFlexibility: 0 | 1 | 2;
+  onFlexibilityChange: (days: 0 | 1 | 2) => void;
+  onSelectRange: (checkIn: string, checkOut: string) => void;
+}
+
+function SharedCalendarContent({
+  checkIn,
+  checkOut,
+  today,
+  dateFlexibility,
+  onFlexibilityChange,
+  onSelectRange,
+}: SharedCalendarContentProps) {
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const initialDate = checkIn ? new Date(`${checkIn}T12:00:00`) : new Date();
+    return new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
+  });
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
+  const [previewEnd, setPreviewEnd] = useState<string | null>(null);
+  const [focusDate, setFocusDate] = useState(checkIn || undefined);
+  const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const isWide = typeof window !== 'undefined' && window.innerWidth > 639;
+
+  const getFocusableDate = (monthOffset: number): string | undefined => {
+    const month = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + monthOffset, 1);
+    const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
+    if (focusDate?.startsWith(prefix) && focusDate >= today) return focusDate;
+    if (checkIn.startsWith(prefix) && checkIn >= today) return checkIn;
+    const leadingDays = month.getDay();
+    return Array.from({ length: 42 }, (_, index) =>
+      isoDate(new Date(month.getFullYear(), month.getMonth(), index - leadingDays + 1)),
+    ).find((dateValue) => dateValue.startsWith(prefix) && dateValue >= today);
+  };
+
+  const handleDateKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, dateValue: string) => {
+    const dayOffset = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : event.key === 'ArrowUp' ? -7 : event.key === 'ArrowDown' ? 7 : 0;
+    if (!dayOffset) return;
+    event.preventDefault();
+    const candidate = new Date(`${dateValue}T12:00:00`);
+    candidate.setDate(candidate.getDate() + dayOffset);
+    const nextDate = isoDate(candidate);
+    if (nextDate < today) return;
+    setFocusDate(nextDate);
+    if (candidate.getMonth() !== visibleMonth.getMonth() || candidate.getFullYear() !== visibleMonth.getFullYear()) {
+      setVisibleMonth(new Date(candidate.getFullYear(), candidate.getMonth(), 1));
+    }
+  };
+
+  useEffect(() => {
+    if (focusDate) dateButtonRefs.current.get(focusDate)?.focus();
+  }, [focusDate, visibleMonth]);
+
+  const renderMonth = (monthOffset: number) => (
+    <CalendarMonthGrid
+      key={monthOffset}
+      month={new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + monthOffset, 1)}
+      minDate={today}
+      selectedStart={checkIn}
+      selectedEnd={checkOut}
+      pendingStart={pendingStart}
+      previewEnd={previewEnd}
+      onPreviewDate={setPreviewEnd}
+      focusDate={getFocusableDate(monthOffset)}
+      onSelectDate={(date) => {
+        setFocusDate(date);
+        setPreviewEnd(null);
+        if (!pendingStart) {
+          setPendingStart(date);
+          return;
+        }
+        if (date > pendingStart) {
+          onSelectRange(pendingStart, date);
+          setPendingStart(null);
+          return;
+        }
+        setPendingStart(date);
+      }}
+      onDateKeyDown={handleDateKeyDown}
+      registerDateButton={(date) => (button) => {
+        if (button) dateButtonRefs.current.set(date, button);
+        else dateButtonRefs.current.delete(date);
+      }}
+    />
+  );
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div role="tablist" aria-label="Tipo de data" className="mx-auto mb-4 flex w-fit shrink-0 items-center rounded-full bg-neutral-100 p-1">
+        <button type="button" role="tab" aria-selected="true" className="min-h-10 rounded-full bg-white px-8 text-sm font-semibold text-neutral-900 shadow-sm">Datas</button>
+        <button type="button" role="tab" aria-selected="false" disabled title="A busca flexível ainda não está disponível para os condomínios." className="min-h-10 cursor-not-allowed rounded-full px-8 text-sm font-semibold text-neutral-400">Flexível</button>
+      </div>
+      <div className="mb-3 grid min-h-0 flex-1 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-2 overflow-y-auto sm:gap-3">
+        <button type="button" onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))} aria-label="Mês anterior" className="mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-neutral-900">
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className={`grid min-w-0 ${isWide ? 'grid-cols-2 gap-4 sm:gap-6' : 'grid-cols-1'}`}>
+          {renderMonth(0)}
+          {isWide && renderMonth(1)}
+        </div>
+        <button type="button" onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))} aria-label="Próximo mês" className="mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-neutral-900">
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+      <div aria-label="Flexibilidade das datas" className="flex shrink-0 flex-wrap items-center gap-2 border-t border-neutral-200/70 pt-3">
+        {([0, 1, 2, 3, 7, 14] as const).map((days) => (
+          <button key={days} type="button" disabled={days > 2} aria-pressed={dateFlexibility === days} onClick={() => { if (days <= 2) onFlexibilityChange(days as 0 | 1 | 2); }} title={days > 2 ? 'Ainda não disponível' : undefined} className={`min-h-10 rounded-full border px-4 text-xs font-semibold ${dateFlexibility === days ? 'border-neutral-900 text-neutral-900' : days > 2 ? 'cursor-not-allowed border-neutral-200 text-neutral-400' : 'border-neutral-300 text-neutral-700 hover:border-neutral-900'}`}>
+            {days === 0 ? 'Datas exatas' : `± ${days} ${days === 1 ? 'dia' : 'dias'}`}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   onSearchInApp,
   currentFilters,
@@ -641,6 +785,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
 
   const [checkIn, setCheckIn] = useState<string>(currentFilters?.checkIn || '');
   const [checkOut, setCheckOut] = useState<string>(currentFilters?.checkOut || '');
+  const [dateFlexibility, setDateFlexibility] = useState<0 | 1 | 2>(currentFilters?.dateFlexibility ?? 0);
   const [persons, setPersons] = useState<string>(
     currentFilters?.guests
       ? String(countOccupancyGuests(currentFilters.guests))
@@ -657,14 +802,17 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   const [activeDatePicker, setActiveDatePicker] = useState<'checkIn' | 'checkOut' | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<'resort' | 'guests' | null>(null);
   const guestTriggerRef = useRef<HTMLButtonElement>(null);
-  const guestPopoverRef = useRef<HTMLDivElement>(null);
-  const [guestPopoverPosition, setGuestPopoverPosition] = useState({ left: 8, top: 8, width: 400, maxHeight: 500 });
+  const [sharedPanelPosition, setSharedPanelPosition] = useState({ left: 8, top: 150, width: 400, height: 420 });
+  const [sharedPanelVisible, setSharedPanelVisible] = useState(false);
+  const [sharedResortQuery, setSharedResortQuery] = useState('');
+  const sharedPanelRef = useRef<HTMLDivElement>(null);
   const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
   const [isLoadingResorts, setIsLoadingResorts] = useState(true);
   const [searchValidationMessage, setSearchValidationMessage] = useState('');
   const hasCurrentFilters = currentFilters !== undefined;
   const syncedCheckIn = currentFilters?.checkIn || '';
   const syncedCheckOut = currentFilters?.checkOut || '';
+  const syncedFlexibility = currentFilters?.dateFlexibility ?? 0;
   const syncedAdults = currentFilters?.guests?.adults;
   const syncedChildren = currentFilters?.guests?.children;
   const syncedInfants = currentFilters?.guests?.infants;
@@ -683,6 +831,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     if (!hasCurrentFilters) return;
     setCheckIn(syncedCheckIn);
     setCheckOut(syncedCheckOut);
+    setDateFlexibility(syncedFlexibility);
     if (hasSyncedGuests && syncedGuestCount >= 1 && syncedGuestCount <= 17) {
       setPersons(String(syncedGuestCount));
       setGuestCounts({
@@ -700,6 +849,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     hasCurrentFilters,
     syncedCheckIn,
     syncedCheckOut,
+    syncedFlexibility,
     hasSyncedGuests,
     syncedAdults,
     syncedChildren,
@@ -726,51 +876,58 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   }, []);
 
   useEffect(() => {
-    if (activeDropdown !== 'guests') return;
+    if (!isHero) return;
+    const activePanel = activeDropdown === 'resort' ? 'where' : activeDropdown === 'guests' ? 'guests' : activeDatePicker ? 'when' : null;
+    if (!activePanel) {
+      const timer = window.setTimeout(() => setSharedPanelVisible(false), 240);
+      return () => window.clearTimeout(timer);
+    }
+    setSharedPanelVisible(true);
     const updatePosition = () => {
-      const trigger = guestTriggerRef.current;
-      if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
-      const gutter = 12;
-      const width = Math.min(400, window.innerWidth - gutter * 2);
-      const left = Math.max(gutter, Math.min(rect.right - width, window.innerWidth - width - gutter));
-      const belowTop = rect.bottom + 12;
-      const belowSpace = Math.max(0, window.innerHeight - belowTop - gutter);
-      const aboveSpace = Math.max(0, rect.top - 12 - gutter);
-      const maxHeight = Math.min(500, Math.max(belowSpace, aboveSpace));
-      const top = belowSpace >= Math.min(360, maxHeight)
-        ? belowTop
-        : Math.max(gutter, rect.top - maxHeight - 12);
-      setGuestPopoverPosition({ left, top, width, maxHeight });
+      const form = document.getElementById('widgetStaysSearchForm');
+      const target = form?.querySelector<HTMLElement>(`[data-search-segment="${activePanel === 'where' ? 'where' : activePanel === 'when' ? 'when' : 'guests'}"]`);
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      const gutter = window.innerWidth <= 639 ? 12 : 16;
+      const width = Math.min(activePanel === 'when' ? 850 : activePanel === 'where' ? 400 : 620, window.innerWidth - gutter * 2);
+      const height = Math.min(activePanel === 'when' ? 540 : activePanel === 'where' ? 360 : 430, window.innerHeight - 24);
+      const centeredLeft = activePanel === 'when' ? (window.innerWidth - width) / 2 : rect.left;
+      const left = Math.max(gutter, Math.min(centeredLeft, window.innerWidth - width - gutter));
+      const top = Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - height - 8));
+      setSharedPanelPosition({ left, top, width, height });
     };
+    const frame = window.requestAnimationFrame(updatePosition);
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
     const focusFrame = window.requestAnimationFrame(() => {
-      updatePosition();
-      guestPopoverRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+      if (activePanel === 'where') sharedPanelRef.current?.querySelector<HTMLInputElement>('input[aria-label="Buscar condomínio"]')?.focus();
+      if (activePanel === 'guests') sharedPanelRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+      if (activePanel === 'when') sharedPanelRef.current?.querySelector<HTMLButtonElement>('[data-calendar-day]:not(:disabled)')?.focus();
     });
     const handleOutsideClick = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (!guestTriggerRef.current?.contains(target) && !guestPopoverRef.current?.contains(target)) {
+      if (!sharedPanelRef.current?.contains(target) && !document.getElementById('widgetStaysSearchForm')?.contains(target)) {
         setActiveDropdown(null);
+        setActiveDatePicker(null);
       }
     };
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setActiveDropdown(null);
-        guestTriggerRef.current?.focus();
+        setActiveDatePicker(null);
       }
     };
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
     document.addEventListener('pointerdown', handleOutsideClick);
     document.addEventListener('keydown', handleEscape);
     return () => {
+      window.cancelAnimationFrame(frame);
       window.cancelAnimationFrame(focusFrame);
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
       document.removeEventListener('pointerdown', handleOutsideClick);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [activeDropdown]);
+  }, [activeDropdown, activeDatePicker, isHero]);
 
   // Form submission handler
   const handleSubmit = (e: React.FormEvent) => {
@@ -812,6 +969,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     onSearchInApp({
       checkIn,
       checkOut,
+      dateFlexibility,
       persons: guests ? countOccupancyGuests(guests) : personCount,
       guests,
       destination: surpriseMe ? '' : selectedResort,
@@ -822,7 +980,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
 
   const resortOptions = [
     { value: '', label: 'Todos os condomínios' },
-    ...resorts.map((resort) => ({ value: resort.id, label: resort.name })),
+    ...resorts.map((resort) => ({ value: resort.id, label: resort.name.replace(/^CRCN\s*[-–]\s*/i, '') })),
   ];
   const guestOptions = [
     { value: '', label: 'Hóspedes' },
@@ -851,7 +1009,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     <div className={`w-full transition-all ${className}`}>
       {/* Container in Liquid Glass */}
       <div
-        className={`relative ${isHero ? 'rounded-[2rem] border border-neutral-200 bg-neutral-100 p-0 shadow-[0_12px_35px_-18px_rgba(15,23,42,0.3)] backdrop-blur-xl sm:rounded-full sm:p-0' : 'rounded-3xl liquid-glass-card border border-white/85 p-4 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.07)] sm:p-7 max-[400px]:p-3 [@media(max-height:400px)]:p-0'}`}
+        className={`relative ${isHero ? 'search-bar-shell rounded-[2rem] border border-neutral-200/90 bg-white/85 p-0 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.35)] backdrop-blur-xl sm:rounded-full sm:p-0' : 'rounded-3xl liquid-glass-card border border-white/85 p-4 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.07)] sm:p-7 max-[400px]:p-3 [@media(max-height:400px)]:p-0'}`}
       >
         {/* Search widget heading */}
         <div
@@ -952,6 +1110,8 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     placeholder="Todos os condomínios"
                     options={resortOptions}
                     searchable
+                    advanceOnSelect={isHero}
+                    sharedPanel={isHero}
                     message={
                       isLoadingResorts
                         ? 'Carregando condomínios da Stays...'
@@ -966,6 +1126,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     onChange={(option) => {
                       setSelectedResortId(option.value);
                       setSelectedResort(option.value ? option.label : '');
+                      if (isHero) setActiveDatePicker('checkIn');
                     }}
                   />
                 </div>
@@ -1008,6 +1169,8 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                           collapsed={isHero}
                           summaryValue={dateRangeSummary}
                           rangeEnd={checkOut}
+                          dateFlexibility={dateFlexibility}
+                          onFlexibilityChange={setDateFlexibility}
                           emptyLabel={isHero ? 'Entrada' : undefined}
                           value={checkIn}
                           minDate={today}
@@ -1119,32 +1282,6 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     >
                       {selectedGuestLabel || '1 Pessoa'}
                     </button>
-                    {activeDropdown === 'guests' && (
-                      createPortal(
-                        <div
-                          ref={guestPopoverRef}
-                          role="dialog"
-                          aria-label="Selecionar hóspedes"
-                          className="search-popover-enter fixed z-[1100] overflow-y-auto overscroll-contain rounded-2xl border border-neutral-200 bg-white p-4 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] sm:p-5"
-                          style={{
-                            left: guestPopoverPosition.left,
-                            top: guestPopoverPosition.top,
-                            width: guestPopoverPosition.width,
-                            maxHeight: guestPopoverPosition.maxHeight,
-                          }}
-                        >
-                          <GuestCounterList
-                            compact
-                            counts={guestCounts}
-                            onChange={(nextCounts) => {
-                              setGuestCounts(nextCounts);
-                              setPersons(String(countOccupancyGuests(nextCounts)));
-                            }}
-                          />
-                        </div>,
-                        document.body,
-                      )
-                    )}
                   </>
                 ) : (
                   <LiquidSelect
@@ -1225,6 +1362,34 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
             </div>
           </div>
         </form>
+        {isHero && sharedPanelVisible && createPortal(
+          <div
+            ref={sharedPanelRef}
+            data-dialog-focus-portal
+            aria-hidden={!activeDropdown && !activeDatePicker}
+            inert={!activeDropdown && !activeDatePicker}
+            role="dialog"
+            aria-label={activeDropdown === 'resort' ? 'Escolher condomínio' : activeDropdown === 'guests' ? 'Selecionar hóspedes' : 'Calendário de entrada (check-in)'}
+            className={`search-shared-panel fixed z-[1000] overflow-hidden rounded-3xl border border-white/90 bg-white/90 p-4 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl [@media(max-width:639px)]:p-3 ${!activeDropdown && !activeDatePicker ? 'search-shared-panel--closing' : ''}`}
+            style={{ left: sharedPanelPosition.left, top: sharedPanelPosition.top, width: sharedPanelPosition.width, height: sharedPanelPosition.height }}
+          >
+            {activeDropdown === 'resort' && (
+              <div className="h-full overflow-hidden">
+                <label className="sr-only" htmlFor={`${fieldId}-resorts-query`}>Buscar condomínio</label>
+                <input id={`${fieldId}-resorts-query`} aria-label="Buscar condomínio" value={sharedResortQuery} onChange={(event) => setSharedResortQuery(event.target.value)} placeholder="Buscar condomínio..." className="mb-2 min-h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none focus:border-orange-500" />
+                <div role="listbox" aria-label="Opções disponíveis" className="max-h-[calc(100%-3.5rem)] overflow-y-auto">
+                  {resortOptions.filter((option) => !sharedResortQuery || option.label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').includes(sharedResortQuery.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))).map((option) => <button key={option.value || 'all'} type="button" role="option" aria-selected={selectedResortId === option.value} onClick={() => { setSelectedResortId(option.value); setSelectedResort(option.value ? option.label : ''); setSharedResortQuery(''); setActiveDropdown(null); setActiveDatePicker('checkIn'); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm hover:bg-orange-50">{option.label}</button>)}
+                </div>
+              </div>
+            )}
+            {activeDropdown === 'guests' && <GuestCounterList compact counts={guestCounts} onChange={(nextCounts) => { setGuestCounts(nextCounts); setPersons(String(countOccupancyGuests(nextCounts))); }} />}
+            {!activeDropdown && activeDatePicker && <SharedCalendarContent
+              checkIn={checkIn} checkOut={checkOut} today={today} dateFlexibility={dateFlexibility}
+              onFlexibilityChange={setDateFlexibility}
+              onSelectRange={(newCheckIn, newCheckOut) => { setSearchValidationMessage(''); setCheckIn(newCheckIn); setCheckOut(newCheckOut); setActiveDatePicker(null); }}
+            />}
+          </div>, document.body,
+        )}
       </div>
     </div>
   );

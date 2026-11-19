@@ -19,6 +19,7 @@ export interface AccommodationWidgetSearchParams {
   checkIn: string;
   checkOut: string;
   persons: number;
+  dateFlexibility?: 0 | 1 | 2;
   guests?: SearchFilters['guests'];
   destination?: string;
   propertyId?: string;
@@ -238,6 +239,7 @@ export function useAccommodationSearch({
           ...previous,
           checkIn: searchParams.checkIn,
           checkOut: searchParams.checkOut,
+          dateFlexibility: searchParams.dateFlexibility ?? 0,
           destination: searchParams.destination || '',
           destinationPropertyId: searchParams.propertyId || '',
           guests: searchParams.guests ?? {
@@ -259,6 +261,7 @@ export function useAccommodationSearch({
         ...previous,
         checkIn: searchParams.surpriseMe ? '' : searchParams.checkIn,
         checkOut: searchParams.surpriseMe ? '' : searchParams.checkOut,
+        dateFlexibility: searchParams.surpriseMe ? 0 : searchParams.dateFlexibility ?? 0,
         destination: searchParams.surpriseMe ? '' : searchParams.destination || '',
         destinationPropertyId: searchParams.surpriseMe ? '' : searchParams.propertyId || '',
         guests: searchParams.guests ?? {
@@ -523,6 +526,7 @@ export function useAccommodationSearch({
     const restoredParams = {
       checkIn: restoredFilters.checkIn,
       checkOut: restoredFilters.checkOut,
+      dateFlexibility: restoredFilters.dateFlexibility,
       persons: countOccupancyGuests(restoredFilters.guests),
       guests: restoredFilters.guests,
       destination: restoredFilters.destination,
@@ -550,6 +554,7 @@ export function useAccommodationSearch({
     void handleStaysWidgetSearch({
       checkIn: initialFilters.checkIn,
       checkOut: initialFilters.checkOut,
+      dateFlexibility: initialFilters.dateFlexibility,
       persons: countOccupancyGuests(initialFilters.guests),
       guests: initialFilters.guests,
       destination: initialFilters.destination,

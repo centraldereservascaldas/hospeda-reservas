@@ -21,7 +21,7 @@ import { countOccupancyGuests } from '../utils/guestCounts';
 import { CondominiumDirectory } from './condominium/CondominiumDirectory';
 import { ActiveSearchFilters } from './search/ActiveSearchFilters';
 import { AvailabilitySearchState as AvailabilitySearchStateView } from './search/AvailabilitySearchState';
-import { StaysSearchWidget } from './search/StaysSearchWidget';
+import { FlexibleDateResults } from './search/FlexibleDateResults';
 import { SeasonalDateSuggestions } from './search/SeasonalDateSuggestions';
 import { SearchPagination } from './search/SearchPagination';
 import type { SearchPaginationState } from '../hooks/useAccommodationSearch';
@@ -99,7 +99,6 @@ interface MainContentRouterProps {
     property: Property,
     params: AccommodationWidgetSearchParams,
   ) => void;
-  onOpenAssistant: () => void;
   onSelectCondominium: (condominium: CondominiumSummary) => void;
   onToggleSave: (propertyId: string) => void;
   onSelectProperty: (property: Property) => void;
@@ -155,7 +154,6 @@ export function MainContentRouter({
   onOpenSearch,
   onSearchInApp,
   onOpenSuggestedProperty,
-  onOpenAssistant,
   onSelectCondominium,
   onToggleSave,
   onSelectProperty,
@@ -164,6 +162,7 @@ export function MainContentRouter({
   onCancelReservation,
   onExploreMore,
 }: MainContentRouterProps) {
+  const [mapListExpanded, setMapListExpanded] = React.useState(false);
   const isCompletedSearch =
     availabilitySearchState === 'success' || availabilitySearchState === 'partial';
   const hasPreservedSearchResults =
@@ -201,7 +200,7 @@ export function MainContentRouter({
         hasAvailableSearchResults && (isCondominiumView || viewMode === 'map' || isCompletedSearch)
       }
       showEmptyResults={viewMode === 'map' && !isCondominiumView}
-      showIdleNotice={isCondominiumView}
+      showIdleNotice={false}
       onRetry={onRetryAvailabilitySearch}
       onClearFilters={onClearCatalogFilters}
       onOpenSearch={onOpenSearch}
@@ -268,17 +267,6 @@ export function MainContentRouter({
               não são realizados.
             </p>
           )}
-          {!isCondominiumView && (
-            <div className="mx-auto mb-8 hidden w-full max-w-[var(--search-bar-width)] sm:block [@media(max-height:400px)]:hidden">
-              <StaysSearchWidget
-                variant="hero"
-                currentFilters={filters}
-                onSearchInApp={onSearchInApp}
-                onOpenAssistant={onOpenAssistant}
-              />
-            </div>
-          )}
-
           {!isCondominiumView &&
             availabilitySearchState === 'idle' &&
             !filters.checkIn &&
@@ -306,7 +294,9 @@ export function MainContentRouter({
             onClearFilters={onClearPropertyRefinements}
           />
 
-          <div id="stays-apartments-catalog" className="scroll-mt-24">
+          {!isCondominiumView && <FlexibleDateResults filters={filters} onOpenProperty={onOpenSuggestedProperty} />}
+
+          <div id="stays-apartments-catalog" className="scroll-mt-24 view-transition-explore-content">
             {isCondominiumView && (!shouldShowAvailabilityState || hasPreservedSearchResults) ? (
               <>
                 {availabilitySearchStateView}
@@ -369,6 +359,33 @@ export function MainContentRouter({
                         />
                       </LazyFeatureBoundary>
                     )}
+                  {visibleCatalogStatus !== 'loading' && visibleCatalogStatus !== 'error' && filteredProperties.length > 0 && (
+                    <section className="relative z-10 -mt-6 rounded-t-3xl bg-white px-4 pb-5 pt-2 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] sm:hidden" aria-label="Lista de acomodações">
+                      <button type="button" aria-expanded={mapListExpanded} onClick={() => setMapListExpanded((expanded) => !expanded)} className="flex min-h-14 w-full flex-col items-center justify-center gap-2 rounded-xl text-sm font-semibold focus-visible:outline-2 focus-visible:outline-orange-600">
+                        <span aria-hidden="true" className="h-1 w-10 rounded-full bg-neutral-300" />
+                        <span>{filteredProperties.length} {filteredProperties.length === 1 ? 'acomodação' : 'acomodações'} · {mapListExpanded ? 'Recolher lista' : 'Ver lista'}</span>
+                      </button>
+                      <div className={mapListExpanded ? '' : 'max-h-80 overflow-hidden'}>
+                        <PropertyCatalogGrid
+                          status={visibleCatalogStatus}
+                          properties={mapListExpanded ? filteredProperties : filteredProperties.slice(0, 1)}
+                          currency={currency}
+                          savedPropertyIds={savedPropertyIds}
+                          showTotalWithTaxes={showTotalWithTaxes}
+                          hasSearchDates={Boolean(filters.checkIn && filters.checkOut)}
+                          availabilityConfirmed={hasConfirmedSearchAvailability}
+                          hasAvailableSearchResults={hasAvailableSearchResults}
+                          searchGuestCount={searchGuestCount}
+                          prioritizeFirstImage
+                          onRetryCatalog={onRetryCatalog}
+                          onToggleSave={onToggleSave}
+                          onSelectProperty={onSelectProperty}
+                          onResetFilters={onResetFilters}
+                          onClearCatalogFilters={onClearCatalogFilters}
+                        />
+                      </div>
+                    </section>
+                  )}
                 </div>
               ))}
             {searchPagination?.active && onLoadMoreSearchResults && (

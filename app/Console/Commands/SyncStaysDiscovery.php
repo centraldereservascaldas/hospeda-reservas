@@ -4,8 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\StaysDiscoveryCatalog;
 use Illuminate\Console\Command;
-use Illuminate\Contracts\Cache\LockTimeoutException;
-use RuntimeException;
+use Throwable;
 
 class SyncStaysDiscovery extends Command
 {
@@ -17,7 +16,8 @@ class SyncStaysDiscovery extends Command
     {
         try {
             $snapshot = $catalog->sync();
-        } catch (RuntimeException|LockTimeoutException) {
+        } catch (Throwable $exception) {
+            report($exception);
             $this->error('Sincronização incompleta. A última versão válida foi preservada até seu vencimento.');
 
             return self::FAILURE;

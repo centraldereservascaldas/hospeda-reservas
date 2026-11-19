@@ -13,6 +13,56 @@ class StaysContentReadCache
 {
     public function __construct(private readonly StaysExternalApiClient $stays) {}
 
+    /** @return array<string, mixed>|null */
+    public function getPropertyDetails(string $propertyId, ?int $timeout = null): ?array
+    {
+        if (preg_match('/^[a-zA-Z0-9_-]{1,80}$/D', $propertyId) !== 1) {
+            throw new InvalidArgumentException('Invalid accommodation property ID.');
+        }
+
+        $endpoint = '/content/properties/'.rawurlencode($propertyId);
+        $key = 'stays.content-detail.v1:'.hash('sha256', json_encode([$this->account(), $propertyId], JSON_THROW_ON_ERROR));
+        try {
+            $cached = $this->cache()->get($key);
+            if (is_array($cached)) {
+                return $cached;
+            }
+            $this->assertAvailable();
+
+            return $this->cache()->lock($key.':lock', max(15, ($timeout ?? (int) config('services.stays.timeout', 10)) + 5))->block(1, function () use ($key, $endpoint, $propertyId, $timeout): ?array {
+                $cached = $this->cache()->get($key);
+                if (is_array($cached)) {
+                    return $cached;
+                }
+                $this->assertAvailable();
+                $response = $this->stays->request('GET', $endpoint, timeout: $timeout);
+                if ($response?->status() === 429) {
+                    $limited = StaysContentRateLimited::fromHeader($response->header('Retry-After'));
+                    $this->pause($limited);
+                    throw $limited;
+                }
+                $data = $response?->successful() ? $response->json() : null;
+                if (! is_array($data) || array_is_list($data)
+                    || ($data['_id'] ?? null) !== $propertyId
+                    || (isset($data['amenities']) && ! is_array($data['amenities']))) {
+                    return null;
+                }
+
+                $allowed = array_fill_keys(['_id', 'id', '_mstitle', '_msdesc', 'internalName', 'amenities'], true);
+                $data = array_intersect_key($data, $allowed);
+                $this->cache()->put($key, $data, 300);
+
+                return $data;
+            });
+        } catch (QueryException|LockTimeoutException $exception) {
+            if ($exception instanceof QueryException) {
+                report(new RuntimeException('The shared accommodation metadata cache could not be accessed.'));
+            }
+
+            return null;
+        }
+    }
+
     /**
      * @param  array<string, int|string>  $query
      * @return list<array<string, mixed>>|null

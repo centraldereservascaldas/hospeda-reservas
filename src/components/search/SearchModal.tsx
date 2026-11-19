@@ -4,9 +4,9 @@ import {
   Search,
   MapPin,
   Sparkles,
-  ExternalLink,
 } from 'lucide-react';
 import { SearchFilters } from '../../types';
+import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { StaysSearchWidget, toBrDate } from './StaysSearchWidget';
 import { useDialogFocus } from '../useDialogFocus';
 import { countOccupancyGuests } from '../../utils/guestCounts';
@@ -31,6 +31,7 @@ interface SearchModalProps {
     checkIn: string;
     checkOut: string;
     persons: number;
+    dateFlexibility?: 0 | 1 | 2;
     guests?: SearchFilters['guests'];
     destination?: string;
     propertyId?: string;
@@ -57,8 +58,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     'destination',
   );
   const [destination, setDestination] = useState(filters.destination);
+  const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => { if (!isOpen) return; let active = true; crcnBackendApi.getResorts().then((items) => { if (active) setResorts(items); }).catch(() => {}); return () => { active = false; }; }, [isOpen]);
   const [checkIn, setCheckIn] = useState(filters.checkIn);
   const [checkOut, setCheckOut] = useState(filters.checkOut);
+  const [dateFlexibility, setDateFlexibility] = useState<0 | 1 | 2>(filters.dateFlexibility ?? 0);
   const [adults, setAdults] = useState(filters.guests.adults);
   const [children, setChildren] = useState(filters.guests.children);
   const [infants, setInfants] = useState(filters.guests.infants);
@@ -102,6 +106,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     setDestination(filters.destination);
     setCheckIn(filters.checkIn);
     setCheckOut(filters.checkOut);
+    setDateFlexibility(filters.dateFlexibility ?? 0);
     setAdults(filters.guests.adults);
     setChildren(filters.guests.children);
     setInfants(filters.guests.infants);
@@ -116,43 +121,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
   if (!isOpen) return null;
 
-  const popularDestinations = [
-    {
-      name: 'Todos em Caldas Novas & Rio Quente',
-      subtitle: 'Descubra resorts termais e flats',
-      query: '',
-    },
-    {
-      name: 'Complexo diRoma & Acqua Park',
-      subtitle: 'Lacqua, Exclusive, Piazza e ingressos',
-      query: 'diRoma',
-    },
-    {
-      name: 'Rio Quente & Hot Park',
-      subtitle: 'Parque das Fontes e águas a 42°C',
-      query: 'Rio Quente',
-    },
-    {
-      name: 'Bairro do Turista',
-      subtitle: 'Prive Riviera, Boulevard e centro gastronômico',
-      query: 'Turista',
-    },
-    {
-      name: 'À beira do Lago Corumbá',
-      subtitle: 'Chalés náuticos, passeios de lancha e pier',
-      query: 'Corumbá',
-    },
-    {
-      name: 'Jardim Belvedere (L’acqua diRoma)',
-      subtitle: 'Piscina de ondas e parque 24h',
-      query: 'Belvedere',
-    },
-    {
-      name: 'Ecologic Ville & Furnas',
-      subtitle: 'Resorts com bosque nativo e tranquilidade',
-      query: 'Ecologic',
-    },
-  ];
+  const normalizedQuery = destination.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const popularDestinations = resorts.map((resort) => {
+    const name = resort.name.replace(/^CRCN\s*[-–]\s*/i, '');
+    return { name, subtitle: 'Condomínio', query: resort.name };
+  }).filter((item) => !normalizedQuery || item.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(normalizedQuery)).slice(0, 8);
 
   const handleApply = () => {
     const hasPartialDateRange = Boolean(checkIn) !== Boolean(checkOut);
@@ -173,12 +146,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         destination === filters.destination ? filters.destinationPropertyId : '',
       checkIn,
       checkOut,
+      dateFlexibility,
       guests,
     });
     onSearchInApp({
       checkIn,
       checkOut,
       persons: Math.max(1, totalGuests),
+      dateFlexibility,
       guests,
       destination,
       propertyId: destination === filters.destination ? filters.destinationPropertyId : '',
@@ -190,6 +165,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     setDestination('');
     setCheckIn('');
     setCheckOut('');
+    setDateFlexibility(0);
     setAdults(1);
     setChildren(0);
     setInfants(0);
@@ -206,9 +182,6 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     });
   };
 
-  const brCheckIn = toBrDate(checkIn);
-  const brCheckOut = toBrDate(checkOut);
-  const externalStaysUrl = `https://www.centraldereservascaldas.com.br/pt/search?from=${encodeURIComponent(brCheckIn)}&to=${encodeURIComponent(brCheckOut)}&persons=${encodeURIComponent(Math.max(1, totalGuests))}&wpl=`;
 
   if (mobile) {
     const steps = [
@@ -230,10 +203,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 {step.id === 'destination' && <div className="space-y-4">
                   <label className="sr-only" htmlFor={`${fieldId}-mobile-destination`}>Buscar condomínio ou destino</label>
                   <input id={`${fieldId}-mobile-destination`} value={destination} onChange={(event) => setDestination(event.target.value)} placeholder="Buscar condomínio ou destino" className="min-h-14 w-full rounded-xl border border-neutral-300 px-4 text-sm focus-visible:outline-2 focus-visible:outline-orange-600" />
+                  <button type="button" onClick={() => { setDestination(''); setActiveTab('dates'); }} className="flex min-h-14 w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-orange-600">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><MapPin className="h-5 w-5" /></span>
+                    <span><span className="block text-sm font-semibold">Todos os condomínios</span><span className="block text-xs text-neutral-500">Buscar em todos os empreendimentos</span></span>
+                  </button>
                   <p className="text-sm font-semibold">Destinos sugeridos</p>
                   <div className="max-h-[38dvh] space-y-1 overflow-y-auto">{popularDestinations.map((item) => <button key={item.name} type="button" onClick={() => { setDestination(item.query); setActiveTab('dates'); }} className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50"><span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600"><MapPin className="h-5 w-5" /></span><span><span className="block text-sm font-semibold">{item.name}</span><span className="block text-xs text-neutral-500">{item.subtitle}</span></span></button>)}</div>
                 </div>}
-                {step.id === 'dates' && <div className="max-h-[48dvh] overflow-y-auto"><p className="mb-4 text-sm text-neutral-600">{checkIn && !checkOut ? 'Selecione a saída' : 'Selecione entrada e saída'}</p><SearchDateCalendar checkIn={checkIn} checkOut={checkOut} minDate={todayIso} onDatesChange={(from, to) => { setCheckIn(from); setCheckOut(to); setSearchError(''); }} />{searchError && <p role="alert" className="text-sm text-red-700">{searchError}</p>}</div>}
+                {step.id === 'dates' && <div className="max-h-[48dvh] overflow-y-auto"><p className="mb-4 text-sm text-neutral-600">{checkIn && !checkOut ? 'Selecione a saída' : 'Selecione entrada e saída'}</p><div className="mb-3 flex flex-wrap gap-2" aria-label="Flexibilidade das datas">{([0, 1, 2] as const).map((days) => <button key={days} type="button" aria-pressed={dateFlexibility === days} onClick={() => setDateFlexibility(days)} className={`rounded-full border px-4 py-2 text-sm ${dateFlexibility === days ? 'border-neutral-900' : 'border-neutral-300'}`}>{days === 0 ? 'Datas exatas' : `± ${days} ${days === 1 ? 'dia' : 'dias'}`}</button>)}</div><SearchDateCalendar checkIn={checkIn} checkOut={checkOut} minDate={todayIso} onDatesChange={(from, to) => { setCheckIn(from); setCheckOut(to); setSearchError(''); }} />{searchError && <p role="alert" className="text-sm text-red-700">{searchError}</p>}</div>}
                 {step.id === 'guests' && <GuestCounterList counts={{ adults, children, infants, pets }} onChange={(counts) => { setAdults(counts.adults); setChildren(counts.children); setInfants(counts.infants); setPets(counts.pets); }} />}
               </section>
             ) : <button key={step.id} type="button" onClick={() => setActiveTab(step.id)} className="flex min-h-14 shrink-0 items-center justify-between gap-4 rounded-2xl bg-white px-6 text-sm shadow-sm"><span className="text-neutral-500">{step.label}</span><span className="truncate font-semibold">{step.summary}</span></button>)}
@@ -358,12 +335,13 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
         {/* Tab Body */}
         <div
+          key={activeTab}
           ref={tabPanelRef}
           id={`${fieldId}-tabpanel`}
           role="tabpanel"
           aria-labelledby={`${fieldId}-tab-${activeTab}`}
           tabIndex={0}
-          className="p-6 [@media(max-height:400px)]:p-3 overflow-y-auto max-h-[55vh]"
+          className="search-popover-enter motion-reduce:animate-none p-6 [@media(max-height:400px)]:p-3 overflow-y-auto max-h-[55vh]"
         >
           {/* TAB: BOOKING SEARCH */}
           {activeTab === 'stays_engine' && (
@@ -542,26 +520,15 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             >
               Limpar tudo
             </button>
-            <span className="text-neutral-300 hidden sm:inline">•</span>
-            <a
-              href={externalStaysUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`text-xs text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1 [@media(max-height:400px)]:hidden ${focusRing}`}
-              title="Abrir pesquisa com esses mesmos parâmetros em centraldereservascaldas.com.br"
-            >
-              <span>Abrir portal de reservas</span>
-              <ExternalLink className="w-3 h-3" />
-            </a>
           </div>
 
           <button
             onClick={handleApply}
-            aria-label="Buscar hospedagens termais"
+            aria-label="Buscar Reserva"
             className={`min-h-11 w-full [@media(max-height:400px)]:w-auto [@media(max-height:400px)]:min-w-0 [@media(max-height:400px)]:flex-1 [@media(max-height:400px)]:px-2 sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-orange-700 to-amber-700 text-white text-sm font-bold shadow-md shadow-orange-500/30 hover:shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20 ${focusRing}`}
           >
             <Search className="w-4 h-4 stroke-[2.5]" />
-            <span className="[@media(max-height:400px)]:hidden">Buscar hospedagens termais</span>
+            <span className="[@media(max-height:400px)]:hidden">Buscar Reserva</span>
             <span className="hidden [@media(max-height:400px)]:inline">Buscar</span>
           </button>
         </div>
