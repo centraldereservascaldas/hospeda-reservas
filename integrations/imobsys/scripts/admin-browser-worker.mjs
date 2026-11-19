@@ -27,7 +27,10 @@ export async function queryThroughPanel(tab,query) {
  throw new Error('Panel changed dates');
 }
 export async function startBrowserWorker(tab) {
- const control=JSON.parse(await readFile(new URL('../data/admin-control.json',import.meta.url)));
+ const control=process.env.IMOBSYS_WORKER_CONTROL_KEY
+  ? {port:Number(process.env.IMOBSYS_WORKER_PORT||8012),controlKey:process.env.IMOBSYS_WORKER_CONTROL_KEY}
+  : JSON.parse(await readFile(new URL('../data/admin-control.json',import.meta.url)));
+ if(!Number.isInteger(control.port)||control.port<1024||control.port>65535||!/^[a-f0-9]{64}$/.test(control.controlKey||''))throw new Error('Configuração do executor inválida.');
  const origin=`http://127.0.0.1:${control.port}`;let stopped=false,lastFailure=null;
  const headers={'X-Local-Control':control.controlKey,'X-Worker-Id':randomUUID(),'Content-Type':'application/json'};
  const heartbeat=setInterval(()=>{void fetch(origin+'/internal/browser/heartbeat',{headers}).catch(()=>{});},5000);

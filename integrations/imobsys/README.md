@@ -76,12 +76,22 @@ A consulta administrativa observada usa POST `/Ajax.php`, Controller `hospedagem
 
 ## Consulta administrativa automatizada (local)
 
-O transporte validado é um executor Playwright independente, com janela separada e contexto não persistente. Não lê tokens/cookies do Chrome habitual, não grava storageState e não salva credenciais. Ao encerrar o navegador, a sessão se perde. Quando o fornecedor exigir novo login, o usuário precisa entrar novamente nessa janela.
+### Sessão única do operador e do executor
+
+O executor abre duas abas no **mesmo navegador e na mesma sessão em memória**: uma para a equipe usar o painel normalmente e outra, restrita a consultas, para o trabalho automático. Faça login na aba da equipe; a aba automática reconhece a mesma sessão. A aba da equipe não é redirecionada pelo executor. Ao fechar o navegador, a sessão é descartada. Abrir outra sessão independente da ImobSys pode invalidar esta sessão, conforme o comportamento do fornecedor.
+
+### Imagem isolada para preparação do Coolify
+
+O `Dockerfile` prepara somente o serviço Node de testes, com usuário sem privilégios e verificação de saúde. Ele não contém credenciais nem o navegador. O processo escuta **somente em 127.0.0.1 dentro do contêiner**; a imagem não deve ser publicada como serviço HTTP aberto. O diretório `/app/data` precisa de armazenamento persistente gravável pelo usuário `node` para preservar os pedidos e operações de teste.
+
+Essa imagem, isoladamente, **não completa a instalação no Coolify**: o navegador autenticado precisa de um transporte seguro entre o executor e o serviço, e de um modo de login operacional no ambiente remoto. O protocolo atual usa um arquivo de controle local e loopback; não exponha o endpoint interno nem copie cookies para contornar isso. A integração permanece em sandbox e não está pronta para cobrar clientes ou substituir o checkout atual.
+
+O transporte usa Playwright com contexto não persistente e uma sessão compartilhada entre a aba do operador e a aba automática. Não lê tokens/cookies do Chrome habitual, não grava storageState e não salva credenciais. Ao encerrar o navegador, a sessão se perde. Quando o fornecedor exigir novo login, o usuário precisa entrar novamente na aba do operador.
 
 1. Inicie o serviço: node --env-file-if-exists=.env src/server.mjs.
 2. Disponibilize o pacote playwright (ou configure IMOBSYS_PLAYWRIGHT_MODULE com o caminho local do módulo).
 3. Inicie: node scripts/standalone-browser-worker.mjs.
-4. Entre manualmente na janela separada. O executor detecta o login e conecta a fila local.
+4. Entre manualmente na aba do operador. O executor detecta o login na mesma sessão e conecta a fila local.
 5. Use o botão Consulta autenticada da rede no painel local ou GET /api/admin/availability?from=2026-11-19&to=2026-11-21&unit=00109. guests é opcional (2 a 10); unit vazio consulta a rede.
 
 O navegador permite somente login manual, páginas/recursos necessários e as ações observadas hospedagem/getOrcamentoRede e hospedagem/newSugestao_saida. Não há execução de Alugar, Gerar Link, criação de cliente, reserva ou cobrança. O arquivo local ignorado data/admin-control.json contém uma chave de controle local, nunca a sessão ImobSys. A API exige essa chave para distribuir trabalhos ao executor; o frontend não recebe a chave.
