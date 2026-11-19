@@ -53,7 +53,7 @@ test('date picker announces full dates and restores focus on Escape and selectio
   const originalGetResorts = crcnBackendApi.getResorts;
   crcnBackendApi.getResorts = async () => [];
   try {
-    const { getByRole, getByText, queryByRole } = render(
+    const { getByRole, queryByRole } = render(
       React.createElement(StaysSearchWidget, {
         onSearchInApp: () => {},
         currentFilters: {
@@ -74,7 +74,7 @@ test('date picker announces full dates and restores focus on Escape and selectio
       }),
     );
 
-    const checkIn = getByRole('button', { name: /Entrada \(Check-in\) 11\/11\/2026/ });
+    const checkIn = getByRole('button', { name: /Quando 11 de nov./ });
     fireEvent.click(checkIn);
 
     const calendar = getByRole('dialog', { name: /Calendário de entrada/ });
@@ -82,10 +82,17 @@ test('date picker announces full dates and restores focus on Escape and selectio
       'button[data-calendar-day][disabled]',
     );
     assert.ok(adjacentDate);
-    assert.match(adjacentDate.className, /text-neutral-600/);
+    assert.match(adjacentDate.className, /text-calendar-muted-foreground/);
+    assert.equal(
+      calendar
+        .querySelector('section[aria-label="novembro de 2026"]')
+        ?.querySelector('[data-calendar-day="2026-12-01"]'),
+      null,
+      'the November calendar should not repeat December dates in its final row',
+    );
     const selectedDate = getByRole('button', { name: /11 de novembro de 2026/ });
     assert.equal(selectedDate.getAttribute('aria-pressed'), 'true');
-    assert.match(selectedDate.className, /min-h-11/);
+    assert.match(selectedDate.className, /min-h-\[var\(--search-calendar-day-size\)\]/);
 
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => assert.equal(document.activeElement, checkIn));
@@ -93,18 +100,17 @@ test('date picker announces full dates and restores focus on Escape and selectio
 
     fireEvent.click(checkIn);
     fireEvent.click(getByRole('button', { name: /12 de novembro de 2026/ }));
+    fireEvent.click(getByRole('button', { name: /16 de novembro de 2026/ }));
     assert.equal(queryByRole('dialog', { name: /Calendário de entrada/ }), null);
-    assert.equal(checkIn.textContent?.includes('12/11/2026'), true);
+    assert.match(checkIn.getAttribute('aria-label') ?? '', /12 de nov\. - 16 de nov\./);
     assert.equal(document.activeElement, checkIn);
-    assert.ok(getByText('12/11/2026'));
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
   }
 });
 
-test('touch drag selects a check-in to check-out range in the search calendar', async () => {
+test('calendar selects a check-in to check-out range in the shared search panel', async () => {
   const originalGetResorts = crcnBackendApi.getResorts;
-  const originalElementFromPoint = document.elementFromPoint;
   crcnBackendApi.getResorts = async () => [];
 
   try {
@@ -129,48 +135,19 @@ test('touch drag selects a check-in to check-out range in the search calendar', 
       }),
     );
 
-    fireEvent.click(getByRole('button', { name: /Entrada \(Check-in\)/ }));
-    const calendar = getByRole('dialog', { name: /Calendário de entrada/ });
+    fireEvent.click(getByRole('button', { name: /Quando/ }));
     const grid = getByRole('grid', { name: 'Calendário de novembro de 2026' });
-    const checkInCell = grid.querySelector<HTMLElement>(
-      '[data-calendar-day="2026-11-12"][data-calendar-selectable="true"]',
+    fireEvent.click(
+      grid.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-12"]')!,
     );
-    const checkOutButton = grid.querySelector<HTMLButtonElement>(
-      'button[data-calendar-day="2026-11-15"]',
+    fireEvent.click(
+      grid.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-15"]')!,
     );
-    assert.ok(checkInCell);
-    assert.ok(checkOutButton);
-    document.elementFromPoint = () => checkOutButton;
 
-    fireEvent.pointerDown(checkInCell, { pointerId: 7, pointerType: 'touch' });
-    fireEvent.pointerMove(calendar, {
-      pointerId: 7,
-      pointerType: 'touch',
-      clientX: 10,
-      clientY: 10,
-    });
-    assert.match(checkOutButton.className, /bg-orange-100/);
-    fireEvent.pointerUp(calendar, { pointerId: 7, pointerType: 'touch', clientX: 10, clientY: 10 });
-
-    assert.match(
-      getByRole('button', { name: /Entrada \(Check-in\).*12\/11\/2026/ }).textContent || '',
-      /12\/11\/2026/,
-    );
-    assert.match(
-      getByRole('button', { name: /Saída \(Checkout\).*15\/11\/2026/ }).textContent || '',
-      /15\/11\/2026/,
-    );
+    assert.ok(getByRole('button', { name: /Quando 12 de nov\. - 15 de nov\./ }));
     assert.equal(queryByRole('dialog', { name: /Calendário de entrada/ }), null);
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
-    if (originalElementFromPoint) {
-      document.elementFromPoint = originalElementFromPoint;
-    } else {
-      Object.defineProperty(document, 'elementFromPoint', {
-        configurable: true,
-        value: undefined,
-      });
-    }
   }
 });
 
@@ -201,9 +178,10 @@ test('preserves an unsubmitted date edit when an unrelated active filter changes
       }),
     );
 
-    fireEvent.click(getByRole('button', { name: /Entrada \(Check-in\) 11\/11\/2026/ }));
+    fireEvent.click(getByRole('button', { name: /Quando 11 de nov./ }));
     fireEvent.click(getByRole('button', { name: /12 de novembro de 2026/ }));
-    assert.ok(getByRole('button', { name: /Entrada \(Check-in\) 12\/11\/2026/ }));
+    fireEvent.click(getByRole('button', { name: /16 de novembro de 2026/ }));
+    assert.ok(getByRole('button', { name: /Quando 12 de nov\. - 16 de nov\./ }));
 
     rerender(
       React.createElement(StaysSearchWidget, {
@@ -212,8 +190,7 @@ test('preserves an unsubmitted date edit when an unrelated active filter changes
       }),
     );
 
-    assert.ok(getByRole('button', { name: /Entrada \(Check-in\) 12\/11\/2026/ }));
-    assert.ok(getByRole('button', { name: /Saída \(Checkout\) 15\/11\/2026/ }));
+    assert.ok(getByRole('button', { name: /Quando 12 de nov\. - 16 de nov\./ }));
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
   }
@@ -244,18 +221,17 @@ test('date picker closes when keyboard focus moves out without pulling focus bac
       }),
     );
 
-    const checkIn = getByRole('button', { name: /Entrada \(Check-in\) 11\/11\/2026/ });
-    const checkOut = getByRole('button', { name: /Saída \(Checkout\) 15\/11\/2026/ });
+    const checkIn = getByRole('button', { name: /Quando 11 de nov./ });
     fireEvent.click(checkIn);
     const dialog = getByRole('dialog', { name: /Calendário de entrada/ });
-    const lastControl = within(dialog).getByRole('button', { name: 'Hoje' });
+    const lastControl = within(dialog).getByRole('button', { name: '± 2 dias' });
 
     lastControl.focus();
     fireEvent.keyDown(lastControl, { key: 'Tab' });
     await waitFor(() =>
       assert.equal(queryByRole('dialog', { name: /Calendário de entrada/ }), null),
     );
-    assert.equal(document.activeElement, checkOut);
+    assert.equal(document.activeElement, getByRole('button', { name: 'Buscar hospedagens' }));
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
   }
@@ -290,14 +266,12 @@ test('searchable guest and resort menus keep their list within short landscape s
       }) as DOMRect;
 
     fireEvent.click(resortTrigger);
-    const menu = getByRole('group', { name: 'Opções de filtro' });
+    const menu = getByRole('dialog', { name: 'Escolher condomínio' });
     const listbox = getByRole('listbox', { name: 'Opções disponíveis' });
 
-    await waitFor(() => assert.equal(menu.style.maxHeight, '142px'));
-    assert.equal(listbox.style.maxHeight, '74px');
-    assert.ok(
-      Number.parseFloat(listbox.style.maxHeight) <= Number.parseFloat(menu.style.maxHeight),
-    );
+    await waitFor(() => assert.equal(menu.style.height, '296px'));
+    assert.match(listbox.className, /overflow-y-auto/);
+    assert.equal(menu.className.includes('overflow-hidden'), true);
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
     if (originalInnerHeight) {
@@ -338,7 +312,7 @@ test('date picker uses one tab stop and arrow keys move across dates and months'
       }),
     );
 
-    fireEvent.click(getByRole('button', { name: /Entrada \(Check-in\) 11\/11\/2026/ }));
+    fireEvent.click(getByRole('button', { name: /Quando 11 de nov./ }));
     const grid = getByRole('grid', { name: 'Calendário de novembro de 2026' });
     assert.equal(
       within(grid.parentElement!).getByRole('heading').getAttribute('aria-live'),
@@ -407,11 +381,12 @@ test('date picker stays within short viewports and scrolls its own content', asy
       }),
     );
 
-    fireEvent.click(getByRole('button', { name: /Entrada \(Check-in\) 11\/11\/2026/ }));
+    fireEvent.click(getByRole('button', { name: /Quando 11 de nov./ }));
     await waitFor(() => {
       const dialog = getByRole('dialog', { name: /Calendário de entrada/ });
-      assert.equal(dialog.style.maxHeight, '304px');
-      assert.match(dialog.className, /overflow-y-auto/);
+      assert.equal(dialog.style.height, '296px');
+      assert.match(dialog.className, /overflow-hidden/);
+      assert.ok(dialog.querySelector('.overflow-y-auto'));
     });
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
@@ -462,8 +437,7 @@ test('starts without implying selected dates and explains when a date search is 
       }),
     );
 
-    getByRole('button', { name: /Entrada \(Check-in\) Selecione a data/ });
-    getByRole('button', { name: /Saída \(Checkout\) Selecione a data/ });
+    getByRole('button', { name: /Quando Insira as datas/ });
     fireEvent.submit(getByRole('search'));
 
     getByRole('alert');
@@ -494,8 +468,9 @@ test('keeps surprise search available without asking guests to choose dates firs
     assert.deepEqual(submitted, {
       checkIn: '',
       checkOut: '',
-      persons: 2,
-      guests: undefined,
+      dateFlexibility: 0,
+      persons: 1,
+      guests: { adults: 1, children: 0, infants: 0, pets: 0 },
       destination: '',
       propertyId: '',
       surpriseMe: true,
@@ -540,6 +515,7 @@ test('preserves the guest breakdown when the compact guest total is unchanged', 
     assert.deepEqual(submitted, {
       checkIn: '2026-11-11',
       checkOut: '2026-11-15',
+      dateFlexibility: 0,
       persons: 4,
       guests,
       destination: '',
@@ -551,7 +527,7 @@ test('preserves the guest breakdown when the compact guest total is unchanged', 
   }
 });
 
-test('preserves infants and pets when the guest total is changed in the compact search', async () => {
+test('preserves infants and pets when the adult count changes in the compact search', async () => {
   const originalGetResorts = crcnBackendApi.getResorts;
   crcnBackendApi.getResorts = async () => [];
   const currentGuests = { adults: 2, children: 1, infants: 1, pets: 1 };
@@ -581,16 +557,17 @@ test('preserves infants and pets when the guest total is changed in the compact 
       }),
     );
 
-    fireEvent.click(getByRole('button', { name: /Hóspedes/ }));
-    const guestOptions = await findByRole('listbox', { name: 'Opções disponíveis' });
-    fireEvent.click(within(guestOptions).getByRole('option', { name: '4 Pessoas' }));
+    fireEvent.click(getByRole('button', { name: /Quem:/ }));
+    const guestDialog = await findByRole('dialog', { name: 'Selecionar hóspedes' });
+    fireEvent.click(within(guestDialog).getByRole('button', { name: 'Aumentar adultos' }));
     fireEvent.submit(getByRole('search'));
 
     assert.deepEqual(submitted, {
       checkIn: '2026-11-11',
       checkOut: '2026-11-15',
+      dateFlexibility: 0,
       persons: 5,
-      guests: { adults: 4, children: 0, infants: 1, pets: 1 },
+      guests: { adults: 3, children: 1, infants: 1, pets: 1 },
       destination: '',
       propertyId: '',
       surpriseMe: false,

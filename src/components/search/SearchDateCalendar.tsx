@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { CalendarMonthGrid } from './CalendarMonthGrid';
+import { matchesMediaQuery } from '../../utils/motion';
 
 interface SearchDateCalendarProps {
   checkIn: string;
@@ -24,12 +25,15 @@ export function SearchDateCalendar({
   });
   const [keyboardFocusDate, setKeyboardFocusDate] = useState<string | null>(null);
   const [previewEnd, setPreviewEnd] = useState<string | null>(null);
-  const [isMobileLayout, setIsMobileLayout] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+  const [isMobileLayout, setIsMobileLayout] = useState(() =>
+    matchesMediaQuery('(max-width: 639px)'),
+  );
   const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const monthCount = isMobileLayout ? 12 : 2;
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(max-width: 639px)');
+    const mediaQuery = window.matchMedia?.('(max-width: 639px)');
+    if (!mediaQuery) return;
     const updateLayout = () => setIsMobileLayout(mediaQuery.matches);
     mediaQuery.addEventListener('change', updateLayout);
     return () => mediaQuery.removeEventListener('change', updateLayout);
@@ -46,10 +50,7 @@ export function SearchDateCalendar({
     onDatesChange(checkIn, dateValue);
   };
 
-  const handleDateKeyDown = (
-    event: KeyboardEvent<HTMLButtonElement>,
-    dateValue: string,
-  ) => {
+  const handleDateKeyDown = (event: KeyboardEvent<HTMLButtonElement>, dateValue: string) => {
     const dayOffset =
       event.key === 'ArrowLeft'
         ? -1
@@ -89,11 +90,15 @@ export function SearchDateCalendar({
 
   const getFocusDate = (month: Date): string | undefined => {
     const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
-    if (keyboardFocusDate?.startsWith(prefix) && keyboardFocusDate >= minDate) return keyboardFocusDate;
+    if (keyboardFocusDate?.startsWith(prefix) && keyboardFocusDate >= minDate)
+      return keyboardFocusDate;
     if (checkIn.startsWith(prefix) && checkIn >= minDate) return checkIn;
 
-    const firstAvailableDay = new Date(Math.max(month.getTime(), new Date(`${minDate}T12:00:00`).getTime()));
-    return firstAvailableDay.getFullYear() === month.getFullYear() && firstAvailableDay.getMonth() === month.getMonth()
+    const firstAvailableDay = new Date(
+      Math.max(month.getTime(), new Date(`${minDate}T12:00:00`).getTime()),
+    );
+    return firstAvailableDay.getFullYear() === month.getFullYear() &&
+      firstAvailableDay.getMonth() === month.getMonth()
       ? toIsoDate(firstAvailableDay)
       : undefined;
   };
@@ -126,7 +131,9 @@ export function SearchDateCalendar({
           <button
             type="button"
             aria-label="Mês anterior"
-            onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
+            onClick={() =>
+              setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))
+            }
             disabled={visibleMonth <= new Date(new Date().getFullYear(), new Date().getMonth(), 1)}
           >
             <ChevronLeft aria-hidden="true" />
@@ -134,13 +141,21 @@ export function SearchDateCalendar({
           <button
             type="button"
             aria-label="Próximo mês"
-            onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+            onClick={() =>
+              setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))
+            }
           >
             <ChevronRight aria-hidden="true" />
           </button>
         </div>
       )}
-      <div className={isMobileLayout ? 'search-date-calendar__months search-date-calendar__months--stacked' : 'search-date-calendar__months'}>
+      <div
+        className={
+          isMobileLayout
+            ? 'search-date-calendar__months search-date-calendar__months--stacked'
+            : 'search-date-calendar__months'
+        }
+      >
         {monthViews}
       </div>
     </div>

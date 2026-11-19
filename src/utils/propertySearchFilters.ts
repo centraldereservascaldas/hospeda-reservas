@@ -25,6 +25,16 @@ export function filterPropertiesBySearchFilters(
     if (!matchesPropertyCategory(property, filters.category)) return false;
 
     if (
+      filters.propertyTypes.length > 0 &&
+      !filters.propertyTypes.includes(property.propertyType)
+    ) {
+      return false;
+    }
+
+    if (filters.superhostOnly && !property.isSuperhost) return false;
+    if (filters.instantBookOnly && !property.instantBook) return false;
+
+    if (
       filters.destinationPropertyId &&
       property.staysPropertyId !== filters.destinationPropertyId
     ) {
@@ -80,5 +90,8 @@ export function countActivePropertyFilters(filters: SearchFilters): number {
   if (filters.minBedrooms > 0) count += 1;
   if ((filters.minBeds ?? 0) > 0) count += 1;
   if (filters.minBaths > 0) count += 1;
+  if (filters.propertyTypes.length > 0) count += 1;
+  if (filters.superhostOnly) count += 1;
+  if (filters.instantBookOnly) count += 1;
   return count;
 }

@@ -27,8 +27,9 @@ function useSelectedOptionBounds(selectedValue: string, options: number) {
     if (!group) return;
 
     const update = () => {
-      const selectedButton = [...group.querySelectorAll<HTMLButtonElement>('[data-shared-option]')]
-        .find((button) => button.dataset.sharedOption === selectedValue);
+      const selectedButton = [
+        ...group.querySelectorAll<HTMLButtonElement>('[data-shared-option]'),
+      ].find((button) => button.dataset.sharedOption === selectedValue);
       if (!selectedButton) return;
 
       const groupRect = group.getBoundingClientRect();
@@ -62,8 +63,8 @@ function getAvailableAmenities(properties: Property[], selectedAmenities: string
       property.propertyAmenities,
     );
     for (const amenity of amenities) {
-    const label = amenity.trim();
-    const identity = getAmenityFilterIdentity(label);
+      const label = amenity.trim();
+      const identity = getAmenityFilterIdentity(label);
       if (!label || label.length > 80 || !identity) continue;
       const current = options.get(identity);
       options.set(identity, { label: current?.label ?? label, count: (current?.count ?? 0) + 1 });
@@ -79,7 +80,10 @@ function getAvailableAmenities(properties: Property[], selectedAmenities: string
   }
 
   return [...options.values()]
-    .sort((first, second) => second.count - first.count || first.label.localeCompare(second.label, 'pt-BR'))
+    .sort(
+      (first, second) =>
+        second.count - first.count || first.label.localeCompare(second.label, 'pt-BR'),
+    )
     .map(({ label }) => label);
 }
 
@@ -105,6 +109,9 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   const [minBedrooms, setMinBedrooms] = useState(filters.minBedrooms);
   const [minBeds, setMinBeds] = useState(filters.minBeds ?? 0);
   const [minBaths, setMinBaths] = useState(filters.minBaths);
+  const [selectedPropertyTypes, setSelectedPropertyTypes] = useState(filters.propertyTypes);
+  const [superhostOnly, setSuperhostOnly] = useState(filters.superhostOnly);
+  const [instantBookOnly, setInstantBookOnly] = useState(filters.instantBookOnly);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
   const amenitiesKey = filters.amenities.join('\u0000');
@@ -119,8 +126,22 @@ export const FilterModal: React.FC<FilterModalProps> = ({
       minBedrooms,
       minBeds,
       minBaths,
+      propertyTypes: selectedPropertyTypes,
+      superhostOnly,
+      instantBookOnly,
     }),
-    [filters, maxPrice, minBeds, minBaths, minBedrooms, minPrice, selectedAmenities],
+    [
+      filters,
+      instantBookOnly,
+      maxPrice,
+      minBeds,
+      minBaths,
+      minBedrooms,
+      minPrice,
+      selectedAmenities,
+      selectedPropertyTypes,
+      superhostOnly,
+    ],
   );
   const matchingCount = useMemo(
     () => filterPropertiesBySearchFilters(properties, draftFilters).length,
@@ -142,6 +163,9 @@ export const FilterModal: React.FC<FilterModalProps> = ({
     setMinBedrooms(currentFilters.minBedrooms);
     setMinBeds(currentFilters.minBeds ?? 0);
     setMinBaths(currentFilters.minBaths);
+    setSelectedPropertyTypes(currentFilters.propertyTypes);
+    setSuperhostOnly(currentFilters.superhostOnly);
+    setInstantBookOnly(currentFilters.instantBookOnly);
   }, [
     filters.minPrice,
     filters.maxPrice,
@@ -149,6 +173,9 @@ export const FilterModal: React.FC<FilterModalProps> = ({
     filters.minBedrooms,
     filters.minBeds,
     filters.minBaths,
+    filters.propertyTypes,
+    filters.superhostOnly,
+    filters.instantBookOnly,
     isOpen,
   ]);
 
@@ -186,6 +213,9 @@ export const FilterModal: React.FC<FilterModalProps> = ({
       minBedrooms,
       minBeds,
       minBaths,
+      propertyTypes: selectedPropertyTypes,
+      superhostOnly,
+      instantBookOnly,
     });
     onClose();
   };
@@ -197,6 +227,9 @@ export const FilterModal: React.FC<FilterModalProps> = ({
     setMinBedrooms(0);
     setMinBeds(0);
     setMinBaths(0);
+    setSelectedPropertyTypes([]);
+    setSuperhostOnly(false);
+    setInstantBookOnly(false);
     onResetFilters();
   };
 
@@ -239,7 +272,8 @@ export const FilterModal: React.FC<FilterModalProps> = ({
 
             {!filters.checkIn || !filters.checkOut ? (
               <p className="mb-4 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs leading-5 text-neutral-600">
-                Sem datas, os valores são referências e não confirmam disponibilidade. Escolha um período para consultar preços reais.
+                Sem datas, os valores são referências e não confirmam disponibilidade. Escolha um
+                período para consultar preços reais.
               </p>
             ) : null}
 
@@ -403,12 +437,85 @@ export const FilterModal: React.FC<FilterModalProps> = ({
             </div>
           </div>
 
+          <div className="pt-6 space-y-4">
+            <h3 className="text-base font-bold text-neutral-900">Tipo de acomodação</h3>
+            <div
+              role="group"
+              aria-label="Tipo de acomodação"
+              className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-3"
+            >
+              {[
+                { value: 'entire_place', label: 'Espaço inteiro' },
+                { value: 'private_room', label: 'Quarto privativo' },
+                { value: 'shared_room', label: 'Quarto compartilhado' },
+              ].map(({ value, label }) => {
+                const isSelected = selectedPropertyTypes.includes(value);
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() =>
+                      setSelectedPropertyTypes((current) =>
+                        isSelected ? current.filter((item) => item !== value) : [...current, value],
+                      )
+                    }
+                    className={`min-h-11 rounded-xl border px-3 text-sm font-medium ${focusRing} ${isSelected ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 text-neutral-700 hover:border-neutral-900'}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <h3 className="text-base font-bold text-neutral-900">Opções de reserva</h3>
+            <div className="space-y-2">
+              {[
+                {
+                  label: 'Apenas Superhost',
+                  description: 'Anfitriões com avaliações consistentes.',
+                  selected: superhostOnly,
+                  onToggle: () => setSuperhostOnly((value) => !value),
+                },
+                {
+                  label: 'Reserva instantânea',
+                  description: 'Reserve sem aguardar aprovação do anfitrião.',
+                  selected: instantBookOnly,
+                  onToggle: () => setInstantBookOnly((value) => !value),
+                },
+              ].map((option) => (
+                <div
+                  key={option.label}
+                  data-filter-switch-row
+                  className="flex min-w-0 flex-col gap-3 rounded-2xl border border-neutral-200 p-3 min-[400px]:flex-row min-[400px]:items-center"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-semibold text-neutral-900">
+                      {option.label}
+                    </p>
+                    <p className="break-words text-xs text-neutral-500">{option.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-label={option.label}
+                    aria-checked={option.selected}
+                    onClick={option.onToggle}
+                    className={`h-11 w-11 self-end rounded-full border ${focusRing} min-[400px]:self-auto ${option.selected ? 'bg-neutral-900 text-white' : 'bg-white'}`}
+                  >
+                    ✓
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Amenities */}
           <div className="pt-6">
             <h3 className="text-base font-bold text-neutral-900 mb-3">Comodidades populares</h3>
             {availableAmenities.length === 0 ? (
               <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm leading-5 text-neutral-600">
-                A Stays não retornou comodidades para as hospedagens disponíveis. O filtro ficará disponível quando esses dados forem sincronizados.
+                A Stays não retornou comodidades para as hospedagens disponíveis. O filtro ficará
+                disponível quando esses dados forem sincronizados.
               </p>
             ) : null}
             <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -448,7 +555,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                 },
               )}
             </div>
-            {availableAmenities.length > 6 && (
+            {availableAmenities.length > 10 && (
               <button
                 type="button"
                 aria-expanded={showAllAmenities}

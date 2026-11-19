@@ -13,9 +13,17 @@ import {
   ChevronDown,
   LogOut,
   ShieldCheck,
-  Building, Waves, GlassWater, MapPin, Users, PawPrint, ChevronLeft, ChevronRight,
+  Building,
+  Waves,
+  GlassWater,
+  MapPin,
+  Users,
+  PawPrint,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Currency } from '../types';
+import { matchesMediaQuery } from '../utils/motion';
 import { LogoCRCN } from './LogoCRCN';
 
 interface HeaderProps {
@@ -75,9 +83,10 @@ export const Header: React.FC<HeaderProps> = ({
   isOwnerAdmin,
 }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 640px)').matches);
+  const [isDesktop, setIsDesktop] = useState(() => matchesMediaQuery('(min-width: 640px)'));
   useEffect(() => {
-    const media = window.matchMedia('(min-width: 640px)');
+    const media = window.matchMedia?.('(min-width: 640px)');
+    if (!media) return;
     const update = () => setIsDesktop(media.matches);
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
@@ -85,7 +94,13 @@ export const Header: React.FC<HeaderProps> = ({
   const [isCurrencyMenuOpen, setIsCurrencyMenuOpen] = useState(false);
   const categoryNavigationRef = useRef<HTMLDivElement>(null);
   const categoryIndicatorReadyRef = useRef(false);
-  const [categoryIndicator, setCategoryIndicator] = useState({ left: 0, top: 0, width: 0, height: 0, ready: false });
+  const [categoryIndicator, setCategoryIndicator] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+    ready: false,
+  });
   const menuRef = useRef<HTMLDivElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const localAccountButtonRef = useRef<HTMLButtonElement>(null);
@@ -218,43 +233,114 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Central Search Bar with min-w-0 so it never forces overflow */}
-          {currentView === 'explore' && <div aria-hidden={compactSearch || undefined} inert={compactSearch || undefined} className={`hidden min-w-0 flex-1 items-center gap-1 transition-[opacity,transform] duration-300 motion-reduce:transition-none sm:flex ${compactSearch ? 'sm:pointer-events-none sm:-translate-y-3 sm:opacity-0' : ''}`} aria-label="Categorias de hospedagem">
-            <button type="button" aria-label="Rolar categorias para trás" onClick={(event) => event.currentTarget.nextElementSibling?.scrollBy({ left: -300, behavior: 'smooth' })} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-600 hover:bg-white"><ChevronLeft className="h-4 w-4" /></button>
-            <div ref={categoryNavigationRef} className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <span
-                aria-hidden="true"
-                className={`header-category-selection ${categoryIndicator.ready && categoryIndicatorReadyRef.current ? 'header-category-selection--ready' : ''}`}
-                style={{
-                  left: categoryIndicator.left,
-                  top: categoryIndicator.top,
-                  width: categoryIndicator.width,
-                  height: categoryIndicator.height,
-                }}
-              />
-              {categories.map((category) => {
-                const icons: Record<string, React.ElementType> = { Building, Waves, GlassWater, MapPin, Users, PawPrint, Sparkles };
-                const Icon = icons[category.icon] || Sparkles;
-                return <button key={category.id} data-header-category-id={category.id} type="button" aria-pressed={selectedCategory === category.id} onClick={() => onSelectCategory?.(category.id)} className={`relative z-10 flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 text-left text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-orange-600 ${selectedCategory === category.id ? 'text-orange-700' : 'text-neutral-600 hover:bg-white/70'}`}><Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="max-w-28">{category.label}</span></button>;
-              })}
+          {currentView === 'explore' && (
+            <div
+              aria-hidden={compactSearch || undefined}
+              inert={compactSearch || undefined}
+              className={`hidden min-w-0 flex-1 items-center gap-1 transition-[opacity,transform] duration-300 motion-reduce:transition-none sm:flex ${compactSearch ? 'sm:pointer-events-none sm:-translate-y-3 sm:opacity-0' : ''}`}
+              aria-label="Categorias de hospedagem"
+            >
+              <button
+                type="button"
+                aria-label="Rolar categorias para trás"
+                onClick={(event) =>
+                  event.currentTarget.nextElementSibling?.scrollBy({
+                    left: -300,
+                    behavior: 'smooth',
+                  })
+                }
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-600 hover:bg-white"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div
+                ref={categoryNavigationRef}
+                className="relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`header-category-selection ${categoryIndicator.ready && categoryIndicatorReadyRef.current ? 'header-category-selection--ready' : ''}`}
+                  style={{
+                    left: categoryIndicator.left,
+                    top: categoryIndicator.top,
+                    width: categoryIndicator.width,
+                    height: categoryIndicator.height,
+                  }}
+                />
+                {categories.map((category) => {
+                  const icons: Record<string, React.ElementType> = {
+                    Building,
+                    Waves,
+                    GlassWater,
+                    MapPin,
+                    Users,
+                    PawPrint,
+                    Sparkles,
+                  };
+                  const Icon = icons[category.icon] || Sparkles;
+                  return (
+                    <button
+                      key={category.id}
+                      data-header-category-id={category.id}
+                      type="button"
+                      aria-pressed={selectedCategory === category.id}
+                      onClick={() => onSelectCategory?.(category.id)}
+                      className={`relative z-10 flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 text-left text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-orange-600 ${selectedCategory === category.id ? 'text-orange-700' : 'text-neutral-600 hover:bg-white/70'}`}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="max-w-28">{category.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                aria-label="Rolar categorias para frente"
+                onClick={(event) =>
+                  event.currentTarget.previousElementSibling?.scrollBy({
+                    left: 300,
+                    behavior: 'smooth',
+                  })
+                }
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-600 hover:bg-white"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
-            <button type="button" aria-label="Rolar categorias para frente" onClick={(event) => event.currentTarget.previousElementSibling?.scrollBy({ left: 300, behavior: 'smooth' })} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-neutral-600 hover:bg-white"><ChevronRight className="h-4 w-4" /></button>
-          </div>}
-          <div data-shared-search="compact" style={{ viewTransitionName: currentView === 'explore' && compactSearch ? 'shared-search-bar' : 'none' }} aria-hidden={currentView === 'explore' && !compactSearch && isDesktop ? true : undefined} inert={currentView === 'explore' && !compactSearch && isDesktop ? true : undefined} className={`flex-1 min-w-0 max-w-xl mx-1 sm:mx-4 lg:mx-6 ${currentView === 'explore' ? `sm:absolute sm:left-1/2 sm:!mx-0 sm:w-[min(var(--header-compact-search-width),38vw)] sm:-translate-x-1/2 sm:transition-[opacity,transform] sm:duration-[400ms] sm:ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${compactSearch ? 'sm:translate-y-0 sm:opacity-100' : 'sm:pointer-events-none sm:translate-y-16 sm:opacity-0'}` : ''}`}>
+          )}
+          <div
+            data-shared-search="compact"
+            style={{
+              viewTransitionName:
+                currentView === 'explore' && compactSearch ? 'shared-search-bar' : 'none',
+            }}
+            aria-hidden={
+              currentView === 'explore' && !compactSearch && isDesktop ? true : undefined
+            }
+            inert={currentView === 'explore' && !compactSearch && isDesktop ? true : undefined}
+            className={`flex-1 min-w-0 max-w-xl mx-1 sm:mx-4 lg:mx-6 ${currentView === 'explore' ? `header-compact-search sm:absolute sm:left-1/2 sm:!mx-0 sm:-translate-x-1/2 sm:transition-[opacity,transform] sm:duration-[400ms] sm:ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none ${compactSearch ? 'sm:translate-y-0 sm:opacity-100' : 'sm:pointer-events-none sm:translate-y-16 sm:opacity-0'}` : ''}`}
+            data-compact-search={currentView === 'explore' && compactSearch ? 'true' : 'false'}
+          >
             <button
               onClick={onOpenSearch}
-              aria-label={`Buscar hospedagens: ${searchSummaryText || 'Caldas Novas & Região'}`}
-              className="min-h-14 sm:min-h-11 w-full flex items-center justify-center sm:justify-between pl-3 sm:pl-4 pr-1.5 sm:pr-2 py-1.5 sm:py-2 rounded-full liquid-glass-pill hover:bg-white/90 border border-neutral-200/90 shadow-[0_5px_18px_-12px_rgba(15,23,42,0.4),inset_0_1px_1.5px_rgba(255,255,255,0.9)] hover:shadow-lg transition-all cursor-pointer group min-w-0"
+              aria-label="Iniciar busca"
+              className="min-h-16 sm:min-h-11 w-full flex items-center justify-center sm:justify-between px-4 sm:pl-4 sm:pr-2 py-1.5 sm:py-2 rounded-full liquid-glass-pill hover:bg-white/90 border border-neutral-200/90 shadow-[0_5px_18px_-12px_rgba(15,23,42,0.4),inset_0_1px_1.5px_rgba(255,255,255,0.9)] hover:shadow-lg transition-all cursor-pointer group min-w-0"
             >
-              <Search aria-hidden="true" className="ml-3 h-4 w-4 shrink-0 text-neutral-900 sm:hidden" />
-              <span className="truncate px-2 text-xs font-semibold text-neutral-900 sm:hidden">{searchSummaryText || 'Inicie sua busca'}</span>
-              <div className="hidden items-center divide-x divide-neutral-200 text-xs sm:flex sm:text-sm font-semibold text-neutral-800 min-w-0 truncate">
+              <Search
+                aria-hidden="true"
+                className="mr-2 h-5 w-5 shrink-0 text-orange-700 sm:hidden"
+              />
+              <span className="text-sm font-semibold text-neutral-800 sm:hidden">
+                Iniciar busca
+              </span>
+              <div className="hidden min-w-0 items-center text-neutral-800 sm:flex sm:text-sm">
                 <span className="pr-2 sm:pr-3 text-neutral-900 font-bold truncate min-w-0 max-[360px]:hidden">
                   {searchSummaryText ? searchSummaryText : 'Caldas Novas & Região'}
                 </span>
-                <span className="hidden md:inline px-2.5 sm:px-3 text-neutral-600 font-medium whitespace-nowrap">
+                <span className="hidden border-l border-neutral-200 px-2.5 font-medium text-neutral-600 whitespace-nowrap md:inline sm:px-3">
                   {searchDateSummary}
                 </span>
-                <span className="hidden lg:inline pl-2.5 sm:pl-3 text-neutral-500 font-normal whitespace-nowrap">
+                <span className="hidden border-l border-neutral-200 pl-2.5 font-normal text-neutral-500 whitespace-nowrap lg:inline sm:pl-3">
                   {searchGuestSummary}
                 </span>
               </div>
@@ -265,9 +351,21 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* Right section: Currency and User Menu */}
-          <div className={`relative hidden items-center gap-1.5 transition-transform duration-[400ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none sm:flex sm:gap-2.5 lg:gap-3 flex-shrink-0 ${compactSearch ? 'sm:translate-x-[max(0px,calc((100vw_-_var(--header-expanded-width))_/2))]' : ''}`}>
-            <div aria-hidden={!compactSearch || undefined} inert={!compactSearch || undefined} className={`absolute right-full mr-3 hidden transition-opacity duration-[400ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none min-[1440px]:block ${compactSearch ? 'opacity-100' : 'pointer-events-none opacity-0'}`}>
-              <button type="button" onClick={onCreateListing} className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-xs font-semibold text-neutral-900 hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-orange-600">Anuncie seu imóvel</button>
+          <div
+            className={`relative hidden items-center gap-1.5 transition-transform duration-[400ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none sm:flex sm:gap-2.5 lg:gap-3 flex-shrink-0 ${compactSearch ? 'sm:translate-x-[max(0px,calc((100vw_-_var(--header-expanded-width))_/2))]' : ''}`}
+          >
+            <div
+              aria-hidden={!compactSearch || undefined}
+              inert={!compactSearch || undefined}
+              className={`absolute right-full mr-3 hidden transition-opacity duration-[400ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none min-[1440px]:block ${compactSearch ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+            >
+              <button
+                type="button"
+                onClick={onCreateListing}
+                className="inline-flex min-h-11 items-center whitespace-nowrap rounded-full px-3 text-xs font-semibold text-neutral-900 hover:bg-white/70 focus-visible:outline-2 focus-visible:outline-orange-600"
+              >
+                Anuncie seu imóvel
+              </button>
             </div>
             {/* Currency selector dropdown */}
             <div className="relative flex-shrink-0" ref={currencyRef}>
@@ -597,7 +695,13 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
       </div>
-      {toolbar && <div className={`search-toolbar-collapse ${compactSearch ? 'search-toolbar-collapse--compact' : ''}`}><div>{toolbar}</div></div>}
+      {toolbar && (
+        <div
+          className={`search-toolbar-collapse ${compactSearch ? 'search-toolbar-collapse--compact' : ''}`}
+        >
+          <div>{toolbar}</div>
+        </div>
+      )}
     </header>
   );
 };

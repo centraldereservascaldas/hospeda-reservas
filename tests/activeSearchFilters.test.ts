@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { afterEach } from 'node:test';
+import test, { afterEach, beforeEach, mock } from 'node:test';
 import { JSDOM } from 'jsdom';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
@@ -18,7 +18,12 @@ const { ActiveSearchFilters } = await import('../src/components/search/ActiveSea
 const { createDefaultSearchFilters } = await import('../src/utils/searchUrlState.ts');
 const { useSearchUrlSync } = await import('../src/hooks/useSearchUrlSync.ts');
 
+beforeEach(() => {
+  mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 3, 12) });
+});
+
 afterEach(() => {
+  mock.timers.reset();
   cleanup();
   document.body.innerHTML = '';
 });
@@ -287,9 +292,10 @@ test('removing an amenity chip updates the shared URL and preserves trip and cat
 
     const query = new URL(window.location.href).searchParams;
     assert.equal(query.has('amenity'), false);
-    assert.equal(query.get('from'), '2026-11-11');
-    assert.equal(query.get('to'), '2026-11-14');
-    assert.equal(query.get('guests'), '3');
+    assert.equal(query.get('checkin'), '2026-11-11');
+    assert.equal(query.get('checkout'), '2026-11-14');
+    assert.equal(query.get('adults'), '2');
+    assert.equal(query.get('children'), '1');
     assert.equal(query.get('category'), 'pools_24h');
   } finally {
     window.history.replaceState({}, '', originalUrl);

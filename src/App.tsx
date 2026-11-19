@@ -25,6 +25,7 @@ import {
   buildHomeUrl,
   buildCondominiumDirectoryUrl,
   createDefaultSearchFilters,
+  getAccommodationIdFromPath,
   parseSearchFilters,
 } from './utils/searchUrlState';
 import { StaysSearchWidget } from './components/search/StaysSearchWidget';
@@ -116,17 +117,18 @@ function MarketplaceApp() {
   const [isDesktopSearchCompact, setIsDesktopSearchCompact] = useState(false);
   useEffect(() => {
     let compact = false;
-    const desktop = window.matchMedia('(min-width: 640px)');
+    const desktop = window.matchMedia?.('(min-width: 640px)');
     const update = () => {
       const position = window.scrollY;
-      const next = desktop.matches && (compact ? position > 1 : position > 32);
+      const next = Boolean(desktop?.matches) && (compact ? position > 1 : position > 32);
       if (next !== compact) {
         compact = next;
         const supportsSharedTransition =
-          typeof (document as Document & { startViewTransition?: (update: () => void) => unknown }).startViewTransition === 'function' &&
+          typeof (document as Document & { startViewTransition?: (update: () => void) => unknown })
+            .startViewTransition === 'function' &&
           Boolean(document.querySelector('[data-shared-search="expanded"]')) &&
           Boolean(document.querySelector('[data-shared-search="compact"]')) &&
-          !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 
         if (!supportsSharedTransition) {
           setIsDesktopSearchCompact(next);
@@ -155,10 +157,10 @@ function MarketplaceApp() {
     };
     update();
     window.addEventListener('scroll', update, { passive: true });
-    desktop.addEventListener('change', update);
+    desktop?.addEventListener('change', update);
     return () => {
       window.removeEventListener('scroll', update);
-      desktop.removeEventListener('change', update);
+      desktop?.removeEventListener('change', update);
     };
   }, []);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
@@ -326,7 +328,7 @@ function MarketplaceApp() {
   });
 
   const {
-    handleStaysWidgetSearch,
+    handleStaysWidgetSearch: searchAccommodations,
     retryLastSearch,
     availabilitySearchState,
     searchPagination,
@@ -336,6 +338,17 @@ function MarketplaceApp() {
     setFilters,
     restoreSearchFromUrlRef,
   });
+
+  const handleStaysWidgetSearch: typeof searchAccommodations = (...args) => {
+    if (
+      window.location.pathname !== '/s/homes' &&
+      !getAccommodationIdFromPath(window.location.pathname)
+    ) {
+      window.history.pushState(window.history.state, '', `/s/homes${window.location.search}`);
+      window.dispatchEvent(new Event(PAGE_METADATA_NAVIGATION_EVENT));
+    }
+    return searchAccommodations(...args);
+  };
 
   const {
     filteredProperties,
@@ -414,7 +427,7 @@ function MarketplaceApp() {
     if (
       typeof transitionDocument.startViewTransition === 'function' &&
       !transitionDocument.activeViewTransition &&
-      !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
     ) {
       try {
         transitionDocument.startViewTransition(() => flushSync(navigate));
@@ -514,7 +527,11 @@ function MarketplaceApp() {
         tripsCount={reservations.filter((r) => r.status === 'confirmed').length}
         searchSummaryText={filters.destination || undefined}
         compactSearch={currentView === 'explore' && isDesktopSearchCompact}
-        searchDateSummary={filters.checkIn && filters.checkOut ? `${new Date(`${filters.checkIn}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })} - ${new Date(`${filters.checkOut}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}` : 'Qualquer dia'}
+        searchDateSummary={
+          filters.checkIn && filters.checkOut
+            ? `${new Date(`${filters.checkIn}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })} - ${new Date(`${filters.checkOut}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}`
+            : 'Qualquer dia'
+        }
         searchGuestSummary={`${countOccupancyGuests(filters.guests)} ${countOccupancyGuests(filters.guests) === 1 ? 'hóspede' : 'hóspedes'}`}
         onCreateListing={() => setIsCreateListingOpen(true)}
         categories={availableCategories}
@@ -534,18 +551,27 @@ function MarketplaceApp() {
         ownerRequestLoading={ownerRequestLoading}
         onRequestOwnerAccess={handleRequestOwnerAccess}
         isOwnerAdmin={isOwnerAdmin}
-        toolbar={currentView === 'explore' ? (
-        <CategoryBar
-          availableCategories={availableCategories}
-          selectedCategory={filters.category}
-          onSelectCategory={handleSelectCategory}
-          onOpenFilters={() => setIsFilterOpen(true)}
-          activeFilterCount={activeFilterCount}
-          isCondominiumView={isCondominiumView}
-          compact={isDesktopSearchCompact}
-          searchBar={<StaysSearchWidget variant="hero" currentFilters={filters} onSearchInApp={handleStaysWidgetSearch} onOpenAssistant={() => setIsSofiaOpen(true)} />}
-        />
-        ) : null}
+        toolbar={
+          currentView === 'explore' ? (
+            <CategoryBar
+              availableCategories={availableCategories}
+              selectedCategory={filters.category}
+              onSelectCategory={handleSelectCategory}
+              onOpenFilters={() => setIsFilterOpen(true)}
+              activeFilterCount={activeFilterCount}
+              isCondominiumView={isCondominiumView}
+              compact={isDesktopSearchCompact}
+              searchBar={
+                <StaysSearchWidget
+                  variant="hero"
+                  currentFilters={filters}
+                  onSearchInApp={handleStaysWidgetSearch}
+                  onOpenAssistant={() => setIsSofiaOpen(true)}
+                />
+              }
+            />
+          ) : null
+        }
       />
 
       <MainContentRouter
@@ -816,6 +842,7 @@ export default function App() {
   if (
     normalizedPathname !== '/' &&
     normalizedPathname !== '/condominios' &&
+    normalizedPathname !== '/s/homes' &&
     !legalSlug &&
     normalizedPathname !== '/auth/confirm' &&
     !isPropertyPath &&

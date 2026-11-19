@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { afterEach } from 'node:test';
+import test, { afterEach, beforeEach, mock } from 'node:test';
 import { JSDOM } from 'jsdom';
 import type { ComponentProps } from 'react';
 
@@ -27,6 +27,10 @@ import type {
 import type { ScheduledRequestOptions } from '../src/services/requestScheduler.ts';
 
 const originalSearch = crcnBackendApi.searchAccommodationsPage;
+
+beforeEach(() => {
+  mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 0, 1, 12) });
+});
 
 function createSeasonalDateSuggestionsElement(
   props: Partial<ComponentProps<typeof SeasonalDateSuggestions>> = {},
@@ -101,6 +105,7 @@ class VisibilityObserver {
 Object.assign(globalThis, { IntersectionObserver: VisibilityObserver });
 
 afterEach(() => {
+  mock.timers.reset();
   cleanup();
   VisibilityObserver.automatic = true;
   window.sessionStorage.clear();

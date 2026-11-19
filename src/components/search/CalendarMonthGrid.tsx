@@ -35,16 +35,32 @@ export function CalendarMonthGrid({
     year: 'numeric',
   });
   const leadingDays = month.getDay();
-  const calendarDays = Array.from(
-    { length: 42 },
-    (_, index) => new Date(month.getFullYear(), month.getMonth(), index - leadingDays + 1),
-  );
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const weekCount = Math.ceil((leadingDays + daysInMonth) / 7);
+  const calendarCells: (Date | null)[] = Array.from({ length: weekCount * 7 }, (_, index) => {
+    const day = index - leadingDays + 1;
+    return day > 0 && day <= daysInMonth
+      ? new Date(month.getFullYear(), month.getMonth(), day)
+      : null;
+  });
   const rangeStart = pendingStart || selectedStart;
-  const rangeEnd = pendingStart ? (previewEnd && previewEnd > pendingStart ? previewEnd : '') : selectedEnd;
+  const rangeEnd = pendingStart
+    ? previewEnd && previewEnd > pendingStart
+      ? previewEnd
+      : ''
+    : selectedEnd;
 
   return (
-    <section className="min-w-0" aria-label={monthTitle} onPointerLeave={() => onPreviewDate?.(null)}>
-      <h3 className="mb-2 text-center text-[length:var(--search-calendar-month-font-size)] font-semibold text-neutral-900">
+    <section
+      className="min-w-0"
+      aria-label={monthTitle}
+      onPointerLeave={() => onPreviewDate?.(null)}
+    >
+      <h3
+        aria-live="polite"
+        aria-atomic="true"
+        className="mb-2 text-center text-[length:var(--search-calendar-month-font-size)] font-semibold text-neutral-900"
+      >
         {monthTitle}
       </h3>
       <div role="grid" aria-label={`Calendário de ${monthTitle}`}>
@@ -58,15 +74,27 @@ export function CalendarMonthGrid({
             </span>
           ))}
         </div>
-        {Array.from({ length: 6 }, (_, weekIndex) => (
+        {Array.from({ length: weekCount }, (_, weekIndex) => (
           <div key={`week-${weekIndex}`} role="row" className="grid grid-cols-7 text-center">
-            {calendarDays.slice(weekIndex * 7, weekIndex * 7 + 7).map((date) => {
+            {calendarCells.slice(weekIndex * 7, weekIndex * 7 + 7).map((date, dayIndex) => {
+              if (!date) {
+                return (
+                  <div
+                    key={`empty-${weekIndex}-${dayIndex}`}
+                    role="gridcell"
+                    aria-hidden="true"
+                    className="aspect-square min-h-[var(--search-calendar-day-size)]"
+                  />
+                );
+              }
+
               const dateValue = isoDate(date);
-              const isCurrentMonth = date.getMonth() === month.getMonth();
               const isBeforeMinimum = dateValue < minDate;
-              const isStart = Boolean(isCurrentMonth && rangeStart && dateValue === rangeStart);
-              const isEnd = Boolean(isCurrentMonth && rangeEnd && dateValue === rangeEnd);
-              const isInRange = Boolean(isCurrentMonth && rangeStart && rangeEnd && dateValue > rangeStart && dateValue < rangeEnd);
+              const isStart = Boolean(rangeStart && dateValue === rangeStart);
+              const isEnd = Boolean(rangeEnd && dateValue === rangeEnd);
+              const isInRange = Boolean(
+                rangeStart && rangeEnd && dateValue > rangeStart && dateValue < rangeEnd,
+              );
               const isSelected = isStart || (isEnd && !pendingStart);
               const isPreviewEnd = Boolean(pendingStart && isEnd);
 
@@ -89,10 +117,11 @@ export function CalendarMonthGrid({
                   <button
                     ref={registerDateButton(dateValue)}
                     type="button"
-                    disabled={!isCurrentMonth || isBeforeMinimum}
+                    disabled={isBeforeMinimum}
                     onKeyDown={(event) => onDateKeyDown(event, dateValue)}
                     onPointerEnter={(event) => {
-                      if (event.pointerType !== 'touch' && isCurrentMonth && !isBeforeMinimum) onPreviewDate?.(dateValue);
+                      if (event.pointerType !== 'touch' && !isBeforeMinimum)
+                        onPreviewDate?.(dateValue);
                     }}
                     onClick={() => onSelectDate(dateValue)}
                     aria-label={date.toLocaleDateString('pt-BR', {
@@ -109,11 +138,11 @@ export function CalendarMonthGrid({
                         ? 'bg-neutral-900 font-semibold text-white'
                         : isPreviewEnd
                           ? 'bg-white text-neutral-900 outline outline-1 -outline-offset-1 outline-neutral-800'
-                        : isInRange
-                          ? 'text-calendar-range-foreground'
-                          : isCurrentMonth && !isBeforeMinimum
-                            ? 'text-neutral-800'
-                            : 'text-calendar-muted-foreground'
+                          : isInRange
+                            ? 'text-calendar-range-foreground'
+                            : !isBeforeMinimum
+                              ? 'text-neutral-800'
+                              : 'text-calendar-muted-foreground'
                     }`}
                   >
                     {date.getDate()}

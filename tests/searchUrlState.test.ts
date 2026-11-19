@@ -85,12 +85,12 @@ test('serializes non-default search state and round-trips it', () => {
 
   assert.deepEqual(restored, filters);
   const params = new URLSearchParams(serialized);
-  assert.equal(params.get('date_picker_type'), 'calendar');
+  assert.equal(params.has('date_picker_type'), false);
   assert.equal(params.get('checkin'), '2026-11-05');
   assert.equal(params.get('checkout'), '2026-11-08');
   assert.equal(params.get('adults'), '2');
   assert.equal(params.get('children'), '1');
-  assert.equal(params.get('infants'), '0');
+  assert.equal(params.has('infants'), false);
   assert.equal(params.get('pets'), '1');
   assert.equal(params.has('guests'), false);
   assert.equal(params.get('query'), 'Rio Quente');
@@ -186,8 +186,8 @@ test('syncs filter updates to the URL without dropping path, hash, or unrelated 
     assert.equal(url.searchParams.get('checkout'), '2026-11-08');
     assert.equal(url.searchParams.get('adults'), '2');
     assert.equal(url.searchParams.get('children'), '1');
-    assert.equal(url.searchParams.get('infants'), '0');
-    assert.equal(url.searchParams.get('pets'), '0');
+    assert.equal(url.searchParams.has('infants'), false);
+    assert.equal(url.searchParams.has('pets'), false);
     assert.equal(url.searchParams.has('guests'), false);
     view.unmount();
   } finally {

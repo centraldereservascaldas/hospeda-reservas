@@ -5,8 +5,9 @@ import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { StaysSearchWidget, toBrDate } from './StaysSearchWidget';
 import { useDialogFocus } from '../useDialogFocus';
 import { countOccupancyGuests } from '../../utils/guestCounts';
-import { SearchDateCalendar } from './SearchDateCalendar';
+import { matchesMediaQuery } from '../../utils/motion';
 import { GuestCounterList } from './GuestCounterList';
+import { CalendarMonthGrid } from './CalendarMonthGrid';
 
 function toLocalIsoDate(date: Date): string {
   const year = date.getFullYear();
@@ -52,6 +53,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [activeTab, setActiveTab] = useState<'destination' | 'dates' | 'guests' | 'stays_engine'>(
     'destination',
   );
+  const [displayedTab, setDisplayedTab] = useState(activeTab);
   const [destination, setDestination] = useState(filters.destination);
   const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
@@ -70,14 +72,19 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const [checkIn, setCheckIn] = useState(filters.checkIn);
   const [checkOut, setCheckOut] = useState(filters.checkOut);
   const [dateFlexibility, setDateFlexibility] = useState<0 | 1 | 2>(filters.dateFlexibility ?? 0);
+  const [visibleMonth, setVisibleMonth] = useState(() => {
+    const date = filters.checkIn ? new Date(`${filters.checkIn}T12:00:00`) : new Date();
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  });
   const [adults, setAdults] = useState(filters.guests.adults);
   const [children, setChildren] = useState(filters.guests.children);
   const [infants, setInfants] = useState(filters.guests.infants);
   const [pets, setPets] = useState(filters.guests.pets);
   const [searchError, setSearchError] = useState('');
-  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 639px)').matches);
+  const [mobile, setMobile] = useState(() => matchesMediaQuery('(max-width: 639px)'));
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 639px)');
+    const media = window.matchMedia?.('(max-width: 639px)');
+    if (!media) return;
     const update = () => setMobile(media.matches);
     media.addEventListener('change', update);
     return () => media.removeEventListener('change', update);
@@ -103,9 +110,15 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
     const nextTab = tabs[nextIndex]!;
     setActiveTab(nextTab.id);
+    setDisplayedTab(nextTab.id);
     tabListRef.current
       ?.querySelector<HTMLButtonElement>(`[data-search-tab="${nextTab.id}"]`)
       ?.focus();
+  };
+
+  const transitionToTab = (nextTab: typeof activeTab) => {
+    setActiveTab(nextTab);
+    setDisplayedTab(nextTab);
   };
 
   useEffect(() => {
@@ -124,10 +137,13 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     if (!isOpen || !tabPanelRef.current) return;
 
     tabPanelRef.current.scrollTop = 0;
+    setDisplayedTab(activeTab);
   }, [activeTab, isOpen]);
 
   if (!isOpen) return null;
 
+  const today = new Date(`${todayIso}T12:00:00`);
+  const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const normalizedQuery = destination
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -156,7 +172,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     );
     if (hasPartialDateRange || hasInvalidDateRange) {
       setSearchError('Escolha datas futuras e um check-out posterior ao check-in.');
-      setActiveTab('dates');
+      transitionToTab('dates');
       return;
     }
 
@@ -204,6 +220,58 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     });
   };
 
+  const renderDateCalendar = () => (
+    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-2 sm:gap-3">
+      <button
+        type="button"
+        aria-label="Mês anterior"
+        onClick={() =>
+          setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))
+        }
+        disabled={visibleMonth <= currentMonth}
+        className="mt-8 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <span aria-hidden="true">‹</span>
+      </button>
+      <div
+        className={`grid min-w-0 grid-cols-1 gap-6 sm:grid-cols-2 ${mobile ? 'max-h-[58dvh] overflow-y-auto overscroll-contain touch-pan-y' : ''}`}
+      >
+        {[0, 1].map((offset) => (
+          <CalendarMonthGrid
+            key={offset}
+            month={new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + offset, 1)}
+            minDate={todayIso}
+            selectedStart={checkIn}
+            selectedEnd={checkOut}
+            pendingStart={checkIn && !checkOut ? checkIn : null}
+            focusDate={undefined}
+            registerDateButton={() => () => {}}
+            onDateKeyDown={() => {}}
+            onSelectDate={(date) => {
+              if (!checkIn || checkOut || date <= checkIn) {
+                setCheckIn(date);
+                setCheckOut('');
+              } else {
+                setCheckOut(date);
+              }
+              setSearchError('');
+            }}
+          />
+        ))}
+      </div>
+      <button
+        type="button"
+        aria-label="Próximo mês"
+        onClick={() =>
+          setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))
+        }
+        className="mt-8 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200"
+      >
+        <span aria-hidden="true">›</span>
+      </button>
+    </div>
+  );
+
   if (mobile) {
     const steps = [
       { id: 'destination' as const, label: 'Onde', summary: destination || 'Todos os condomínios' },
@@ -246,10 +314,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
           </header>
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-4">
             {steps.map((step) =>
-              activeTab === step.id ? (
+              displayedTab === step.id ? (
                 <section
                   key={step.id}
-                  className="min-h-0 rounded-3xl bg-white p-6 shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
+                  className="min-h-0 shrink-0 rounded-3xl bg-white p-6 shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
                 >
                   <h3 className="mb-5 text-2xl font-bold">{step.label}?</h3>
                   {step.id === 'destination' && (
@@ -268,7 +336,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         type="button"
                         onClick={() => {
                           setDestination('');
-                          setActiveTab('dates');
+                          transitionToTab('dates');
                         }}
                         className="flex min-h-14 w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-orange-600"
                       >
@@ -283,14 +351,14 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         </span>
                       </button>
                       <p className="text-sm font-semibold">Destinos sugeridos</p>
-                      <div className="max-h-[38dvh] space-y-1 overflow-y-auto">
+                      <div className="space-y-1">
                         {popularDestinations.map((item) => (
                           <button
                             key={item.name}
                             type="button"
                             onClick={() => {
                               setDestination(item.query);
-                              setActiveTab('dates');
+                              transitionToTab('dates');
                             }}
                             className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50"
                           >
@@ -309,7 +377,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     </div>
                   )}
                   {step.id === 'dates' && (
-                    <div className="max-h-[48dvh] overflow-y-auto">
+                    <div>
                       <p className="mb-4 text-sm text-neutral-600">
                         {checkIn && !checkOut ? 'Selecione a saída' : 'Selecione entrada e saída'}
                       </p>
@@ -331,16 +399,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                           </button>
                         ))}
                       </div>
-                      <SearchDateCalendar
-                        checkIn={checkIn}
-                        checkOut={checkOut}
-                        minDate={todayIso}
-                        onDatesChange={(from, to) => {
-                          setCheckIn(from);
-                          setCheckOut(to);
-                          setSearchError('');
-                        }}
-                      />
+                      {renderDateCalendar()}
                       {searchError && (
                         <p role="alert" className="text-sm text-red-700">
                           {searchError}
@@ -364,7 +423,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 <button
                   key={step.id}
                   type="button"
-                  onClick={() => setActiveTab(step.id)}
+                  onClick={() => transitionToTab(step.id)}
                   className="flex min-h-14 shrink-0 items-center justify-between gap-4 rounded-2xl bg-white px-6 text-sm shadow-sm"
                 >
                   <span className="text-neutral-500">{step.label}</span>
@@ -397,7 +456,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     setSearchError('Escolha a entrada e a saída para continuar.');
                     return;
                   }
-                  setActiveTab(activeTab === 'destination' ? 'dates' : 'guests');
+                  transitionToTab(activeTab === 'destination' ? 'dates' : 'guests');
                 }}
                 className="min-h-12 rounded-xl bg-neutral-900 px-6 text-sm font-bold text-white"
               >
@@ -445,7 +504,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               aria-selected={activeTab === 'destination'}
               aria-controls={`${fieldId}-tabpanel`}
               tabIndex={activeTab === 'destination' ? 0 : -1}
-              onClick={() => setActiveTab('destination')}
+              onClick={() => transitionToTab('destination')}
               className={`flex min-h-11 items-center justify-center rounded-xl px-2 py-2 transition-all cursor-pointer min-[480px]:rounded-full min-[480px]:px-3 sm:px-4 ${focusRing} ${
                 activeTab === 'destination'
                   ? 'bg-white text-neutral-950 shadow-sm font-bold'
@@ -462,7 +521,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               aria-selected={activeTab === 'dates'}
               aria-controls={`${fieldId}-tabpanel`}
               tabIndex={activeTab === 'dates' ? 0 : -1}
-              onClick={() => setActiveTab('dates')}
+              onClick={() => transitionToTab('dates')}
               className={`flex min-h-11 items-center justify-center rounded-xl px-2 py-2 transition-all cursor-pointer min-[480px]:rounded-full min-[480px]:px-3 sm:px-4 ${focusRing} ${
                 activeTab === 'dates'
                   ? 'bg-white text-neutral-950 shadow-sm font-bold'
@@ -479,7 +538,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               aria-selected={activeTab === 'guests'}
               aria-controls={`${fieldId}-tabpanel`}
               tabIndex={activeTab === 'guests' ? 0 : -1}
-              onClick={() => setActiveTab('guests')}
+              onClick={() => transitionToTab('guests')}
               className={`flex min-h-11 items-center justify-center rounded-xl px-2 py-2 transition-all cursor-pointer min-[480px]:rounded-full min-[480px]:px-3 sm:px-4 ${focusRing} ${
                 activeTab === 'guests'
                   ? 'bg-white text-neutral-950 shadow-sm font-bold'
@@ -496,7 +555,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               aria-selected={activeTab === 'stays_engine'}
               aria-controls={`${fieldId}-tabpanel`}
               tabIndex={activeTab === 'stays_engine' ? 0 : -1}
-              onClick={() => setActiveTab('stays_engine')}
+              onClick={() => transitionToTab('stays_engine')}
               className={`flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-2 py-2 transition-all cursor-pointer min-[480px]:rounded-full min-[480px]:px-3 sm:px-4 ${focusRing} ${
                 activeTab === 'stays_engine'
                   ? 'bg-gradient-to-r from-orange-700 to-amber-700 text-white shadow-sm font-bold'
@@ -521,184 +580,176 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
         {/* Tab Body */}
         <div
-          key={activeTab}
           ref={tabPanelRef}
           id={`${fieldId}-tabpanel`}
           role="tabpanel"
           aria-labelledby={`${fieldId}-tab-${activeTab}`}
           tabIndex={0}
-          className="search-popover-enter motion-reduce:animate-none p-6 [@media(max-height:400px)]:p-3 overflow-y-auto max-h-[55vh]"
+          className="search-modal-shared-panel search-popover-enter motion-reduce:animate-none p-6 [@media(max-height:400px)]:p-3 overflow-y-auto max-h-[55vh]"
         >
-          {/* TAB: BOOKING SEARCH */}
-          {activeTab === 'stays_engine' && (
-            <div className="space-y-4">
-              <StaysSearchWidget
-                variant="modal"
-                surpriseMe
-                currentFilters={{
-                  ...filters,
-                  destination,
-                  checkIn,
-                  checkOut,
-                  guests: { adults, children, infants, pets },
-                }}
-                onSearchInApp={(params) => {
-                  onSearchInApp(params);
-                  onClose();
+          <div key={displayedTab} className="search-modal-panel-content">
+            {/* TAB: BOOKING SEARCH */}
+            {displayedTab === 'stays_engine' && (
+              <div className="space-y-4">
+                <StaysSearchWidget
+                  variant="modal"
+                  surpriseMe
+                  currentFilters={{
+                    ...filters,
+                    destination,
+                    checkIn,
+                    checkOut,
+                    guests: { adults, children, infants, pets },
+                  }}
+                  onSearchInApp={(params) => {
+                    onSearchInApp(params);
+                    onClose();
+                  }}
+                />
+              </div>
+            )}
+            {/* TAB 1: DESTINATION */}
+            {displayedTab === 'destination' && (
+              <div className="space-y-6">
+                <div>
+                  <label
+                    htmlFor={`${fieldId}-destination`}
+                    className="block text-sm font-bold text-neutral-900 mb-2"
+                  >
+                    Buscar por região, cidade ou nome do espaço
+                  </label>
+                  <div className="relative">
+                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-500" />
+                    <input
+                      id={`${fieldId}-destination`}
+                      type="text"
+                      value={destination}
+                      onChange={(e) => setDestination(e.target.value)}
+                      placeholder="Ex: Trancoso, Rio de Janeiro, Campos do Jordão..."
+                      className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-neutral-300 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none transition-all"
+                    />
+                    {destination && (
+                      <button
+                        type="button"
+                        aria-label="Limpar destino"
+                        onClick={() => setDestination('')}
+                        className={`absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 ${focusRing}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-3">
+                    Destinos em destaque
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {popularDestinations.map((dest) => (
+                      <button
+                        key={dest.name}
+                        onClick={() => {
+                          setDestination(dest.query);
+                          transitionToTab('dates');
+                        }}
+                        className={`flex items-center gap-3 p-3 rounded-2xl border border-neutral-100 hover:border-neutral-300 hover:bg-neutral-50 text-left transition-all cursor-pointer group ${focusRing}`}
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-orange-50 group-hover:bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 transition-colors">
+                          <MapPin className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-neutral-900 group-hover:text-orange-600 transition-colors">
+                            {dest.name}
+                          </p>
+                          <p className="text-xs text-neutral-500">{dest.subtitle}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: DATES */}
+            {displayedTab === 'dates' && (
+              <div className="space-y-6 [@media(max-height:400px)]:space-y-3">
+                <h3 className="text-base font-bold text-neutral-900 [@media(max-height:400px)]:sr-only">
+                  Selecione as datas da sua estadia
+                </h3>
+
+                <div aria-label="Período da hospedagem" className="grid grid-cols-2 gap-3">
+                  <div className="min-w-0 rounded-2xl border border-neutral-200 px-4 py-3">
+                    <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">
+                      Entrada
+                    </p>
+                    <p className="mt-1 truncate text-[length:var(--search-date-value-font-size)] font-semibold text-neutral-900">
+                      {checkIn ? toBrDate(checkIn) : 'Adicionar data'}
+                    </p>
+                  </div>
+                  <div className="min-w-0 rounded-2xl border border-neutral-200 px-4 py-3">
+                    <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">
+                      Saída
+                    </p>
+                    <p className="mt-1 truncate text-[length:var(--search-date-value-font-size)] font-semibold text-neutral-900">
+                      {checkOut ? toBrDate(checkOut) : 'Adicionar data'}
+                    </p>
+                  </div>
+                </div>
+
+                {renderDateCalendar()}
+
+                {searchError && (
+                  <p role="alert" className="text-sm font-semibold text-red-700">
+                    {searchError}
+                  </p>
+                )}
+
+                {/* Quick Preset Buttons */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">
+                    Atalhos rápidos
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: 'Próximo fim de semana (Sex - Dom)', days: 2, offset: 5 },
+                      { label: 'Férias de 5 noites', days: 5, offset: 12 },
+                      { label: 'Semana completa (7 noites)', days: 7, offset: 20 },
+                    ].map((preset, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          const now = new Date();
+                          const start = new Date(now);
+                          start.setDate(now.getDate() + preset.offset);
+                          const end = new Date(start);
+                          end.setDate(start.getDate() + preset.days);
+                          setCheckIn(start.toISOString().split('T')[0]);
+                          setCheckOut(end.toISOString().split('T')[0]);
+                        }}
+                        className={`inline-flex min-h-11 items-center justify-center rounded-xl border border-neutral-200 px-3.5 py-2 text-left text-xs font-medium text-neutral-700 transition-all hover:border-neutral-900 hover:bg-neutral-50 cursor-pointer ${focusRing}`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: GUESTS */}
+            {displayedTab === 'guests' && (
+              <GuestCounterList
+                counts={{ adults, children, infants, pets }}
+                onChange={(counts) => {
+                  setAdults(counts.adults);
+                  setChildren(counts.children);
+                  setInfants(counts.infants);
+                  setPets(counts.pets);
                 }}
               />
-            </div>
-          )}
-          {/* TAB 1: DESTINATION */}
-          {activeTab === 'destination' && (
-            <div className="space-y-6">
-              <div>
-                <label
-                  htmlFor={`${fieldId}-destination`}
-                  className="block text-sm font-bold text-neutral-900 mb-2"
-                >
-                  Buscar por região, cidade ou nome do espaço
-                </label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-500" />
-                  <input
-                    id={`${fieldId}-destination`}
-                    type="text"
-                    value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
-                    placeholder="Ex: Trancoso, Rio de Janeiro, Campos do Jordão..."
-                    className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-neutral-300 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none transition-all"
-                  />
-                  {destination && (
-                    <button
-                      type="button"
-                      aria-label="Limpar destino"
-                      onClick={() => setDestination('')}
-                      className={`absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 ${focusRing}`}
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-3">
-                  Destinos em destaque
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {popularDestinations.map((dest) => (
-                    <button
-                      key={dest.name}
-                      onClick={() => {
-                        setDestination(dest.query);
-                        setActiveTab('dates');
-                      }}
-                      className={`flex items-center gap-3 p-3 rounded-2xl border border-neutral-100 hover:border-neutral-300 hover:bg-neutral-50 text-left transition-all cursor-pointer group ${focusRing}`}
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-orange-50 group-hover:bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 transition-colors">
-                        <MapPin className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-900 group-hover:text-orange-600 transition-colors">
-                          {dest.name}
-                        </p>
-                        <p className="text-xs text-neutral-500">{dest.subtitle}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 2: DATES */}
-          {activeTab === 'dates' && (
-            <div className="space-y-6 [@media(max-height:400px)]:space-y-3">
-              <h3 className="text-base font-bold text-neutral-900 [@media(max-height:400px)]:sr-only">
-                Selecione as datas da sua estadia
-              </h3>
-
-              <div aria-label="Período da hospedagem" className="grid grid-cols-2 gap-3">
-                <div className="min-w-0 rounded-2xl border border-neutral-200 px-4 py-3">
-                  <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">
-                    Entrada
-                  </p>
-                  <p className="mt-1 truncate text-[length:var(--search-date-value-font-size)] font-semibold text-neutral-900">
-                    {checkIn ? toBrDate(checkIn) : 'Adicionar data'}
-                  </p>
-                </div>
-                <div className="min-w-0 rounded-2xl border border-neutral-200 px-4 py-3">
-                  <p className="text-[length:var(--search-date-label-font-size)] font-semibold text-neutral-600">
-                    Saída
-                  </p>
-                  <p className="mt-1 truncate text-[length:var(--search-date-value-font-size)] font-semibold text-neutral-900">
-                    {checkOut ? toBrDate(checkOut) : 'Adicionar data'}
-                  </p>
-                </div>
-              </div>
-
-              <SearchDateCalendar
-                checkIn={checkIn}
-                checkOut={checkOut}
-                minDate={todayIso}
-                onDatesChange={(nextCheckIn, nextCheckOut) => {
-                  setCheckIn(nextCheckIn);
-                  setCheckOut(nextCheckOut);
-                  setSearchError('');
-                }}
-              />
-
-              {searchError && (
-                <p role="alert" className="text-sm font-semibold text-red-700">
-                  {searchError}
-                </p>
-              )}
-
-              {/* Quick Preset Buttons */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-2">
-                  Atalhos rápidos
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { label: 'Próximo fim de semana (Sex - Dom)', days: 2, offset: 5 },
-                    { label: 'Férias de 5 noites', days: 5, offset: 12 },
-                    { label: 'Semana completa (7 noites)', days: 7, offset: 20 },
-                  ].map((preset, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        const now = new Date();
-                        const start = new Date(now);
-                        start.setDate(now.getDate() + preset.offset);
-                        const end = new Date(start);
-                        end.setDate(start.getDate() + preset.days);
-                        setCheckIn(start.toISOString().split('T')[0]);
-                        setCheckOut(end.toISOString().split('T')[0]);
-                      }}
-                      className={`inline-flex min-h-11 items-center justify-center rounded-xl border border-neutral-200 px-3.5 py-2 text-left text-xs font-medium text-neutral-700 transition-all hover:border-neutral-900 hover:bg-neutral-50 cursor-pointer ${focusRing}`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: GUESTS */}
-          {activeTab === 'guests' && (
-            <GuestCounterList
-              counts={{ adults, children, infants, pets }}
-              onChange={(counts) => {
-                setAdults(counts.adults);
-                setChildren(counts.children);
-                setInfants(counts.infants);
-                setPets(counts.pets);
-              }}
-            />
-          )}
+            )}
+          </div>
         </div>
 
         {/* Footer controls */}

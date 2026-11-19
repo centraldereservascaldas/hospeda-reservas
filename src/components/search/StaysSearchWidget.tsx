@@ -86,7 +86,10 @@ const addDaysToIsoDate = (dateValue: string, days: number) => {
 function usePopoverPresence(isOpen: boolean) {
   const [retained, setRetained] = useState(isOpen);
   useEffect(() => {
-    if (isOpen) { setRetained(true); return; }
+    if (isOpen) {
+      setRetained(true);
+      return;
+    }
     const timer = window.setTimeout(() => setRetained(false), 140);
     return () => window.clearTimeout(timer);
   }, [isOpen]);
@@ -123,7 +126,12 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
     const date = value ? new Date(`${value}T12:00:00`) : new Date();
     return new Date(date.getFullYear(), date.getMonth(), 1);
   });
-  const [position, setPosition] = useState({ left: 8, top: 8, width: hero ? 850 : 320, maxHeight: 540 });
+  const [position, setPosition] = useState({
+    left: 8,
+    top: 8,
+    width: hero ? 850 : 320,
+    maxHeight: 540,
+  });
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -133,7 +141,8 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
     const rootStyles = getComputedStyle(document.documentElement);
     const remSize = Number.parseFloat(rootStyles.fontSize) || 16;
     const calendarWidth =
-      (Number.parseFloat(rootStyles.getPropertyValue('--search-calendar-width')) || 53.125) * remSize;
+      (Number.parseFloat(rootStyles.getPropertyValue('--search-calendar-width')) || 53.125) *
+      remSize;
     const width = Math.min(hero ? calendarWidth : 320, window.innerWidth - gutter * 2);
     const maxHeight = Math.max(0, window.innerHeight - 16);
     const height = Math.min(hero ? 540 : 440, maxHeight);
@@ -212,7 +221,8 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
   const getFocusableDateForMonth = (monthOffset: number): string | undefined => {
     const month = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + monthOffset, 1);
     const prefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
-    if (keyboardFocusDate?.startsWith(prefix) && keyboardFocusDate >= minDate) return keyboardFocusDate;
+    if (keyboardFocusDate?.startsWith(prefix) && keyboardFocusDate >= minDate)
+      return keyboardFocusDate;
     if (value.startsWith(prefix) && value >= minDate) return value;
 
     const leadingDays = month.getDay();
@@ -297,9 +307,7 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
   };
 
   const shownValue = value ? new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR') : emptyLabel;
-  const triggerDescription = hero && collapsed
-    ? summaryValue || 'Insira as datas'
-    : shownValue;
+  const triggerDescription = hero && collapsed ? summaryValue || 'Insira as datas' : shownValue;
 
   useEffect(() => {
     if (isOpen && !hero) updatePosition();
@@ -327,7 +335,14 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
             {label === 'Entrada (Check-in)' ? 'Entrada (Check-in)' : 'Saída'}
           </span>
         )}
-        <span aria-hidden="true" className={hero ? `block truncate leading-tight text-neutral-900 ${collapsed ? 'text-[length:var(--search-date-value-font-size)] font-normal text-neutral-500' : 'text-3xl font-semibold'}` : undefined}>
+        <span
+          aria-hidden="true"
+          className={
+            hero
+              ? `block truncate leading-tight text-neutral-900 ${collapsed ? 'text-[length:var(--search-date-value-font-size)] font-normal text-neutral-500' : 'text-3xl font-semibold'}`
+              : undefined
+          }
+        >
           {hero && collapsed ? (
             triggerDescription
           ) : value ? (
@@ -341,7 +356,8 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
         </span>
       </button>
 
-      {popoverPresent && !hero &&
+      {popoverPresent &&
+        !hero &&
         createPortal(
           <div
             ref={popoverRef}
@@ -360,28 +376,58 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
             }}
           >
             {hero && (
-              <div role="tablist" aria-label="Tipo de data" className="mx-auto mb-5 flex w-fit items-center rounded-full bg-neutral-100 p-1">
-                <button type="button" role="tab" aria-selected="true" className="min-h-10 rounded-full bg-white px-8 text-sm font-semibold text-neutral-900 shadow-sm">Datas</button>
-                <button type="button" role="tab" aria-selected="false" disabled title="A busca flexível ainda não está disponível para os condomínios." className="min-h-10 cursor-not-allowed rounded-full px-8 text-sm font-semibold text-neutral-400">Flexível</button>
+              <div
+                role="tablist"
+                aria-label="Tipo de data"
+                className="mx-auto mb-5 flex w-fit items-center rounded-full bg-neutral-100 p-1"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  className="min-h-10 rounded-full bg-white px-8 text-sm font-semibold text-neutral-900 shadow-sm"
+                >
+                  Datas
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  disabled
+                  title="A busca flexível ainda não está disponível para os condomínios."
+                  className="min-h-10 cursor-not-allowed rounded-full px-8 text-sm font-semibold text-neutral-400"
+                >
+                  Flexível
+                </button>
               </div>
             )}
             <div className="mb-3 grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-2 sm:gap-3">
               <button
                 type="button"
                 onKeyDown={handleCalendarKeyDown}
-                onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))}
+                onClick={() =>
+                  setVisibleMonth(
+                    new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1),
+                  )
+                }
                 className="liquid-glass-button mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-700 transition hover:text-orange-600"
                 aria-label="Mês anterior"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <div className={`grid min-w-0 ${hero && window.innerWidth > 639 ? 'grid-cols-2 gap-6' : 'grid-cols-1'}`}>
+              <div
+                className={`grid min-w-0 ${hero && window.innerWidth > 639 ? 'grid-cols-2 gap-6' : 'grid-cols-1'}`}
+              >
                 {renderCalendarMonth(0)}
                 {hero && window.innerWidth > 639 && renderCalendarMonth(1)}
               </div>
               <button
                 type="button"
-                onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))}
+                onClick={() =>
+                  setVisibleMonth(
+                    new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1),
+                  )
+                }
                 className="liquid-glass-button mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-neutral-700 transition hover:text-orange-600"
                 aria-label="Próximo mês"
               >
@@ -390,30 +436,41 @@ const LiquidDatePicker: React.FC<LiquidDatePickerProps> = ({
             </div>
             <div className="mt-3 flex items-center justify-between gap-2 border-t border-neutral-200/70 pt-3">
               {hero && onRangeChange && (
-                <div aria-label="Flexibilidade das datas" className="flex flex-wrap items-center gap-2">
-                  {([0, 1, 2, 3, 7, 14] as const).map((days) => (
-                    <button key={days} type="button" disabled={days > 2} aria-pressed={dateFlexibility === days} onClick={() => { if (days <= 2) onFlexibilityChange?.(days as 0 | 1 | 2); }} title={days > 2 ? 'Ainda não disponível' : undefined} className={`min-h-10 rounded-full border px-4 text-xs font-semibold ${dateFlexibility === days ? 'border-neutral-900 text-neutral-900' : days > 2 ? 'cursor-not-allowed border-neutral-200 text-neutral-400' : 'border-neutral-300 text-neutral-700 hover:border-neutral-900'}`}>
+                <div
+                  aria-label="Flexibilidade das datas"
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  {([0, 1, 2] as const).map((days) => (
+                    <button
+                      key={days}
+                      type="button"
+                      aria-pressed={dateFlexibility === days}
+                      onClick={() => onFlexibilityChange?.(days)}
+                      className={`min-h-10 rounded-full border px-4 text-xs font-semibold ${dateFlexibility === days ? 'border-neutral-900 text-neutral-900' : 'border-neutral-300 text-neutral-700 hover:border-neutral-900'}`}
+                    >
                       {days === 0 ? 'Datas exatas' : `± ${days} ${days === 1 ? 'dia' : 'dias'}`}
                     </button>
                   ))}
                 </div>
               )}
-              {!hero && <button
-                type="button"
-                onKeyDown={handleCalendarKeyDown}
-                onClick={() => {
-                  const today = isoDate(new Date());
-                  if (today >= minDate) {
-                    onChange(today);
-                    onClose();
-                    triggerRef.current?.focus();
-                  }
-                }}
-                disabled={isoDate(new Date()) < minDate}
-                className="min-h-11 rounded-full px-4 text-xs font-bold text-orange-700 transition hover:bg-orange-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Hoje
-              </button>}
+              {!hero && (
+                <button
+                  type="button"
+                  onKeyDown={handleCalendarKeyDown}
+                  onClick={() => {
+                    const today = isoDate(new Date());
+                    if (today >= minDate) {
+                      onChange(today);
+                      onClose();
+                      triggerRef.current?.focus();
+                    }
+                  }}
+                  disabled={isoDate(new Date()) < minDate}
+                  className="min-h-11 rounded-full px-4 text-xs font-bold text-orange-700 transition hover:bg-orange-500/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Hoje
+                </button>
+              )}
             </div>
           </div>,
           document.body,
@@ -558,7 +615,8 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
         />
       </button>
 
-      {popoverPresent && !sharedPanel &&
+      {popoverPresent &&
+        !sharedPanel &&
         createPortal(
           <div
             ref={menuRef}
@@ -692,7 +750,16 @@ function SharedCalendarContent({
   };
 
   const handleDateKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, dateValue: string) => {
-    const dayOffset = event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowRight' ? 1 : event.key === 'ArrowUp' ? -7 : event.key === 'ArrowDown' ? 7 : 0;
+    const dayOffset =
+      event.key === 'ArrowLeft'
+        ? -1
+        : event.key === 'ArrowRight'
+          ? 1
+          : event.key === 'ArrowUp'
+            ? -7
+            : event.key === 'ArrowDown'
+              ? 7
+              : 0;
     if (!dayOffset) return;
     event.preventDefault();
     const candidate = new Date(`${dateValue}T12:00:00`);
@@ -700,7 +767,10 @@ function SharedCalendarContent({
     const nextDate = isoDate(candidate);
     if (nextDate < today) return;
     setFocusDate(nextDate);
-    if (candidate.getMonth() !== visibleMonth.getMonth() || candidate.getFullYear() !== visibleMonth.getFullYear()) {
+    if (
+      candidate.getMonth() !== visibleMonth.getMonth() ||
+      candidate.getFullYear() !== visibleMonth.getFullYear()
+    ) {
       setVisibleMonth(new Date(candidate.getFullYear(), candidate.getMonth(), 1));
     }
   };
@@ -744,25 +814,72 @@ function SharedCalendarContent({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div role="tablist" aria-label="Tipo de data" className="mx-auto mb-4 flex w-fit shrink-0 items-center rounded-full bg-neutral-100 p-1">
-        <button type="button" role="tab" aria-selected="true" className="min-h-10 rounded-full bg-white px-8 text-sm font-semibold text-neutral-900 shadow-sm">Datas</button>
-        <button type="button" role="tab" aria-selected="false" disabled title="A busca flexível ainda não está disponível para os condomínios." className="min-h-10 cursor-not-allowed rounded-full px-8 text-sm font-semibold text-neutral-400">Flexível</button>
+      <div
+        role="tablist"
+        aria-label="Tipo de data"
+        className="mx-auto mb-4 flex w-fit shrink-0 items-center rounded-full bg-neutral-100 p-1"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected="true"
+          className="min-h-10 rounded-full bg-white px-8 text-sm font-semibold text-neutral-900 shadow-sm"
+        >
+          Datas
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected="false"
+          disabled
+          title="A busca flexível ainda não está disponível para os condomínios."
+          className="min-h-10 cursor-not-allowed rounded-full px-8 text-sm font-semibold text-neutral-400"
+        >
+          Flexível
+        </button>
       </div>
       <div className="mb-3 grid min-h-0 flex-1 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-2 overflow-y-auto sm:gap-3">
-        <button type="button" onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))} aria-label="Mês anterior" className="mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-neutral-900">
+        <button
+          type="button"
+          onClick={() =>
+            setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))
+          }
+          aria-label="Mês anterior"
+          className="mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-neutral-900"
+        >
           <ChevronLeft className="h-4 w-4" />
         </button>
         <div className={`grid min-w-0 ${isWide ? 'grid-cols-2 gap-4 sm:gap-6' : 'grid-cols-1'}`}>
           {renderMonth(0)}
           {isWide && renderMonth(1)}
         </div>
-        <button type="button" onClick={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))} aria-label="Próximo mês" className="mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-neutral-900">
+        <button
+          type="button"
+          onClick={() =>
+            setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))
+          }
+          aria-label="Próximo mês"
+          className="mt-8 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-700 transition hover:border-neutral-900"
+        >
           <ChevronRight className="h-4 w-4" />
         </button>
       </div>
-      <div aria-label="Flexibilidade das datas" className="flex shrink-0 flex-wrap items-center gap-2 border-t border-neutral-200/70 pt-3">
+      <div
+        aria-label="Flexibilidade das datas"
+        className="flex shrink-0 flex-wrap items-center gap-2 border-t border-neutral-200/70 pt-3"
+      >
         {([0, 1, 2, 3, 7, 14] as const).map((days) => (
-          <button key={days} type="button" disabled={days > 2} aria-pressed={dateFlexibility === days} onClick={() => { if (days <= 2) onFlexibilityChange(days as 0 | 1 | 2); }} title={days > 2 ? 'Ainda não disponível' : undefined} className={`min-h-10 rounded-full border px-4 text-xs font-semibold ${dateFlexibility === days ? 'border-neutral-900 text-neutral-900' : days > 2 ? 'cursor-not-allowed border-neutral-200 text-neutral-400' : 'border-neutral-300 text-neutral-700 hover:border-neutral-900'}`}>
+          <button
+            key={days}
+            type="button"
+            disabled={days > 2}
+            aria-pressed={dateFlexibility === days}
+            onClick={() => {
+              if (days <= 2) onFlexibilityChange(days as 0 | 1 | 2);
+            }}
+            title={days > 2 ? 'Ainda não disponível' : undefined}
+            className={`min-h-10 rounded-full border px-4 text-xs font-semibold ${dateFlexibility === days ? 'border-neutral-900 text-neutral-900' : days > 2 ? 'cursor-not-allowed border-neutral-200 text-neutral-400' : 'border-neutral-300 text-neutral-700 hover:border-neutral-900'}`}
+          >
             {days === 0 ? 'Datas exatas' : `± ${days} ${days === 1 ? 'dia' : 'dias'}`}
           </button>
         ))}
@@ -785,11 +902,11 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
 
   const [checkIn, setCheckIn] = useState<string>(currentFilters?.checkIn || '');
   const [checkOut, setCheckOut] = useState<string>(currentFilters?.checkOut || '');
-  const [dateFlexibility, setDateFlexibility] = useState<0 | 1 | 2>(currentFilters?.dateFlexibility ?? 0);
+  const [dateFlexibility, setDateFlexibility] = useState<0 | 1 | 2>(
+    currentFilters?.dateFlexibility ?? 0,
+  );
   const [persons, setPersons] = useState<string>(
-    currentFilters?.guests
-      ? String(countOccupancyGuests(currentFilters.guests))
-      : '2',
+    currentFilters?.guests ? String(countOccupancyGuests(currentFilters.guests)) : '2',
   );
   const [guestCounts, setGuestCounts] = useState<GuestCounts>(
     currentFilters?.guests ?? { adults: 1, children: 0, infants: 0, pets: 0 },
@@ -802,7 +919,12 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   const [activeDatePicker, setActiveDatePicker] = useState<'checkIn' | 'checkOut' | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<'resort' | 'guests' | null>(null);
   const guestTriggerRef = useRef<HTMLButtonElement>(null);
-  const [sharedPanelPosition, setSharedPanelPosition] = useState({ left: 8, top: 150, width: 400, height: 420 });
+  const [sharedPanelPosition, setSharedPanelPosition] = useState({
+    left: 8,
+    top: 150,
+    width: 400,
+    height: 420,
+  });
   const [sharedPanelVisible, setSharedPanelVisible] = useState(false);
   const [sharedResortQuery, setSharedResortQuery] = useState('');
   const sharedPanelRef = useRef<HTMLDivElement>(null);
@@ -877,7 +999,14 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
 
   useEffect(() => {
     if (!isHero) return;
-    const activePanel = activeDropdown === 'resort' ? 'where' : activeDropdown === 'guests' ? 'guests' : activeDatePicker ? 'when' : null;
+    const activePanel =
+      activeDropdown === 'resort'
+        ? 'where'
+        : activeDropdown === 'guests'
+          ? 'guests'
+          : activeDatePicker
+            ? 'when'
+            : null;
     if (!activePanel) {
       const timer = window.setTimeout(() => setSharedPanelVisible(false), 240);
       return () => window.clearTimeout(timer);
@@ -885,12 +1014,20 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     setSharedPanelVisible(true);
     const updatePosition = () => {
       const form = document.getElementById('widgetStaysSearchForm');
-      const target = form?.querySelector<HTMLElement>(`[data-search-segment="${activePanel === 'where' ? 'where' : activePanel === 'when' ? 'when' : 'guests'}"]`);
+      const target = form?.querySelector<HTMLElement>(
+        `[data-search-segment="${activePanel === 'where' ? 'where' : activePanel === 'when' ? 'when' : 'guests'}"]`,
+      );
       if (!target) return;
       const rect = target.getBoundingClientRect();
       const gutter = window.innerWidth <= 639 ? 12 : 16;
-      const width = Math.min(activePanel === 'when' ? 850 : activePanel === 'where' ? 400 : 620, window.innerWidth - gutter * 2);
-      const height = Math.min(activePanel === 'when' ? 540 : activePanel === 'where' ? 360 : 430, window.innerHeight - 24);
+      const width = Math.min(
+        activePanel === 'when' ? 850 : activePanel === 'where' ? 400 : 620,
+        window.innerWidth - gutter * 2,
+      );
+      const height = Math.min(
+        activePanel === 'when' ? 540 : activePanel === 'where' ? 360 : 430,
+        window.innerHeight - 24,
+      );
       const centeredLeft = activePanel === 'when' ? (window.innerWidth - width) / 2 : rect.left;
       const left = Math.max(gutter, Math.min(centeredLeft, window.innerWidth - width - gutter));
       const top = Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - height - 8));
@@ -900,13 +1037,23 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
     const focusFrame = window.requestAnimationFrame(() => {
-      if (activePanel === 'where') sharedPanelRef.current?.querySelector<HTMLInputElement>('input[aria-label="Buscar condomínio"]')?.focus();
-      if (activePanel === 'guests') sharedPanelRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
-      if (activePanel === 'when') sharedPanelRef.current?.querySelector<HTMLButtonElement>('[data-calendar-day]:not(:disabled)')?.focus();
+      if (activePanel === 'where')
+        sharedPanelRef.current
+          ?.querySelector<HTMLInputElement>('input[aria-label="Buscar condomínio"]')
+          ?.focus();
+      if (activePanel === 'guests')
+        sharedPanelRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+      if (activePanel === 'when')
+        sharedPanelRef.current
+          ?.querySelector<HTMLButtonElement>('[data-calendar-day]:not(:disabled)')
+          ?.focus();
     });
     const handleOutsideClick = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (!sharedPanelRef.current?.contains(target) && !document.getElementById('widgetStaysSearchForm')?.contains(target)) {
+      if (
+        !sharedPanelRef.current?.contains(target) &&
+        !document.getElementById('widgetStaysSearchForm')?.contains(target)
+      ) {
         setActiveDropdown(null);
         setActiveDatePicker(null);
       }
@@ -915,10 +1062,47 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       if (event.key === 'Escape') {
         setActiveDropdown(null);
         setActiveDatePicker(null);
+        document
+          .querySelector<HTMLButtonElement>(
+            `[data-search-segment="${activePanel === 'where' ? 'where' : activePanel === 'when' ? 'when' : 'guests'}"] button`,
+          )
+          ?.focus();
+      }
+    };
+    const handlePanelKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab' || !sharedPanelRef.current?.contains(event.target as Node)) return;
+      const controls = Array.from(
+        sharedPanelRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), a[href], input:not([disabled]), [tabindex="0"]',
+        ),
+      );
+      const firstControl = controls[0];
+      const lastControl = controls[controls.length - 1];
+      const target =
+        event.target instanceof Element
+          ? event.target.closest('button, a, input, [tabindex="0"]')
+          : null;
+      const leavesPanel = event.shiftKey ? target === firstControl : target === lastControl;
+      if (!leavesPanel) return;
+
+      event.preventDefault();
+      setActiveDropdown(null);
+      setActiveDatePicker(null);
+      if (event.shiftKey) {
+        const activeSegment =
+          activeDropdown === 'resort' ? 'where' : activeDropdown === 'guests' ? 'guests' : 'when';
+        document
+          .querySelector<HTMLButtonElement>(`[data-search-segment="${activeSegment}"] button`)
+          ?.focus();
+      } else {
+        document
+          .querySelector<HTMLButtonElement>('#widgetStaysSearchForm button[type="submit"]')
+          ?.focus();
       }
     };
     document.addEventListener('pointerdown', handleOutsideClick);
     document.addEventListener('keydown', handleEscape);
+    document.addEventListener('keydown', handlePanelKeyDown);
     return () => {
       window.cancelAnimationFrame(frame);
       window.cancelAnimationFrame(focusFrame);
@@ -926,6 +1110,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       window.removeEventListener('scroll', updatePosition, true);
       document.removeEventListener('pointerdown', handleOutsideClick);
       document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('keydown', handlePanelKeyDown);
     };
   }, [activeDropdown, activeDatePicker, isHero]);
 
@@ -952,15 +1137,15 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     const guests = isHero
       ? guestCounts
       : currentGuests
-      ? personCount === countOccupancyGuests(currentGuests)
-        ? currentGuests
-        : {
-            adults: personCount,
-            children: 0,
-            infants: currentGuests.infants,
-            pets: currentGuests.pets,
-          }
-      : undefined;
+        ? personCount === countOccupancyGuests(currentGuests)
+          ? currentGuests
+          : {
+              adults: personCount,
+              children: 0,
+              infants: currentGuests.infants,
+              pets: currentGuests.pets,
+            }
+        : undefined;
     emitFunnelEvent({
       event: 'search',
       has_dates: !surpriseMe && Boolean(checkIn && checkOut),
@@ -980,7 +1165,10 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
 
   const resortOptions = [
     { value: '', label: 'Todos os condomínios' },
-    ...resorts.map((resort) => ({ value: resort.id, label: resort.name.replace(/^CRCN\s*[-–]\s*/i, '') })),
+    ...resorts.map((resort) => ({
+      value: resort.id,
+      label: resort.name.replace(/^CRCN\s*[-–]\s*/i, ''),
+    })),
   ];
   const guestOptions = [
     { value: '', label: 'Hóspedes' },
@@ -994,8 +1182,12 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   const selectedGuestLabel = isHero
     ? [
         `${selectedOccupancyCount} ${selectedOccupancyCount === 1 ? 'hóspede' : 'hóspedes'}`,
-        guestCounts.pets > 0 ? `${guestCounts.pets} ${guestCounts.pets === 1 ? 'pet' : 'pets'}` : '',
-      ].filter(Boolean).join(' · ')
+        guestCounts.pets > 0
+          ? `${guestCounts.pets} ${guestCounts.pets === 1 ? 'pet' : 'pets'}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' · ')
     : selectedGuestOption
       ? currentFilters?.guests.infants
         ? `${selectedGuestOption.label} + ${currentFilters.guests.infants} bebê${currentFilters.guests.infants === 1 ? '' : 's'}`
@@ -1054,7 +1246,17 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
           role="search"
           id="widgetStaysSearchForm"
           data-search-variant={isHero ? 'hero' : 'standard'}
-          data-active-search-segment={isHero ? (activeDatePicker ? 'when' : activeDropdown === 'resort' ? 'where' : activeDropdown === 'guests' ? 'guests' : undefined) : undefined}
+          data-active-search-segment={
+            isHero
+              ? activeDatePicker
+                ? 'when'
+                : activeDropdown === 'resort'
+                  ? 'where'
+                  : activeDropdown === 'guests'
+                    ? 'guests'
+                    : undefined
+              : undefined
+          }
           onSubmit={handleSubmit}
           className={
             isHero
@@ -1073,10 +1275,26 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
           <input name="checkin" value={checkIn} type="hidden" />
           <input name="checkout" value={checkOut} type="hidden" />
           <input name="persons" value={isHero ? selectedOccupancyCount : persons} type="hidden" />
-          <input name="adults" value={isHero ? guestCounts.adults : currentFilters?.guests.adults ?? persons} type="hidden" />
-          <input name="children" value={isHero ? guestCounts.children : currentFilters?.guests.children ?? 0} type="hidden" />
-          <input name="infants" value={isHero ? guestCounts.infants : currentFilters?.guests.infants ?? 0} type="hidden" />
-          <input name="pets" value={isHero ? guestCounts.pets : currentFilters?.guests.pets ?? 0} type="hidden" />
+          <input
+            name="adults"
+            value={isHero ? guestCounts.adults : (currentFilters?.guests.adults ?? persons)}
+            type="hidden"
+          />
+          <input
+            name="children"
+            value={isHero ? guestCounts.children : (currentFilters?.guests.children ?? 0)}
+            type="hidden"
+          />
+          <input
+            name="infants"
+            value={isHero ? guestCounts.infants : (currentFilters?.guests.infants ?? 0)}
+            type="hidden"
+          />
+          <input
+            name="pets"
+            value={isHero ? guestCounts.pets : (currentFilters?.guests.pets ?? 0)}
+            type="hidden"
+          />
           {selectedResort && <input name="q" value={selectedResort} type="hidden" />}
           {selectedResortId && <input name="propertyId" value={selectedResortId} type="hidden" />}
 
@@ -1137,11 +1355,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
               <div
                 data-search-segment="when"
                 data-search-active={isHero && activeDatePicker ? 'true' : undefined}
-                className={
-                  isHero
-                    ? 'min-w-0 px-3 py-2 sm:px-4 lg:col-span-1'
-                    : 'contents'
-                }
+                className={isHero ? 'min-w-0 px-3 py-2 sm:px-4 lg:col-span-1' : 'contents'}
               >
                 {isHero && <span className="mb-1.5 block text-xs font-semibold">Quando</span>}
                 <div className={isHero ? 'grid grid-cols-1 gap-0' : 'contents'}>
@@ -1150,13 +1364,15 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     <div
                       className={`${isHero ? 'min-w-0' : 'min-w-0 lg:col-span-3 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-1 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1'}`}
                     >
-                      {!isHero && <span
-                        aria-hidden="true"
-                        className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:hidden"
-                      >
-                        <span className="max-[400px]:hidden">Entrada (Check-in)</span>
-                        <span className="hidden max-[400px]:inline">Entrada</span>
-                      </span>}
+                      {!isHero && (
+                        <span
+                          aria-hidden="true"
+                          className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:hidden"
+                        >
+                          <span className="max-[400px]:hidden">Entrada (Check-in)</span>
+                          <span className="hidden max-[400px]:inline">Entrada</span>
+                        </span>
+                      )}
                       <div className="relative group">
                         <div
                           className={`${isHero ? 'hidden' : 'pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3.5 text-neutral-500 group-focus-within:text-orange-600'}`}
@@ -1204,15 +1420,15 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     <div
                       className={`${isHero ? 'min-w-0' : 'min-w-0 lg:col-span-3 [@media(min-width:360px)_and_(max-width:639px)_and_(min-height:401px)]:col-span-1 [@media(max-width:639px)_and_(max-height:400px)]:col-span-1'}`}
                     >
-                      {!isHero && <span
-                        aria-hidden="true"
-                        className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:hidden"
-                      >
-                        <span className="max-[400px]:hidden">
-                          Saída (Checkout)
+                      {!isHero && (
+                        <span
+                          aria-hidden="true"
+                          className="mb-1.5 block truncate text-xs font-extrabold uppercase tracking-wider text-neutral-800 [@media(max-width:639px)_and_(max-height:400px)]:hidden"
+                        >
+                          <span className="max-[400px]:hidden">Saída (Checkout)</span>
+                          <span className="hidden max-[400px]:inline">Saída</span>
                         </span>
-                        <span className="hidden max-[400px]:inline">Saída</span>
-                      </span>}
+                      )}
                       <div className="relative group">
                         <div
                           className={`${isHero ? 'hidden' : 'pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center pl-3.5 text-neutral-500 group-focus-within:text-orange-600'}`}
@@ -1268,7 +1484,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                 )}
                 {isHero ? (
                   <>
-                <button
+                    <button
                       ref={guestTriggerRef}
                       type="button"
                       aria-haspopup="dialog"
@@ -1309,7 +1525,11 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                   className={`flex h-12 shrink-0 items-center justify-center rounded-full bg-orange-600 text-white transition-all hover:bg-orange-700 active:scale-95 ${activeDropdown || activeDatePicker ? 'w-auto gap-2 px-4' : 'w-12'}`}
                 >
                   <Search className="h-5 w-5 stroke-[2.5]" aria-hidden="true" />
-                  <span className={activeDropdown || activeDatePicker ? 'text-sm font-bold' : 'sr-only'}>Buscar</span>
+                  <span
+                    className={activeDropdown || activeDatePicker ? 'text-sm font-bold' : 'sr-only'}
+                  >
+                    Buscar
+                  </span>
                 </button>
               )}
             </div>
@@ -1362,34 +1582,116 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
             </div>
           </div>
         </form>
-        {isHero && sharedPanelVisible && createPortal(
-          <div
-            ref={sharedPanelRef}
-            data-dialog-focus-portal
-            aria-hidden={!activeDropdown && !activeDatePicker}
-            inert={!activeDropdown && !activeDatePicker}
-            role="dialog"
-            aria-label={activeDropdown === 'resort' ? 'Escolher condomínio' : activeDropdown === 'guests' ? 'Selecionar hóspedes' : 'Calendário de entrada (check-in)'}
-            className={`search-shared-panel fixed z-[1000] overflow-hidden rounded-3xl border border-white/90 bg-white/90 p-4 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl [@media(max-width:639px)]:p-3 ${!activeDropdown && !activeDatePicker ? 'search-shared-panel--closing' : ''}`}
-            style={{ left: sharedPanelPosition.left, top: sharedPanelPosition.top, width: sharedPanelPosition.width, height: sharedPanelPosition.height }}
-          >
-            {activeDropdown === 'resort' && (
-              <div className="h-full overflow-hidden">
-                <label className="sr-only" htmlFor={`${fieldId}-resorts-query`}>Buscar condomínio</label>
-                <input id={`${fieldId}-resorts-query`} aria-label="Buscar condomínio" value={sharedResortQuery} onChange={(event) => setSharedResortQuery(event.target.value)} placeholder="Buscar condomínio..." className="mb-2 min-h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none focus:border-orange-500" />
-                <div role="listbox" aria-label="Opções disponíveis" className="max-h-[calc(100%-3.5rem)] overflow-y-auto">
-                  {resortOptions.filter((option) => !sharedResortQuery || option.label.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').includes(sharedResortQuery.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))).map((option) => <button key={option.value || 'all'} type="button" role="option" aria-selected={selectedResortId === option.value} onClick={() => { setSelectedResortId(option.value); setSelectedResort(option.value ? option.label : ''); setSharedResortQuery(''); setActiveDropdown(null); setActiveDatePicker('checkIn'); }} className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm hover:bg-orange-50">{option.label}</button>)}
+        {isHero &&
+          sharedPanelVisible &&
+          createPortal(
+            <div
+              ref={sharedPanelRef}
+              data-dialog-focus-portal
+              aria-hidden={!activeDropdown && !activeDatePicker}
+              inert={!activeDropdown && !activeDatePicker}
+              role="dialog"
+              tabIndex={-1}
+              aria-label={
+                activeDropdown === 'resort'
+                  ? 'Escolher condomínio'
+                  : activeDropdown === 'guests'
+                    ? 'Selecionar hóspedes'
+                    : 'Calendário de entrada (check-in)'
+              }
+              className={`search-shared-panel fixed z-[1000] overflow-hidden rounded-3xl border border-white/90 bg-white/90 p-4 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl [@media(max-width:639px)]:p-3 ${!activeDropdown && !activeDatePicker ? 'search-shared-panel--closing' : ''}`}
+              style={{
+                left: sharedPanelPosition.left,
+                top: sharedPanelPosition.top,
+                width: sharedPanelPosition.width,
+                height: sharedPanelPosition.height,
+              }}
+            >
+              {activeDropdown === 'resort' && (
+                <div className="h-full overflow-hidden">
+                  <label className="sr-only" htmlFor={`${fieldId}-resorts-query`}>
+                    Buscar condomínio
+                  </label>
+                  <input
+                    id={`${fieldId}-resorts-query`}
+                    aria-label="Buscar condomínio"
+                    value={sharedResortQuery}
+                    onChange={(event) => setSharedResortQuery(event.target.value)}
+                    placeholder="Buscar condomínio..."
+                    className="mb-2 min-h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none focus:border-orange-500"
+                  />
+                  <div
+                    role="listbox"
+                    aria-label="Opções disponíveis"
+                    className="max-h-[calc(100%-3.5rem)] overflow-y-auto"
+                  >
+                    {resortOptions
+                      .filter(
+                        (option) =>
+                          !sharedResortQuery ||
+                          option.label
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .toLocaleLowerCase('pt-BR')
+                            .includes(
+                              sharedResortQuery
+                                .normalize('NFD')
+                                .replace(/[\u0300-\u036f]/g, '')
+                                .toLocaleLowerCase('pt-BR'),
+                            ),
+                      )
+                      .map((option) => (
+                        <button
+                          key={option.value || 'all'}
+                          type="button"
+                          role="option"
+                          aria-selected={selectedResortId === option.value}
+                          onClick={() => {
+                            setSelectedResortId(option.value);
+                            setSelectedResort(option.value ? option.label : '');
+                            setSharedResortQuery('');
+                            setActiveDropdown(null);
+                            setActiveDatePicker('checkIn');
+                          }}
+                          className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm hover:bg-orange-50"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {activeDropdown === 'guests' && <GuestCounterList compact counts={guestCounts} onChange={(nextCounts) => { setGuestCounts(nextCounts); setPersons(String(countOccupancyGuests(nextCounts))); }} />}
-            {!activeDropdown && activeDatePicker && <SharedCalendarContent
-              checkIn={checkIn} checkOut={checkOut} today={today} dateFlexibility={dateFlexibility}
-              onFlexibilityChange={setDateFlexibility}
-              onSelectRange={(newCheckIn, newCheckOut) => { setSearchValidationMessage(''); setCheckIn(newCheckIn); setCheckOut(newCheckOut); setActiveDatePicker(null); }}
-            />}
-          </div>, document.body,
-        )}
+              )}
+              {activeDropdown === 'guests' && (
+                <GuestCounterList
+                  compact
+                  counts={guestCounts}
+                  onChange={(nextCounts) => {
+                    setGuestCounts(nextCounts);
+                    setPersons(String(countOccupancyGuests(nextCounts)));
+                  }}
+                />
+              )}
+              {!activeDropdown && activeDatePicker && (
+                <SharedCalendarContent
+                  checkIn={checkIn}
+                  checkOut={checkOut}
+                  today={today}
+                  dateFlexibility={dateFlexibility}
+                  onFlexibilityChange={setDateFlexibility}
+                  onSelectRange={(newCheckIn, newCheckOut) => {
+                    setSearchValidationMessage('');
+                    setCheckIn(newCheckIn);
+                    setCheckOut(newCheckOut);
+                    setActiveDatePicker(null);
+                    document
+                      .querySelector<HTMLButtonElement>('[data-search-segment="when"] button')
+                      ?.focus();
+                  }}
+                />
+              )}
+            </div>,
+            document.body,
+          )}
       </div>
     </div>
   );

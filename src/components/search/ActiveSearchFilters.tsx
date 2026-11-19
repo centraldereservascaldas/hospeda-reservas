@@ -105,6 +105,40 @@ export function ActiveSearchFilters({
               }
             />
           )}
+          {filters.propertyTypes.map((propertyType) => {
+            const label =
+              propertyType === 'entire_place'
+                ? 'Espaço inteiro'
+                : propertyType === 'private_room'
+                  ? 'Quarto privativo'
+                  : propertyType === 'shared_room'
+                    ? 'Quarto compartilhado'
+                    : propertyType;
+            return (
+              <FilterChip
+                key={propertyType}
+                label={label}
+                onRemove={() =>
+                  onChange({
+                    ...filters,
+                    propertyTypes: filters.propertyTypes.filter((item) => item !== propertyType),
+                  })
+                }
+              />
+            );
+          })}
+          {filters.superhostOnly && (
+            <FilterChip
+              label="Apenas Superhost"
+              onRemove={() => onChange({ ...filters, superhostOnly: false })}
+            />
+          )}
+          {filters.instantBookOnly && (
+            <FilterChip
+              label="Reserva instantânea"
+              onRemove={() => onChange({ ...filters, instantBookOnly: false })}
+            />
+          )}
           {filters.amenities.map((amenity) => (
             <FilterChip
               key={amenity}

@@ -223,7 +223,6 @@ export function getAccommodationIdFromPath(pathname: string): string | null {
 
 export function serializeSearchFilters(filters: SearchFilters): string {
   const params = new URLSearchParams();
-  params.set('date_picker_type', 'calendar');
   if (
     isValidDate(filters.checkIn) &&
     isValidDate(filters.checkOut) &&
@@ -236,10 +235,10 @@ export function serializeSearchFilters(filters: SearchFilters): string {
   if (filters.checkIn && filters.checkOut && filters.dateFlexibility)
     params.set('flexDays', String(filters.dateFlexibility));
 
-  params.set('adults', String(filters.guests.adults));
-  params.set('children', String(filters.guests.children));
-  params.set('infants', String(filters.guests.infants));
-  params.set('pets', String(filters.guests.pets));
+  if (filters.guests.adults !== 1) params.set('adults', String(filters.guests.adults));
+  if (filters.guests.children > 0) params.set('children', String(filters.guests.children));
+  if (filters.guests.infants > 0) params.set('infants', String(filters.guests.infants));
+  if (filters.guests.pets > 0) params.set('pets', String(filters.guests.pets));
 
   if (filters.destination) params.set('query', filters.destination);
   if (filters.destinationPropertyId) params.set('propertyId', filters.destinationPropertyId);
@@ -260,13 +259,6 @@ export function serializeSearchFilters(filters: SearchFilters): string {
   if (filters.minBaths > 0) params.set('min_bathrooms', String(filters.minBaths));
   if (filters.superhostOnly) params.set('superhost', 'true');
   if (filters.instantBookOnly) params.set('instant_book', 'true');
-
-  const hasDefaultGuests =
-    filters.guests.adults === 1 &&
-    filters.guests.children === 0 &&
-    filters.guests.infants === 0 &&
-    filters.guests.pets === 0;
-  if (params.size === 5 && hasDefaultGuests) return '';
 
   return params.toString();
 }
