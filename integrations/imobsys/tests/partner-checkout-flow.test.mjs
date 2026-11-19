@@ -5,7 +5,8 @@ import {openCheckoutOperationStore} from '../src/checkout-operation-store.mjs';
 import {openSandboxOrderStore} from '../src/sandbox-order-store.mjs';
 for(const method of ['pix','card'])test(`cotação, pré-reserva, ${method} e fila persistente conectados`,async()=>{
  const operations=openCheckoutOperationStore(':memory:'),sellerStore=openSandboxOrderStore(':memory:');
- const input={id:'test'+method,propertyId:'imobsys-crcn-2-663',from:'2027-05-17',to:'2027-05-19',guests:2,acceptedBaseCents:52300,method,installments:6,customer:{name:'Teste',cpf:'12345678901'},reservationInput:{}};
+ const customer={name:'Teste',cpf:'12345678901',phone:'64999999999'};
+ const input={id:'test'+method,propertyId:'imobsys-crcn-2-663',from:'2027-05-17',to:'2027-05-19',guests:2,acceptedBaseCents:52300,method,installments:6,customer,reservationInput:{customer}};
  let amount;
  const id='123e4567-e89b-12d3-a456-426614174000';
  const charge=async x=>{amount=x.amountCents;return {Payment:{PaymentId:id,Status:2}};};

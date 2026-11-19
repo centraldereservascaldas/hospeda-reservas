@@ -7,6 +7,7 @@ export function createPartnerCheckoutFlow({quoteProvider,reservations,verifyRese
     async start(input) {
       if(enabled!==true)throw Error('Integração desativada.');
       if(!input||!/^[A-Za-z0-9]{1,25}$/.test(input.id||'')||!['pix','card'].includes(input.method))throw Error('Pedido inválido.');
+      if(!input.customer||!input.reservationInput?.customer||input.customer.name!==input.reservationInput.customer.name||input.customer.cpf!==input.reservationInput.customer.cpf||input.customer.phone!==input.reservationInput.customer.phone)throw Error('Titular da pré-reserva e pagamento divergentes.');
       const quote=await quoteProvider(input);
       if(quote.provider!=='imobsys-crcn'||!Number.isSafeInteger(quote.pix?.totalCents)||quote.pix.totalCents<1||quote.propertyId!==input.propertyId||quote.from!==input.from||quote.to!==input.to||quote.guests!==input.guests||quote.pix.totalCents!==input.acceptedBaseCents)throw Error('Cotação alterada ou divergente.');
       const amount=input.method==='pix'?quote.pix.totalCents:cardPricing(quote.pix.totalCents,input.installments).totalCents;
