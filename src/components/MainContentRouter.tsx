@@ -167,7 +167,8 @@ export function MainContentRouter({
     availabilitySearchState === 'success' || availabilitySearchState === 'partial';
   const hasPreservedSearchResults =
     hasAvailableSearchResults &&
-    (availabilitySearchState === 'expired' ||
+    (availabilitySearchState === 'stale' ||
+      availabilitySearchState === 'expired' ||
       availabilitySearchState === 'refreshing' ||
       availabilitySearchState === 'error');
   const hasSearchSnapshot = isCompletedSearch || hasPreservedSearchResults;
@@ -181,9 +182,7 @@ export function MainContentRouter({
     (isCompletedSearch && filteredProperties.length === 0) ||
     Boolean(searchPagination?.hasMore && filteredProperties.length === 0);
   const hasConfirmedSearchAvailability =
-    hasSearchSnapshot &&
-    availabilitySearchState !== 'error' &&
-    Boolean(filters.checkIn && filters.checkOut);
+    isCompletedSearch && Boolean(filters.checkIn && filters.checkOut);
   const visibleCatalogStatus: PropertyCatalogStatus = hasSearchSnapshot ? 'ready' : catalogStatus;
   const searchGuestCount = countOccupancyGuests(filters.guests);
 

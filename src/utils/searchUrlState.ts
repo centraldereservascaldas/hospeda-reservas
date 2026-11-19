@@ -204,12 +204,9 @@ export function parseSearchFilters(search: string): SearchFilters {
   filters.minBedrooms = parseInteger(firstValue(params, 'min_bedrooms', 'minBedrooms'), 0, 0, 30);
   filters.minBeds = parseInteger(firstValue(params, 'min_beds', 'minBeds'), 0, 0, 30);
   filters.minBaths = parseInteger(firstValue(params, 'min_bathrooms', 'minBaths'), 0, 0, 30);
-  filters.superhostOnly = ['true', '1'].includes(
-    firstValue(params, 'superhost', 'superhostOnly') ?? '',
-  );
-  filters.instantBookOnly = ['true', '1'].includes(
-    firstValue(params, 'instant_book', 'instantBook', 'instantBookOnly') ?? '',
-  );
+  // Legacy booking flags are ignored until their values are backed by trustworthy catalog data.
+  filters.superhostOnly = false;
+  filters.instantBookOnly = false;
 
   return filters;
 }
@@ -257,9 +254,6 @@ export function serializeSearchFilters(filters: SearchFilters): string {
   const minBeds = filters.minBeds ?? 0;
   if (minBeds > 0) params.set('min_beds', String(minBeds));
   if (filters.minBaths > 0) params.set('min_bathrooms', String(filters.minBaths));
-  if (filters.superhostOnly) params.set('superhost', 'true');
-  if (filters.instantBookOnly) params.set('instant_book', 'true');
-
   return params.toString();
 }
 

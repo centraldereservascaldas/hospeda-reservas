@@ -212,7 +212,6 @@ test('bedroom and bathroom options are visible in compact grids without horizont
   const minPrice = screen.getByLabelText('Preço mínimo por noite');
   const maxPrice = screen.getByLabelText('Preço máximo por noite');
   const priceGrid = minPrice.parentElement?.parentElement?.parentElement;
-  const bookingOptions = screen.getByRole('heading', { name: 'Opções de reserva' }).parentElement;
   const amenities = screen.getByRole('heading', {
     name: 'Comodidades populares',
   }).nextElementSibling;
@@ -229,14 +228,8 @@ test('bedroom and bathroom options are visible in compact grids without horizont
   assert.match(priceGrid?.className ?? '', /min-\[400px\]:grid-cols-2/);
   assert.match(minPrice.className, /min-w-0/);
   assert.match(maxPrice.className, /min-w-0/);
-  const switches = bookingOptions?.querySelectorAll('[role="switch"]') ?? [];
-  assert.equal(switches.length, 2);
-  for (const control of switches) {
-    assert.match(control.className, /self-end/);
-    assert.match(control.className, /min-\[400px\]:self-auto/);
-    assert.match(control.className, /h-11/);
-    assert.match(control.className, /w-11/);
-  }
+  assert.equal(screen.queryByRole('heading', { name: 'Opções de reserva' }), null);
+  assert.equal(screen.queryByRole('switch'), null);
   assert.match(amenities?.className ?? '', /grid-cols-1/);
   assert.match(amenities?.className ?? '', /min-\[380px\]:grid-cols-2/);
   assert.match(amenities?.className ?? '', /sm:grid-cols-3/);
@@ -258,6 +251,31 @@ test('bedroom and bathroom options are visible in compact grids without horizont
     assert.match(label.className, /break-words/);
     assert.doesNotMatch(label.className, /truncate/);
   }
+});
+
+test('removes unsupported reservation flags when applying filters', () => {
+  const appliedFilters: ReturnType<typeof createDefaultSearchFilters>[] = [];
+  render(
+    React.createElement(FilterModal, {
+      isOpen: true,
+      onClose: () => {},
+      filters: {
+        ...createDefaultSearchFilters(),
+        superhostOnly: true,
+        instantBookOnly: true,
+      },
+      properties: [],
+      onApplyFilters: (filters) => {
+        appliedFilters.push(filters);
+      },
+      onResetFilters: () => {},
+      currency: 'BRL',
+    }),
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Mostrar 0 acomodações' }));
+  assert.equal(appliedFilters[0]?.superhostOnly, false);
+  assert.equal(appliedFilters[0]?.instantBookOnly, false);
 });
 
 test('filter dialog keeps keyboard focus inside and returns it to the opener', () => {

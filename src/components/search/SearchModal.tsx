@@ -35,6 +35,8 @@ interface SearchModalProps {
   }) => void;
 }
 
+const MAX_SEARCH_CALENDAR_MONTHS = 12;
+
 export const SearchModal: React.FC<SearchModalProps> = ({
   isOpen,
   onClose,
@@ -47,6 +49,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
   const tabPanelRef = useRef<HTMLDivElement>(null);
+  const mobileCalendarScrollRef = useRef<HTMLDivElement>(null);
+  const mobileCalendarSentinelRef = useRef<HTMLDivElement>(null);
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
   const focusRing =
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600';
@@ -76,6 +80,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     const date = filters.checkIn ? new Date(`${filters.checkIn}T12:00:00`) : new Date();
     return new Date(date.getFullYear(), date.getMonth(), 1);
   });
+  const [mobileMonthCount, setMobileMonthCount] = useState(2);
   const [adults, setAdults] = useState(filters.guests.adults);
   const [children, setChildren] = useState(filters.guests.children);
   const [infants, setInfants] = useState(filters.guests.infants);
@@ -90,6 +95,15 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     return () => media.removeEventListener('change', update);
   }, []);
   const todayIso = toLocalIsoDate(new Date());
+  const today = new Date(`${todayIso}T12:00:00`);
+  const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthOffsetFromCurrent = Math.max(
+    0,
+    (visibleMonth.getFullYear() - currentMonth.getFullYear()) * 12 +
+      visibleMonth.getMonth() -
+      currentMonth.getMonth(),
+  );
+  const maxCalendarMonths = Math.max(1, MAX_SEARCH_CALENDAR_MONTHS - monthOffsetFromCurrent);
   const totalGuests = countOccupancyGuests({ adults, children, infants });
   const tabs = [
     { id: 'destination', label: 'Destino' },
@@ -123,6 +137,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    const selectedDate = filters.checkIn ? new Date(`${filters.checkIn}T12:00:00`) : new Date();
+    const firstVisibleDate =
+      selectedDate < new Date(`${todayIso}T12:00:00`) ? new Date() : selectedDate;
+    setVisibleMonth(new Date(firstVisibleDate.getFullYear(), firstVisibleDate.getMonth(), 1));
+    setMobileMonthCount(2);
     setDestination(filters.destination);
     setCheckIn(filters.checkIn);
     setCheckOut(filters.checkOut);
@@ -131,7 +150,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     setChildren(filters.guests.children);
     setInfants(filters.guests.infants);
     setPets(filters.guests.pets);
-  }, [filters, isOpen]);
+  }, [filters, isOpen, todayIso]);
 
   useEffect(() => {
     if (!isOpen || !tabPanelRef.current) return;
@@ -140,10 +159,29 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     setDisplayedTab(activeTab);
   }, [activeTab, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen || !mobile || activeTab !== 'dates' || !('IntersectionObserver' in window)) return;
+    if (mobileMonthCount >= maxCalendarMonths) return;
+
+    const scrollRoot = mobileCalendarScrollRef.current;
+    const sentinel = mobileCalendarSentinelRef.current;
+    if (!scrollRoot || !sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setMobileMonthCount((count) => Math.min(count + 2, maxCalendarMonths));
+        }
+      },
+      { root: scrollRoot, rootMargin: '0px 0px 180px 0px' },
+    );
+    observer.observe(sentinel);
+
+    return () => observer.disconnect();
+  }, [activeTab, isOpen, maxCalendarMonths, mobile, mobileMonthCount]);
+
   if (!isOpen) return null;
 
-  const today = new Date(`${todayIso}T12:00:00`);
-  const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const normalizedQuery = destination
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -154,15 +192,22 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       const name = resort.name.replace(/^CRCN\s*[-–]\s*/i, '');
       return { name, subtitle: 'Condomínio', query: resort.name };
     })
-    .filter(
-      (item) =>
+    .filter((item) => {
+      const normalizedName = item.name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      const normalizedDestination = item.query
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+      return (
         !normalizedQuery ||
-        item.name
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase()
-          .includes(normalizedQuery),
-    )
+        normalizedName.includes(normalizedQuery) ||
+        normalizedDestination.includes(normalizedQuery)
+      );
+    })
     .slice(0, 8);
 
   const handleApply = () => {
@@ -221,24 +266,29 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   };
 
   const renderDateCalendar = () => (
-    <div className="grid grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-start gap-2 sm:gap-3">
-      <button
-        type="button"
-        aria-label="Mês anterior"
-        onClick={() =>
-          setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))
-        }
-        disabled={visibleMonth <= currentMonth}
-        className="mt-8 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        <span aria-hidden="true">‹</span>
-      </button>
+    <div
+      className={`grid items-start gap-2 sm:gap-3 ${mobile ? 'grid-cols-1' : 'grid-cols-[2.75rem_minmax(0,1fr)_2.75rem]'}`}
+    >
+      {!mobile && (
+        <button
+          type="button"
+          aria-label="Mês anterior"
+          onClick={() =>
+            setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))
+          }
+          disabled={visibleMonth <= currentMonth}
+          className="mt-8 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <span aria-hidden="true">‹</span>
+        </button>
+      )}
       <div
-        className={`grid min-w-0 grid-cols-1 gap-6 sm:grid-cols-2 ${mobile ? 'max-h-[58dvh] overflow-y-auto overscroll-contain touch-pan-y' : ''}`}
+        ref={mobile ? mobileCalendarScrollRef : undefined}
+        className={`grid min-w-0 grid-cols-1 gap-6 ${mobile ? 'h-[58dvh] min-h-0 overflow-y-auto overscroll-contain touch-pan-y' : 'sm:grid-cols-2'}`}
       >
-        {[0, 1].map((offset) => (
+        {Array.from({ length: mobile ? mobileMonthCount : 2 }, (_, offset) => (
           <CalendarMonthGrid
-            key={offset}
+            key={`${visibleMonth.getFullYear()}-${visibleMonth.getMonth() + offset}`}
             month={new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + offset, 1)}
             minDate={todayIso}
             selectedStart={checkIn}
@@ -258,17 +308,23 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             }}
           />
         ))}
+        {mobile && mobileMonthCount < maxCalendarMonths && (
+          <div ref={mobileCalendarSentinelRef} aria-hidden="true" className="h-1" />
+        )}
       </div>
-      <button
-        type="button"
-        aria-label="Próximo mês"
-        onClick={() =>
-          setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))
-        }
-        className="mt-8 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200"
-      >
-        <span aria-hidden="true">›</span>
-      </button>
+      {!mobile && (
+        <button
+          type="button"
+          aria-label="Próximo mês"
+          onClick={() =>
+            setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))
+          }
+          disabled={monthOffsetFromCurrent >= MAX_SEARCH_CALENDAR_MONTHS - 1}
+          className="mt-8 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <span aria-hidden="true">›</span>
+        </button>
+      )}
     </div>
   );
 
@@ -350,29 +406,37 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                           </span>
                         </span>
                       </button>
-                      <p className="text-sm font-semibold">Destinos sugeridos</p>
+                      <p className="text-sm font-semibold">
+                        {normalizedQuery ? 'Resultados da busca' : 'Destinos sugeridos'}
+                      </p>
                       <div className="space-y-1">
-                        {popularDestinations.map((item) => (
-                          <button
-                            key={item.name}
-                            type="button"
-                            onClick={() => {
-                              setDestination(item.query);
-                              transitionToTab('dates');
-                            }}
-                            className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50"
-                          >
-                            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
-                              <MapPin className="h-5 w-5" />
-                            </span>
-                            <span>
-                              <span className="block text-sm font-semibold">{item.name}</span>
-                              <span className="block text-xs text-neutral-500">
-                                {item.subtitle}
+                        {popularDestinations.length > 0 ? (
+                          popularDestinations.map((item) => (
+                            <button
+                              key={item.name}
+                              type="button"
+                              onClick={() => {
+                                setDestination(item.query);
+                                transitionToTab('dates');
+                              }}
+                              className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50"
+                            >
+                              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
+                                <MapPin className="h-5 w-5" />
                               </span>
-                            </span>
-                          </button>
-                        ))}
+                              <span>
+                                <span className="block text-sm font-semibold">{item.name}</span>
+                                <span className="block text-xs text-neutral-500">
+                                  {item.subtitle}
+                                </span>
+                              </span>
+                            </button>
+                          ))
+                        ) : normalizedQuery && resorts.length > 0 ? (
+                          <p className="px-3 py-2 text-sm text-neutral-500">
+                            Nenhum condomínio encontrado. Tente outro nome.
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   )}
@@ -432,11 +496,11 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               ),
             )}
           </div>
-          <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-neutral-200 bg-neutral-100 p-4">
+          <footer className="flex min-h-[88px] shrink-0 items-center justify-between gap-3 border-t border-neutral-200 bg-neutral-100 px-5 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <button
               type="button"
               onClick={handleClear}
-              className="min-h-11 px-2 text-sm font-semibold underline"
+              className="min-h-12 px-2 text-sm font-semibold underline"
             >
               Limpar tudo
             </button>
@@ -444,7 +508,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
               <button
                 type="button"
                 onClick={handleApply}
-                className="min-h-12 rounded-xl bg-orange-700 px-6 text-sm font-bold text-white"
+                className="min-h-14 rounded-xl bg-orange-700 px-8 text-base font-bold text-white shadow-sm"
               >
                 Buscar
               </button>
@@ -458,7 +522,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                   }
                   transitionToTab(activeTab === 'destination' ? 'dates' : 'guests');
                 }}
-                className="min-h-12 rounded-xl bg-neutral-900 px-6 text-sm font-bold text-white"
+                className="min-h-14 rounded-xl bg-neutral-900 px-8 text-base font-bold text-white shadow-sm"
               >
                 Avançar
               </button>
@@ -643,29 +707,35 @@ export const SearchModal: React.FC<SearchModalProps> = ({
 
                 <div>
                   <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-3">
-                    Destinos em destaque
+                    {normalizedQuery ? 'Resultados da busca' : 'Destinos em destaque'}
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {popularDestinations.map((dest) => (
-                      <button
-                        key={dest.name}
-                        onClick={() => {
-                          setDestination(dest.query);
-                          transitionToTab('dates');
-                        }}
-                        className={`flex items-center gap-3 p-3 rounded-2xl border border-neutral-100 hover:border-neutral-300 hover:bg-neutral-50 text-left transition-all cursor-pointer group ${focusRing}`}
-                      >
-                        <div className="w-10 h-10 rounded-xl bg-orange-50 group-hover:bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 transition-colors">
-                          <MapPin className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-neutral-900 group-hover:text-orange-600 transition-colors">
-                            {dest.name}
-                          </p>
-                          <p className="text-xs text-neutral-500">{dest.subtitle}</p>
-                        </div>
-                      </button>
-                    ))}
+                    {popularDestinations.length > 0 ? (
+                      popularDestinations.map((dest) => (
+                        <button
+                          key={dest.name}
+                          onClick={() => {
+                            setDestination(dest.query);
+                            transitionToTab('dates');
+                          }}
+                          className={`flex items-center gap-3 p-3 rounded-2xl border border-neutral-100 hover:border-neutral-300 hover:bg-neutral-50 text-left transition-all cursor-pointer group ${focusRing}`}
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-orange-50 group-hover:bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 transition-colors">
+                            <MapPin className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-neutral-900 group-hover:text-orange-600 transition-colors">
+                              {dest.name}
+                            </p>
+                            <p className="text-xs text-neutral-500">{dest.subtitle}</p>
+                          </div>
+                        </button>
+                      ))
+                    ) : normalizedQuery && resorts.length > 0 ? (
+                      <p className="text-sm text-neutral-500">
+                        Nenhum condomínio encontrado. Tente outro nome.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>

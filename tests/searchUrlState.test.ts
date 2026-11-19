@@ -39,8 +39,8 @@ test('restores dates, guest composition, destination, and repeated filters from 
   assert.deepEqual(filters.amenities, ['Piscina', 'Wi-Fi']);
   assert.equal(filters.minBedrooms, 2);
   assert.equal(filters.minBaths, 1);
-  assert.equal(filters.superhostOnly, true);
-  assert.equal(filters.instantBookOnly, true);
+  assert.equal(filters.superhostOnly, false);
+  assert.equal(filters.instantBookOnly, false);
 });
 
 test('accepts Stays date aliases and a total guest count without composition', () => {
@@ -83,7 +83,7 @@ test('serializes non-default search state and round-trips it', () => {
   const serialized = serializeSearchFilters(filters);
   const restored = parseSearchFilters(`?${serialized}`);
 
-  assert.deepEqual(restored, filters);
+  assert.deepEqual(restored, { ...filters, superhostOnly: false, instantBookOnly: false });
   const params = new URLSearchParams(serialized);
   assert.equal(params.has('date_picker_type'), false);
   assert.equal(params.get('checkin'), '2026-11-05');
@@ -101,8 +101,8 @@ test('serializes non-default search state and round-trips it', () => {
   assert.equal(params.get('min_bedrooms'), '2');
   assert.equal(params.get('min_beds'), '1');
   assert.equal(params.get('min_bathrooms'), '1');
-  assert.equal(params.get('superhost'), 'true');
-  assert.equal(params.get('instant_book'), 'true');
+  assert.equal(params.has('superhost'), false);
+  assert.equal(params.has('instant_book'), false);
 });
 
 test('replaces only search keys and preserves unrelated URL parameters', () => {

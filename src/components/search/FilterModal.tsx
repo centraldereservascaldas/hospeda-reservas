@@ -110,8 +110,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   const [minBeds, setMinBeds] = useState(filters.minBeds ?? 0);
   const [minBaths, setMinBaths] = useState(filters.minBaths);
   const [selectedPropertyTypes, setSelectedPropertyTypes] = useState(filters.propertyTypes);
-  const [superhostOnly, setSuperhostOnly] = useState(filters.superhostOnly);
-  const [instantBookOnly, setInstantBookOnly] = useState(filters.instantBookOnly);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
   const amenitiesKey = filters.amenities.join('\u0000');
@@ -127,12 +125,11 @@ export const FilterModal: React.FC<FilterModalProps> = ({
       minBeds,
       minBaths,
       propertyTypes: selectedPropertyTypes,
-      superhostOnly,
-      instantBookOnly,
+      superhostOnly: false,
+      instantBookOnly: false,
     }),
     [
       filters,
-      instantBookOnly,
       maxPrice,
       minBeds,
       minBaths,
@@ -140,7 +137,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({
       minPrice,
       selectedAmenities,
       selectedPropertyTypes,
-      superhostOnly,
     ],
   );
   const matchingCount = useMemo(
@@ -153,7 +149,11 @@ export const FilterModal: React.FC<FilterModalProps> = ({
   );
   const matchingCountLabel = matchingCount === 1 ? 'acomodação' : 'acomodações';
   const bedroomOptions = [0, 1, 2, 3, 4, 5];
+  const bedOptions = [0, 1, 2, 3, 4, 5];
+  const bathroomOptions = [0, 1, 2, 3, 4];
   const bedroomSelection = useSelectedOptionBounds(String(minBedrooms), bedroomOptions.length);
+  const bedSelection = useSelectedOptionBounds(String(minBeds), bedOptions.length);
+  const bathroomSelection = useSelectedOptionBounds(String(minBaths), bathroomOptions.length);
 
   useEffect(() => {
     const currentFilters = filtersRef.current;
@@ -164,8 +164,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({
     setMinBeds(currentFilters.minBeds ?? 0);
     setMinBaths(currentFilters.minBaths);
     setSelectedPropertyTypes(currentFilters.propertyTypes);
-    setSuperhostOnly(currentFilters.superhostOnly);
-    setInstantBookOnly(currentFilters.instantBookOnly);
   }, [
     filters.minPrice,
     filters.maxPrice,
@@ -174,8 +172,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({
     filters.minBeds,
     filters.minBaths,
     filters.propertyTypes,
-    filters.superhostOnly,
-    filters.instantBookOnly,
     isOpen,
   ]);
 
@@ -214,8 +210,8 @@ export const FilterModal: React.FC<FilterModalProps> = ({
       minBeds,
       minBaths,
       propertyTypes: selectedPropertyTypes,
-      superhostOnly,
-      instantBookOnly,
+      superhostOnly: false,
+      instantBookOnly: false,
     });
     onClose();
   };
@@ -228,8 +224,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({
     setMinBeds(0);
     setMinBaths(0);
     setSelectedPropertyTypes([]);
-    setSuperhostOnly(false);
-    setInstantBookOnly(false);
     onResetFilters();
   };
 
@@ -384,19 +378,30 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                 Camas mínimas
               </p>
               <div
+                ref={bedSelection.groupRef}
                 role="group"
                 aria-labelledby={`${fieldId}-beds-label`}
-                className="grid grid-cols-2 gap-2 py-1 min-[480px]:grid-cols-3 sm:grid-cols-6"
+                className="relative grid grid-cols-2 gap-2 py-1 min-[480px]:grid-cols-3 sm:grid-cols-6"
               >
-                {[0, 1, 2, 3, 4, 5].map((num) => (
+                <span
+                  aria-hidden="true"
+                  className={`filter-shared-selection ${bedSelection.bounds.ready ? 'filter-shared-selection--ready' : ''}`}
+                  style={{
+                    width: bedSelection.bounds.width,
+                    height: bedSelection.bounds.height,
+                    transform: `translate3d(${bedSelection.bounds.left}px, ${bedSelection.bounds.top}px, 0)`,
+                  }}
+                />
+                {bedOptions.map((num) => (
                   <button
                     key={num}
+                    data-shared-option={num}
                     type="button"
                     aria-pressed={minBeds === num}
                     onClick={() => setMinBeds(num)}
-                    className={`min-h-11 min-w-0 whitespace-normal break-words px-1 leading-tight rounded-full text-xs font-semibold border transition-all cursor-pointer ${focusRing} ${
+                    className={`relative z-10 min-h-11 min-w-0 whitespace-normal break-words rounded-full border px-1 leading-tight text-xs font-semibold transition-colors cursor-pointer ${focusRing} ${
                       minBeds === num
-                        ? 'bg-neutral-900 text-white border-neutral-900'
+                        ? 'border-transparent text-white'
                         : 'border-neutral-200 text-neutral-700 hover:border-neutral-900'
                     }`}
                   >
@@ -414,19 +419,30 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                 Banheiros mínimos
               </p>
               <div
+                ref={bathroomSelection.groupRef}
                 role="group"
                 aria-labelledby={`${fieldId}-baths-label`}
-                className="grid grid-cols-2 gap-2 py-1 min-[480px]:grid-cols-3 sm:grid-cols-5"
+                className="relative grid grid-cols-2 gap-2 py-1 min-[480px]:grid-cols-3 sm:grid-cols-5"
               >
-                {[0, 1, 2, 3, 4].map((num) => (
+                <span
+                  aria-hidden="true"
+                  className={`filter-shared-selection ${bathroomSelection.bounds.ready ? 'filter-shared-selection--ready' : ''}`}
+                  style={{
+                    width: bathroomSelection.bounds.width,
+                    height: bathroomSelection.bounds.height,
+                    transform: `translate3d(${bathroomSelection.bounds.left}px, ${bathroomSelection.bounds.top}px, 0)`,
+                  }}
+                />
+                {bathroomOptions.map((num) => (
                   <button
                     key={num}
+                    data-shared-option={num}
                     type="button"
                     aria-pressed={minBaths === num}
                     onClick={() => setMinBaths(num)}
-                    className={`min-h-11 min-w-0 whitespace-normal break-words px-1 leading-tight rounded-full text-xs font-semibold border transition-all cursor-pointer ${focusRing} ${
+                    className={`relative z-10 min-h-11 min-w-0 whitespace-normal break-words rounded-full border px-1 leading-tight text-xs font-semibold transition-colors cursor-pointer ${focusRing} ${
                       minBaths === num
-                        ? 'bg-neutral-900 text-white border-neutral-900'
+                        ? 'border-transparent text-white'
                         : 'border-neutral-200 text-neutral-700 hover:border-neutral-900'
                     }`}
                   >
@@ -434,78 +450,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({
                   </button>
                 ))}
               </div>
-            </div>
-          </div>
-
-          <div className="pt-6 space-y-4">
-            <h3 className="text-base font-bold text-neutral-900">Tipo de acomodação</h3>
-            <div
-              role="group"
-              aria-label="Tipo de acomodação"
-              className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-3"
-            >
-              {[
-                { value: 'entire_place', label: 'Espaço inteiro' },
-                { value: 'private_room', label: 'Quarto privativo' },
-                { value: 'shared_room', label: 'Quarto compartilhado' },
-              ].map(({ value, label }) => {
-                const isSelected = selectedPropertyTypes.includes(value);
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() =>
-                      setSelectedPropertyTypes((current) =>
-                        isSelected ? current.filter((item) => item !== value) : [...current, value],
-                      )
-                    }
-                    className={`min-h-11 rounded-xl border px-3 text-sm font-medium ${focusRing} ${isSelected ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-200 text-neutral-700 hover:border-neutral-900'}`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            <h3 className="text-base font-bold text-neutral-900">Opções de reserva</h3>
-            <div className="space-y-2">
-              {[
-                {
-                  label: 'Apenas Superhost',
-                  description: 'Anfitriões com avaliações consistentes.',
-                  selected: superhostOnly,
-                  onToggle: () => setSuperhostOnly((value) => !value),
-                },
-                {
-                  label: 'Reserva instantânea',
-                  description: 'Reserve sem aguardar aprovação do anfitrião.',
-                  selected: instantBookOnly,
-                  onToggle: () => setInstantBookOnly((value) => !value),
-                },
-              ].map((option) => (
-                <div
-                  key={option.label}
-                  data-filter-switch-row
-                  className="flex min-w-0 flex-col gap-3 rounded-2xl border border-neutral-200 p-3 min-[400px]:flex-row min-[400px]:items-center"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="break-words text-sm font-semibold text-neutral-900">
-                      {option.label}
-                    </p>
-                    <p className="break-words text-xs text-neutral-500">{option.description}</p>
-                  </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-label={option.label}
-                    aria-checked={option.selected}
-                    onClick={option.onToggle}
-                    className={`h-11 w-11 self-end rounded-full border ${focusRing} min-[400px]:self-auto ${option.selected ? 'bg-neutral-900 text-white' : 'bg-white'}`}
-                  >
-                    ✓
-                  </button>
-                </div>
-              ))}
             </div>
           </div>
 

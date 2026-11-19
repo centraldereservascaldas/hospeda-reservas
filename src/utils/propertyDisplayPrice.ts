@@ -43,16 +43,17 @@ export function getPropertyDisplayPrice(
 ): PropertyDisplayPrice {
   const quote = getConfirmedPropertyQuote(property);
   const storedQuote = getStoredPropertyQuote(property);
-  const hasValidQuote = hasSearchDates && quote !== null;
+  const quoteToDisplay = quote ?? storedQuote;
+  const hasValidQuote = hasSearchDates && quoteToDisplay !== null;
 
-  if (hasValidQuote && quote) {
+  if (hasValidQuote && quoteToDisplay) {
     return {
       kind: 'quote',
-      amount: showTotalWithTaxes ? quote.totalAmount : quote.dailyRate,
+      amount: showTotalWithTaxes ? quoteToDisplay.totalAmount : quoteToDisplay.dailyRate,
       detail: showTotalWithTaxes
-        ? `Total da estadia • ${quote.nights} ${quote.nights === 1 ? 'noite' : 'noites'}`
+        ? `Total da estadia • ${quoteToDisplay.nights} ${quoteToDisplay.nights === 1 ? 'noite' : 'noites'}`
         : '/ noite',
-      ...(showTotalWithTaxes ? { dailyRate: quote.dailyRate } : {}),
+      ...(showTotalWithTaxes ? { dailyRate: quoteToDisplay.dailyRate } : {}),
     };
   }
 

@@ -34,7 +34,7 @@ export function CalendarMonthGrid({
     month: 'long',
     year: 'numeric',
   });
-  const leadingDays = month.getDay();
+  const leadingDays = (month.getDay() + 6) % 7;
   const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const weekCount = Math.ceil((leadingDays + daysInMonth) / 7);
   const calendarCells: (Date | null)[] = Array.from({ length: weekCount * 7 }, (_, index) => {
@@ -68,7 +68,7 @@ export function CalendarMonthGrid({
           role="row"
           className="mb-1 grid grid-cols-7 text-center text-[length:var(--search-calendar-weekday-font-size)] font-semibold text-neutral-600"
         >
-          {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, index) => (
+          {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((day, index) => (
             <span key={`${day}-${index}`} role="columnheader" className="py-2">
               {day}
             </span>

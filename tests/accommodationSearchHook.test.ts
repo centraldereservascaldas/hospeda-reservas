@@ -808,7 +808,7 @@ test('expires only the affected page and retains delivered cards without automat
     await act(async () => {
       context.mock.timers.tick(1);
     });
-    assert.equal(hook.result.current.availabilitySearchState, 'expired');
+    assert.equal(hook.result.current.availabilitySearchState, 'stale');
     assert.deepEqual(
       hook.result.current.properties.map((item) => item.id),
       ['first', 'second'],

@@ -27,7 +27,15 @@ export interface AccommodationWidgetSearchParams {
 }
 
 export type AvailabilitySearchState =
-  'idle' | 'loading' | 'refreshing' | 'success' | 'partial' | 'expired' | 'error' | 'invalid-dates';
+  | 'idle'
+  | 'loading'
+  | 'refreshing'
+  | 'success'
+  | 'partial'
+  | 'stale'
+  | 'expired'
+  | 'error'
+  | 'invalid-dates';
 
 interface UseAccommodationSearchOptions {
   setProperties: Dispatch<SetStateAction<Property[]>>;
@@ -172,7 +180,7 @@ export function useAccommodationSearch({
           }),
         );
         setAvailabilitySearchState((previous) =>
-          previous === 'loading' || previous === 'refreshing' ? previous : 'expired',
+          previous === 'loading' || previous === 'refreshing' ? previous : 'stale',
         );
       }
       arm();

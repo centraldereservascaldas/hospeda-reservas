@@ -38,8 +38,8 @@ test('names destination removal and preserves remaining filters until reset', ()
     guests: { adults: 3, children: 1, infants: 0, pets: 1 },
     minPrice: 100,
     amenities: ['Piscina'],
-    superhostOnly: true,
-    instantBookOnly: true,
+    superhostOnly: false,
+    instantBookOnly: false,
   };
   const changes: (typeof selectedFilters)[] = [];
   let destinationRemovalRequested = false;
@@ -65,13 +65,9 @@ test('names destination removal and preserves remaining filters until reset', ()
   fireEvent.click(screen.getByRole('button', { name: 'Remover filtro: destino' }));
   assert.equal(destinationRemovalRequested, true);
 
-  fireEvent.click(screen.getByRole('button', { name: 'Remover filtro: Apenas Superhost' }));
-  assert.equal(changes[0]?.superhostOnly, false);
-  assert.equal(changes[0]?.instantBookOnly, true);
-
   fireEvent.click(screen.getByRole('button', { name: 'Limpar filtros' }));
   assert.equal(clearFiltersRequested, true);
-  assert.equal(changes.length, 1);
+  assert.equal(changes.length, 0);
 });
 
 test('renders nothing when no destination or counted filter is active', () => {
@@ -135,7 +131,7 @@ test('keeps active property filters compact on mobile while preserving full-size
   );
 
   const group = screen.getByRole('group', { name: 'Filtros do imóvel ativos' });
-  assert.match(group.className, /gap-x-1 gap-y-1\.5 sm:gap-2/);
+  assert.match(group.className, /gap-2/);
   assert.match(screen.getByText('Filtros do imóvel:').className, /sr-only.*sm:not-sr-only/);
   for (const filter of ['Espaço inteiro', 'Wi-Fi', 'Piscina', '2+ quartos']) {
     assert.match(

@@ -96,7 +96,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
           <div
             role="group"
             aria-label="Categorias de hospedagem"
-            className="no-scrollbar flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1"
+            className="no-scrollbar order-2 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto py-1 sm:order-1"
           >
             {availableCategories.map((cat) => {
               const isSelected = selectedCategory === cat.id;
@@ -123,7 +123,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
           <div
             data-shared-search="expanded"
             style={{ viewTransitionName: compact ? 'none' : 'shared-search-bar' }}
-            className="hidden min-w-0 w-full max-w-[var(--search-bar-width)] sm:block"
+            className="order-2 hidden min-w-0 w-full max-w-[var(--search-bar-width)] sm:block"
           >
             {searchBar}
           </div>
@@ -132,10 +132,10 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             aria-label={
               activeFilterCount > 0 ? `Abrir filtros; ${activeFilterCount} ativos` : 'Abrir filtros'
             }
-            className="liquid-glass-button flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-white/85 px-2 text-xs font-bold text-neutral-800 shadow-xs transition-all hover:scale-105 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:px-4"
+            className="liquid-glass-button order-1 flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-white/85 px-3 text-xs font-bold text-neutral-800 shadow-xs transition-all hover:scale-105 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:order-3 sm:px-4"
           >
             <SlidersHorizontal className="h-3.5 w-3.5 text-neutral-700" />
-            <span className="hidden sm:inline">Filtros</span>
+            <span>Filtros</span>
             {activeFilterCount > 0 && (
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-700 text-[11px] font-bold text-white shadow-xs">
                 {activeFilterCount}

@@ -49,6 +49,8 @@ export function AvailabilitySearchState({
   const guestLabel = `${guests} ${guests === 1 ? 'hóspede' : 'hóspedes'}`;
   const searchContext = dateRange ? `${dateRange} · ${guestLabel}` : guestLabel;
 
+  if (state === 'stale') return null;
+
   if (state === 'expired' || state === 'refreshing') {
     const refreshing = state === 'refreshing';
     return (
