@@ -1,6 +1,7 @@
 // Receives the documented browser Tab API. Never reads cookies, tokens or hidden credentials.
 import {readFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
+import http from 'node:http';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 export async function queryThroughPanel(tab,query) {
  const location=new URL(await tab.url());
@@ -32,16 +33,19 @@ export async function startBrowserWorker(tab) {
   : JSON.parse(await readFile(new URL('../data/admin-control.json',import.meta.url)));
  if(!Number.isInteger(control.port)||control.port<1024||control.port>65535||!/^[a-f0-9]{64}$/.test(control.controlKey||''))throw new Error('Configuração do executor inválida.');
  const origin=`http://127.0.0.1:${control.port}`;let stopped=false,lastFailure=null;
- const headers={'X-Local-Control':control.controlKey,'X-Worker-Id':randomUUID(),'Content-Type':'application/json'};
- const heartbeat=setInterval(()=>{void fetch(origin+'/internal/browser/heartbeat',{headers}).catch(()=>{});},5000);
+ const serverPort=Number(process.env.IMOBSYS_WORKER_SERVER_PORT||control.port);
+ if(!Number.isInteger(serverPort)||serverPort<1024||serverPort>65535)throw new Error('Porta do serviço inválida.');
+ const headers={'Host':`127.0.0.1:${serverPort}`,'X-Local-Control':control.controlKey,'X-Worker-Id':randomUUID(),'Content-Type':'application/json'};
+ const request=(path,options={})=>new Promise((resolve,reject)=>{const req=http.request(origin+path,{method:options.method||'GET',headers,timeout:10000},res=>{let body='';res.on('data',chunk=>{body+=chunk;if(body.length>2000000)req.destroy();});res.on('end',()=>resolve({ok:res.statusCode>=200&&res.statusCode<300,json:async()=>JSON.parse(body)}));});req.on('timeout',()=>req.destroy());req.on('error',reject);req.end(options.body);});
+ const heartbeat=setInterval(()=>{void request('/internal/browser/heartbeat').catch(()=>{});},5000);
  const run=async()=>{
   while(!stopped){
    try {
-    const response=await fetch(origin+'/internal/browser/next',{headers});if(!response.ok)break;
+    const response=await request('/internal/browser/next');if(!response.ok)break;
     const {job}=await response.json();
     if(!job){await sleep(1000);continue;}
     let result,error;try{result=await queryThroughPanel(tab,job.query);}catch(e){error=true;lastFailure=String(e.message).slice(0,500);}
-    await fetch(origin+'/internal/browser/result',{method:'POST',headers,body:JSON.stringify({id:job.id,result,error})});
+    await request('/internal/browser/result',{method:'POST',body:JSON.stringify({id:job.id,result,error})});
    }catch{if(!stopped)await sleep(1500);}
   }
  };

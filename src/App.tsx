@@ -415,6 +415,20 @@ function MarketplaceApp() {
         isOwnerAdmin={isOwnerAdmin}
       />
 
+      {import.meta.env.DEV && currentView === 'explore' && (
+        <nav
+          aria-label="Explorar hospedagens"
+          className="mx-auto flex w-full max-w-7xl gap-6 px-6 pt-5 text-sm font-semibold"
+        >
+          <span aria-current="page" className="border-b-2 border-orange-600 pb-3 text-neutral-950">
+            Em destaque
+          </span>
+          <a href="/mais-opcoes" className="pb-3 text-neutral-600 hover:text-orange-700">
+            Mais opções
+          </a>
+        </nav>
+      )}
+
       {/* Category Bar & Controls (Visible only on Explore view) */}
       {currentView === 'explore' && (
         <CategoryBar
@@ -635,7 +649,10 @@ export default function App() {
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
 
-  if (checkoutPreviewAllowed && pathname === '/integracao/imobsys') {
+  if (
+    checkoutPreviewAllowed &&
+    (pathname === '/integracao/imobsys' || pathname === '/mais-opcoes')
+  ) {
     return (
       <Suspense fallback={<main role="status">Carregando parceiros…</main>}>
         <ImobsysIntegrationPreview />

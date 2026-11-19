@@ -57,6 +57,29 @@ function parseOffers(value: unknown): PartnerOffer[] {
 export function ImobsysIntegrationPreview() {
   const [offers, setOffers] = useState<PartnerOffer[]>([]);
   const [message, setMessage] = useState('Carregando apartamentos…');
+  const [checking, setChecking] = useState<string | null>(null);
+  const [quoteMessage, setQuoteMessage] = useState('');
+  async function checkOffer(offer: PartnerOffer) {
+    setChecking(offer.id);
+    setQuoteMessage('Consultando disponibilidade e valor atual…');
+    try {
+      const params = new URLSearchParams({
+        propertyId: offer.id,
+        from: offer.from,
+        to: offer.to,
+        guests: '2',
+      });
+      const response = await fetch(`/imobsys/api/checkout-quote?${params}`, { cache: 'no-store' });
+      const data: unknown = await response.json();
+      if (!response.ok || !data || typeof data !== 'object' || !('quote' in data))
+        throw new Error();
+      setQuoteMessage('Cotação consultada. O checkout deste apartamento ainda está em validação.');
+    } catch {
+      setQuoteMessage('Não foi possível confirmar esta oferta agora. Tente novamente.');
+    } finally {
+      setChecking(null);
+    }
+  }
   useEffect(() => {
     const controller = new AbortController();
     fetch('/imobsys/api/preview', { signal: controller.signal, cache: 'no-store' })
@@ -81,13 +104,23 @@ export function ImobsysIntegrationPreview() {
         <LogoCRCN />
       </header>
       <section className="mx-auto max-w-7xl px-6 py-12">
-        <p className="text-xs font-bold uppercase tracking-widest text-orange-800">
-          Integração de parceiros · ambiente local
-        </p>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight">Encontre sua próxima hospedagem</h1>
+        <nav aria-label="Explorar hospedagens" className="flex gap-6 text-sm font-semibold">
+          <a href="/" className="pb-3 text-neutral-600 hover:text-orange-700">
+            Em destaque
+          </a>
+          <span aria-current="page" className="border-b-2 border-orange-600 pb-3">
+            Mais opções
+          </span>
+        </nav>
+        <h1 className="mt-6 text-3xl font-bold tracking-tight">Mais opções para sua viagem</h1>
         <p className="mt-4 text-neutral-600" role="status">
           {message}
         </p>
+        {quoteMessage && (
+          <p role="status" className="mt-3 text-sm text-orange-800">
+            {quoteMessage}
+          </p>
+        )}
         <div className="mt-8 grid gap-7 sm:grid-cols-2 lg:grid-cols-4">
           {offers.slice(0, 32).map((offer) => (
             <article
@@ -116,10 +149,11 @@ export function ImobsysIntegrationPreview() {
                   <span className="text-sm font-normal">/ {offer.nights} noites</span>
                 </p>
                 <button
-                  disabled
-                  className="mt-4 min-h-12 w-full rounded-xl bg-neutral-200 px-4 font-semibold text-neutral-600"
+                  disabled={checking !== null}
+                  onClick={() => void checkOffer(offer)}
+                  className="mt-4 min-h-12 w-full rounded-xl bg-orange-600 px-4 font-semibold text-white disabled:opacity-60"
                 >
-                  Compra em validação
+                  {checking === offer.id ? 'Consultando…' : 'Consultar disponibilidade'}
                 </button>
               </div>
             </article>

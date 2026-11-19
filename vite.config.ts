@@ -12,6 +12,10 @@ export default defineConfig({
     proxy: {
       '/imobsys': {
         target: 'http://127.0.0.1:8012',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (request) => request.removeHeader('origin'));
+        },
         rewrite: (path) => path.replace(/^\/imobsys/, ''),
       },
       '/api': backendTarget,
