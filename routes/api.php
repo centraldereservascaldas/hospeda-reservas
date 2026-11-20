@@ -1,6 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AccommodationController;
+use App\Http\Controllers\Api\AffiliateAccessController;
+use App\Http\Controllers\Api\AffiliateAdminController;
+use App\Http\Controllers\Api\AffiliateDashboardController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CheckoutCancellationController;
 use App\Http\Controllers\Api\CheckoutGuestsController;
@@ -50,6 +53,10 @@ Route::post('/stays-checkout', [BookingController::class, 'startStaysCheckout'])
     ->middleware('throttle:5,1');
 
 Route::middleware('supabase.guest')->group(function (): void {
+    Route::get('/affiliate/access', [AffiliateAccessController::class, 'show']);
+    Route::post('/affiliate/access', [AffiliateAccessController::class, 'store'])->middleware('throttle:5,1');
+    Route::get('/affiliate/dashboard', [AffiliateDashboardController::class, 'index'])->middleware('throttle:30,1');
+    Route::get('/affiliate/links/{listingId}', [AffiliateAccessController::class, 'link'])->where('listingId', '[A-Za-z0-9_-]{1,100}')->middleware('throttle:30,1');
     Route::post('/auth/sync-stays', [GuestReservationController::class, 'sync']);
     Route::get('/my-reservations', [GuestReservationController::class, 'index']);
     Route::get('/my-direct-booking-orders', [GuestReservationController::class, 'directBookingOrders'])
@@ -75,6 +82,13 @@ Route::middleware(['supabase.guest', 'owner.admin:reviewer'])->prefix('owner/adm
     Route::post('/reject', [OwnerAdminController::class, 'reject']);
 });
 Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->group(function (): void {
+    Route::get('/affiliates', [AffiliateAdminController::class, 'index']);
+    Route::get('/affiliates/approved', [AffiliateAdminController::class, 'approvedAccounts']);
+    Route::post('/affiliates/{userId}/approve', [AffiliateAdminController::class, 'approve'])->whereUuid('userId')->middleware('throttle:10,1');
+    Route::post('/affiliates/{userId}/rate', [AffiliateAdminController::class, 'updateRate'])->whereUuid('userId')->middleware('throttle:10,1');
+    Route::get('/affiliate-commissions', [AffiliateAdminController::class, 'commissions']);
+    Route::post('/affiliate-commissions/{id}/approve', [AffiliateAdminController::class, 'approveCommission'])->whereNumber('id')->middleware('throttle:10,1');
+    Route::post('/affiliate-commissions/{id}/mark-paid', [AffiliateAdminController::class, 'markCommissionPaid'])->whereNumber('id')->middleware('throttle:10,1');
     Route::get('/direct-booking-orders', [OwnerAdminController::class, 'directBookingOrders']);
     Route::post('/direct-booking-webhooks/{webhookId}/retry', [OwnerAdminController::class, 'retryDirectBookingWebhook'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/start-manual-cancellation', [OwnerAdminController::class, 'startManualDirectBookingCancellation'])->middleware('throttle:10,1');
@@ -82,6 +96,7 @@ Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->gro
     Route::post('/direct-booking-orders/{publicReference}/verify-manual-gateway-refund', [OwnerAdminController::class, 'verifyManualDirectBookingGatewayRefund'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/revoke-resume-token', [OwnerAdminController::class, 'revokeDirectBookingResumeToken'])->middleware('throttle:10,1');
 });
+Route::post('/affiliate/capture', [AffiliateAccessController::class, 'capture'])->middleware('throttle:30,1');
 Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->middleware('throttle:5,1');
 Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');
 Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
