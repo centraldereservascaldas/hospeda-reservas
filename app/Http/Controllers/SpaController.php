@@ -182,7 +182,7 @@ class SpaController extends Controller
             return $this->homeResponse($html);
         }
 
-        if (preg_match('~^(?:[a-z]{2}(?:/search)?|search|auth/confirm|checkout-preview/cielo)$~D', trim((string) $path, '/')) === 1) {
+        if (preg_match('~^(?:[a-z]{2}(?:/search)?|search|s/homes|auth/confirm|checkout-preview/cielo)$~D', trim((string) $path, '/')) === 1) {
             return $this->noindexResponse($html);
         }
 
