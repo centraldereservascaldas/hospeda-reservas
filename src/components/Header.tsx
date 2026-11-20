@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import {
   Search,
   LogIn,
@@ -38,7 +38,7 @@ interface HeaderProps {
   searchDateSummary?: string;
   searchGuestSummary?: string;
   onCreateListing?: () => void;
-  toolbar?: React.ReactNode;
+  toolbar?: React.ReactNode | ((compactSearch: boolean) => React.ReactNode);
   categories?: Array<{ id: string; label: string; icon: string }>;
   selectedCategory?: string;
   onSelectCategory?: (id: string) => void;
@@ -63,7 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
   setCurrency,
   tripsCount,
   searchSummaryText,
-  compactSearch = false,
+  compactSearch: compactSearchOverride,
   searchDateSummary = 'Qualquer dia',
   searchGuestSummary = 'Hóspedes?',
   onCreateListing,
@@ -83,7 +83,64 @@ export const Header: React.FC<HeaderProps> = ({
   isOwnerAdmin,
 }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isSearchCompact, setIsSearchCompact] = useState(false);
+  const compactSearch = compactSearchOverride ?? isSearchCompact;
   const [isDesktop, setIsDesktop] = useState(() => matchesMediaQuery('(min-width: 640px)'));
+  useEffect(() => {
+    let compact = false;
+    const desktop = window.matchMedia?.('(min-width: 640px)');
+    const update = () => {
+      const position = window.scrollY;
+      const next = Boolean(desktop?.matches) && (compact ? position > 1 : position > 32);
+      if (next === compact) return;
+
+      compact = next;
+      const transitionDocument = document as Document & {
+        startViewTransition?: (update: () => void) => { finished: Promise<void> };
+        activeViewTransition?: unknown;
+      };
+      const transitionScope = document.documentElement;
+      const headerOnlyTransitionClass = 'search-header-only-transition';
+      const applyState = () => {
+        if (compact === next) setIsSearchCompact(next);
+      };
+      const supportsSharedTransition =
+        typeof transitionDocument.startViewTransition === 'function' &&
+        Boolean(document.querySelector('[data-shared-search="expanded"]')) &&
+        Boolean(document.querySelector('[data-shared-search="compact"]')) &&
+        !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+
+      if (!supportsSharedTransition || transitionDocument.activeViewTransition) {
+        setIsSearchCompact(next);
+        return;
+      }
+
+      try {
+        transitionScope.classList.add(headerOnlyTransitionClass);
+        const transition = transitionDocument.startViewTransition?.(() => flushSync(applyState));
+        if (transition) {
+          void transition.finished.then(
+            () => transitionScope.classList.remove(headerOnlyTransitionClass),
+            () => transitionScope.classList.remove(headerOnlyTransitionClass),
+          );
+        } else {
+          transitionScope.classList.remove(headerOnlyTransitionClass);
+          setIsSearchCompact(next);
+        }
+      } catch {
+        transitionScope.classList.remove(headerOnlyTransitionClass);
+        setIsSearchCompact(next);
+      }
+    };
+
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    desktop?.addEventListener('change', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      desktop?.removeEventListener('change', update);
+    };
+  }, []);
   useEffect(() => {
     const media = window.matchMedia?.('(min-width: 640px)');
     if (!media) return;
@@ -697,7 +754,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div
           className={`search-toolbar-collapse ${compactSearch ? 'search-toolbar-collapse--compact' : ''}`}
         >
-          <div>{toolbar}</div>
+          <div>{typeof toolbar === 'function' ? toolbar(compactSearch) : toolbar}</div>
         </div>
       )}
     </header>

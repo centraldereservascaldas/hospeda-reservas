@@ -962,6 +962,11 @@ body {
   view-transition-name: explore-content;
 }
 
+/* Keep the large accommodation catalog out of the sticky search-bar snapshot. */
+.search-header-only-transition .view-transition-explore-content {
+  view-transition-name: none !important;
+}
+
 ::view-transition-group(explore-content) {
   animation-duration: 380ms;
   animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
