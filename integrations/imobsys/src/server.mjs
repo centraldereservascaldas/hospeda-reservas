@@ -13,7 +13,7 @@ import { createAdminProvider, parseAdminAvailability } from './admin-provider.mj
 import { createBrowserQueue } from './browser-query-queue.mjs';
 import { makePreview } from './preview-data.mjs';
 import { checkoutQuote, validateCheckoutQuery } from './checkout-quote.mjs';
-import { mapAccommodationSearch } from './accommodation-search.mjs';
+import { mapAccommodationSearch, mapPartnerOffers } from './accommodation-search.mjs';
 import { prepareManualCheckout } from './manual-checkout-handoff.mjs';
 import { createSessionReceiver } from './session-envelope.mjs';
 import { fileURLToPath } from 'node:url';
@@ -122,6 +122,22 @@ const server = http.createServer(async (req, res) => {
       }
     }
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
+    if(url.pathname==='/internal/offers/search') {
+      if(req.method!=='GET')return json(405,{success:false,code:'method_not_allowed'});
+      if(req.headers['x-local-control']!==sessionReceiver.controlKey)return json(403,{success:false,code:'control_denied'});
+      if(Date.now()-windowStarted>=60000){windowStarted=Date.now();requests=0;}
+      if(++requests>30)throw new ConnectorError('rate_limited','Limite de consultas atingido.',429);
+      const allowed=['from','to','guests','condominiumId','page','pageSize'];
+      for(const name of url.searchParams.keys())if(!allowed.includes(name)||url.searchParams.getAll(name).length!==1)throw new ConnectorError('invalid_query','Parâmetro inválido ou repetido.',400);
+      for(const name of ['from','to','guests'])if(url.searchParams.getAll(name).length!==1)throw new ConnectorError('invalid_query','Informe datas e hóspedes.',400);
+      const query=Object.fromEntries(url.searchParams);const {from,to}=validateDates(query.from,query.to);
+      if(!/^(?:[2-9]|10)$/.test(query.guests))throw new ConnectorError('invalid_guests','Informe de 2 a 10 hóspedes.',400);
+      const search={from,to,guests:query.guests};
+      const result=await cached(`search:${JSON.stringify(search)}`,10000,()=>browserQueue.status().connected?browserQueue.query(search):adminProvider.availability(search));
+      const metadata=JSON.parse(await readFile(`${root}/verified-property-metadata.json`,'utf8'));
+      let media=[];try{const snapshot=JSON.parse(await readFile(`${root}/data/media.json`,'utf8'));if(Array.isArray(snapshot.results))media=snapshot.results;}catch{}
+      return json(200,mapPartnerOffers(result,query,{metadata,media}));
+    }
     if(await handleCheckoutHttp({req,res,url,authorize:request=>request.headers['x-local-control']===sessionReceiver.controlKey,flow:checkoutFlow,operations,sellerStore,reconcile:async item=>{if(!cielo)throw Error('Sandbox unavailable');await reconcileSandboxPayment({client:cielo,store:sellerStore,order:item.payload.order,paymentId:item.payload.paymentId});operations.advance(item.id,'awaiting_seller_confirmation',{});}}))return;
     if(['/seller-orders','/seller-orders.js'].includes(url.pathname)&&req.method==='GET') {
       const isScript=url.pathname.endsWith('.js');

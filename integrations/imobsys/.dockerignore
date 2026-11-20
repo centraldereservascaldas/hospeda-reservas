@@ -2,6 +2,7 @@
 !Dockerfile
 !package.json
 !properties.json
+!verified-property-metadata.json
 !src/
 !src/**
 !public/

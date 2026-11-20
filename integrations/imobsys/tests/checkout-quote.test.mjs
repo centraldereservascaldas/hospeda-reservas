@@ -8,7 +8,7 @@ test('replica as seis faixas e o arredondamento do checkout existente',()=>{
 });
 test('o encaminhamento manual mantém valor, origem e reserva pendente e recusa cotação antiga',()=>{
   const now=Date.now();
-  const q={propertyId:'imobsys-crcn-1-1149',from:'2026-11-19',to:'2026-11-21',guests:'4'};
+  const q={propertyId:'imobsys-crcn-1-1149',from:'2027-11-19',to:'2027-11-21',guests:'4'};
   const r={...q,source:'authenticated-network-search',observedAt:new Date(now).toISOString(),offers:[{id:q.propertyId,pixCents:99400,condominium:'Flat',unit:'00109'}]};
   const quote=checkoutQuote(q,r), result=prepareManualCheckout(quote,{now});
   assert.equal(result.origin,'imobsys_manual');
@@ -19,7 +19,7 @@ test('o encaminhamento manual mantém valor, origem e reserva pendente e recusa 
   assert.throws(()=>prepareManualCheckout(quote,{now:now+30001}),/consultada novamente/);
 });
 test('usa o valor final Pix do hóspede, não o valor do fornecedor',()=>{
-  const q={propertyId:'imobsys-crcn-1-1149',from:'2026-11-19',to:'2026-11-21',guests:'4'};
+  const q={propertyId:'imobsys-crcn-1-1149',from:'2027-11-19',to:'2027-11-21',guests:'4'};
   const r={...q,source:'authenticated-network-search',observedAt:'2026-11-18T12:00:00Z',offers:[{id:q.propertyId,pixCents:99400,supplierCents:79500,condominium:'Flat',unit:'00109'}]};
   const result=checkoutQuote(q,r);
   assert.equal(result.pix.totalCents,99400);

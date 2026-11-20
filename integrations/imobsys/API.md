@@ -44,6 +44,14 @@ A resposta tem `success`, `source`, `total`, `from`, `to`, `guests`, `data`, `un
 
 ## Controle interno e sandbox
 
+### Busca entre serviços
+
+`GET /internal/offers/search?from=2027-05-17&to=2027-05-19&guests=2&page=1&pageSize=20` exige `X-Local-Control`. Aceita `page` de 1 a 10000 e `pageSize` de 1 a 100, com padrão 1 e 20. A paginação ocorre sobre as ofertas retornadas pela consulta, não sobre um catálogo completo do fornecedor. A resposta contém identidade composta, base, referência, datas, hóspedes, preço total em centavos, moeda e capacidade quando reconhecida; atributos não comprovados são `null`. `offer_observed` indica oferta encontrada, sem garantia de disponibilidade ou bloqueio. `absenceMeans: unknown` indica que ausência não comprova indisponibilidade. Reserva e pagamento continuam desativados nesta rota.
+
+O parâmetro opcional `condominiumId` utiliza apenas vínculos explícitos em `verified-property-metadata.json`. Esse cadastro é parcial: apenas a unidade `imobsys-crcn-2-663` está vinculada ao condomínio `imobsys-crcn-condo-86`, conforme observação no painel. A resposta informa `unmappedCondominiumCount`, pois ofertas sem vínculo podem pertencer ao condomínio selecionado. Se não houver oferta mapeada para o filtro e houver ofertas sem vínculo, ou se a busca estiver vazia, retorna `503 condominium_mapping_unavailable`. Não deduzir que o condomínio não tem ofertas.
+
+Fotos são associadas pelo ID completo ao snapshot `data/media.json`, somente quando sua origem e caminho forem aceitos; quando não houver foto comprovada, `images` é `null`. Situação ativa e autorização para o site permanecem desconhecidas. O serviço depende da sessão autenticada do executor e retorna erro se ela não estiver disponível. O processo remoto e a renovação da sessão ainda não foram validados para operação contínua. O cache de consulta dura 10 segundos; até duas consultas simultâneas são aceitas, e o trabalho no navegador expira após 60 segundos. O limite local é 30 consultas por minuto.
+
 | Método e rota | Função |
 | --- | --- |
 | `GET /internal/browser/heartbeat` | Registra atividade do executor autenticado. |

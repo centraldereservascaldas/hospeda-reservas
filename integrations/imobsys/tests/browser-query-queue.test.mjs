@@ -1,6 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {createBrowserQueue} from '../src/browser-query-queue.mjs';
-const query={from:'2026-11-19',to:'2026-11-21',unit:'00109'};
+const query={from:'2027-11-19',to:'2027-11-21',unit:'00109'};
 test('browser queue refuses work without an active executor',()=>{
  const queue=createBrowserQueue();assert.throws(()=>queue.query(query),{code:'browser_worker_required'});
 });
