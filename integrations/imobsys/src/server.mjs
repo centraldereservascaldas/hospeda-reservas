@@ -22,7 +22,16 @@ import { createCatalogProvider, validateMonth } from './catalog-provider.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const port = Number(process.env.PORT || 8012);
+const bindAddress = process.env.HOST || '127.0.0.1';
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Porta inválida.');
+const allowedHosts = new Set([
+  `127.0.0.1:${port}`,
+  `localhost:${port}`,
+  ...(process.env.IMOBSYS_ALLOWED_HOSTS || '')
+    .split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean),
+]);
 const properties = JSON.parse(await readFile(`${root}/properties.json`, 'utf8'));
 for (const property of properties) validateProperty(property);
 const provider = createProvider({ authorization: process.env.CNSP_AUTHORIZATION || '' });
@@ -100,9 +109,18 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
   const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
   try {
-    const hosts = [`127.0.0.1:${port}`, `localhost:${port}`];
-    if (!hosts.includes(req.headers.host)) return json(403, { success: false, code: 'host_not_allowed' });
-    if (req.headers.origin && !hosts.some((host) => req.headers.origin === `http://${host}`)) return json(403, { success: false, code: 'origin_not_allowed' });
+    if (!allowedHosts.has(String(req.headers.host || '').toLowerCase())) return json(403, { success: false, code: 'host_not_allowed' });
+    if (req.headers.origin) {
+      let origin;
+      try {
+        origin = new URL(req.headers.origin);
+      } catch {
+        return json(403, { success: false, code: 'origin_not_allowed' });
+      }
+      if (origin.protocol !== 'http:' || !allowedHosts.has(origin.host.toLowerCase())) {
+        return json(403, { success: false, code: 'origin_not_allowed' });
+      }
+    }
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     if(await handleCheckoutHttp({req,res,url,authorize:request=>request.headers['x-local-control']===sessionReceiver.controlKey,flow:checkoutFlow,operations,sellerStore,reconcile:async item=>{if(!cielo)throw Error('Sandbox unavailable');await reconcileSandboxPayment({client:cielo,store:sellerStore,order:item.payload.order,paymentId:item.payload.paymentId});operations.advance(item.id,'awaiting_seller_confirmation',{});}}))return;
     if(['/seller-orders','/seller-orders.js'].includes(url.pathname)&&req.method==='GET') {
@@ -235,4 +253,4 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(port, '127.0.0.1', () => console.log(`Conector ImobSys somente leitura: http://127.0.0.1:${port}`));
+server.listen(port, bindAddress, () => console.log(`Conector ImobSys somente leitura em ${bindAddress}:${port}`));

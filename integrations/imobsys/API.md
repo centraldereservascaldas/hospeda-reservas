@@ -5,7 +5,7 @@ Estado da branch `codex/imobsys-checkout-integration`. Este serviço é um labor
 ## Execução e segurança
 
 - Node.js 22 ou superior: `node --env-file-if-exists=.env src/server.mjs`.
-- Endereço padrão: `http://127.0.0.1:8012`. O serviço escuta somente em loopback e valida os cabeçalhos `Host` e `Origin`.
+- Endereço local padrão: `http://127.0.0.1:8012`. O container pode escutar em `0.0.0.0` para comunicação por rede Docker privada; `IMOBSYS_ALLOWED_HOSTS` precisa listar os hosts internos permitidos, separados por vírgula. O serviço não deve receber domínio público nem porta publicada no host.
 - Os endpoints `/internal/` exigem `X-Local-Control` com a chave local. Os do navegador também exigem `X-Worker-Id` (UUID). A chave é privada: não colocar em frontend, repositório, URL ou documentação compartilhada.
 - O executor Playwright usa sessão ImobSys em memória. Sessão expirada ou executor desconectado impede consultas autenticadas. Não se deve transportar cookies para o navegador do cliente.
 - `data/` é ignorado pelo Git. Contém snapshots, controle local e bancos SQLite de testes; em instalação isolada, exige armazenamento persistente protegido.

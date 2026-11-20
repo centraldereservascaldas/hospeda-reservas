@@ -8,7 +8,7 @@ Serviço independente do Hospeda Reservas. Usa Node.js 22+ e HTTP direto, sem de
 node --env-file-if-exists=.env src/server.mjs
 ```
 
-Acesse `http://127.0.0.1:8012`. O serviço escuta exclusivamente no loopback. Não foi configurado deploy.
+Acesse `http://127.0.0.1:8012`. Localmente, o serviço escuta em loopback. Em container, `HOST=0.0.0.0` permite tráfego na rede Docker; configure `IMOBSYS_ALLOWED_HOSTS` com os nomes internos exatos e mantenha domínio público e porta publicada desativados.
 
 ```powershell
 node --test tests/*.test.mjs
@@ -82,7 +82,7 @@ O executor abre duas abas no **mesmo navegador e na mesma sessão em memória**:
 
 ### Imagem isolada para preparação do Coolify
 
-O `Dockerfile` prepara somente o serviço Node de testes, com usuário sem privilégios e verificação de saúde. Ele não contém credenciais nem o navegador. O processo escuta **somente em 127.0.0.1 dentro do contêiner**; a imagem não deve ser publicada como serviço HTTP aberto. O diretório `/app/data` precisa de armazenamento persistente gravável pelo usuário `node` para preservar os pedidos e operações de teste.
+O `Dockerfile` prepara somente o serviço Node, com usuário sem privilégios e verificação de saúde. Ele não contém credenciais nem o navegador. O processo escuta em `0.0.0.0` dentro do contêiner para permitir tráfego privado entre containers; a imagem não deve ser publicada como serviço HTTP aberto. Restrinja os cabeçalhos `Host` e `Origin` com `IMOBSYS_ALLOWED_HOSTS`. O diretório `/app/data` precisa de armazenamento persistente gravável pelo usuário `node` para preservar os pedidos e operações de teste.
 
 Essa imagem, isoladamente, **não completa a instalação no Coolify**: o navegador autenticado precisa de um transporte seguro entre o executor e o serviço, e de um modo de login operacional no ambiente remoto. O protocolo atual usa um arquivo de controle local e loopback; não exponha o endpoint interno nem copie cookies para contornar isso. A integração permanece em sandbox e não está pronta para cobrar clientes ou substituir o checkout atual.
 
