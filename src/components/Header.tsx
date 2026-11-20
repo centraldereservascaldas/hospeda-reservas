@@ -34,6 +34,7 @@ interface HeaderProps {
   setCurrency: (c: Currency) => void;
   tripsCount: number;
   searchSummaryText?: string;
+  compactSearch?: boolean;
   searchDateSummary?: string;
   searchGuestSummary?: string;
   onCreateListing?: () => void;
@@ -62,6 +63,7 @@ export const Header: React.FC<HeaderProps> = ({
   setCurrency,
   tripsCount,
   searchSummaryText,
+  compactSearch: compactSearchOverride,
   searchDateSummary = 'Qualquer dia',
   searchGuestSummary = 'Hóspedes?',
   onCreateListing,
@@ -81,7 +83,8 @@ export const Header: React.FC<HeaderProps> = ({
   isOwnerAdmin,
 }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [compactSearch, setCompactSearch] = useState(false);
+  const [isSearchCompact, setIsSearchCompact] = useState(false);
+  const compactSearch = compactSearchOverride ?? isSearchCompact;
   const [isDesktop, setIsDesktop] = useState(() => matchesMediaQuery('(min-width: 640px)'));
   useEffect(() => {
     let compact = false;
@@ -99,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({
       const transitionScope = document.documentElement;
       const headerOnlyTransitionClass = 'search-header-only-transition';
       const applyState = () => {
-        if (compact === next) setCompactSearch(next);
+        if (compact === next) setIsSearchCompact(next);
       };
       const supportsSharedTransition =
         typeof transitionDocument.startViewTransition === 'function' &&
@@ -108,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
         !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
 
       if (!supportsSharedTransition || transitionDocument.activeViewTransition) {
-        setCompactSearch(next);
+        setIsSearchCompact(next);
         return;
       }
 
@@ -122,11 +125,11 @@ export const Header: React.FC<HeaderProps> = ({
           );
         } else {
           transitionScope.classList.remove(headerOnlyTransitionClass);
-          setCompactSearch(next);
+          setIsSearchCompact(next);
         }
       } catch {
         transitionScope.classList.remove(headerOnlyTransitionClass);
-        setCompactSearch(next);
+        setIsSearchCompact(next);
       }
     };
 
