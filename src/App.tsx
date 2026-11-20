@@ -114,55 +114,6 @@ function MarketplaceApp() {
   const showTotalWithTaxes = true;
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [currentView, setCurrentView] = useState<MainView>('explore');
-  const [isDesktopSearchCompact, setIsDesktopSearchCompact] = useState(false);
-  useEffect(() => {
-    let compact = false;
-    const desktop = window.matchMedia?.('(min-width: 640px)');
-    const update = () => {
-      const position = window.scrollY;
-      const next = Boolean(desktop?.matches) && (compact ? position > 1 : position > 32);
-      if (next !== compact) {
-        compact = next;
-        const supportsSharedTransition =
-          typeof (document as Document & { startViewTransition?: (update: () => void) => unknown })
-            .startViewTransition === 'function' &&
-          Boolean(document.querySelector('[data-shared-search="expanded"]')) &&
-          Boolean(document.querySelector('[data-shared-search="compact"]')) &&
-          !(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
-
-        if (!supportsSharedTransition) {
-          setIsDesktopSearchCompact(next);
-          return;
-        }
-
-        const transitionDocument = document as Document & {
-          startViewTransition?: (update: () => void) => unknown;
-          activeViewTransition?: unknown;
-        };
-        const applyState = () => {
-          if (compact === next) setIsDesktopSearchCompact(next);
-        };
-
-        if (transitionDocument.activeViewTransition) {
-          setIsDesktopSearchCompact(next);
-          return;
-        }
-
-        try {
-          transitionDocument.startViewTransition?.(() => flushSync(applyState));
-        } catch {
-          setIsDesktopSearchCompact(next);
-        }
-      }
-    };
-    update();
-    window.addEventListener('scroll', update, { passive: true });
-    desktop?.addEventListener('change', update);
-    return () => {
-      window.removeEventListener('scroll', update);
-      desktop?.removeEventListener('change', update);
-    };
-  }, []);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
   const currentViewRef = useRef(currentView);
   currentViewRef.current = currentView;
@@ -526,7 +477,6 @@ function MarketplaceApp() {
         setCurrency={setCurrency}
         tripsCount={reservations.filter((r) => r.status === 'confirmed').length}
         searchSummaryText={filters.destination || undefined}
-        compactSearch={currentView === 'explore' && isDesktopSearchCompact}
         searchDateSummary={
           filters.checkIn && filters.checkOut
             ? `${new Date(`${filters.checkIn}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })} - ${new Date(`${filters.checkOut}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}`
@@ -551,7 +501,7 @@ function MarketplaceApp() {
         ownerRequestLoading={ownerRequestLoading}
         onRequestOwnerAccess={handleRequestOwnerAccess}
         isOwnerAdmin={isOwnerAdmin}
-        toolbar={
+        toolbar={(compactSearch) =>
           currentView === 'explore' ? (
             <CategoryBar
               availableCategories={availableCategories}
@@ -560,7 +510,7 @@ function MarketplaceApp() {
               onOpenFilters={() => setIsFilterOpen(true)}
               activeFilterCount={activeFilterCount}
               isCondominiumView={isCondominiumView}
-              compact={isDesktopSearchCompact}
+              compact={compactSearch}
               searchBar={
                 <StaysSearchWidget
                   variant="hero"
