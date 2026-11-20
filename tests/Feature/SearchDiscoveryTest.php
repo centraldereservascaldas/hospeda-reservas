@@ -112,7 +112,7 @@ class SearchDiscoveryTest extends TestCase
         foreach (['/pagina-inexistente', '/sitemap-old.xml', '/destinos/inexistente'] as $path) {
             $this->get($path)->assertNotFound();
         }
-        foreach (['/auth/confirm', '/checkout/example-reference', '/pt/search'] as $path) {
+        foreach (['/auth/confirm', '/checkout/example-reference', '/pt/search', '/s/homes?checkin=2026-12-03&checkout=2026-12-06&adults=2'] as $path) {
             $this->get($path)->assertOk()->assertHeader('X-Robots-Tag', 'noindex, nofollow');
         }
     }
