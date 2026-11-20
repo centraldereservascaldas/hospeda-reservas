@@ -13,6 +13,7 @@ import { createAdminProvider, parseAdminAvailability } from './admin-provider.mj
 import { createBrowserQueue } from './browser-query-queue.mjs';
 import { makePreview } from './preview-data.mjs';
 import { checkoutQuote, validateCheckoutQuery } from './checkout-quote.mjs';
+import { mapAccommodationSearch } from './accommodation-search.mjs';
 import { prepareManualCheckout } from './manual-checkout-handoff.mjs';
 import { createSessionReceiver } from './session-envelope.mjs';
 import { fileURLToPath } from 'node:url';
@@ -175,6 +176,16 @@ const server = http.createServer(async (req, res) => {
     }
     if (Date.now() - windowStarted >= 60000) { windowStarted = Date.now(); requests = 0; }
     if (++requests > 30) throw new ConnectorError('rate_limited', 'Limite de consultas locais atingido. Aguarde um minuto.', 429);
+    if(url.pathname==='/api/v1/accommodations/search') {
+      for(const name of ['from','to','guests'])if(url.searchParams.getAll(name).length!==1)throw new ConnectorError('invalid_query','Informe datas e hóspedes uma vez.',400);
+      for(const name of url.searchParams.keys())if(!['from','to','guests'].includes(name))throw new ConnectorError('invalid_query','Parâmetro não permitido.',400);
+      const query=Object.fromEntries(url.searchParams);
+      const {from,to}=validateDates(query.from,query.to);
+      if(!/^(?:[2-9]|10)$/.test(query.guests))throw new ConnectorError('invalid_guests','Informe de 2 a 10 hóspedes.',400);
+      const search={from,to,guests:query.guests};
+      const result=await cached(`search:${JSON.stringify(search)}`,10000,()=>browserQueue.status().connected?browserQueue.query(search):adminProvider.availability(search));
+      return json(200,mapAccommodationSearch(result,search));
+    }
     if(url.pathname==='/api/checkout-quote') {
       for(const name of ['propertyId','from','to','guests'])if(url.searchParams.getAll(name).length!==1)throw new ConnectorError('invalid_query','Informe imóvel, datas e hóspedes uma vez.',400);
       for(const name of url.searchParams.keys())if(!['propertyId','from','to','guests'].includes(name))throw new ConnectorError('invalid_query','Parâmetro não permitido.',400);
