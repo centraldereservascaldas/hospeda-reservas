@@ -103,10 +103,10 @@ test('mobile search prompt has prominent text and a larger search icon', () => {
   );
   assert.ok(searchButton);
   const searchIcon = searchButton.querySelector('svg');
-  const searchLabel = searchButton.querySelector('span.text-base');
+  const searchLabel = searchButton.querySelector('span.text-lg');
 
-  assert.ok(searchIcon?.classList.contains('h-6'));
-  assert.ok(searchIcon?.classList.contains('w-6'));
+  assert.ok(searchIcon?.classList.contains('h-7'));
+  assert.ok(searchIcon?.classList.contains('w-7'));
   assert.equal(searchLabel?.textContent, 'Iniciar busca');
   assert.ok(searchLabel?.classList.contains('font-bold'));
 });

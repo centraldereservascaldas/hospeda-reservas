@@ -44,6 +44,49 @@ const SofiaAssistantModal = React.lazy(() =>
   })),
 );
 
+function SearchModalLoadingFallback() {
+  return (
+    <div
+      role="status"
+      aria-label="Carregando busca de hospedagens"
+      aria-busy="true"
+      className="fixed inset-0 z-[100] flex bg-neutral-100 sm:items-start sm:justify-center sm:bg-neutral-950/70 sm:p-4 sm:pt-16"
+    >
+      <div className="flex h-dvh w-full max-w-3xl flex-col sm:h-auto sm:max-h-[85vh] sm:overflow-hidden sm:rounded-3xl sm:bg-white sm:shadow-2xl">
+        <header className="flex h-20 shrink-0 items-center justify-between px-5 sm:border-b sm:border-neutral-200">
+          <span className="text-base font-bold text-neutral-900">Buscar hospedagens</span>
+          <span className="h-11 w-11 rounded-full border border-neutral-200 bg-white shadow-sm" />
+        </header>
+        <main className="min-h-0 flex-1 space-y-3 overflow-hidden px-3 pb-4 sm:overflow-y-auto sm:p-5">
+          <section className="space-y-5 rounded-3xl bg-white p-6 shadow-lg">
+            <div className="h-8 w-28 rounded-lg bg-neutral-200 motion-safe:animate-pulse" />
+            <div className="h-14 rounded-xl bg-neutral-100 motion-safe:animate-pulse" />
+            <div className="space-y-3">
+              {Array.from({ length: 4 }, (_, index) => (
+                <div
+                  key={index}
+                  className="flex h-[68px] items-center gap-3 rounded-xl bg-neutral-50 px-3"
+                >
+                  <span className="h-12 w-12 shrink-0 rounded-xl bg-orange-100 motion-safe:animate-pulse" />
+                  <span className="min-w-0 flex-1 space-y-2">
+                    <span className="block h-4 w-2/3 rounded bg-neutral-200 motion-safe:animate-pulse" />
+                    <span className="block h-3 w-1/2 rounded bg-neutral-100 motion-safe:animate-pulse" />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+          <div className="flex h-16 items-center justify-between rounded-2xl bg-white px-5 shadow-sm sm:hidden">
+            <span className="h-4 w-20 rounded bg-neutral-200 motion-safe:animate-pulse" />
+            <span className="h-12 w-28 rounded-xl bg-neutral-300 motion-safe:animate-pulse" />
+          </div>
+        </main>
+        <span className="sr-only">Preparando os campos de destino, datas e hóspedes.</span>
+      </div>
+    </div>
+  );
+}
+
 export interface AppOverlayLayerProps {
   currency: Currency;
   filters: SearchFilters;
@@ -165,7 +208,7 @@ export function AppOverlayLayer({
         />
       </DeferredModal>
 
-      <DeferredModal active={isSearchOpen}>
+      <DeferredModal active={isSearchOpen} fallback={<SearchModalLoadingFallback />}>
         <SearchModal
           isOpen={isSearchOpen}
           onClose={onCloseSearch}
