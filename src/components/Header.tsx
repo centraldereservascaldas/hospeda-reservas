@@ -272,7 +272,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-50 liquid-glass border-b border-neutral-200/80 shadow-[0_8px_30px_-24px_rgba(15,23,42,0.45)] backdrop-blur-2xl">
       <div className="mx-auto w-full max-w-[var(--header-expanded-width)] px-[var(--header-edge-spacing)]">
-        <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4 [@media(max-width:639px)_and_(max-height:400px)]:h-14">
+        <div className="flex items-center justify-between h-[84px] sm:h-20 gap-2 sm:gap-4 [@media(max-width:639px)_and_(max-height:400px)]:h-[76px]">
           {/* Official Company Logo: Central de Reservas Caldas Novas */}
           <button
             onClick={() => {
@@ -379,15 +379,16 @@ export const Header: React.FC<HeaderProps> = ({
             data-compact-search={currentView === 'explore' && compactSearch ? 'true' : 'false'}
           >
             <button
+              type="button"
               onClick={onOpenSearch}
               aria-label="Iniciar busca"
-              className="min-h-16 sm:min-h-11 w-full flex items-center justify-center sm:justify-between px-4 sm:pl-4 sm:pr-2 py-1.5 sm:py-2 rounded-full liquid-glass-pill hover:bg-white/90 border border-neutral-200/90 shadow-[0_5px_18px_-12px_rgba(15,23,42,0.4),inset_0_1px_1.5px_rgba(255,255,255,0.9)] hover:shadow-lg transition-all cursor-pointer group min-w-0"
+              className="min-h-[68px] sm:min-h-11 w-full flex items-center justify-center sm:justify-between px-5 sm:pl-4 sm:pr-2 py-1.5 sm:py-2 rounded-full bg-white/95 sm:bg-white/90 text-neutral-900 hover:bg-orange-50 sm:hover:bg-white border border-orange-200/80 sm:border-neutral-200/90 shadow-[0_8px_24px_-10px_rgba(194,65,12,0.4),inset_0_2px_2px_rgba(255,255,255,0.95),inset_0_-1px_1px_rgba(194,65,12,0.06)] sm:shadow-[0_5px_18px_-12px_rgba(15,23,42,0.4),inset_0_1px_1.5px_rgba(255,255,255,0.9)] sm:backdrop-blur-lg sm:backdrop-saturate-150 hover:shadow-lg sm:hover:shadow-lg transition-all cursor-pointer group min-w-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
             >
               <Search
                 aria-hidden="true"
-                className="mr-3 h-6 w-6 shrink-0 text-orange-700 sm:hidden"
+                className="mr-3 h-7 w-7 shrink-0 text-orange-700 sm:hidden"
               />
-              <span className="text-base font-bold text-neutral-900 sm:hidden">Iniciar busca</span>
+              <span className="text-lg font-bold text-neutral-900 sm:hidden">Iniciar busca</span>
               <div className="hidden min-w-0 items-center text-neutral-800 sm:flex sm:text-sm">
                 <span className="pr-2 sm:pr-3 text-neutral-900 font-bold truncate min-w-0 max-[360px]:hidden">
                   {searchSummaryText ? searchSummaryText : 'Caldas Novas & Região'}

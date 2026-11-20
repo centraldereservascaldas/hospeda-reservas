@@ -4,6 +4,7 @@ interface LazyFeatureBoundaryProps {
   children: React.ReactNode;
   overlay?: boolean;
   visible?: boolean;
+  fallback?: React.ReactNode;
 }
 
 export class LazyFeatureBoundary extends React.Component<
@@ -37,7 +38,7 @@ export class LazyFeatureBoundary extends React.Component<
         )}
       </div>
     );
-    const fallback = this.props.overlay ? (
+    const defaultFallback = this.props.overlay ? (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
         {content}
       </div>
@@ -45,7 +46,11 @@ export class LazyFeatureBoundary extends React.Component<
       <div className="flex min-h-48 items-center justify-center p-6">{content}</div>
     );
 
-    if (this.state.hasError) return this.props.visible === false ? null : fallback;
-    return <React.Suspense fallback={fallback}>{this.props.children}</React.Suspense>;
+    if (this.state.hasError) return this.props.visible === false ? null : defaultFallback;
+    return (
+      <React.Suspense fallback={this.props.fallback ?? defaultFallback}>
+        {this.props.children}
+      </React.Suspense>
+    );
   }
 }
