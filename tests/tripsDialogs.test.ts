@@ -22,6 +22,42 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+test('linked reservations show the checkout lifecycle instead of a generic confirmation', () => {
+  const { getByText } = render(
+    React.createElement(TripsView, {
+      reservations: [
+        {
+          ...reservation,
+          id: 'pre-reserved',
+          status: 'pending',
+          directBookingStatus: 'pre_reservado',
+        },
+        {
+          ...reservation,
+          id: 'review',
+          status: 'pending',
+          directBookingStatus: 'atencao_operacional',
+        },
+        {
+          ...reservation,
+          id: 'paid',
+          status: 'pending',
+          directBookingStatus: 'pago_em_confirmacao',
+        },
+        { ...reservation, id: 'approved', status: 'confirmed', directBookingStatus: 'confirmado' },
+      ],
+      currency: 'BRL',
+      onCancelReservation: async () => {},
+      onExploreMore: () => {},
+    }),
+  );
+
+  assert.ok(getByText('Pré-reserva'));
+  assert.ok(getByText('Em análise pela Central'));
+  assert.ok(getByText('Pagamento aprovado · confirmação pendente'));
+  assert.ok(getByText('Aprovada'));
+});
+
 const reservation = {
   id: 'reservation-1',
   code: 'ABC123',

@@ -518,12 +518,29 @@
   }
 }
 
-/* Fluid background mesh with thermal waters & Caldas Novas warmth - radiant liquid glow */
+/* Keep the page mesh visible in iOS Safari, where fixed body backgrounds may not paint. */
+html {
+  min-height: 100%;
+  background-color: var(--color-page);
+}
+
 body {
+  position: relative;
+  min-height: 100vh;
+  isolation: isolate;
+  background: transparent;
+}
+
+body::before {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
   background-color: var(--color-page);
   background-image: var(--crcn-page-background);
-  background-attachment: fixed;
+  background-position: center;
   background-size: cover;
+  content: '';
+  pointer-events: none;
 }
 
 * {

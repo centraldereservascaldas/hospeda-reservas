@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Enums\DirectBookingOrderStatus;
 use App\Models\DirectBookingOrder;
 use App\Models\GuestProfile;
 use App\Services\DirectSaleTermsRegistry;
@@ -130,6 +131,77 @@ class BookingApiTest extends TestCase
             ->assertJsonPath('data.0.guestName', 'Guest Example')
             ->assertJsonPath('data.0.guestEmail', 'guest@example.test')
             ->assertHeader('Cache-Control', 'no-store, private');
+    }
+
+    public function test_missing_client_reservation_is_loaded_by_reference_and_shows_stays_cancellation(): void
+    {
+        Http::preventStrayRequests();
+        config([
+            'services.supabase.url' => 'https://auth.example.test',
+            'services.supabase.anon_key' => 'public-key',
+            'services.stays.client_id' => 'stays-client-id',
+            'services.stays.client_secret' => 'stays-client-secret',
+        ]);
+        Http::fake([
+            '*/auth/v1/user' => Http::response([
+                'id' => '575c8054-6646-443c-bf62-07945019a32f',
+                'email' => 'guest@example.test',
+                'email_confirmed_at' => '2026-01-01T00:00:00Z',
+                'user_metadata' => ['full_name' => 'Guest Example'],
+            ], 200),
+            '*/booking/clients/stays-client-1' => Http::response(['client' => ['reservations' => []]], 200),
+            '*/booking/reservations/reservation-canceled-1' => Http::response([
+                '_id' => 'reservation-canceled-1',
+                '_idlisting' => 'JQ08G',
+                '_idclient' => 'stays-client-1',
+                'partnerCode' => 'QIO3J',
+                'type' => 'canceled',
+                'checkInDate' => '2026-11-10',
+                'checkOutDate' => '2026-11-13',
+                'guests' => 2,
+                'price' => ['currency' => 'BRL', '_f_total' => 3001],
+            ], 200),
+        ]);
+        GuestProfile::query()->create([
+            'id' => '575c8054-6646-443c-bf62-07945019a32f',
+            'full_name' => 'Guest Example',
+            'stays_client_id' => 'stays-client-1',
+        ]);
+        DirectBookingOrder::query()->create([
+            'status' => DirectBookingOrderStatus::Confirmado,
+            'idempotency_key' => 'canceled-reservation-test',
+            'public_reference' => str_repeat('a', 40),
+            'resume_token' => str_repeat('b', 64),
+            'request_fingerprint' => str_repeat('c', 64),
+            'listing_id' => 'JQ08G',
+            'stays_listing_id' => 'JQ08G',
+            'stays_client_id' => 'stays-client-1',
+            'reservation_status' => 'reserved',
+            'check_in' => '2026-11-10',
+            'check_out' => '2026-11-13',
+            'guests' => ['adults' => 2, 'children' => 0, 'infants' => 0, 'pets' => 0],
+            'guest_name' => 'Guest Example',
+            'guest_email' => 'guest@example.test',
+            'guest_phone' => '11999999999',
+            'quote_total' => '3001.00',
+            'currency' => 'BRL',
+            'quote_snapshot' => [],
+            'accepted_terms_version' => 'terms-test-1',
+            'accepted_terms_snapshot' => ['version' => 'terms-test-1'],
+            'terms_accepted_at' => now(),
+            'origin' => 'website',
+            'expires_at' => now()->subMinute(),
+            'stays_reservation_id' => 'reservation-canceled-1',
+            'operational_events' => [],
+        ]);
+
+        $this->withToken('valid-access-token')->getJson('/api/my-reservations')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', 'reservation-canceled-1')
+            ->assertJsonPath('data.0.status', 'cancelled')
+            ->assertJsonPath('data.0.directBookingReference', str_repeat('a', 40))
+            ->assertJsonPath('data.0.directBookingStatus', 'confirmado');
     }
 
     public function test_valid_supabase_session_can_request_owner_access_in_local_database(): void

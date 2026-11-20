@@ -535,6 +535,11 @@ export const isReservation = (value: unknown): value is Reservation =>
   (value.directBookingReference === undefined ||
     (typeof value.directBookingReference === 'string' &&
       /^[A-Za-z0-9]{40}$/.test(value.directBookingReference))) &&
+  (value.directBookingStatus === undefined ||
+    value.directBookingStatus === null ||
+    checkoutOrderStatuses.includes(
+      value.directBookingStatus as (typeof checkoutOrderStatuses)[number],
+    )) &&
   (value.staysSyncStatus === undefined ||
     value.staysSyncStatus === 'synced' ||
     value.staysSyncStatus === 'pending' ||

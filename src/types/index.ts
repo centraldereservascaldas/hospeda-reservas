@@ -1,3 +1,5 @@
+import type { DirectBookingOrderListItem } from '../services/checkoutApi';
+
 export interface Review {
   id: string;
   authorName: string;
@@ -140,6 +142,7 @@ export interface Reservation {
   staysReservationId?: string;
   staysLocator?: string;
   directBookingReference?: string;
+  directBookingStatus?: DirectBookingOrderListItem['status'] | null;
   staysSyncStatus?: 'synced' | 'pending' | 'offline';
 }
 

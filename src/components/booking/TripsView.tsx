@@ -32,6 +32,47 @@ const tripDialogSafeAreaHeightStyle: React.CSSProperties = {
     'calc(100dvh - max(1rem, env(safe-area-inset-top, 0px)) - max(1rem, env(safe-area-inset-bottom, 0px)))',
 };
 
+const directBookingStatusLabels: Record<DirectBookingOrderListItem['status'], string> = {
+  iniciado: 'Pedido iniciado',
+  cotado: 'Cotação registrada',
+  pre_reservado: 'Pré-reserva',
+  liberacao_pendente: 'Liberação pendente',
+  pagamento_pendente: 'Pagamento pendente',
+  pago_em_confirmacao: 'Pagamento aprovado · confirmação pendente',
+  confirmado: 'Aprovada',
+  concluido: 'Concluída',
+  expirado: 'Pedido expirado',
+  pagamento_recusado: 'Pagamento não aprovado',
+  atencao_operacional: 'Em análise pela Central',
+  cancelamento_solicitado: 'Cancelamento solicitado',
+  reembolso_pendente: 'Reembolso em análise',
+  reembolsado: 'Reembolsado',
+  contestado: 'Pagamento contestado',
+};
+
+const reservationStatusesNeedingAttention: DirectBookingOrderListItem['status'][] = [
+  'pre_reservado',
+  'liberacao_pendente',
+  'pagamento_pendente',
+  'pago_em_confirmacao',
+  'atencao_operacional',
+];
+
+const getReservationStatusLabel = (reservation: Reservation): string => {
+  if (reservation.cancellationRequested) return 'Cancelamento solicitado';
+  if (reservation.directBookingStatus) {
+    return directBookingStatusLabels[reservation.directBookingStatus];
+  }
+
+  return reservation.status === 'pending' ? 'Pré-reserva' : 'Confirmada';
+};
+
+const reservationNeedsAttention = (reservation: Reservation): boolean =>
+  reservation.cancellationRequested === true ||
+  reservation.status === 'pending' ||
+  (reservation.directBookingStatus != null &&
+    reservationStatusesNeedingAttention.includes(reservation.directBookingStatus));
+
 interface TripsViewProps {
   reservations: Reservation[];
   directBookingOrders?: DirectBookingOrderListItem[];
@@ -112,23 +153,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
         (reservation) => reservation.directBookingReference === order.publicReference,
       ),
   );
-  const directBookingStatusLabels: Record<DirectBookingOrderListItem['status'], string> = {
-    iniciado: 'Pedido iniciado',
-    cotado: 'Cotação registrada',
-    pre_reservado: 'Pré-reserva',
-    liberacao_pendente: 'Liberação pendente',
-    pagamento_pendente: 'Pagamento pendente',
-    pago_em_confirmacao: 'Pagamento aprovado · confirmação pendente',
-    confirmado: 'Confirmada',
-    concluido: 'Concluída',
-    expirado: 'Pedido expirado',
-    pagamento_recusado: 'Pagamento não aprovado',
-    atencao_operacional: 'Em análise pela Central',
-    cancelamento_solicitado: 'Cancelamento solicitado',
-    reembolso_pendente: 'Reembolso em análise',
-    reembolsado: 'Reembolsado',
-    contestado: 'Pagamento contestado',
-  };
   const openDirectBookingOrder = (order: DirectBookingOrderListItem): void => {
     window.location.assign(`/checkout/${encodeURIComponent(order.publicReference)}`);
   };
@@ -505,18 +529,14 @@ export const TripsView: React.FC<TripsViewProps> = ({
                             {res.code}
                           </span>
                           <span
-                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 border ${res.status === 'pending' || res.cancellationRequested ? 'bg-amber-100 text-amber-900 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}`}
+                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 border ${reservationNeedsAttention(res) ? 'bg-amber-100 text-amber-900 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}`}
                           >
-                            {res.status === 'pending' || res.cancellationRequested ? (
+                            {reservationNeedsAttention(res) ? (
                               <AlertCircle className="w-3 h-3" />
                             ) : (
                               <CheckCircle2 className="w-3 h-3" />
                             )}
-                            {res.cancellationRequested
-                              ? 'Cancelamento solicitado'
-                              : res.status === 'pending'
-                                ? 'Não confirmada'
-                                : 'Confirmada'}
+                            {getReservationStatusLabel(res)}
                           </span>
                         </div>
 
