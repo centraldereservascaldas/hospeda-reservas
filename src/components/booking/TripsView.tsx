@@ -32,6 +32,47 @@ const tripDialogSafeAreaHeightStyle: React.CSSProperties = {
     'calc(100dvh - max(1rem, env(safe-area-inset-top, 0px)) - max(1rem, env(safe-area-inset-bottom, 0px)))',
 };
 
+const directBookingStatusLabels: Record<DirectBookingOrderListItem['status'], string> = {
+  iniciado: 'Pedido iniciado',
+  cotado: 'Cotação registrada',
+  pre_reservado: 'Pré-reserva',
+  liberacao_pendente: 'Liberação pendente',
+  pagamento_pendente: 'Pagamento pendente',
+  pago_em_confirmacao: 'Pagamento aprovado · confirmação pendente',
+  confirmado: 'Aprovada',
+  concluido: 'Concluída',
+  expirado: 'Pedido expirado',
+  pagamento_recusado: 'Pagamento não aprovado',
+  atencao_operacional: 'Em análise pela Central',
+  cancelamento_solicitado: 'Cancelamento solicitado',
+  reembolso_pendente: 'Reembolso em análise',
+  reembolsado: 'Reembolsado',
+  contestado: 'Pagamento contestado',
+};
+
+const reservationStatusesNeedingAttention: DirectBookingOrderListItem['status'][] = [
+  'pre_reservado',
+  'liberacao_pendente',
+  'pagamento_pendente',
+  'pago_em_confirmacao',
+  'atencao_operacional',
+];
+
+const getReservationStatusLabel = (reservation: Reservation): string => {
+  if (reservation.cancellationRequested) return 'Cancelamento solicitado';
+  if (reservation.directBookingStatus) {
+    return directBookingStatusLabels[reservation.directBookingStatus];
+  }
+
+  return reservation.status === 'pending' ? 'Pré-reserva' : 'Confirmada';
+};
+
+const reservationNeedsAttention = (reservation: Reservation): boolean =>
+  reservation.cancellationRequested === true ||
+  reservation.status === 'pending' ||
+  (reservation.directBookingStatus !== undefined &&
+    reservationStatusesNeedingAttention.includes(reservation.directBookingStatus));
+
 interface TripsViewProps {
   reservations: Reservation[];
   directBookingOrders?: DirectBookingOrderListItem[];
@@ -112,23 +153,6 @@ export const TripsView: React.FC<TripsViewProps> = ({
         (reservation) => reservation.directBookingReference === order.publicReference,
       ),
   );
-  const directBookingStatusLabels: Record<DirectBookingOrderListItem['status'], string> = {
-    iniciado: 'Pedido iniciado',
-    cotado: 'Cotação registrada',
-    pre_reservado: 'Pré-reserva',
-    liberacao_pendente: 'Liberação pendente',
-    pagamento_pendente: 'Pagamento pendente',
-    pago_em_confirmacao: 'Pagamento aprovado · confirmação pendente',
-    confirmado: 'Confirmada',
-    concluido: 'Concluída',
-    expirado: 'Pedido expirado',
-    pagamento_recusado: 'Pagamento não aprovado',
-    atencao_operacional: 'Em análise pela Central',
-    cancelamento_solicitado: 'Cancelamento solicitado',
-    reembolso_pendente: 'Reembolso em análise',
-    reembolsado: 'Reembolsado',
-    contestado: 'Pagamento contestado',
-  };
   const openDirectBookingOrder = (order: DirectBookingOrderListItem): void => {
     window.location.assign(`/checkout/${encodeURIComponent(order.publicReference)}`);
   };
@@ -488,101 +512,97 @@ export const TripsView: React.FC<TripsViewProps> = ({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {activeReservations.map((res) => (
-                  <div
-                    key={res.id}
-                    className="flex flex-col sm:flex-row bg-white/70 backdrop-blur-2xl rounded-3xl border border-white/80 overflow-hidden shadow-[0_12px_36px_-10px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_48px_-10px_rgba(244,63,94,0.18)] transition-all"
-                  >
-                    <img
-                      src={res.propertyImage}
-                      alt={getPublicPropertyTitle(res.propertyTitle)}
-                      className="w-full sm:w-48 h-48 object-cover flex-shrink-0"
-                    />
+                    <div
+                      key={res.id}
+                      className="flex flex-col sm:flex-row bg-white/70 backdrop-blur-2xl rounded-3xl border border-white/80 overflow-hidden shadow-[0_12px_36px_-10px_rgba(0,0,0,0.08)] hover:shadow-[0_20px_48px_-10px_rgba(244,63,94,0.18)] transition-all"
+                    >
+                      <img
+                        src={res.propertyImage}
+                        alt={getPublicPropertyTitle(res.propertyTitle)}
+                        className="w-full sm:w-48 h-48 object-cover flex-shrink-0"
+                      />
 
-                    <div className="p-5 flex flex-col justify-between flex-1">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-extrabold text-orange-600 uppercase tracking-wider bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
-                            {res.code}
-                          </span>
-                          <span
-                            className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 border ${res.status === 'pending' || res.cancellationRequested ? 'bg-amber-100 text-amber-900 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}`}
-                          >
-                            {res.status === 'pending' || res.cancellationRequested ? (
-                              <AlertCircle className="w-3 h-3" />
-                            ) : (
-                              <CheckCircle2 className="w-3 h-3" />
-                            )}
-                            {res.cancellationRequested
-                              ? 'Cancelamento solicitado'
-                              : res.status === 'pending'
-                                ? 'Não confirmada'
-                                : 'Confirmada'}
-                          </span>
-                        </div>
-
-                        {res.cancellationRequested && (
-                          <p
-                            className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-950"
-                            role="status"
-                          >
-                            A Central está analisando sua solicitação. A reserva continua ativa até
-                            a confirmação do cancelamento.
-                          </p>
-                        )}
-
-                        <h3 className="font-extrabold text-sm text-neutral-900 mt-2 line-clamp-1">
-                          {getPublicPropertyTitle(res.propertyTitle)}
-                        </h3>
-
-                        <div className="mt-2 space-y-1 text-xs text-neutral-600">
-                          <p className="flex items-center gap-1.5">
-                            <MapPin className="w-3.5 h-3.5 text-neutral-400" />
-                            <span>{res.propertyLocation}</span>
-                          </p>
-                          <p className="flex items-center gap-1.5">
-                            <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-                            <span>
-                              {res.checkIn} até {res.checkOut} ({res.nights} noites)
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-4 pt-3 border-t border-neutral-200/60 flex items-center justify-between">
+                      <div className="p-5 flex flex-col justify-between flex-1">
                         <div>
-                          <span className="text-[11px] text-neutral-600 block font-semibold uppercase">
-                            Total
-                          </span>
-                          <span className="font-black text-sm sm:text-base text-neutral-900">
-                            {formatCurrency(res.totalAmount, currency)}
-                          </span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-extrabold text-orange-600 uppercase tracking-wider bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">
+                              {res.code}
+                            </span>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 border ${reservationNeedsAttention(res) ? 'bg-amber-100 text-amber-900 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}`}
+                            >
+                              {reservationNeedsAttention(res) ? (
+                                <AlertCircle className="w-3 h-3" />
+                              ) : (
+                                <CheckCircle2 className="w-3 h-3" />
+                              )}
+                              {getReservationStatusLabel(res)}
+                            </span>
+                          </div>
+
+                          {res.cancellationRequested && (
+                            <p
+                              className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-950"
+                              role="status"
+                            >
+                              A Central está analisando sua solicitação. A reserva continua ativa
+                              até a confirmação do cancelamento.
+                            </p>
+                          )}
+
+                          <h3 className="font-extrabold text-sm text-neutral-900 mt-2 line-clamp-1">
+                            {getPublicPropertyTitle(res.propertyTitle)}
+                          </h3>
+
+                          <div className="mt-2 space-y-1 text-xs text-neutral-600">
+                            <p className="flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-neutral-400" />
+                              <span>{res.propertyLocation}</span>
+                            </p>
+                            <p className="flex items-center gap-1.5">
+                              <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+                              <span>
+                                {res.checkIn} até {res.checkOut} ({res.nights} noites)
+                              </span>
+                            </p>
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          {res.status === 'confirmed' && (
-                            <button
-                              onClick={() => setSelectedVoucher(res)}
-                              className="px-3.5 py-1.5 rounded-xl bg-white/80 hover:bg-white border border-white/90 text-xs font-bold text-neutral-700 shadow-2xs hover:scale-105 transition-all cursor-pointer"
-                            >
-                              {res.directBookingReference ? 'Comprovante' : 'Voucher'}
-                            </button>
-                          )}
+                        <div className="mt-4 pt-3 border-t border-neutral-200/60 flex items-center justify-between">
+                          <div>
+                            <span className="text-[11px] text-neutral-600 block font-semibold uppercase">
+                              Total
+                            </span>
+                            <span className="font-black text-sm sm:text-base text-neutral-900">
+                              {formatCurrency(res.totalAmount, currency)}
+                            </span>
+                          </div>
 
-                          {res.status === 'confirmed' && !res.cancellationRequested && (
-                            <button
-                              onClick={() => {
-                                setCancellationError('');
-                                setCancellingId(res.id);
-                              }}
-                              className="px-3 py-1.5 rounded-xl text-xs font-bold text-orange-600 hover:bg-orange-50/80 transition-colors cursor-pointer"
-                            >
-                              Cancelar
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {res.status === 'confirmed' && (
+                              <button
+                                onClick={() => setSelectedVoucher(res)}
+                                className="px-3.5 py-1.5 rounded-xl bg-white/80 hover:bg-white border border-white/90 text-xs font-bold text-neutral-700 shadow-2xs hover:scale-105 transition-all cursor-pointer"
+                              >
+                                {res.directBookingReference ? 'Comprovante' : 'Voucher'}
+                              </button>
+                            )}
+
+                            {res.status === 'confirmed' && !res.cancellationRequested && (
+                              <button
+                                onClick={() => {
+                                  setCancellationError('');
+                                  setCancellingId(res.id);
+                                }}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold text-orange-600 hover:bg-orange-50/80 transition-colors cursor-pointer"
+                              >
+                                Cancelar
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
                 ))}
               </div>
             )}
