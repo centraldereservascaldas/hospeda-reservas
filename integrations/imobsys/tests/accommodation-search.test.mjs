@@ -4,6 +4,13 @@ import { mapAccommodationSearch, mapPartnerOffers } from '../src/accommodation-s
 
 const query={from:'2027-05-17',to:'2027-05-19',guests:'2'};
 const result={...query,source:'authenticated-network-search',observedAt:'2026-11-20T12:00:00Z',offers:[{id:'imobsys-crcn-2-663',condominium:'Lacqua',unit:'10189',pixCents:52300}]};
+test('keeps a one-guest request and result matched without substituting another occupancy',()=>{
+ const one={...query,guests:'1'};
+ const offer={...result.offers[0],base:'2',reference:'663',capacityText:'Para até 5 pessoas'};
+ const mapped=mapPartnerOffers({...result,guests:'1',offers:[offer]},one);
+ assert.equal(mapped.guests,1);assert.equal(mapped.offers[0].guests,1);
+ assert.throws(()=>mapPartnerOffers({...result,guests:'2',offers:[offer]},one),{code:'search_mismatch'});
+});
 test('preserva origem, total e incerteza na resposta compatível',()=>{
   const mapped=mapAccommodationSearch(result,query);
   assert.equal(mapped.source,'imobsys-live');

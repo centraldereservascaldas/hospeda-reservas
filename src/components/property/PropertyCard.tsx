@@ -38,39 +38,53 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [partnerImages, setPartnerImages] = useState<string[] | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressPhotoClickUntilRef = useRef(0);
   const photoCarouselRef = useRef<HTMLDivElement>(null);
   const cardId = useId().replace(/:/g, '');
   const priceDescriptionId = `property-price-${cardId}`;
   const availabilityDescriptionId = `property-availability-${cardId}`;
-  const images = property.images.length ? property.images : (partnerImages ?? []);
+  const images = (property.images.length ? property.images : (partnerImages ?? [])).filter(
+    (image) => !failedImages.has(image),
+  );
   const galleryKey = images.join('|');
 
   useEffect(() => {
     setPartnerImages(null);
+    setFailedImages(new Set());
     if (property.dataSource !== 'imobsys-live' || property.images.length > 0) return;
     let cancelled = false;
     const load = () => {
-      void loadImobSysCardImages(property.id).then((result) => {
-        if (!cancelled) setPartnerImages(result);
-      }).catch(() => {
-        if (!cancelled) setPartnerImages([]);
-      });
+      void loadImobSysCardImages(property.id)
+        .then((result) => {
+          if (!cancelled) setPartnerImages(result);
+        })
+        .catch(() => {
+          if (!cancelled) setPartnerImages([]);
+        });
     };
     const target = photoCarouselRef.current;
     if (!target || typeof IntersectionObserver === 'undefined') {
       load();
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+      };
     }
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        observer.disconnect();
-        load();
-      }
-    }, { rootMargin: '200px' });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          observer.disconnect();
+          load();
+        }
+      },
+      { rootMargin: '200px' },
+    );
     observer.observe(target);
-    return () => { cancelled = true; observer.disconnect(); };
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
   }, [property.id, property.dataSource, property.images.length]);
 
   useEffect(() => {
@@ -187,11 +201,16 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
               className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
               loading={prioritizeImage ? 'eager' : 'lazy'}
               fetchPriority={prioritizeImage ? 'high' : 'auto'}
+              onError={() => setFailedImages((previous) => new Set(previous).add(currentImage))}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-orange-50 via-white to-sky-50 text-neutral-500">
               <Building2 aria-hidden="true" className="h-8 w-8 text-orange-500" />
-              <span className="text-xs font-semibold">{property.dataSource === 'imobsys-live' && partnerImages === null ? 'Carregando fotos…' : 'Fotos não disponíveis'}</span>
+              <span className="text-xs font-semibold">
+                {property.dataSource === 'imobsys-live' && partnerImages === null
+                  ? 'Carregando fotos…'
+                  : 'Fotos não disponíveis'}
+              </span>
             </div>
           )}
 

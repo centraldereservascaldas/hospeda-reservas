@@ -139,6 +139,7 @@ const server = http.createServer(async (req, res) => {
         source: 'imobsys-public-site',
         propertyId: media.propertyId,
         observedAt: media.observedAt,
+        description: media.description,
         images: media.apartmentImages.map((image) => image.url),
       });
     }
@@ -151,7 +152,7 @@ const server = http.createServer(async (req, res) => {
       for(const name of url.searchParams.keys())if(!allowed.includes(name)||url.searchParams.getAll(name).length!==1)throw new ConnectorError('invalid_query','Parâmetro inválido ou repetido.',400);
       for(const name of ['from','to','guests'])if(url.searchParams.getAll(name).length!==1)throw new ConnectorError('invalid_query','Informe datas e hóspedes.',400);
       const query=Object.fromEntries(url.searchParams);const {from,to}=validateDates(query.from,query.to);
-      if(!/^(?:[2-9]|10)$/.test(query.guests))throw new ConnectorError('invalid_guests','Informe de 2 a 10 hóspedes.',400);
+      if(!/^(?:[1-9]|10)$/.test(query.guests))throw new ConnectorError('invalid_guests','Informe de 1 a 10 hóspedes.',400);
       const search={from,to,guests:query.guests};
       const result=await cached(`search:${JSON.stringify(search)}`,10000,()=>browserQueue.status().connected?browserQueue.query(search):adminProvider.availability(search));
       const metadata=JSON.parse(await readFile(`${root}/verified-property-metadata.json`,'utf8'));
@@ -291,7 +292,7 @@ const server = http.createServer(async (req, res) => {
       for(const name of url.searchParams.keys())if(!['from','to','guests'].includes(name))throw new ConnectorError('invalid_query','Parâmetro não permitido.',400);
       const query=Object.fromEntries(url.searchParams);
       const {from,to}=validateDates(query.from,query.to);
-      if(!/^(?:[2-9]|10)$/.test(query.guests))throw new ConnectorError('invalid_guests','Informe de 2 a 10 hóspedes.',400);
+      if(!/^(?:[1-9]|10)$/.test(query.guests))throw new ConnectorError('invalid_guests','Informe de 1 a 10 hóspedes.',400);
       const search={from,to,guests:query.guests};
       const result=await cached(`search:${JSON.stringify(search)}`,10000,()=>browserQueue.status().connected?browserQueue.query(search):adminProvider.availability(search));
       return json(200,mapAccommodationSearch(result,search));

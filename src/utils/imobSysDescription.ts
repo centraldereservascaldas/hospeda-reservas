@@ -25,7 +25,10 @@ export function organizeImobSysDescription(description: string): {
   );
 
   return {
-    description: text.replace(/[ \t]{2,}/g, ' ').trim(),
+    description: text
+      .replace(/\bimobsys\b/gi, 'plataforma parceira')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim(),
     amenities: [...amenities],
   };
 }

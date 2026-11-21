@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import { fetchPropertyMedia, parsePropertyMedia } from '../src/property-media.mjs';
 const p = { id: 'imobsys-crcn-1-1149', base: '1', reference: '1149' };
 const identity = '<input id="ImovRef" value="1149"><input id="BaseConsulta" value="1">';
+test('extracts the identified apartment description without scripts or surrounding content', () => {
+  const html = identity + '<div class="pi-margin-top-15">Condições gerais do condomínio</div><div class="pi-margin-top-15"><b>COMODIDADES DO APARTAMENTO:</b><br>QUARTO: cama de casal<br><script>unsafe()</script>Não inclui roupa de cama</div><p>Outro imóvel</p>';
+  const result = parsePropertyMedia(html, p);
+  assert.match(result.description, /QUARTO: cama de casal/);
+  assert.match(result.description, /Não inclui roupa de cama/);
+  assert.doesNotMatch(result.description, /unsafe|Outro imóvel|Condições gerais/);
+});
 test('separates apartment photos from common areas, excludes logos and external URLs', () => {
   const m = parsePropertyMedia(identity + '<img src="/fotos/cr/imoveis/090-00109/fotos/a.JPG"><img src="/fotos/cr/imoveis/090-00109/fotos/a.JPG"><img src="/fotos/crcn/condominios/090/fotos/b.jpeg"><img src="/fotos/crcn/img/logo.png"><img src="https://evil.test/fotos/cr/imoveis/090-00109/fotos/a.JPG">', p);
   assert.equal(m.apartmentImages.length, 1);

@@ -121,15 +121,15 @@ class AccommodationController extends Controller
             return response()->json(['success' => false, 'message' => 'Pesquise novamente este imóvel para carregar as fotos.'], 404);
         }
 
-        $images = $imobSys->propertyImages($id);
-        if ($images === null) {
+        $content = $imobSys->propertyContent($id);
+        if ($content === null) {
             return response()->json(['success' => false, 'message' => 'Não foi possível carregar as fotos deste imóvel agora.'], 503);
         }
 
         return response()->json([
             'success' => true,
             'source' => 'imobsys-live',
-            'data' => ['propertyId' => $id, 'images' => $images],
+            'data' => ['propertyId' => $id, 'images' => $content['images'], 'description' => $content['description']],
         ]);
     }
 

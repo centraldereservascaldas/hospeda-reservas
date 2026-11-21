@@ -439,6 +439,35 @@ class CrcnBackendApiService {
     }
   }
 
+  public async getImobSysPropertyDescription(
+    id: string,
+    externalSignal?: AbortSignal,
+  ): Promise<string | null> {
+    if (!/^imobsys-crcn-[1-9]\d{0,8}-[1-9]\d{0,11}$/.test(id)) return null;
+    try {
+      const json: unknown = await withApiRequestTimeout(async (signal) => {
+        const response = await apiFetch(`/api/accommodations/${encodeURIComponent(id)}/media`, {
+          signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }, externalSignal);
+      if (
+        !isRecord(json) ||
+        json.success !== true ||
+        json.source !== 'imobsys-live' ||
+        !isRecord(json.data) ||
+        json.data.propertyId !== id ||
+        typeof json.data.description !== 'string' ||
+        json.data.description.length > 10000
+      )
+        return null;
+      return json.data.description.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Fetch one raw page without filling gaps or requesting subsequent pages. */
   public async searchAccommodationsPage(
     params: SearchAccommodationsParams,

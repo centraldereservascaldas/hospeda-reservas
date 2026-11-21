@@ -39,6 +39,25 @@ const commonProps = {
   onRetryCatalog: () => {},
 };
 
+test('tries the next property photo when an image fails', () => {
+  const property = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    images: ['https://crcn.stays.net/image/broken', 'https://crcn.stays.net/image/working'],
+  };
+  const { container } = render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      properties: [property],
+      status: 'ready',
+    }),
+  );
+  const image = container.querySelector('article img');
+  assert.ok(image);
+  assert.match(image.getAttribute('src') ?? '', /broken/);
+  fireEvent.error(image);
+  assert.match(container.querySelector('article img')?.getAttribute('src') ?? '', /working/);
+});
+
 test('announces catalog loading and errors using status and alert roles', () => {
   const { rerender } = render(
     React.createElement(PropertyCatalogGrid, { ...commonProps, status: 'loading' }),

@@ -92,7 +92,7 @@ O transporte usa Playwright com contexto não persistente e uma sessão comparti
 2. Disponibilize o pacote playwright (ou configure IMOBSYS_PLAYWRIGHT_MODULE com o caminho local do módulo).
 3. Inicie: node scripts/standalone-browser-worker.mjs.
 4. Entre manualmente na aba do operador. O executor detecta o login na mesma sessão e conecta a fila local.
-5. Use o botão Consulta autenticada da rede no painel local ou GET /api/admin/availability?from=2026-11-19&to=2026-11-21&unit=00109. guests é opcional (2 a 10); unit vazio consulta a rede.
+5. Use o botão Consulta autenticada da rede no painel local ou GET /api/admin/availability?from=2026-11-19&to=2026-11-21&unit=00109. guests é opcional (1 a 10); unit vazio consulta a rede. A ocupação de 1 hóspede ainda precisa ser validada com dados reais antes da ativação.
 
 O navegador permite somente login manual, páginas/recursos necessários e as ações observadas hospedagem/getOrcamentoRede e hospedagem/newSugestao_saida. Não há execução de Alugar, Gerar Link, criação de cliente, reserva ou cobrança. O arquivo local ignorado data/admin-control.json contém uma chave de controle local, nunca a sessão ImobSys. A API exige essa chave para distribuir trabalhos ao executor; o frontend não recebe a chave.
 

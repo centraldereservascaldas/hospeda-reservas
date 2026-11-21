@@ -61,7 +61,11 @@ class ImobSysSearchClient
                         return null;
                     }
 
-                    $offers = [...$offers, ...$pageOffers];
+                    $observedAt = $payload['observedAt'] ?? null;
+                    if (! is_string($observedAt) || strtotime($observedAt) === false) {
+                        $observedAt = now()->toIso8601String();
+                    }
+                    $offers = [...$offers, ...array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnObservedAt' => $observedAt] : $offer, $pageOffers)];
                     if ($propertyId !== null && collect($pageOffers)->contains(fn (mixed $offer): bool => is_array($offer) && ($offer['id'] ?? null) === $propertyId)) {
                         $hasMore = false;
                         break;
@@ -230,7 +234,7 @@ class ImobSysSearchClient
                     'nights' => $nights,
                     'totalAmount' => $offer['totalCents'] / 100,
                     'currency' => 'BRL',
-                    'observedAt' => now()->toIso8601String(),
+                    'observedAt' => is_string($offer['_crcnObservedAt'] ?? null) ? $offer['_crcnObservedAt'] : now()->toIso8601String(),
                     'availabilityConfirmed' => false,
                     'expiresAt' => ((int) ($offer['_crcnExpiresAt'] ?? now()->addSeconds(max(1, min(60, (int) config('services.imobsys.cache_ttl', 25))))->getTimestamp())) * 1000,
                 ],
@@ -272,11 +276,17 @@ class ImobSysSearchClient
     /** @return list<string>|null */
     public function propertyImages(string $id): ?array
     {
+        return $this->propertyContent($id)['images'] ?? null;
+    }
+
+    /** @return array{images: list<string>, description: ?string}|null */
+    public function propertyContent(string $id): ?array
+    {
         if (! $this->isEnabled() || preg_match('/^imobsys-crcn-[1-9]\d{0,8}-[1-9]\d{0,11}$/', $id) !== 1) {
             return null;
         }
 
-        $cacheKey = 'imobsys.media.'.hash('sha256', $id);
+        $cacheKey = 'imobsys.content.v2.'.hash('sha256', $id);
 
         return Cache::remember($cacheKey, 600, function () use ($id): ?array {
             $localMedia = app()->environment(['local', 'testing'])
@@ -309,7 +319,12 @@ class ImobSysSearchClient
                 return null;
             }
 
-            return $this->validImages($images);
+            $description = $response->json('description');
+
+            return [
+                'images' => $this->validImages($images),
+                'description' => is_string($description) && mb_strlen($description) <= 10000 ? trim(strip_tags($description)) : null,
+            ];
         });
     }
 
