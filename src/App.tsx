@@ -730,11 +730,26 @@ export default function App() {
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
 
-  if (import.meta.env.DEV && (normalizedPathname === '/imobsys' || normalizedPathname === '/parceiros')) {
-    return <Suspense fallback={<main role="status">Carregando imóveis…</main>}><ImobSysPreviewPage /></Suspense>;
+  if (
+    import.meta.env.DEV &&
+    (normalizedPathname === '/imobsys' || normalizedPathname === '/parceiros')
+  ) {
+    return (
+      <Suspense fallback={<main role="status">Carregando imóveis…</main>}>
+        <ImobSysPreviewPage />
+      </Suspense>
+    );
   }
-  if (import.meta.env.DEV && /^\/apartamento\/(?:imobsys|parceiro)-crcn-[1-9]\d*-[1-9]\d*(?:\/[a-z0-9-]+)?$/.test(normalizedPathname)) {
-    return <Suspense fallback={<main role="status">Carregando imóvel…</main>}><ImobSysPropertyPage /></Suspense>;
+  if (
+    /^\/apartamento\/(?:imobsys|parceiro)-crcn-[1-9]\d*-[1-9]\d*(?:\/[a-z0-9-]+)?$/.test(
+      normalizedPathname,
+    )
+  ) {
+    return (
+      <Suspense fallback={<main role="status">Carregando imóvel…</main>}>
+        <ImobSysPropertyPage />
+      </Suspense>
+    );
   }
 
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/pagamento-confirmado') {

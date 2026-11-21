@@ -4,7 +4,7 @@ import { ConnectorError, validateDates } from './provider-http.mjs';
 export function mapAccommodationSearch(result, query) {
   const { from, to } = validateDates(query.from, query.to);
   const guests = Number(query.guests);
-  if (!Number.isInteger(guests) || guests < 2 || guests > 10) throw new ConnectorError('invalid_guests', 'Informe de 2 a 10 hóspedes.', 400);
+  if (!Number.isInteger(guests) || guests < 1 || guests > 10) throw new ConnectorError('invalid_guests', 'Informe de 1 a 10 hóspedes.', 400);
   if (!result || result.source !== 'authenticated-network-search' || result.from !== from || result.to !== to || String(result.guests) !== String(guests) || !Array.isArray(result.offers)) throw new ConnectorError('search_mismatch', 'Resultado da consulta não corresponde ao período solicitado.', 502);
   const nights = (Date.parse(to) - Date.parse(from)) / 86400000;
   const data = result.offers.map(offer => {
@@ -26,7 +26,7 @@ export function mapAccommodationSearch(result, query) {
 export function mapPartnerOffers(result, query, {metadata={}, media=[]}={}) {
   const {from,to,nights}=validateDates(query.from,query.to);
   const guests=Number(query.guests),page=Number(query.page??1),pageSize=Number(query.pageSize??20);
-  if(!Number.isInteger(guests)||guests<2||guests>10||!Number.isInteger(page)||page<1||page>10000||!Number.isInteger(pageSize)||pageSize<1||pageSize>100)throw new ConnectorError('invalid_query','Filtros ou paginação inválidos.',400);
+  if(!Number.isInteger(guests)||guests<1||guests>10||!Number.isInteger(page)||page<1||page>10000||!Number.isInteger(pageSize)||pageSize<1||pageSize>100)throw new ConnectorError('invalid_query','Filtros ou paginação inválidos.',400);
   if(query.condominiumId && !/^[A-Za-z0-9_-]{1,80}$/.test(query.condominiumId))throw new ConnectorError('invalid_condominium','Condomínio inválido.',400);
   if(!result||result.source!=='authenticated-network-search'||result.from!==from||result.to!==to||String(result.guests)!==String(guests)||!Array.isArray(result.offers))throw new ConnectorError('search_mismatch','Resultado incompatível com a consulta.',502);
   const seen=new Set();

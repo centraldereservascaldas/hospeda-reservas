@@ -65,7 +65,7 @@ return [
         'media_control_key' => env('IMOBSYS_MEDIA_CONTROL_KEY'),
         'search_fallback_enabled' => (bool) env('IMOBSYS_SEARCH_FALLBACK_ENABLED', false),
         'control_key' => env('IMOBSYS_CONTROL_KEY'),
-        'timeout' => (int) env('IMOBSYS_API_TIMEOUT', 8),
+        'timeout' => (int) env('IMOBSYS_API_TIMEOUT', 65),
         'cache_ttl' => (int) env('IMOBSYS_SEARCH_CACHE_TTL', 25),
     ],
 

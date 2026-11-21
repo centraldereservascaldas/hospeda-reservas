@@ -6,6 +6,8 @@ import type { CondominiumSummary } from '../utils/condominiumCatalog';
 import type { AccountModalMode } from '../hooks/useSupabaseSession';
 import type { AppOverlayBookingPayload } from '../types/booking';
 import { DeferredModal } from './DeferredModal';
+import { apiFetch } from '../services/apiFetch';
+import { isProperty, isRecord } from '../utils/apiValidation';
 
 const CondominiumDetailModal = React.lazy(() =>
   import('./condominium/CondominiumDetailModal').then(({ CondominiumDetailModal }) => ({
@@ -158,20 +160,81 @@ export function AppOverlayLayer({
   onAddProperty,
   onSearchInApp,
 }: AppOverlayLayerProps) {
+  const [partnerResult, setPartnerResult] = React.useState<{
+    property: Property;
+    from: string;
+    to: string;
+    guests: number;
+  } | null>(null);
+  const [partnerSearchState, setPartnerSearchState] = React.useState({
+    loading: false,
+    message: '',
+  });
+  const partnerGeneration = React.useRef(0);
+  React.useEffect(() => {
+    partnerGeneration.current += 1;
+    setPartnerResult(null);
+    setPartnerSearchState({ loading: false, message: '' });
+    return () => {
+      partnerGeneration.current += 1;
+    };
+  }, [selectedProperty?.id]);
+
+  const searchPartner = async (from: string, to: string, guests: number) => {
+    if (!selectedProperty || selectedProperty.dataSource !== 'imobsys-live') return;
+    const id = selectedProperty.id;
+    const generation = ++partnerGeneration.current;
+    setPartnerSearchState({ loading: true, message: '' });
+    try {
+      const params = new URLSearchParams({ from, to, guests: String(guests), propertyId: id });
+      const response = await apiFetch(`/api/imobsys/offers?${params}`);
+      if (!response.ok) throw new Error('Consulta indisponível');
+      const body: unknown = await response.json();
+      if (generation !== partnerGeneration.current) return;
+      if (!isRecord(body) || !Array.isArray(body.data)) throw new Error('Resposta inválida');
+      const found = body.data.find((item: unknown) => isProperty(item) && item.id === id);
+      if (!isProperty(found)) {
+        setPartnerSearchState({
+          loading: false,
+          message: 'Não encontramos uma oferta para as datas e hóspedes escolhidos.',
+        });
+        return;
+      }
+      setPartnerResult({ property: found, from, to, guests });
+      setPartnerSearchState({ loading: false, message: '' });
+    } catch {
+      if (generation === partnerGeneration.current)
+        setPartnerSearchState({
+          loading: false,
+          message: 'Não foi possível consultar a oferta agora. Tente novamente.',
+        });
+    }
+  };
+  const currentPartner = partnerResult?.property.id === selectedProperty?.id ? partnerResult : null;
   return (
     <>
       <DeferredModal active={selectedProperty !== null}>
         <PropertyDetailModal
-          property={selectedProperty}
-          initialCheckIn={filters.checkIn}
-          initialCheckOut={filters.checkOut}
-          initialGuests={filters.guests}
+          property={currentPartner?.property ?? selectedProperty}
+          initialCheckIn={currentPartner?.from ?? filters.checkIn}
+          initialCheckOut={currentPartner?.to ?? filters.checkOut}
+          initialGuests={
+            currentPartner
+              ? { adults: currentPartner.guests, children: 0, infants: 0, pets: 0 }
+              : filters.guests
+          }
           onClose={onClosePropertyDetail}
           returnFocusRef={catalogFocusRef}
           currency={currency}
           isSaved={selectedProperty ? savedPropertyIds.includes(selectedProperty.id) : false}
           onToggleSave={onToggleSave}
           onStartBooking={onStartBooking}
+          onImobSysSearch={
+            selectedProperty?.dataSource === 'imobsys-live' ? searchPartner : undefined
+          }
+          imobSysSearchState={
+            selectedProperty?.dataSource === 'imobsys-live' ? partnerSearchState : undefined
+          }
         />
       </DeferredModal>
 

@@ -46,7 +46,7 @@ export function createAdminProvider({fetchImpl=fetch, now=()=>Date.now()}={}) {
       const unit=input.unit||'';
       if (!/^[A-Za-z0-9 -]{0,30}$/.test(unit)) throw new ConnectorError('invalid_unit','Unidade inválida.',400);
       const guests=String(input.guests||'');
-      if (guests && !/^(?:[2-9]|10)$/.test(guests)) throw new ConnectorError('invalid_guests','Use 2 a 10 hóspedes ou todos.',400);
+      if (guests && !/^(?:[1-9]|10)$/.test(guests)) throw new ConnectorError('invalid_guests','Use 1 a 10 hóspedes ou todos.',400);
       if (!session || expiresAt<=now()) {session=null;throw new ConnectorError('admin_session_required','Reconecte a sessão administrativa para consultar a rede.',503);}
       const body=new URLSearchParams({...session,Ajax:'Ajax',Controller:'hospedagem',Action:'getOrcamentoRede',beforeSend:'nao',returnDiv:'#returnAjax_Lista'});
       const fields={selectCond:'',unidade:unit,entrada:from,saida:to,qtdeqrts:'all',minPax:'1',maxPax:'0',selectPax:guests||'all',crianca:'0',umCada:'0',qtdBusca:'',whatsapp:'',entradaAntecipada:'0',saidaProrrogada_0:'1',saidaProrrogada_1:'0',cFogao:'0',sFogao:'0',bebidas:'0',piscina24h:'0',barmolhado:'0',geladeira:'0',casal:'0',tela:'0',pet:'0',roupascama:'0',vistaPiscina:'0',frenteRua:'0',semServico:'0',banheiro:'all',estacionamento:'all',sofa:'all',ar:'all',tv:'all'};

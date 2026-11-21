@@ -119,21 +119,34 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     status: 'loading' | 'resolved';
     images: string[];
   } | null>(null);
+  const [partnerContent, setPartnerContent] = useState<{
+    propertyId: string;
+    description: string;
+  } | null>(null);
   const [shareStatus, setShareStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const [partnerFrom, setPartnerFrom] = useState(initialCheckIn);
   const [partnerTo, setPartnerTo] = useState(initialCheckOut);
-  const [partnerGuests, setPartnerGuests] = useState(initialGuests.adults);
+  const [partnerGuests, setPartnerGuests] = useState(countOccupancyGuests(initialGuests));
   const [calendarInteractionMessage, setCalendarInteractionMessage] = useState('');
   const hasEditedBookingContextRef = useRef(false);
   const hasExplicitDateSelectionRef = useRef(Boolean(initialCheckIn && initialCheckOut));
   const latestBookingContextRef = useRef({ checkIn, checkOut, adults, children, infants, pets });
   latestBookingContextRef.current = { checkIn, checkOut, adults, children, infants, pets };
+  const partnerContentId = property?.dataSource === 'imobsys-live' ? property.id : null;
   useEffect(() => {
-    if (
-      !property ||
-      property.dataSource !== 'imobsys-live' ||
-      property.images.length > 0
-    ) {
+    if (!partnerContentId) return;
+    const controller = new AbortController();
+    void crcnBackendApi
+      .getImobSysPropertyDescription(partnerContentId, controller.signal)
+      .then((description) => {
+        if (!controller.signal.aborted && description)
+          setPartnerContent({ propertyId: partnerContentId, description });
+      });
+    return () => controller.abort();
+  }, [partnerContentId]);
+
+  useEffect(() => {
+    if (!property || property.dataSource !== 'imobsys-live' || property.images.length > 0) {
       return;
     }
 
@@ -209,6 +222,9 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     setChildren(initialGuests.children);
     setInfants(initialGuests.infants);
     setPets(initialGuests.pets);
+    setPartnerFrom(initialCheckIn);
+    setPartnerTo(initialCheckOut);
+    setPartnerGuests(countOccupancyGuests(initialGuests));
     setDisplayedMonth(new Date(`${nextCheckIn || todayIso}T12:00:00`));
   }, [
     propertyId,
@@ -327,9 +343,14 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
   if (!property) return null;
 
-  const partnerDescription = property.dataSource === 'imobsys-live'
-    ? organizeImobSysDescription(property.description)
-    : null;
+  const partnerDescription =
+    property.dataSource === 'imobsys-live'
+      ? organizeImobSysDescription(
+          partnerContent?.propertyId === property.id
+            ? partnerContent.description
+            : property.description,
+        )
+      : null;
 
   const displayTitle = getPublicPropertyTitle(property.title);
   const staysReviews = getSyncedPropertyReviews(property);
@@ -523,13 +544,15 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               )}
             </button>
 
-            {property.dataSource !== 'imobsys-live' && <PropertyDetailActions
-              propertyTitle={displayTitle}
-              isSaved={isSaved}
-              shareStatus={shareStatus}
-              onShare={handleShare}
-              onToggleSave={() => onToggleSave(property.id)}
-            />}
+            {property.dataSource !== 'imobsys-live' && (
+              <PropertyDetailActions
+                propertyTitle={displayTitle}
+                isSaved={isSaved}
+                shareStatus={shareStatus}
+                onShare={handleShare}
+                onToggleSave={() => onToggleSave(property.id)}
+              />
+            )}
           </div>
 
           <div className="p-4 sm:p-8 lg:p-10 space-y-8">
@@ -560,79 +583,153 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             <div className="grid grid-cols-1 gap-10 lg:grid-cols-3">
               <div className="min-w-0 lg:col-start-3 lg:col-span-1 lg:row-start-1">
                 {property.dataSource === 'imobsys-live' ? (
-                  <aside className="rounded-3xl border border-orange-200 bg-orange-50/80 p-5 shadow-sm" aria-label="Oferta observada de parceiro">
-                    <h2 className="text-sm font-bold text-neutral-900">Oferta encontrada para a busca</h2>
-                    {!imobSysSearchState?.loading && !imobSysSearchState?.message && partnerFrom === checkIn && partnerTo === checkOut && partnerGuests === initialGuests.adults && property.imobsysOffer && property.imobsysOffer.expiresAt > Date.now() && property.imobsysOffer.from === checkIn && property.imobsysOffer.to === checkOut ? (
+                  <aside
+                    className="rounded-3xl border border-orange-200 bg-orange-50/80 p-5 shadow-sm"
+                    aria-label="Oferta observada de parceiro"
+                  >
+                    <h2 className="text-sm font-bold text-neutral-900">
+                      Oferta encontrada para a busca
+                    </h2>
+                    {!imobSysSearchState?.loading &&
+                    !imobSysSearchState?.message &&
+                    partnerFrom === checkIn &&
+                    partnerTo === checkOut &&
+                    partnerGuests === countOccupancyGuests(initialGuests) &&
+                    property.imobsysOffer &&
+                    property.imobsysOffer.expiresAt > Date.now() &&
+                    property.imobsysOffer.from === checkIn &&
+                    property.imobsysOffer.to === checkOut ? (
                       <p className="mt-2 text-2xl font-black text-neutral-900">
                         {formatCurrency(property.imobsysOffer.totalAmount, currency)}
-                        <span className="ml-2 text-xs font-semibold text-neutral-600">total no Pix</span>
+                        <span className="ml-2 text-xs font-semibold text-neutral-600">
+                          total no Pix
+                        </span>
                       </p>
                     ) : (
-                      <p className="mt-2 text-sm text-neutral-700">Pesquise novamente as datas para consultar outra oferta.</p>
+                      <p className="mt-2 text-sm text-neutral-700">
+                        Pesquise novamente as datas para consultar outra oferta.
+                      </p>
                     )}
                     <p className="mt-3 text-xs leading-relaxed text-neutral-600">
-                      Oferta observada na rede parceira. A disponibilidade ainda precisa ser confirmada e a reserva não é realizada pelo site.
+                      Oferta observada na rede parceira. A disponibilidade ainda precisa ser
+                      confirmada e a reserva não é realizada pelo site.
                     </p>
-                    {onImobSysSearch && <form className="mt-5 space-y-3" onSubmit={(event) => {
-                      event.preventDefault();
-                      void onImobSysSearch(partnerFrom, partnerTo, partnerGuests);
-                    }}>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => openDatePicker('checkIn')} aria-haspopup="dialog" className="min-h-16 rounded-xl border border-neutral-300 bg-white p-2 text-left text-xs font-bold uppercase text-neutral-600 focus-visible:outline-2 focus-visible:outline-orange-600">Check-in <span className="mt-1 block text-sm font-medium text-neutral-900">{partnerFrom ? partnerFrom.split('-').reverse().join('/') : 'Selecionar'}</span></button>
-                        <button type="button" onClick={() => openDatePicker('checkOut')} aria-haspopup="dialog" className="min-h-16 rounded-xl border border-neutral-300 bg-white p-2 text-left text-xs font-bold uppercase text-neutral-600 focus-visible:outline-2 focus-visible:outline-orange-600">Check-out <span className="mt-1 block text-sm font-medium text-neutral-900">{partnerTo ? partnerTo.split('-').reverse().join('/') : 'Selecionar'}</span></button>
-                      </div>
-                      <label className="block text-xs font-bold uppercase text-neutral-600">Hóspedes
-                        <input required type="number" min="2" max="10" value={partnerGuests} onChange={(event) => setPartnerGuests(Number(event.target.value))} className="mt-1 block min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-900 focus-visible:outline-2 focus-visible:outline-orange-600" />
-                      </label>
-                      <button type="submit" disabled={imobSysSearchState?.loading} className="min-h-11 w-full rounded-xl bg-orange-600 px-4 py-3 text-sm font-bold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-60">
-                        {imobSysSearchState?.loading ? 'Consultando…' : 'Consultar datas e hóspedes'}
-                      </button>
-                      {imobSysSearchState?.loading && <p role="status" className="text-sm text-neutral-700">Consultando oferta para este imóvel…</p>}
-                      {imobSysSearchState?.message && <p role="alert" className="text-sm text-neutral-800">{imobSysSearchState.message}</p>}
-                    </form>}
+                    {onImobSysSearch && (
+                      <form
+                        className="mt-5 space-y-3"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void onImobSysSearch(partnerFrom, partnerTo, partnerGuests);
+                        }}
+                      >
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openDatePicker('checkIn')}
+                            aria-haspopup="dialog"
+                            className="min-h-16 rounded-xl border border-neutral-300 bg-white p-2 text-left text-xs font-bold uppercase text-neutral-600 focus-visible:outline-2 focus-visible:outline-orange-600"
+                          >
+                            Check-in{' '}
+                            <span className="mt-1 block text-sm font-medium text-neutral-900">
+                              {partnerFrom
+                                ? partnerFrom.split('-').reverse().join('/')
+                                : 'Selecionar'}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openDatePicker('checkOut')}
+                            aria-haspopup="dialog"
+                            className="min-h-16 rounded-xl border border-neutral-300 bg-white p-2 text-left text-xs font-bold uppercase text-neutral-600 focus-visible:outline-2 focus-visible:outline-orange-600"
+                          >
+                            Check-out{' '}
+                            <span className="mt-1 block text-sm font-medium text-neutral-900">
+                              {partnerTo ? partnerTo.split('-').reverse().join('/') : 'Selecionar'}
+                            </span>
+                          </button>
+                        </div>
+                        <label className="block text-xs font-bold uppercase text-neutral-600">
+                          Hóspedes
+                          <input
+                            required
+                            type="number"
+                            min="1"
+                            max="10"
+                            value={partnerGuests}
+                            onChange={(event) => setPartnerGuests(Number(event.target.value))}
+                            className="mt-1 block min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-900 focus-visible:outline-2 focus-visible:outline-orange-600"
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={imobSysSearchState?.loading}
+                          className="min-h-11 w-full rounded-xl bg-orange-600 px-4 py-3 text-sm font-bold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-60"
+                        >
+                          {imobSysSearchState?.loading
+                            ? 'Consultando…'
+                            : 'Consultar datas e hóspedes'}
+                        </button>
+                        {imobSysSearchState?.loading && (
+                          <p role="status" className="text-sm text-neutral-700">
+                            Consultando oferta para este imóvel…
+                          </p>
+                        )}
+                        {imobSysSearchState?.message && (
+                          <p role="alert" className="text-sm text-neutral-800">
+                            {imobSysSearchState.message}
+                          </p>
+                        )}
+                      </form>
+                    )}
                   </aside>
                 ) : (
-                <PropertyBookingPanel
-                  property={property}
-                  currency={currency}
-                  hasReviews={hasReviews}
-                  checkIn={checkIn}
-                  checkOut={checkOut}
-                  hasExplicitDateSelection={hasExplicitDateSelectionRef.current}
-                  isDatePickerOpen={isDatePickerOpen}
-                  activeDateField={activeDateField}
-                  onOpenDatePicker={openDatePicker}
-                  guestSelectorTriggerRef={guestSelectorTriggerRef}
-                  isGuestSelectorOpen={isGuestSelectorOpen}
-                  onToggleGuestSelector={toggleGuestSelector}
-                  totalGuests={totalGuests}
-                  infants={infants}
-                  nights={nights}
-                  staysPrice={staysPrice}
-                  calendarAvailable={calendarAvailable}
-                  calendarCoverageEnd={calendarCoverageEnd}
-                  isLoadingCalendar={isLoadingCalendar}
-                  isCalculatingPrice={isCalculatingPrice}
-                  priceRequestFailed={priceRequestFailed}
-                  onRetryCalendar={retryCalendar}
-                  onRetryPrice={retryPrice}
-                  selectedRangeAvailable={selectedRangeAvailable}
-                  pricing={{
-                    baseSubtotal,
-                    discount,
-                    cleaningFee,
-                    serviceFee,
-                    totalAmount,
-                    visibleFees,
-                  }}
-                  onProceedBooking={handleProceedBooking}
-                  suppressMobileBookingAction={!showMobileBookingAction}
-                />
+                  <PropertyBookingPanel
+                    property={property}
+                    currency={currency}
+                    hasReviews={hasReviews}
+                    checkIn={checkIn}
+                    checkOut={checkOut}
+                    hasExplicitDateSelection={hasExplicitDateSelectionRef.current}
+                    isDatePickerOpen={isDatePickerOpen}
+                    activeDateField={activeDateField}
+                    onOpenDatePicker={openDatePicker}
+                    guestSelectorTriggerRef={guestSelectorTriggerRef}
+                    isGuestSelectorOpen={isGuestSelectorOpen}
+                    onToggleGuestSelector={toggleGuestSelector}
+                    totalGuests={totalGuests}
+                    infants={infants}
+                    nights={nights}
+                    staysPrice={staysPrice}
+                    calendarAvailable={calendarAvailable}
+                    calendarCoverageEnd={calendarCoverageEnd}
+                    isLoadingCalendar={isLoadingCalendar}
+                    isCalculatingPrice={isCalculatingPrice}
+                    priceRequestFailed={priceRequestFailed}
+                    onRetryCalendar={retryCalendar}
+                    onRetryPrice={retryPrice}
+                    selectedRangeAvailable={selectedRangeAvailable}
+                    pricing={{
+                      baseSubtotal,
+                      discount,
+                      cleaningFee,
+                      serviceFee,
+                      totalAmount,
+                      visibleFees,
+                    }}
+                    onProceedBooking={handleProceedBooking}
+                    suppressMobileBookingAction={!showMobileBookingAction}
+                  />
                 )}
               </div>
 
               <div className="min-w-0 space-y-8 divide-y divide-neutral-100 lg:col-start-1 lg:col-span-2 lg:row-start-1">
-                <PropertyOverviewSection property={partnerDescription ? { ...property, description: partnerDescription.description } : property} />
+                <PropertyOverviewSection
+                  property={
+                    partnerDescription
+                      ? { ...property, description: partnerDescription.description }
+                      : property
+                  }
+                />
 
                 <PropertyAmenitiesSection
                   listingAmenities={property.listingAmenities}
@@ -640,33 +737,41 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   amenities={[...property.amenities, ...(partnerDescription?.amenities ?? [])]}
                 />
 
-                {property.dataSource !== 'imobsys-live' && <PropertyAvailabilityStrip
-                  calendarDays={calendarDays}
-                  calendarAvailable={calendarAvailable}
-                  isLoading={isLoadingCalendar}
-                  isRefreshingCalendar={isRefreshingCalendar}
-                  calendarMessage={calendarInteractionMessage || availabilityMessage}
-                  checkIn={checkIn}
-                  checkOut={checkOut}
-                  onRetryCalendar={retryCalendar}
-                  onExplainDate={setCalendarInteractionMessage}
-                  onSelectDay={selectCalendarDay}
-                />}
+                {property.dataSource !== 'imobsys-live' && (
+                  <PropertyAvailabilityStrip
+                    calendarDays={calendarDays}
+                    calendarAvailable={calendarAvailable}
+                    isLoading={isLoadingCalendar}
+                    isRefreshingCalendar={isRefreshingCalendar}
+                    calendarMessage={calendarInteractionMessage || availabilityMessage}
+                    checkIn={checkIn}
+                    checkOut={checkOut}
+                    onRetryCalendar={retryCalendar}
+                    onExplainDate={setCalendarInteractionMessage}
+                    onSelectDay={selectCalendarDay}
+                  />
+                )}
 
-                {property.dataSource !== 'imobsys-live' && <PropertyLocationSection title={displayTitle} location={property.location} />}
-                {property.dataSource !== 'imobsys-live' && <PropertyHostSection host={property.host} />}
+                {property.dataSource !== 'imobsys-live' && (
+                  <PropertyLocationSection title={displayTitle} location={property.location} />
+                )}
+                {property.dataSource !== 'imobsys-live' && (
+                  <PropertyHostSection host={property.host} />
+                )}
               </div>
             </div>
 
-            {property.dataSource !== 'imobsys-live' && <PropertyReviewsSection
-              property={{
-                rating: property.rating,
-                reviewCount: property.reviewCount,
-                reviewsSynced: property.reviewsSynced,
-                staysSynced: property.staysSynced,
-              }}
-              reviews={staysReviews}
-            />}
+            {property.dataSource !== 'imobsys-live' && (
+              <PropertyReviewsSection
+                property={{
+                  rating: property.rating,
+                  reviewCount: property.reviewCount,
+                  reviewsSynced: property.reviewsSynced,
+                  staysSynced: property.staysSynced,
+                }}
+                reviews={staysReviews}
+              />
+            )}
 
             <PropertyPoliciesSection rules={property.rules} />
           </div>

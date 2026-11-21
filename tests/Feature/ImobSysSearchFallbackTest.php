@@ -30,6 +30,37 @@ class ImobSysSearchFallbackTest extends TestCase
         ]);
     }
 
+    public function test_production_partner_detail_requires_feature_flag_and_specific_property(): void
+    {
+        $originalEnvironment = $this->app['env'];
+        $this->app['env'] = 'production';
+        try {
+            config(['services.imobsys.search_fallback_enabled' => false]);
+            $this->getJson('/api/imobsys/offers?from=2027-01-10&to=2027-01-12&guests=1&propertyId=imobsys-crcn-1-961')->assertForbidden();
+            config(['services.imobsys.search_fallback_enabled' => true]);
+            $this->getJson('/api/imobsys/offers?from=2027-01-10&to=2027-01-12&guests=1')->assertUnprocessable()->assertJsonValidationErrors('propertyId');
+        } finally {
+            $this->app['env'] = $originalEnvironment;
+        }
+    }
+
+    public function test_partner_detail_passes_one_guest_without_changing_the_requested_occupancy(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['http://imobsys.test/internal/offers/search*' => Http::response([
+            'success' => true, 'source' => 'imobsys-live', 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 1,
+            'offers' => [[
+                'id' => 'imobsys-crcn-1-961', 'condominiumName' => 'Piazza', 'unit' => '204', 'capacity' => 4,
+                'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 1, 'nights' => 2,
+                'totalCents' => 52300, 'currency' => 'BRL', 'status' => 'offer_observed',
+                'availabilityConfirmed' => false, 'reservationGuaranteed' => false,
+            ]], 'pagination' => ['page' => 1, 'pageSize' => 100, 'hasMore' => false],
+        ])]);
+        $this->getJson('/api/imobsys/offers?from=2027-01-10&to=2027-01-12&guests=1&propertyId=imobsys-crcn-1-961')
+            ->assertOk()->assertJsonPath('data.0.id', 'imobsys-crcn-1-961');
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/internal/offers/search') && (int) $request['guests'] === 1);
+    }
+
     public function test_resorts_include_active_unmatched_imobsys_condominiums(): void
     {
         Http::preventStrayRequests();
@@ -149,6 +180,7 @@ class ImobSysSearchFallbackTest extends TestCase
             ->assertJsonPath('data.0.id', 'imobsys-crcn-2-663')
             ->assertJsonPath('data.0.dataSource', 'imobsys-live')
             ->assertJsonPath('data.0.imobsysOffer.totalAmount', 523)
+            ->assertJsonPath('data.0.imobsysOffer.observedAt', '2026-11-20T12:00:00Z')
             ->assertJsonPath('data.0.imobsysOffer.availabilityConfirmed', false)
             ->assertJsonPath('pagination.hasMore', false);
 
@@ -211,6 +243,7 @@ class ImobSysSearchFallbackTest extends TestCase
                 'success' => true,
                 'source' => 'imobsys-public-site',
                 'propertyId' => 'imobsys-crcn-2-663',
+                'description' => 'QUARTO: cama de casal',
                 'images' => [
                     'https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png',
                     'https://evil.example/fotos/tt/imoveis/086-10189/fotos/fake.png',
@@ -230,6 +263,7 @@ class ImobSysSearchFallbackTest extends TestCase
             ->assertOk()
             ->assertJsonPath('source', 'imobsys-live')
             ->assertJsonPath('data.propertyId', 'imobsys-crcn-2-663')
+            ->assertJsonPath('data.description', 'QUARTO: cama de casal')
             ->assertJsonCount(1, 'data.images')
             ->assertJsonPath('data.images.0', 'https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png');
 

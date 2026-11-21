@@ -13,6 +13,10 @@ test('organizes explicit supplier tags without inventing amenities or discarding
     },
   );
   assert.deepEqual(organizeImobSysDescription(''), { description: '', amenities: [] });
+  assert.equal(
+    organizeImobSysDescription('Consulte a ImobSys.').description,
+    'Consulte a plataforma parceira.',
+  );
   assert.deepEqual(organizeImobSysDescription('Sem #piscina'), {
     description: 'Sem #piscina',
     amenities: [],

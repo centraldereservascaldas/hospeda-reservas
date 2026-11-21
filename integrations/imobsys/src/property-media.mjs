@@ -24,6 +24,10 @@ export function parsePropertyMedia(html, property) {
     return tag?.match(/\bvalue=["']([^"']*)["']/i)?.[1] || null;
   };
   if (inputValue('ImovRef') !== property.reference || inputValue('BaseConsulta') !== property.base) throw new ConnectorError('media_identity_mismatch', 'A página não confirmou a identidade do parceiro.');
+  const detailBlock = html.match(/<div\b[^>]*class=["'][^"']*\bpi-margin-top-15\b[^"']*["'][^>]*>((?:(?!<\/div>)[\s\S])*?COMODIDADES\s+DO\s+APARTAMENTO(?:(?!<\/div>)[\s\S])*?)<\/div>/i)?.[1];
+  const description = detailBlock
+    ? detailBlock.replace(/<br\s*\/?\s*>/gi, '\n').split('\n').map(htmlToText).filter(Boolean).join('\n').slice(0, 10000)
+    : null;
   const images = new Map();
   for (const match of html.matchAll(/\b(?:src|href|data-src)=["']([^"']+)["']/gi)) {
     let url;
@@ -36,5 +40,5 @@ export function parsePropertyMedia(html, property) {
   }
   const apartmentImages = [...images.values()].filter(i => i.kind === 'apartment');
   const condominiumImages = [...images.values()].filter(i => i.kind === 'condominium');
-  return { propertyId: property.id, observedAt: new Date().toISOString(), apartmentImages, condominiumImages, calendarIdentity: inputValue('idUnidade'), calendarIdentityVerified: false, availabilityConfirmed: false };
+  return { propertyId: property.id, observedAt: new Date().toISOString(), description, apartmentImages, condominiumImages, calendarIdentity: inputValue('idUnidade'), calendarIdentityVerified: false, availabilityConfirmed: false };
 }

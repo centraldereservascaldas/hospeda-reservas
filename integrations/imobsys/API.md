@@ -31,7 +31,7 @@ Datas usam `YYYY-MM-DD`. Os endpoints abaixo são locais e `GET`, exceto quando 
 | `/api/properties/{id}/quote` | `from`, `to` | Preço anunciado no site público, sujeito aos limites da origem. |
 | `/api/admin/status` | — | Estado da sessão administrativa e do executor. |
 | `/api/admin/availability` | `from`, `to`, `unit` e `guests` opcionais | Consulta autenticada da rede; distingue oferta observada de reserva garantida. |
-| `/api/v1/accommodations/search` | `from`, `to`, `guests` (2 a 10) | Busca autenticada com envelope semelhante ao da Stays e origem `imobsys-live`. |
+| `/api/v1/accommodations/search` | `from`, `to`, `guests` (1 a 10) | Busca autenticada com envelope semelhante ao da Stays e origem `imobsys-live`. |
 | `/api/checkout-quote` | `propertyId`, `from`, `to`, `guests` (2 a 10) | Reconsulta a oferta e calcula Pix e parcelas; retorna modo de simulação e não habilita pagamento. |
 
 Exemplo de busca local:
