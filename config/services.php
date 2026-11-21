@@ -58,6 +58,17 @@ return [
         'calendar_cache_ttl' => (int) env('STAYS_CALENDAR_CACHE_TTL', 45),
     ],
 
+    'imobsys' => [
+        'base_url' => env('IMOBSYS_API_BASE_URL', 'http://imobsys-api:8012'),
+        'host_header' => env('IMOBSYS_API_HOST_HEADER'),
+        'media_base_url' => env('IMOBSYS_MEDIA_BASE_URL'),
+        'media_control_key' => env('IMOBSYS_MEDIA_CONTROL_KEY'),
+        'search_fallback_enabled' => (bool) env('IMOBSYS_SEARCH_FALLBACK_ENABLED', false),
+        'control_key' => env('IMOBSYS_CONTROL_KEY'),
+        'timeout' => (int) env('IMOBSYS_API_TIMEOUT', 8),
+        'cache_ttl' => (int) env('IMOBSYS_SEARCH_CACHE_TTL', 25),
+    ],
+
     'stays_simulator' => [
         'enabled' => (bool) env('STAYS_SIMULATOR_ENABLED', false),
     ],

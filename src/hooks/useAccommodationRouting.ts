@@ -65,6 +65,7 @@ export function useAccommodationRouting({
   const refreshSelectedProperty = useCallback(
     (property: Property) => {
       const propertyId = property.id;
+      if (property.dataSource === 'imobsys-live') return;
       const staysListingId = property.staysListingId || property.id;
 
       void crcnBackendApi.getAccommodationById(staysListingId).then((detail) => {
@@ -206,7 +207,10 @@ export function useAccommodationRouting({
     setPropertyRouteStatus('idle');
     setSelectedProperty(property);
     refreshSelectedProperty(property);
-    const slug = property.staysListingId || property.id;
+    const slug =
+      property.dataSource === 'imobsys-live'
+        ? property.id.replace(/^imobsys-crcn-/, 'parceiro-crcn-')
+        : property.staysListingId || property.id;
     const detailPath = getLocalePrefix(window.location.pathname)
       ? getPropertyDetailPath(window.location.pathname, slug)
       : accommodationPagePath(property);

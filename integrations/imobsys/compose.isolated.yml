@@ -1,0 +1,13 @@
+services:
+  imobsys-sandbox:
+    build: .
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      PORT: '8012'
+      IMOBSYS_SANDBOX_FLOW_ENABLED: 'false'
+      IMOBSYS_RESERVATION_CREATION_ENABLED: 'false'
+    volumes:
+      - imobsys_sandbox_data:/app/data
+volumes:
+  imobsys_sandbox_data:

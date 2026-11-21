@@ -138,7 +138,7 @@ export function AvailabilitySearchState({
     return (
       <p className="sr-only" role="status" aria-live="polite">
         {dateRange
-          ? `Encontramos ${count} ${accommodationLabel} com disponibilidade confirmada para ${searchContext}.`
+          ? `Encontramos ${count} ${accommodationLabel} para ${searchContext}. A disponibilidade precisa ser confirmada antes da reserva.`
           : `Encontramos ${count} ${accommodationLabel} para você explorar. A disponibilidade depende das datas escolhidas.`}
       </p>
     );
@@ -246,13 +246,13 @@ export function AvailabilitySearchState({
           {hasAvailableResults
             ? 'Nenhum imóvel corresponde a esses filtros'
             : dateRange
-              ? 'Nenhuma acomodação disponível para esse período'
+              ? 'Nenhuma oferta encontrada para esse período'
               : 'Não encontramos acomodações para esta busca'}
         </h2>
         <p className="text-sm text-neutral-600 [@media(max-height:400px)]:max-w-sm [@media(max-width:639px)_and_(max-height:400px)]:sr-only">
           {hasAvailableResults ? (
             dateRange ? (
-              `A disponibilidade foi confirmada para ${searchContext}, mas nenhum resultado corresponde aos filtros selecionados. Remova alguns filtros e tente novamente.`
+              `A consulta retornou acomodações para ${searchContext}, mas nenhuma corresponde aos filtros selecionados. Remova alguns filtros e tente novamente.`
             ) : (
               <>
                 <span className="[@media(max-height:400px)]:sr-only">
@@ -265,7 +265,7 @@ export function AvailabilitySearchState({
               </>
             )
           ) : dateRange ? (
-            `Não encontramos disponibilidade confirmada para ${searchContext}. Experimente outras datas ou ajuste os filtros.`
+            `Não recebemos ofertas para ${searchContext}. A ausência de resultados não confirma indisponibilidade. Experimente outras datas ou ajuste os filtros.`
           ) : (
             'Experimente outras datas ou ajuste os filtros para ver mais opções.'
           )}
