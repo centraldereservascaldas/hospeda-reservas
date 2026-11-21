@@ -17,6 +17,7 @@ export function PropertyDetailHeader({
   titleRef,
 }: PropertyDetailHeaderProps) {
   const displayTitle = getPublicPropertyTitle(property.title);
+  const hasStaysReviewData = property.dataSource !== 'imobsys-live';
 
   return (
     <div>
@@ -41,7 +42,7 @@ export function PropertyDetailHeader({
             <span>•</span>
           </>
         )}
-        {(hasReviews || !property.staysSynced || !property.reviewsSynced) && (
+        {hasStaysReviewData && (hasReviews || !property.staysSynced || !property.reviewsSynced) && (
           <>
             <button
               type="button"

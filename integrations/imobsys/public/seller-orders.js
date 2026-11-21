@@ -1,0 +1,5 @@
+const form=document.getElementById('access'),list=document.getElementById('orders'),status=document.getElementById('status');
+form.addEventListener('submit',async event=>{
+ event.preventDefault();list.replaceChildren();status.textContent='Consultando…';const key=document.getElementById('access-key');
+ try{const r=await fetch('/internal/seller/orders',{headers:{'x-local-control':key.value},cache:'no-store'});if(!r.ok)throw Error('Acesso ou consulta indisponível.');const data=await r.json();if(data.environment!=='sandbox'||!Array.isArray(data.orders))throw Error('Resposta inválida.');status.textContent=`${data.orders.length} pedido(s) de sandbox pendente(s).`;for(const order of data.orders){const article=document.createElement('article');article.textContent=`Pré-reserva ${order.reservation_reference} · ${order.property_id} · ${order.check_in} a ${order.check_out} · ${order.payment_method} · R$ ${(order.amount_cents/100).toFixed(2)}`;list.append(article);}}catch(e){status.textContent=e.message;}finally{key.value='';}
+});
