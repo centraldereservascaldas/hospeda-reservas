@@ -52,6 +52,8 @@ import { existingReservationCodeFromPath } from './utils/checkoutUrl';
 import { NotFoundPage } from './components/NotFoundPage';
 import { NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
 import { useCheckoutDraftRecovery } from './hooks/useCheckoutDraftRecovery';
+import { captureAffiliateReferral } from './utils/affiliateAttribution';
+import { AffiliatePortal } from './components/affiliate/AffiliatePortal';
 
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
@@ -693,6 +695,14 @@ export default function App() {
   usePageMetadata(pathname);
 
   useEffect(() => {
+    try {
+      captureAffiliateReferral(new URL(window.location.href), window.localStorage);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     const handlePopState = () => setPathname(window.location.pathname);
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -724,6 +734,8 @@ export default function App() {
 
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+
+  if (normalizedPathname === '/afiliados') return <AffiliatePortal />;
 
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/pagamento-confirmado') {
     return (

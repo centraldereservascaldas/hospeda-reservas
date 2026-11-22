@@ -17,6 +17,7 @@ use App\Services\Payments\DirectCheckoutPaymentService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -33,6 +34,63 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->travelTo(Carbon::parse('2026-11-09 12:00:00', 'UTC'));
     }
 
+    public function test_checkout_records_affiliate_referral_only_as_pending(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        Http::preventStrayRequests();
+        $gatewayStatus = 'pending';
+        $this->fakeJourneyHttp($gatewayStatus);
+        $affiliate = '575c8054-6646-443c-bf62-07945019a32f';
+        DB::table('affiliate_accounts')->insert(['user_id' => $affiliate, 'full_name' => 'Afiliado Exemplo',
+            'status' => 'approved', 'referral_code' => str_repeat('A', 40), 'commission_basis_points' => 500,
+            'created_at' => now(), 'updated_at' => now()]);
+        $capture = $this->postJson('/api/affiliate/capture', ['referral' => str_repeat('A', 40), 'listingId' => 'JQ08G', 'signature' => hash_hmac('sha256', str_repeat('A', 40).':JQ08G', (string) config('app.key'))])->assertOk();
+        $payload = $this->checkoutPayload() + ['affiliateReferral' => str_repeat('A', 40),
+            'affiliateIssuedAt' => $capture->json('issuedAt'), 'affiliateSignature' => $capture->json('signature')];
+        $headers = ['Idempotency-Key' => 'affiliate-checkout-journey-001'];
+        $this->postJson('/api/checkout', $payload, $headers)->assertCreated();
+        $this->assertDatabaseHas('affiliate_conversions', ['affiliate_user_id' => $affiliate,
+            'status' => 'pending', 'commission_basis_points' => 500, 'approved_amount_cents' => null]);
+        $this->postJson('/api/checkout', $payload, $headers)->assertSuccessful();
+        $this->assertDatabaseCount('affiliate_conversions', 1);
+    }
+
+    public function test_checkout_does_not_credit_a_referral_for_another_property(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        Http::preventStrayRequests();
+        $gatewayStatus = 'pending';
+        $this->fakeJourneyHttp($gatewayStatus);
+        DB::table('affiliate_accounts')->insert(['user_id' => '575c8054-6646-443c-bf62-07945019a32f',
+            'full_name' => 'Afiliado Exemplo', 'status' => 'approved', 'referral_code' => str_repeat('A', 40),
+            'commission_basis_points' => 500, 'created_at' => now(), 'updated_at' => now()]);
+        $payload = $this->checkoutPayload() + ['affiliateReferral' => str_repeat('A', 40),
+            'affiliateIssuedAt' => now()->timestamp, 'affiliateSignature' => hash_hmac('sha256', 'affiliate-click:'.str_repeat('A', 40).':OTHER:'.now()->timestamp, (string) config('app.key'))];
+        $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'affiliate-wrong-property-001'])->assertUnprocessable();
+        $this->assertDatabaseCount('affiliate_conversions', 0);
+    }
+
+    public function test_expired_and_tampered_attribution_cannot_create_commission(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        Http::preventStrayRequests();
+        $gatewayStatus = 'pending';
+        $this->fakeJourneyHttp($gatewayStatus);
+        DB::table('affiliate_accounts')->insert(['user_id' => '575c8054-6646-443c-bf62-07945019a32f', 'full_name' => 'Affiliate', 'status' => 'approved', 'referral_code' => str_repeat('A', 40), 'created_at' => now(), 'updated_at' => now()]);
+        $this->travel(-30)->days();
+        $capture = $this->postJson('/api/affiliate/capture', ['referral' => str_repeat('A', 40), 'listingId' => 'JQ08G', 'signature' => hash_hmac('sha256', str_repeat('A', 40).':JQ08G', (string) config('app.key'))])->assertOk();
+        $issued = $capture->json('issuedAt');
+        $payload = $this->checkoutPayload() + ['affiliateReferral' => str_repeat('A', 40), 'affiliateIssuedAt' => $issued + 1, 'affiliateSignature' => $capture->json('signature')];
+        $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'affiliate-tampered-time-001'])->assertUnprocessable();
+        $this->travel(30)->days();
+        $payload['affiliateIssuedAt'] = $issued;
+        $this->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'affiliate-expired-time-001'])->assertUnprocessable();
+        $this->assertDatabaseCount('affiliate_conversions', 0);
+    }
+
     public function test_checkout_pix_webhook_confirmation_email_and_resume_complete_the_real_order_journey(): void
     {
         $this->configureCheckout();
@@ -42,7 +100,12 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $gatewayStatus = 'pending';
         $this->fakeJourneyHttp($gatewayStatus);
 
-        $checkout = $this->postJson('/api/checkout', $this->checkoutPayload(), [
+        $affiliateId = '575c8054-6646-443c-bf62-07945019a32f';
+        DB::table('affiliate_accounts')->insert(['user_id' => $affiliateId, 'full_name' => 'Afiliado', 'status' => 'approved', 'referral_code' => str_repeat('A', 40), 'commission_basis_points' => 500, 'created_at' => now(), 'updated_at' => now()]);
+        $capture = $this->postJson('/api/affiliate/capture', ['referral' => str_repeat('A', 40), 'listingId' => 'JQ08G', 'signature' => hash_hmac('sha256', str_repeat('A', 40).':JQ08G', (string) config('app.key'))])->assertOk();
+        $transfer = $this->postJson('/api/affiliate/capture', ['referral' => str_repeat('A', 40), 'listingId' => 'JQ08G', 'issuedAt' => $capture->json('issuedAt'), 'signature' => $capture->json('signature')])->assertOk()->assertJsonPath('issuedAt', $capture->json('issuedAt'));
+        $payload = $this->checkoutPayload() + ['affiliateReferral' => str_repeat('A', 40), 'affiliateIssuedAt' => $transfer->json('issuedAt'), 'affiliateSignature' => $transfer->json('signature')];
+        $checkout = $this->postJson('/api/checkout', $payload, [
             'Idempotency-Key' => 'integrated-checkout-journey-001',
         ])
             ->assertCreated()
@@ -107,6 +170,14 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             && $request->method() === 'POST')->sole()[0];
         $this->assertSame(3001.0, $staysPayment->data()['_f_val']);
         $this->assertSame('completed', $staysPayment->data()['status']);
+
+        $conversion = DB::table('affiliate_conversions')->where('direct_booking_order_id', $order->id)->sole();
+        $this->assertSame('pending', $conversion->status);
+        config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key', 'services.hospeda.owner_admin_emails' => ['admin@example.test']]);
+        $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/approve', ['amountCents' => 15000])->assertOk();
+        $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'affiliate_user_id' => $affiliateId, 'status' => 'approved', 'approved_amount_cents' => 15000]);
+        $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/mark-paid', ['paymentReference' => 'manual-test'])->assertOk();
+        $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'status' => 'paid', 'payment_reference' => 'manual-test']);
 
         $email = DirectBookingEmail::query()->where('direct_booking_order_id', $order->id)->sole();
         $this->assertSame(DirectBookingEmail::TYPE_BOOKING_CONFIRMED, $email->notification_type);
@@ -669,6 +740,9 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             $path = parse_url($request->url(), PHP_URL_PATH);
             $method = $request->method();
 
+            if ($path === '/auth/v1/user') {
+                return Http::response(['id' => '6c2b1b31-c76e-4881-b11e-38f7d551b7a0', 'email' => 'admin@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Admin Example']], 200);
+            }
             if ($path === '/external/v1/booking/search-listings' && $method === 'POST') {
                 return Http::response([['id' => 'JQ08G']], 200);
             }

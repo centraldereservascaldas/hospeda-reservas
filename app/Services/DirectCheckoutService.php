@@ -10,6 +10,7 @@ use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class DirectCheckoutService
 {
@@ -186,6 +187,30 @@ class DirectCheckoutService
                         'source' => 'direct_checkout',
                     ]],
                 ]);
+
+                $referral = $input['affiliateReferral'] ?? '';
+                $signature = $input['affiliateSignature'] ?? '';
+                $issuedAt = $input['affiliateIssuedAt'] ?? 0;
+                $expectedSignature = hash_hmac('sha256', 'affiliate-click:'.$referral.':'.$input['listingId'].':'.$issuedAt, (string) config('app.key'));
+                if (is_string(config('app.key')) && config('app.key') !== '' && $referral !== '' && is_string($signature) && is_numeric($issuedAt) && (int) $issuedAt <= now()->timestamp && (int) $issuedAt > now()->subDays(30)->timestamp && hash_equals($expectedSignature, $signature)) {
+                    $affiliate = DB::table('affiliate_accounts')->where('referral_code', $input['affiliateReferral'])
+                        ->where('status', 'approved')->lockForUpdate()->first();
+                    if ($affiliate === null) {
+                        throw ValidationException::withMessages(['affiliateReferral' => 'Indicação indisponível. Atualize o link e tente novamente.']);
+                    }
+                    if ($affiliate !== null) {
+                        DB::table('affiliate_conversions')->insert([
+                            'affiliate_user_id' => $affiliate->user_id,
+                            'direct_booking_order_id' => $order->id,
+                            'commission_basis_points' => $affiliate->commission_basis_points,
+                            'status' => 'pending',
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
+                } elseif ($referral !== '' || $signature !== '' || $issuedAt !== 0) {
+                    throw ValidationException::withMessages(['affiliateReferral' => 'Indicação inválida ou expirada. Atualize o link e tente novamente.']);
+                }
 
                 return $order;
             });
