@@ -1,0 +1,3 @@
+[submodule "integrations/api-do-diogo"]
+	path = integrations/api-do-diogo
+	url = https://github.com/murilloimparavel/api-do-diogo.git
