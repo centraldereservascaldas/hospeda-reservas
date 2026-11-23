@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { Property, SearchFilters } from '../types';
+import type { Currency, Property, SearchFilters } from '../types';
 import type { AppOverlayBookingPayload } from '../types/booking';
 import { scrollIntoViewRespectingMotion } from '../utils/motion';
 import { emitFunnelEvent } from '../utils/measurementEvents';
@@ -9,6 +9,7 @@ import {
   NEW_CHECKOUT_PATH,
   saveCheckoutDraft,
 } from '../utils/checkoutDraft';
+import { checkoutUrlWithStay } from '../utils/checkoutUrl';
 
 export const CHECKOUT_MODAL_HISTORY_ENTRY = '__crcnCheckoutModalEntry';
 
@@ -18,6 +19,7 @@ export interface AppOverlaySuggestedFilters {
 }
 
 interface UseAppOverlayActionsOptions {
+  currency?: Currency;
   setProperties: Dispatch<SetStateAction<Property[]>>;
   setFilters: Dispatch<SetStateAction<SearchFilters>>;
   setIsSofiaOpen: Dispatch<SetStateAction<boolean>>;
@@ -32,6 +34,7 @@ const scrollToAccommodationCatalog = () => {
 };
 
 export function useAppOverlayActions({
+  currency = 'BRL',
   setProperties,
   setFilters,
   setIsSofiaOpen,
@@ -60,14 +63,25 @@ export function useAppOverlayActions({
       const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       window.history.replaceState(state, '', currentUrl);
       const draftId = saveCheckoutDraft(payload);
+      const checkoutUrl = checkoutUrlWithStay(
+        NEW_CHECKOUT_PATH,
+        {
+          listingId: payload.property.staysListingId || payload.property.id,
+          from: payload.checkIn,
+          to: payload.checkOut,
+          guests: payload.guests,
+        },
+        window.location.search,
+        currency,
+      );
       window.history.pushState(
         { ...state, [CHECKOUT_MODAL_HISTORY_ENTRY]: true, [CHECKOUT_DRAFT_HISTORY_KEY]: draftId },
         '',
-        NEW_CHECKOUT_PATH,
+        checkoutUrl,
       );
       setBookingPayload(payload);
     },
-    [setBookingPayload],
+    [currency, setBookingPayload],
   );
 
   const handleAssistantApplyFilters = useCallback(

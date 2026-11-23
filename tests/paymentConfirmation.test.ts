@@ -40,7 +40,7 @@ test('confirmation URL is reached only for approved payment and never contains t
 });
 
 test('rejection URL is used only after the server reports a rejected payment', () => {
-  const dom = new JSDOM('', { url: 'https://example.test/checkout?entrada=2027-01-08&token=secret' });
+  const dom = new JSDOM('', { url: 'https://example.test/checkout?checkin=2027-01-08&token=secret' });
   const previousWindow = globalThis.window;
   const previousPopStateEvent = globalThis.PopStateEvent;
   Object.assign(globalThis, { window: dom.window, PopStateEvent: dom.window.PopStateEvent });
@@ -49,7 +49,7 @@ test('rejection URL is used only after the server reports a rejected payment', (
     assert.equal(navigateToPaymentRejection(order), false);
     assert.equal(navigateToPaymentRejection({ ...order, status: 'pagamento_recusado' }), true);
     assert.equal(dom.window.location.pathname, `/checkout/${order.publicReference}/pagamento-recusado`);
-    assert.equal(dom.window.location.search, '?entrada=2027-01-08');
+    assert.equal(dom.window.location.search, '?checkin=2027-01-08');
   } finally {
     Object.assign(globalThis, { window: previousWindow, PopStateEvent: previousPopStateEvent });
     dom.window.close();
