@@ -2,6 +2,8 @@
 
 return [
 
+    'frontend_dev_url' => env('FRONTEND_DEV_URL', 'http://localhost:3000'),
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

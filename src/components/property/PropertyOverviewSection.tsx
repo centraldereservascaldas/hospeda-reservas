@@ -91,24 +91,6 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
             />
           )}
         </div>
-
-        {property.staysSynced && property.isGuestFavorite && (
-          <div className="mt-6 p-4 rounded-2xl border border-neutral-200 bg-neutral-50/70 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Sparkles className="w-6 h-6 text-orange-500 flex-shrink-0" />
-              <div>
-                <p className="font-bold text-sm text-neutral-900">Preferido dos hóspedes</p>
-                <p className="text-xs text-neutral-500">Bem avaliada por quem já se hospedou.</p>
-              </div>
-            </div>
-            <div className="text-right flex-shrink-0">
-              <span className="text-lg font-black text-neutral-900">
-                {property.rating.toFixed(2)}
-              </span>
-              <div className="flex text-amber-500 text-xs">★★★★★</div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Highlights */}

@@ -269,7 +269,7 @@ test('does not present a catalogue nightly rate as a quote for selected dates', 
   );
 });
 
-test('shows the confirmed stay total before its nightly rate in a property card', () => {
+test('shows the confirmed stay total and six-payment amount in a property card', () => {
   const { getByRole } = render(
     React.createElement(PropertyCatalogGrid, {
       ...commonProps,
@@ -298,7 +298,7 @@ test('shows the confirmed stay total before its nightly rate in a property card'
   assert.ok(priceDescriptionId);
   assert.match(document.getElementById(priceDescriptionId)?.textContent || '', /Total da estadia/);
   assert.match(document.getElementById(priceDescriptionId)?.textContent || '', /550,00/);
-  assert.match(document.getElementById(priceDescriptionId)?.textContent || '', /250,00 por noite/);
+  assert.match(document.getElementById(priceDescriptionId)?.textContent || '', /6x R\$\s+111,79/);
 });
 
 test('does not reuse a dated quote as a general price after search dates are cleared', () => {
@@ -306,6 +306,7 @@ test('does not reuse a dated quote as a general price after search dates are cle
     React.createElement(PropertyCatalogGrid, {
       ...commonProps,
       status: 'ready',
+      showTotalWithTaxes: true,
       hasSearchDates: false,
       properties: [
         {
@@ -353,7 +354,7 @@ test('exposes a crawlable property link and preserves modified-click navigation'
   assert.equal(selected, 1);
 });
 
-test('expired search quotes do not display a current total or availability badge', () => {
+test('expired search quotes keep their last total without claiming current availability', () => {
   const property = {
     ...STAYS_NET_APARTMENTS[0]!,
     calculatedPrice: {
@@ -371,11 +372,17 @@ test('expired search quotes do not display a current total or availability badge
     React.createElement(PropertyCatalogGrid, {
       ...commonProps,
       status: 'ready',
+      showTotalWithTaxes: true,
       properties: [property],
       hasSearchDates: true,
       availabilityConfirmed: true,
     }),
   );
-  assert.ok(screen.getByText('Cotação expirada; atualize a disponibilidade'));
+  const detailsButton = screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' });
+  const priceDescriptionId = detailsButton.getAttribute('aria-describedby');
+  const priceText = document.getElementById(priceDescriptionId ?? '')?.textContent ?? '';
+  assert.match(priceText, /R\$\s*500,00/);
+  assert.match(priceText, /6x\s*R\$\s*101,63/);
+  assert.match(priceText, /Total da estadia • 2 noites/);
   assert.equal(screen.queryByText(/Disponível nas datas selecionadas/), null);
 });

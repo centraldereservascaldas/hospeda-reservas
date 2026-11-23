@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildCondominiumDirectoryUrl,
   createDefaultSearchFilters,
   getAccommodationIdFromPath,
   mergeSearchFiltersIntoUrl,
@@ -8,9 +9,19 @@ import {
   serializeSearchFilters,
 } from '../src/utils/searchUrlState.ts';
 
+test('opens the condominium SEO directory while preserving only campaign parameters', () => {
+  assert.equal(
+    buildCondominiumDirectoryUrl(
+      '?utm_source=instagram&utm_campaign=summer&category=pools_24h&checkin=2026-11-20',
+    ),
+    '/condominios?utm_source=instagram&utm_campaign=summer',
+  );
+  assert.equal(buildCondominiumDirectoryUrl('?category=condominiums'), '/condominios');
+});
+
 test('restores dates, guest composition, destination, and repeated filters from a shared URL', () => {
   const filters = parseSearchFilters(
-    '?from=2026-11-05&to=2026-11-08&guests=3&adults=2&children=1&infants=1&pets=1' +
+    '?checkin=2026-11-05&checkout=2026-11-08&adults=2&children=1&infants=1&pets=1' +
       '&destination=Rio%20Quente&propertyId=property-42&category=pools_24h' +
       '&minPrice=150&maxPrice=900&type=cabin&type=villa&amenity=Piscina&amenity=Wi-Fi' +
       '&minBedrooms=2&minBaths=1&superhost=true&instantBook=1',
@@ -28,8 +39,8 @@ test('restores dates, guest composition, destination, and repeated filters from 
   assert.deepEqual(filters.amenities, ['Piscina', 'Wi-Fi']);
   assert.equal(filters.minBedrooms, 2);
   assert.equal(filters.minBaths, 1);
-  assert.equal(filters.superhostOnly, true);
-  assert.equal(filters.instantBookOnly, true);
+  assert.equal(filters.superhostOnly, false);
+  assert.equal(filters.instantBookOnly, false);
 });
 
 test('accepts Stays date aliases and a total guest count without composition', () => {
@@ -59,15 +70,39 @@ test('serializes non-default search state and round-trips it', () => {
     guests: { adults: 2, children: 1, infants: 0, pets: 1 },
     destination: 'Rio Quente',
     category: 'pools_24h',
+    minPrice: 150,
+    maxPrice: 900,
     propertyTypes: ['villa'],
     amenities: ['Piscina'],
+    minBedrooms: 2,
+    minBeds: 1,
+    minBaths: 1,
     superhostOnly: true,
+    instantBookOnly: true,
   };
   const serialized = serializeSearchFilters(filters);
   const restored = parseSearchFilters(`?${serialized}`);
 
-  assert.deepEqual(restored, filters);
-  assert.equal(new URLSearchParams(serialized).get('guests'), '3');
+  assert.deepEqual(restored, { ...filters, superhostOnly: false, instantBookOnly: false });
+  const params = new URLSearchParams(serialized);
+  assert.equal(params.has('date_picker_type'), false);
+  assert.equal(params.get('checkin'), '2026-11-05');
+  assert.equal(params.get('checkout'), '2026-11-08');
+  assert.equal(params.get('adults'), '2');
+  assert.equal(params.get('children'), '1');
+  assert.equal(params.has('infants'), false);
+  assert.equal(params.get('pets'), '1');
+  assert.equal(params.has('guests'), false);
+  assert.equal(params.get('query'), 'Rio Quente');
+  assert.equal(params.get('price_min'), '150');
+  assert.equal(params.get('price_max'), '900');
+  assert.equal(params.get('property_type'), 'villa');
+  assert.equal(params.get('amenities[]'), 'Piscina');
+  assert.equal(params.get('min_bedrooms'), '2');
+  assert.equal(params.get('min_beds'), '1');
+  assert.equal(params.get('min_bathrooms'), '1');
+  assert.equal(params.has('superhost'), false);
+  assert.equal(params.has('instant_book'), false);
 });
 
 test('replaces only search keys and preserves unrelated URL parameters', () => {
@@ -80,7 +115,7 @@ test('replaces only search keys and preserves unrelated URL parameters', () => {
 
   assert.equal(params.get('utm_source'), 'share');
   assert.equal(params.get('campaign'), 'spring');
-  assert.equal(params.get('destination'), 'Caldas Novas');
+  assert.equal(params.get('query'), 'Caldas Novas');
   assert.equal(params.has('category'), false);
 });
 
@@ -147,12 +182,50 @@ test('syncs filter updates to the URL without dropping path, hash, or unrelated 
     assert.equal(url.pathname, '/apartamento/JQ08G');
     assert.equal(url.hash, '#booking');
     assert.equal(url.searchParams.get('utm_source'), 'share');
-    assert.equal(url.searchParams.get('from'), '2026-11-05');
-    assert.equal(url.searchParams.get('to'), '2026-11-08');
-    assert.equal(url.searchParams.get('guests'), '3');
+    assert.equal(url.searchParams.get('checkin'), '2026-11-05');
+    assert.equal(url.searchParams.get('checkout'), '2026-11-08');
+    assert.equal(url.searchParams.get('adults'), '2');
+    assert.equal(url.searchParams.get('children'), '1');
+    assert.equal(url.searchParams.has('infants'), false);
+    assert.equal(url.searchParams.has('pets'), false);
+    assert.equal(url.searchParams.has('guests'), false);
     view.unmount();
   } finally {
     Object.assign(globalThis, original);
     dom.window.close();
   }
+});
+
+test('round-trips supported flexible date windows and rejects unsupported values', () => {
+  for (const days of [1, 2] as const) {
+    const filters = {
+      ...createDefaultSearchFilters(),
+      checkIn: '2027-01-10',
+      checkOut: '2027-01-13',
+      dateFlexibility: days,
+    };
+    const query = serializeSearchFilters(filters);
+    assert.equal(new URLSearchParams(query).get('flexDays'), String(days));
+    assert.equal(parseSearchFilters(query).dateFlexibility, days);
+  }
+  assert.equal(parseSearchFilters('?flexDays=14').dateFlexibility, 0);
+});
+
+test('keeps the default search URL clean and preserves unrelated parameters', () => {
+  const defaults = createDefaultSearchFilters();
+  assert.equal(serializeSearchFilters(defaults), '');
+  assert.equal(mergeSearchFiltersIntoUrl('', defaults), '');
+  assert.equal(
+    mergeSearchFiltersIntoUrl(
+      '?utm_source=share&adults=1&children=0&infants=0&pets=0&date_picker_type=calendar',
+      defaults,
+    ),
+    'utm_source=share',
+  );
+  assert.equal(
+    new URLSearchParams(
+      serializeSearchFilters({ ...defaults, guests: { ...defaults.guests, adults: 2 } }),
+    ).get('adults'),
+    '2',
+  );
 });

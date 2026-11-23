@@ -56,6 +56,14 @@ test('synchronizes its draft after external filters are cleared while the modal 
       onClose: () => {},
       filters: createDefaultSearchFilters(),
       properties: [],
+      amenityProperties: [
+        {
+          ...STAYS_NET_APARTMENTS[0]!,
+          amenities: ['Wi-Fi', 'Piscina', 'Ar-condicionado'],
+          listingAmenities: [],
+          propertyAmenities: [],
+        },
+      ],
       onApplyFilters: () => {},
       onResetFilters: () => {},
       currency: 'BRL',
@@ -79,7 +87,7 @@ test('synchronizes its draft after external filters are cleared while the modal 
   const anyBedrooms = Array.from(document.querySelectorAll('button')).find(
     (button) => button.textContent === 'Qualquer' && button.getAttribute('aria-pressed') === 'true',
   );
-  assert.equal(resetAmenity?.getAttribute('aria-pressed'), 'false');
+  assert.notEqual(resetAmenity?.getAttribute('aria-pressed'), 'true');
   assert.ok(anyBedrooms);
 });
 
@@ -153,6 +161,14 @@ test('filter actions remain touch-sized and stack at narrow viewports', () => {
       onClose: () => {},
       filters: createDefaultSearchFilters(),
       properties: [],
+      amenityProperties: [
+        {
+          ...STAYS_NET_APARTMENTS[0]!,
+          amenities: ['Wi-Fi', 'Piscina', 'Ar-condicionado'],
+          listingAmenities: [],
+          propertyAmenities: [],
+        },
+      ],
       onApplyFilters: () => {},
       onResetFilters: () => {},
       currency: 'BRL',
@@ -177,6 +193,14 @@ test('bedroom and bathroom options are visible in compact grids without horizont
       onClose: () => {},
       filters: createDefaultSearchFilters(),
       properties: [],
+      amenityProperties: [
+        {
+          ...STAYS_NET_APARTMENTS[0]!,
+          amenities: ['Wi-Fi', 'Piscina', 'Ar-condicionado'],
+          listingAmenities: [],
+          propertyAmenities: [],
+        },
+      ],
       onApplyFilters: () => {},
       onResetFilters: () => {},
       currency: 'BRL',
@@ -188,7 +212,6 @@ test('bedroom and bathroom options are visible in compact grids without horizont
   const minPrice = screen.getByLabelText('Preço mínimo por noite');
   const maxPrice = screen.getByLabelText('Preço máximo por noite');
   const priceGrid = minPrice.parentElement?.parentElement?.parentElement;
-  const bookingOptions = screen.getByRole('heading', { name: 'Opções de reserva' }).parentElement;
   const amenities = screen.getByRole('heading', {
     name: 'Comodidades populares',
   }).nextElementSibling;
@@ -205,26 +228,8 @@ test('bedroom and bathroom options are visible in compact grids without horizont
   assert.match(priceGrid?.className ?? '', /min-\[400px\]:grid-cols-2/);
   assert.match(minPrice.className, /min-w-0/);
   assert.match(maxPrice.className, /min-w-0/);
-  const switchRows = bookingOptions?.querySelectorAll(':scope > div.flex') ?? [];
-  assert.equal(switchRows.length, 2);
-  for (const row of switchRows) {
-    assert.match(row.className, /flex-col/);
-    assert.match(row.className, /min-\[400px\]:flex-row/);
-    assert.match(row.className, /min-\[400px\]:items-center/);
-    assert.match(row.className, /min-w-0/);
-    assert.match(row.firstElementChild?.className ?? '', /min-w-0/);
-    for (const label of row.querySelectorAll('p')) {
-      assert.match(label.className, /break-words/);
-    }
-  }
-  const switches = bookingOptions?.querySelectorAll('[role="switch"]') ?? [];
-  assert.equal(switches.length, 2);
-  for (const control of switches) {
-    assert.match(control.className, /self-end/);
-    assert.match(control.className, /min-\[400px\]:self-auto/);
-    assert.match(control.className, /h-11/);
-    assert.match(control.className, /w-11/);
-  }
+  assert.equal(screen.queryByRole('heading', { name: 'Opções de reserva' }), null);
+  assert.equal(screen.queryByRole('switch'), null);
   assert.match(amenities?.className ?? '', /grid-cols-1/);
   assert.match(amenities?.className ?? '', /min-\[380px\]:grid-cols-2/);
   assert.match(amenities?.className ?? '', /sm:grid-cols-3/);
@@ -246,6 +251,31 @@ test('bedroom and bathroom options are visible in compact grids without horizont
     assert.match(label.className, /break-words/);
     assert.doesNotMatch(label.className, /truncate/);
   }
+});
+
+test('removes unsupported reservation flags when applying filters', () => {
+  const appliedFilters: ReturnType<typeof createDefaultSearchFilters>[] = [];
+  render(
+    React.createElement(FilterModal, {
+      isOpen: true,
+      onClose: () => {},
+      filters: {
+        ...createDefaultSearchFilters(),
+        superhostOnly: true,
+        instantBookOnly: true,
+      },
+      properties: [],
+      onApplyFilters: (filters) => {
+        appliedFilters.push(filters);
+      },
+      onResetFilters: () => {},
+      currency: 'BRL',
+    }),
+  );
+
+  fireEvent.click(screen.getByRole('button', { name: 'Mostrar 0 acomodações' }));
+  assert.equal(appliedFilters[0]?.superhostOnly, false);
+  assert.equal(appliedFilters[0]?.instantBookOnly, false);
 });
 
 test('filter dialog keeps keyboard focus inside and returns it to the opener', () => {

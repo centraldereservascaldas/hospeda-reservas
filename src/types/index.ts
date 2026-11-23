@@ -1,3 +1,5 @@
+import type { DirectBookingOrderListItem } from '../services/checkoutApi';
+
 export interface Review {
   id: string;
   authorName: string;
@@ -140,6 +142,7 @@ export interface Reservation {
   staysReservationId?: string;
   staysLocator?: string;
   directBookingReference?: string;
+  directBookingStatus?: DirectBookingOrderListItem['status'] | null;
   staysSyncStatus?: 'synced' | 'pending' | 'offline';
 }
 
@@ -200,6 +203,7 @@ export interface SearchFilters {
   destinationPropertyId?: string;
   checkIn: string;
   checkOut: string;
+  dateFlexibility?: 0 | 1 | 2;
   guests: {
     adults: number;
     children: number;
@@ -212,6 +216,7 @@ export interface SearchFilters {
   propertyTypes: string[];
   amenities: string[];
   minBedrooms: number;
+  minBeds?: number;
   minBaths: number;
   superhostOnly: boolean;
   instantBookOnly: boolean;

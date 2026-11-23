@@ -1,5 +1,5 @@
 import React from 'react';
-import { LoaderCircle, RefreshCw, Search, Sparkles } from 'lucide-react';
+import { LoaderCircle, RefreshCw } from 'lucide-react';
 import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type {
   Currency,
@@ -21,7 +21,7 @@ import { countOccupancyGuests } from '../utils/guestCounts';
 import { CondominiumDirectory } from './condominium/CondominiumDirectory';
 import { ActiveSearchFilters } from './search/ActiveSearchFilters';
 import { AvailabilitySearchState as AvailabilitySearchStateView } from './search/AvailabilitySearchState';
-import { StaysSearchWidget } from './search/StaysSearchWidget';
+import { FlexibleDateResults } from './search/FlexibleDateResults';
 import { SeasonalDateSuggestions } from './search/SeasonalDateSuggestions';
 import { SearchPagination } from './search/SearchPagination';
 import type { SearchPaginationState } from '../hooks/useAccommodationSearch';
@@ -99,7 +99,6 @@ interface MainContentRouterProps {
     property: Property,
     params: AccommodationWidgetSearchParams,
   ) => void;
-  onOpenAssistant: () => void;
   onSelectCondominium: (condominium: CondominiumSummary) => void;
   onToggleSave: (propertyId: string) => void;
   onSelectProperty: (property: Property) => void;
@@ -155,7 +154,6 @@ export function MainContentRouter({
   onOpenSearch,
   onSearchInApp,
   onOpenSuggestedProperty,
-  onOpenAssistant,
   onSelectCondominium,
   onToggleSave,
   onSelectProperty,
@@ -164,11 +162,13 @@ export function MainContentRouter({
   onCancelReservation,
   onExploreMore,
 }: MainContentRouterProps) {
+  const [mapListExpanded, setMapListExpanded] = React.useState(false);
   const isCompletedSearch =
     availabilitySearchState === 'success' || availabilitySearchState === 'partial';
   const hasPreservedSearchResults =
     hasAvailableSearchResults &&
-    (availabilitySearchState === 'expired' ||
+    (availabilitySearchState === 'stale' ||
+      availabilitySearchState === 'expired' ||
       availabilitySearchState === 'refreshing' ||
       availabilitySearchState === 'error');
   const hasSearchSnapshot = isCompletedSearch || hasPreservedSearchResults;
@@ -182,9 +182,7 @@ export function MainContentRouter({
     (isCompletedSearch && filteredProperties.length === 0) ||
     Boolean(searchPagination?.hasMore && filteredProperties.length === 0);
   const hasConfirmedSearchAvailability =
-    hasSearchSnapshot &&
-    availabilitySearchState !== 'error' &&
-    Boolean(filters.checkIn && filters.checkOut);
+    isCompletedSearch && Boolean(filters.checkIn && filters.checkOut);
   const visibleCatalogStatus: PropertyCatalogStatus = hasSearchSnapshot ? 'ready' : catalogStatus;
   const searchGuestCount = countOccupancyGuests(filters.guests);
 
@@ -201,7 +199,7 @@ export function MainContentRouter({
         hasAvailableSearchResults && (isCondominiumView || viewMode === 'map' || isCompletedSearch)
       }
       showEmptyResults={viewMode === 'map' && !isCondominiumView}
-      showIdleNotice={isCondominiumView}
+      showIdleNotice={false}
       onRetry={onRetryAvailabilitySearch}
       onClearFilters={onClearCatalogFilters}
       onOpenSearch={onOpenSearch}
@@ -268,39 +266,6 @@ export function MainContentRouter({
               não são realizados.
             </p>
           )}
-          {!isCondominiumView && (
-            <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2 min-[400px]:hidden [@media(max-height:400px)]:mb-1 [@media(max-height:400px)]:grid">
-              <button
-                type="button"
-                onClick={onOpenSearch}
-                aria-label="Pesquisar datas e hóspedes"
-                className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-2xl border border-orange-200 bg-white/85 px-3 text-sm font-bold text-neutral-800 shadow-sm transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-              >
-                <Search aria-hidden="true" className="h-4 w-4 shrink-0 text-orange-700" />
-                <span className="truncate">Datas e hóspedes</span>
-              </button>
-              <button
-                type="button"
-                onClick={onOpenAssistant}
-                aria-label="Falar com Sofia, assistente virtual"
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-orange-200 bg-white/85 px-3 text-sm font-bold text-orange-800 shadow-sm transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-              >
-                <Sparkles aria-hidden="true" className="h-4 w-4 shrink-0" />
-                <span>Sofia</span>
-              </button>
-            </div>
-          )}
-          {!isCondominiumView && (
-            <div className="mb-4 sm:mb-8 max-[399px]:hidden [@media(max-height:400px)]:hidden">
-              <StaysSearchWidget
-                variant="hero"
-                currentFilters={filters}
-                onSearchInApp={onSearchInApp}
-                onOpenAssistant={onOpenAssistant}
-              />
-            </div>
-          )}
-
           {!isCondominiumView &&
             availabilitySearchState === 'idle' &&
             !filters.checkIn &&
@@ -328,7 +293,9 @@ export function MainContentRouter({
             onClearFilters={onClearPropertyRefinements}
           />
 
-          <div id="stays-apartments-catalog" className="scroll-mt-24">
+          {!isCondominiumView && <FlexibleDateResults filters={filters} onOpenProperty={onOpenSuggestedProperty} />}
+
+          <div id="stays-apartments-catalog" className="scroll-mt-24 view-transition-explore-content">
             {isCondominiumView && (!shouldShowAvailabilityState || hasPreservedSearchResults) ? (
               <>
                 {availabilitySearchStateView}
@@ -391,6 +358,33 @@ export function MainContentRouter({
                         />
                       </LazyFeatureBoundary>
                     )}
+                  {visibleCatalogStatus !== 'loading' && visibleCatalogStatus !== 'error' && filteredProperties.length > 0 && (
+                    <section className="relative z-10 -mt-6 rounded-t-3xl bg-white px-4 pb-5 pt-2 shadow-[0_-8px_30px_rgba(0,0,0,0.12)] sm:hidden" aria-label="Lista de acomodações">
+                      <button type="button" aria-expanded={mapListExpanded} onClick={() => setMapListExpanded((expanded) => !expanded)} className="flex min-h-14 w-full flex-col items-center justify-center gap-2 rounded-xl text-sm font-semibold focus-visible:outline-2 focus-visible:outline-orange-600">
+                        <span aria-hidden="true" className="h-1 w-10 rounded-full bg-neutral-300" />
+                        <span>{filteredProperties.length} {filteredProperties.length === 1 ? 'acomodação' : 'acomodações'} · {mapListExpanded ? 'Recolher lista' : 'Ver lista'}</span>
+                      </button>
+                      <div className={mapListExpanded ? '' : 'max-h-80 overflow-hidden'}>
+                        <PropertyCatalogGrid
+                          status={visibleCatalogStatus}
+                          properties={mapListExpanded ? filteredProperties : filteredProperties.slice(0, 1)}
+                          currency={currency}
+                          savedPropertyIds={savedPropertyIds}
+                          showTotalWithTaxes={showTotalWithTaxes}
+                          hasSearchDates={Boolean(filters.checkIn && filters.checkOut)}
+                          availabilityConfirmed={hasConfirmedSearchAvailability}
+                          hasAvailableSearchResults={hasAvailableSearchResults}
+                          searchGuestCount={searchGuestCount}
+                          prioritizeFirstImage
+                          onRetryCatalog={onRetryCatalog}
+                          onToggleSave={onToggleSave}
+                          onSelectProperty={onSelectProperty}
+                          onResetFilters={onResetFilters}
+                          onClearCatalogFilters={onClearCatalogFilters}
+                        />
+                      </div>
+                    </section>
+                  )}
                 </div>
               ))}
             {searchPagination?.active && onLoadMoreSearchResults && (

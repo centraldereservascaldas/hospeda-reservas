@@ -77,11 +77,11 @@ class StaysDiscoveryTest extends TestCase
     {
         $this->fakeInventory([$this->property()], [$this->listing(), $this->listing(['_id' => 'hidden', 'id' => 'HIDDEN', 'status' => 'hidden'])]);
         $this->artisan('stays:sync-discovery')->assertSuccessful();
-        $this->get('/condominios')->assertOk()->assertSee('Jardim das Águas')->assertSee('/condominios/jardim-das-aguas', false);
-        $response = $this->get('/condominios/jardim-das-aguas', ['Host' => 'evil.test']);
+        $this->get('/condominios')->assertOk()->assertSee('Jardim das Águas')->assertSee('/pt/building/P1/jardim-das-aguas', false);
+        $response = $this->get('/pt/building/P1/jardim-das-aguas', ['Host' => 'evil.test']);
         $response->assertOk()->assertSee('Piscina compartilhada')->assertSee('Até 4 hóspedes')
             ->assertSee('/apartamento/APT01/apartamento-com-varanda', false)->assertSee('propertyId=property-1', false)
-            ->assertSee('https://centraldereservascaldas.com/condominios/jardim-das-aguas', false)
+            ->assertSee('https://centraldereservascaldas.com/pt/building/P1/jardim-das-aguas', false)
             ->assertDontSee('private-owner')->assertDontSee('private-access')->assertDontSee('private-unit')->assertDontSee('evil.test');
         preg_match('~<script type="application/ld\+json">(.*?)</script>~s', $response->getContent(), $matches);
         $schema = json_decode($matches[1], true, flags: JSON_THROW_ON_ERROR);
@@ -89,12 +89,12 @@ class StaysDiscoveryTest extends TestCase
         $this->assertSame('Place', $schema['@graph'][4]['@type']);
         $this->getJson('/api/public/property-metadata/APT01')->assertOk()->assertJsonPath('approved', true)
             ->assertJsonPath('canonicalUrl', 'https://centraldereservascaldas.com/apartamento/APT01/apartamento-com-varanda');
-        $this->get('/sitemap.xml')->assertOk()->assertSee('/condominios/jardim-das-aguas', false)
+        $this->get('/sitemap.xml')->assertOk()->assertSee('/pt/building/P1/jardim-das-aguas', false)
             ->assertSee('/apartamento/APT01/apartamento-com-varanda', false)->assertDontSee('HIDDEN', false);
         $this->get('/condominios/property-1/nome-antigo')->assertStatus(301)
-            ->assertRedirect('https://centraldereservascaldas.com/condominios/jardim-das-aguas');
+            ->assertRedirect('https://centraldereservascaldas.com/pt/building/P1/jardim-das-aguas');
         $this->get('/condominios/P1')->assertStatus(301)
-            ->assertRedirect('https://centraldereservascaldas.com/condominios/jardim-das-aguas');
+            ->assertRedirect('https://centraldereservascaldas.com/pt/building/P1/jardim-das-aguas');
         Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/content/properties'));
         $this->assertTrue(collect(Http::recorded())->every(fn (array $pair): bool => $pair[0]->method() === 'GET'));
     }
@@ -129,12 +129,12 @@ class StaysDiscoveryTest extends TestCase
             $this->listing(['_id' => 'listing-object-2', 'id' => 'APT02', '_idproperty' => 'property-2']),
         ]);
         $this->artisan('stays:sync-discovery')->assertSuccessful();
-        $this->get('/condominios/jardim-das-aguas')->assertOk();
-        $this->get('/condominios/jardim-das-aguas-p2')->assertOk();
+        $this->get('/pt/building/P1/jardim-das-aguas')->assertOk();
+        $this->get('/pt/building/P2/jardim-das-aguas-p2')->assertOk();
         $this->get('/condominios/P2')->assertStatus(301)
-            ->assertRedirect('https://centraldereservascaldas.com/condominios/jardim-das-aguas-p2');
-        $this->get('/sitemap.xml')->assertSee('/condominios/jardim-das-aguas', false)
-            ->assertSee('/condominios/jardim-das-aguas-p2', false);
+            ->assertRedirect('https://centraldereservascaldas.com/pt/building/P2/jardim-das-aguas-p2');
+        $this->get('/sitemap.xml')->assertSee('/pt/building/P1/jardim-das-aguas', false)
+            ->assertSee('/pt/building/P2/jardim-das-aguas-p2', false);
     }
 
     public function test_slug_stays_reserved_when_the_property_is_renamed_or_temporarily_removed(): void
@@ -145,15 +145,15 @@ class StaysDiscoveryTest extends TestCase
         $this->artisan('stays:sync-discovery')->assertSuccessful();
         $this->fakeInventory([$this->property(['_mstitle' => ['pt_BR' => 'Novo Nome']])], [$this->listing()]);
         $this->artisan('stays:sync-discovery')->assertSuccessful();
-        $this->get('/condominios/jardim-das-aguas')->assertOk()->assertSee('Novo Nome');
+        $this->get('/pt/building/P1/jardim-das-aguas')->assertOk()->assertSee('Novo Nome');
         $this->get('/condominios/P1')->assertStatus(301)
-            ->assertRedirect('https://centraldereservascaldas.com/condominios/jardim-das-aguas');
+            ->assertRedirect('https://centraldereservascaldas.com/pt/building/P1/jardim-das-aguas');
         $this->fakeInventory([$this->property(['_id' => 'property-2', 'id' => 'P2'])], [
             $this->listing(['_id' => 'listing-object-2', 'id' => 'APT02', '_idproperty' => 'property-2']),
         ]);
         $this->artisan('stays:sync-discovery')->assertSuccessful();
-        $this->get('/condominios/jardim-das-aguas')->assertNotFound();
-        $this->get('/condominios/jardim-das-aguas-p2')->assertOk();
+        $this->get('/pt/building/P1/jardim-das-aguas')->assertNotFound();
+        $this->get('/pt/building/P2/jardim-das-aguas-p2')->assertOk();
     }
 
     public function test_apartment_html_contains_public_stays_content_and_links_to_its_parent_without_javascript(): void
@@ -171,12 +171,12 @@ class StaysDiscoveryTest extends TestCase
                 ->assertRedirect('https://centraldereservascaldas.com/apartamento/APT01/apartamento-com-varanda');
             $response = $this->get('/apartamento/APT01/apartamento-com-varanda');
             $response->assertOk()->assertSee('Até 4 hóspedes')->assertSee('Comodidades da unidade')
-                ->assertSee('/condominios/jardim-das-aguas', false)->assertSee('"@type":"Accommodation"', false)
+                ->assertSee('/pt/building/P1/jardim-das-aguas', false)->assertSee('"@type":"Accommodation"', false)
                 ->assertSee('https://centraldereservascaldas.com/apartamento/APT01/apartamento-com-varanda', false)
                 ->assertDontSee('private-owner')->assertDontSee('private-access');
             $this->getJson('/api/accommodations')->assertOk()->assertJsonPath('data.0.complexName', 'Jardim das Águas')
                 ->assertJsonPath('data.0.complexImages.0', 'https://images.example.test/condominio.jpg')
-                ->assertJsonPath('data.0.complexPageUrl', '/condominios/jardim-das-aguas');
+                ->assertJsonPath('data.0.complexPageUrl', '/pt/building/P1/jardim-das-aguas');
         } finally {
             if ($original === null) {
                 unlink(public_path('index.html'));
@@ -199,7 +199,7 @@ class StaysDiscoveryTest extends TestCase
         $this->getJson('/api/public/property-metadata/THIN')->assertJsonPath('approved', false);
         $this->get('/sitemap.xml')->assertDontSee('/apartamento/APT01', false)->assertDontSee('/apartamento/THIN', false)->assertDontSee('inactive', false);
         $this->get('/condominios/inactive')->assertNotFound();
-        $this->get('/condominios/jardim-das-aguas')->assertOk()->assertSee('/apartamento/THIN', false)->assertDontSee('FOREIGN');
+        $this->get('/pt/building/P1/jardim-das-aguas')->assertOk()->assertSee('/apartamento/THIN', false)->assertDontSee('FOREIGN');
         Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/content/listings'));
     }
 
@@ -212,10 +212,10 @@ class StaysDiscoveryTest extends TestCase
         Http::preventStrayRequests();
         Http::fake(['https://stays.example.test/external/v1/*' => Http::response([], 503)]);
         $this->artisan('stays:sync-discovery')->assertFailed();
-        $this->get('/condominios/jardim-das-aguas')->assertOk();
+        $this->get('/pt/building/P1/jardim-das-aguas')->assertOk();
         $this->fakeInventory([], []);
         $this->artisan('stays:sync-discovery')->assertSuccessful();
-        $this->get('/condominios/jardim-das-aguas')->assertNotFound();
+        $this->get('/pt/building/P1/jardim-das-aguas')->assertNotFound();
         $this->get('/condominios')->assertHeader('X-Robots-Tag', 'noindex, follow');
         Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/content/properties'));
     }
@@ -228,10 +228,10 @@ class StaysDiscoveryTest extends TestCase
         $this->artisan('stays:sync-discovery')->assertSuccessful();
         Http::swap(new Factory);
         Http::preventStrayRequests();
-        $this->get('/condominios/jardim-das-aguas')->assertOk();
+        $this->get('/pt/building/P1/jardim-das-aguas')->assertOk();
         $this->travel(25)->hours();
         $this->get('/condominios')->assertStatus(503);
-        $this->get('/condominios/jardim-das-aguas')->assertStatus(503);
+        $this->get('/pt/building/P1/jardim-das-aguas')->assertStatus(503);
         Http::assertNothingSent();
     }
 
@@ -252,8 +252,8 @@ class StaysDiscoveryTest extends TestCase
     {
         $this->fakeInventory([$this->property(['_msdesc' => ['pt_BR' => 'Em atualização.']])], [$this->listing()]);
         $this->artisan('stays:sync-discovery')->assertSuccessful();
-        $this->get('/condominios/jardim-das-aguas')->assertOk()->assertHeader('X-Robots-Tag', 'noindex, follow');
-        $this->get('/sitemap.xml')->assertDontSee('/condominios/property-1/', false)->assertSee('/apartamento/APT01', false);
+        $this->get('/pt/building/P1/jardim-das-aguas')->assertOk()->assertHeader('X-Robots-Tag', 'noindex, follow');
+        $this->get('/sitemap.xml')->assertDontSee('/pt/building/property-1/', false)->assertSee('/apartamento/APT01', false);
         config(['services.stays.client_id' => 'another-account']);
         $this->get('/condominios')->assertStatus(503);
         Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/content/properties'));

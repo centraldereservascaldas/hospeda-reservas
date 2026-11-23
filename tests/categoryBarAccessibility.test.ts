@@ -18,7 +18,7 @@ Object.assign(globalThis, {
 });
 
 const React = (await import('react')).default;
-const { render, fireEvent, cleanup } = await import('@testing-library/react');
+const { render, cleanup } = await import('@testing-library/react');
 const { CategoryBar } = await import('../src/components/search/CategoryBar.tsx');
 
 afterEach(() => {
@@ -47,42 +47,48 @@ function renderCategoryBar(overrides: Record<string, unknown> = {}) {
   );
 }
 
-test('mobile category actions keep accessible names when their visible labels are hidden', () => {
+test('category actions keep accessible names when their visible labels are hidden', () => {
   const { getByRole } = renderCategoryBar();
 
   assert.ok(getByRole('button', { name: 'Abrir filtros; 2 ativos' }));
-  assert.ok(getByRole('button', { name: 'Ver mapa' }));
+  assert.equal(document.querySelector('[aria-label="Ver mapa"]'), null);
 });
 
-test('mobile category cards show compact labels beside icons and keep a full-height touch target', () => {
+test('mobile categories use large, single-line chips inside a horizontal scroller', () => {
   const { getByRole } = renderCategoryBar();
   const category = getByRole('button', { name: 'Todas as hospedagens' });
-  const iconSurface = category.querySelector('div.relative');
-  const label = category.querySelector('span.flex-1.items-center');
-  const labelText = label?.querySelector('span.w-full');
+  const scroller = getByRole('group', { name: 'Categorias de hospedagem' });
+  const icon = category.querySelector('span[aria-hidden="true"]');
 
-  assert.match(category.className, /flex-row/);
-  assert.match(category.className, /gap-2/);
-  assert.match(category.className, /min-h-16/);
-  assert.match(category.className, /h-16/);
-  assert.match(category.className, /sm:h-14/);
-  assert.match(category.className, /sm:w-36 sm:min-w-36/);
-  assert.match(category.className, /max-height:400px/);
-  assert.match(category.className, /h-12/);
-  assert.match(category.className, /min-h-12/);
-  assert.match(category.className, /gap-2/);
-  assert.match(category.className, /sm:px-2/);
-  assert.match(iconSurface?.className ?? '', /h-10 w-10/);
-  assert.match(iconSurface?.className ?? '', /sm:h-10 sm:w-10/);
-  assert.match(iconSurface?.querySelector('svg')?.getAttribute('class') ?? '', /w-5 h-5/);
-  assert.match(label?.className ?? '', /flex-1/);
-  assert.doesNotMatch(labelText?.className ?? '', /\bhidden\b/);
-  assert.match(labelText?.textContent ?? '', /Todas as hospedagens/);
-  assert.match(labelText?.className ?? '', /text-caption/);
-  assert.match(labelText?.className ?? '', /leading-tight/);
+  assert.match(category.className, /min-h-11/);
+  assert.match(category.className, /rounded-full/);
+  assert.match(category.className, /shrink-0/);
+  assert.match(category.className, /focus-visible:outline/);
+  assert.match(scroller.className, /overflow-x-auto/);
+  assert.match(scroller.className, /no-scrollbar/);
+  assert.match(
+    category.querySelector('span.whitespace-nowrap')?.textContent ?? '',
+    /Todas as hospedagens/,
+  );
+  assert.equal(icon?.getAttribute('aria-hidden'), 'true');
 });
 
-test('category, filter, map, and price controls expose visible keyboard focus styles', () => {
+test('all mobile categories remain available to keyboard and horizontal scrolling', () => {
+  const { container, getByRole } = renderCategoryBar();
+  const scroller = getByRole('group', { name: 'Categorias de hospedagem' });
+  const categories = Array.from(container.querySelectorAll<HTMLButtonElement>('[aria-pressed]'));
+
+  assert.equal(categories.length, 3);
+  assert.deepEqual(
+    categories.map((button) => button.tabIndex),
+    [0, 0, 0],
+  );
+  assert.equal(categories[0].getAttribute('aria-pressed'), 'true');
+  assert.equal(categories[2].getAttribute('aria-hidden'), null);
+  assert.match(scroller.className, /overflow-x-auto/);
+});
+
+test('category and filter actions expose visible keyboard focus styles', () => {
   const { getByRole } = renderCategoryBar();
 
   assert.match(
@@ -93,48 +99,8 @@ test('category, filter, map, and price controls expose visible keyboard focus st
     getByRole('button', { name: 'Abrir filtros; 2 ativos' }).className,
     /focus-visible:outline/,
   );
-  assert.match(getByRole('button', { name: 'Ver mapa' }).className, /focus-visible:outline/);
-  const totalPriceSwitch = getByRole('switch', { name: 'Exibir total da estadia' });
-  assert.match(totalPriceSwitch.className, /h-11 w-11/);
-  assert.match(totalPriceSwitch.className, /focus-visible:outline/);
-  assert.match(totalPriceSwitch.querySelector('span')?.className ?? '', /h-5 w-9/);
-});
-
-test('map toggle name follows the action and category pagination announces its position', () => {
-  const setViewMode = (mode: string) => modes.push(mode);
-  const modes: string[] = [];
-  const { getByRole } = renderCategoryBar({ setViewMode });
-
-  fireEvent.click(getByRole('button', { name: 'Ver mapa' }));
-  assert.deepEqual(modes, ['map']);
-  fireEvent.click(getByRole('button', { name: /Ver outros filtros/ }));
-  assert.ok(getByRole('button', { name: /Ver filtros anteriores; página 2 de 3/ }));
-});
-
-test('pagination keeps only visible categories in the tab order and moves focus to the new page', () => {
-  const { container, getByRole } = renderCategoryBar();
-  const categories = Array.from(
-    container.querySelectorAll<HTMLButtonElement>('[data-category-index]'),
+  assert.equal(
+    getByRole('button', { name: 'Abrir filtros; 2 ativos' }).getAttribute('aria-label'),
+    'Abrir filtros; 2 ativos',
   );
-
-  assert.deepEqual(
-    categories.map((button) => button.tabIndex),
-    [0, -1, -1],
-  );
-  fireEvent.click(getByRole('button', { name: /Ver outros filtros/ }));
-
-  assert.deepEqual(
-    categories.map((button) => button.tabIndex),
-    [-1, 0, -1],
-  );
-  assert.equal(document.activeElement, categories[1]);
-  assert.equal(categories[0].getAttribute('aria-hidden'), 'true');
-  assert.equal(categories[1].getAttribute('aria-hidden'), 'false');
-
-  fireEvent.click(getByRole('button', { name: /Ver outros filtros/ }));
-  assert.deepEqual(
-    categories.map((button) => button.tabIndex),
-    [-1, -1, 0],
-  );
-  assert.equal(document.activeElement, categories[2]);
 });

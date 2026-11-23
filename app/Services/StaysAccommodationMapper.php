@@ -178,7 +178,26 @@ class StaysAccommodationMapper
             }
         }
 
-        return $this->staysPropertiesById[$propertyId] ?? [];
+        $property = $this->staysPropertiesById[$propertyId] ?? [];
+        if (($property['amenities'] ?? []) === []) {
+            $timeout = $this->deadline === null
+                ? null
+                : max(1, min(10, (int) ceil($this->deadline - microtime(true))));
+            $details = $this->contentReads->getPropertyDetails($propertyId, $timeout);
+            if ($details === null && $this->requireCompleteMetadata) {
+                throw new RuntimeException('Accommodation property amenities are unavailable.');
+            }
+            if ($details !== null) {
+                $property = array_replace($property, $details);
+                $this->staysPropertiesById[$propertyId] = $property;
+                $detailId = (string) ($property['id'] ?? '');
+                if ($detailId !== '') {
+                    $this->staysPropertiesById[$detailId] = $property;
+                }
+            }
+        }
+
+        return $property;
     }
 
     public function map(array $listing, array $catalog, bool $requireCompleteMetadata = false, ?float $deadline = null): array
@@ -230,6 +249,9 @@ class StaysAccommodationMapper
             $listingPropertyMeta = [];
         }
         $propertyAmenityItems = $listing['propertyAmenities'] ?? [];
+        if ($propertyAmenityItems === []) {
+            $propertyAmenityItems = $complex['amenities'] ?? [];
+        }
         $needsPropertyMetadata = $propertyAmenityItems === []
             || (($complex['name'] ?? '') === ''
                 && ($listingPropertyMeta['_mstitle'] ?? $listingPropertyMeta['name'] ?? '') === ''

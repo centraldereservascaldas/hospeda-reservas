@@ -23,6 +23,103 @@ class SpaController extends Controller
         private StaysDiscoveryCatalog $discoveryCatalog,
     ) {}
 
+    public function condominiums(): Response
+    {
+        $snapshot = $this->discoveryCatalog->snapshot();
+        $properties = array_values(array_filter(
+            $snapshot['properties'] ?? [],
+            fn (array $property): bool => ($property['listingIds'] ?? []) !== [],
+        ));
+        usort($properties, fn (array $a, array $b): int => strnatcasecmp($a['name'], $b['name']));
+
+        $indexPath = public_path('index.html');
+        if (! is_file($indexPath)) {
+            abort_if($snapshot === null, 503, 'Estamos atualizando os empreendimentos. Tente novamente em instantes.');
+
+            return $this->condominiumsFallbackResponse($properties);
+        }
+
+        $html = file_get_contents($indexPath);
+        if ($html === false) {
+            return response('Aplicação indisponível.', 503)->header('X-Robots-Tag', 'noindex, nofollow');
+        }
+
+        $title = 'Condomínios em Caldas Novas e região | CRCN';
+        $description = 'Conheça os condomínios de Caldas Novas, compare localização e estrutura e encontre acomodações para a sua viagem.';
+        $canonical = e($this->publicPages->origin().'/condominios');
+        $indexable = $properties !== [];
+        $itemList = array_map(
+            fn (array $property, int $index): array => [
+                '@type' => 'ListItem',
+                'position' => $index + 1,
+                'name' => $property['name'],
+                'url' => $this->publicPages->origin().$this->discoveryCatalog->propertyPath($property),
+            ],
+            $properties,
+            array_keys($properties),
+        );
+        $entities = $itemList === [] ? [] : [[
+            '@type' => 'ItemList',
+            'name' => $title,
+            'itemListElement' => $itemList,
+        ]];
+        $schema = $this->publicPages->schemaJson('/condominios', $title, $entities);
+        $metadata = '<title>'.e($title).'</title>'."\n".
+            '<meta name="description" content="'.e($description).'" />'."\n".
+            '<meta name="robots" content="'.($indexable ? 'index, follow' : 'noindex, follow').'" />'."\n".
+            '<link rel="canonical" href="'.$canonical.'" />'."\n".
+            '<meta property="og:title" content="'.e($title).'" />'."\n".
+            '<meta property="og:description" content="'.e($description).'" />'."\n".
+            '<meta property="og:url" content="'.$canonical.'" />'."\n".
+            '<meta property="og:type" content="website" />'."\n".
+            '<meta property="og:locale" content="pt_BR" />'."\n".
+            '<link rel="stylesheet" href="/seo.css" />'."\n".
+            '<link rel="stylesheet" href="/discovery.css" />'."\n".
+            '<script id="public-condominiums-schema" type="application/ld+json">'.$schema.'</script>';
+        $html = $this->removeGenericMetadata($html);
+        $html = Str::replaceFirst('</head>', $metadata."\n</head>", $html);
+        $html = Str::replaceFirst('</head>', '<meta name="public-site-origin" content="'.e($this->publicPages->origin()).'" />'."\n</head>", $html);
+        $loadingShell = view('seo.home-loading-shell')->render();
+        $directory = view('seo.condominiums-noscript', [
+            'properties' => $properties,
+            'catalog' => $this->discoveryCatalog,
+        ])->render();
+        $html = Str::replaceFirst(
+            '<div id="root"></div>',
+            '<div id="root">'.$loadingShell.'</div><noscript>'.$directory.'</noscript>',
+            $html,
+        );
+        $response = response($html)->header('Content-Type', 'text/html; charset=utf-8');
+        if (! $indexable) {
+            $response->header('X-Robots-Tag', 'noindex, follow');
+        }
+
+        return $response;
+    }
+
+    /** @param list<array<string, mixed>> $properties */
+    private function condominiumsFallbackResponse(array $properties): Response
+    {
+        $title = 'Condomínios em Caldas Novas e região | CRCN';
+        $description = 'Conheça os condomínios de Caldas Novas, compare localização e estrutura e encontre acomodações para a sua viagem.';
+        $path = '/condominios';
+        $indexable = $properties !== [];
+        $response = response()->view('seo.condominiums', [
+            'properties' => $properties,
+            'catalog' => $this->discoveryCatalog,
+            'title' => $title,
+            'description' => $description,
+            'canonical' => $this->publicPages->origin().$path,
+            'indexable' => $indexable,
+            'schema' => $this->publicPages->schemaJson($path, $title),
+        ])->header('Content-Type', 'text/html; charset=utf-8');
+        if (! $indexable) {
+            $response->header('X-Robots-Tag', 'noindex, follow');
+        }
+
+        return $response;
+    }
+
     public function __invoke(Request $request, ?string $path = null): Response
     {
         $legacyDestination = $this->legacyDestination($request, $path);
@@ -38,6 +135,13 @@ class SpaController extends Controller
         }
 
         $indexPath = public_path('index.html');
+        if (! is_file($indexPath) && trim((string) $path, '/') === '' && app()->environment('local')) {
+            $frontendUrl = rtrim((string) config('services.frontend_dev_url', 'http://localhost:3000'), '/');
+            $queryString = $request->getQueryString();
+
+            return redirect()->to($frontendUrl.'/'.($queryString !== null && $queryString !== '' ? '?'.$queryString : ''));
+        }
+
         if (! is_file($indexPath)) {
             return response('Aplicação indisponível.', 503)->header('X-Robots-Tag', 'noindex, nofollow');
         }
@@ -78,7 +182,7 @@ class SpaController extends Controller
             return $this->homeResponse($html);
         }
 
-        if (preg_match('~^(?:[a-z]{2}(?:/search)?|search|auth/confirm|checkout-preview/cielo)$~D', trim((string) $path, '/')) === 1) {
+        if (preg_match('~^(?:[a-z]{2}(?:/search)?|search|s/homes|auth/confirm|checkout-preview/cielo)$~D', trim((string) $path, '/')) === 1) {
             return $this->noindexResponse($html);
         }
 

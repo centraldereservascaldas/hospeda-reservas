@@ -30,5 +30,19 @@
         @endforeach
     </div>
 </section>
+@if (!empty($faqs))
+<section class="guide-shell discovery-section" aria-labelledby="condominium-faq-heading">
+    <p class="guide-eyebrow">DÚVIDAS SOBRE O EMPREENDIMENTO</p>
+    <h2 id="condominium-faq-heading">Perguntas frequentes sobre {{ $property['name'] }}</h2>
+    <div class="discovery-faq-list">
+        @foreach ($faqs as $faq)
+        <article class="discovery-faq-item">
+            <h3>{{ $faq['question'] }}</h3>
+            <p>{{ $faq['answer'] }}</p>
+        </article>
+        @endforeach
+    </div>
+</section>
+@endif
 <section class="guide-shell discovery-section"><div class="guide-note"><p>Quer organizar a viagem? Leia <a href="/blog/onde-ficar-em-caldas-novas/">como escolher onde ficar em Caldas Novas</a> e o <a href="/blog/checklist-reservar-apartamento-caldas-novas/">checklist antes de reservar</a>.</p></div></section>
 @endsection

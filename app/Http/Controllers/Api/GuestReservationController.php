@@ -105,10 +105,56 @@ class GuestReservationController extends Controller
         $records = $client['reservations'] ?? $client['data']['reservations'] ?? [];
         $catalog = json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
         $reservationRecords = collect(is_array($records) ? $records : []);
+        $reservationReferences = $reservationRecords
+            ->flatMap(fn (array $record): array => array_filter([
+                $record['id'] ?? null,
+                $record['_id'] ?? null,
+                $record['partnerCode'] ?? null,
+            ], fn (mixed $id): bool => is_string($id) || is_int($id)))
+            ->map(fn (mixed $id): string => (string) $id)
+            ->unique()
+            ->flip();
+        $directOrdersByReservation = DirectBookingOrder::query()
+            ->where('guest_email', mb_strtolower(trim($guest->email)))
+            ->whereNotNull('stays_reservation_id')
+            ->whereIn('status', [
+                DirectBookingOrderStatus::Confirmado,
+                DirectBookingOrderStatus::CancelamentoSolicitado,
+                DirectBookingOrderStatus::ReembolsoPendente,
+                DirectBookingOrderStatus::Reembolsado,
+            ])
+            ->get()
+            ->keyBy('stays_reservation_id');
+        foreach ($directOrdersByReservation as $reservationId => $order) {
+            if ($reservationReferences->has((string) $reservationId)) {
+                continue;
+            }
+            $details = $this->stays->get('/booking/reservations/'.rawurlencode((string) $reservationId));
+            if (! is_array($details)) {
+                continue;
+            }
+            $details = $details['reservation'] ?? $details['data'] ?? $details;
+            if (! is_array($details)) {
+                continue;
+            }
+            $detailReferences = collect([
+                $details['id'] ?? null,
+                $details['_id'] ?? null,
+                $details['partnerCode'] ?? null,
+            ])->filter(fn (mixed $id): bool => is_string($id) || is_int($id))->map(fn (mixed $id): string => (string) $id);
+            if (! $detailReferences->contains((string) $reservationId)) {
+                continue;
+            }
+            $reservationRecords->push($details);
+            foreach ($detailReferences as $reference) {
+                $reservationReferences->put($reference, true);
+            }
+        }
         $reservationIds = $reservationRecords
             ->flatMap(fn (array $record): array => array_filter([
                 $record['id'] ?? null,
                 $record['_id'] ?? null,
+                $record['partnerCode'] ?? null,
             ], fn (mixed $id): bool => is_string($id) || is_int($id)))
             ->map(fn (mixed $id): string => (string) $id)
             ->unique()
@@ -118,11 +164,20 @@ class GuestReservationController extends Controller
             ->get();
         $data = $reservationRecords
             ->map(function (array $record) use ($catalog, $guest, $directOrders): ?array {
-                $ids = collect([$record['_id'] ?? null, $record['id'] ?? null])
+                $ids = collect([
+                    $record['_id'] ?? null,
+                    $record['id'] ?? null,
+                    $record['partnerCode'] ?? null,
+                ])
                     ->filter(fn (mixed $id): bool => is_string($id) || is_int($id))
-                    ->map(fn (mixed $id): string => (string) $id)->unique();
-                $matching = $directOrders->filter(fn (DirectBookingOrder $order): bool => $ids->contains((string) $order->stays_reservation_id))->values();
-                $order = $matching->count() === 1 && $matching->first()->origin !== 'stays_existing' ? $matching->first() : null;
+                    ->map(fn (mixed $id): string => (string) $id)
+                    ->unique();
+                $matching = $directOrders
+                    ->filter(fn (DirectBookingOrder $order): bool => $ids->contains((string) $order->stays_reservation_id))
+                    ->values();
+                $order = $matching->count() === 1 && $matching->first()->origin !== 'stays_existing'
+                    ? $matching->first()
+                    : null;
 
                 return $this->mapReservation($record, $catalog, $guest, $order);
             })
@@ -272,7 +327,7 @@ class GuestReservationController extends Controller
         $isDirectCheckoutConfirmed = $directOrder !== null
             && in_array($directOrder->status, [DirectBookingOrderStatus::Confirmado, DirectBookingOrderStatus::CancelamentoSolicitado], true)
             && $directOrder->payment_status === 'approved';
-        if ($isDirectCheckoutReservation && ! $isDirectCheckoutConfirmed) {
+        if ($isDirectCheckoutReservation && $status !== 'cancelled' && ! $isDirectCheckoutConfirmed) {
             $status = 'pending';
         }
         $nights = max(1, (int) now()->parse($checkIn)->diffInDays(now()->parse($checkOut)));
@@ -314,6 +369,7 @@ class GuestReservationController extends Controller
             'staysReservationId' => $id,
             'staysLocator' => $record['partnerCode'] ?? '',
             'directBookingReference' => $directOrder?->public_reference,
+            'directBookingStatus' => $directOrder?->status?->value,
             'staysSyncStatus' => 'synced',
         ];
     }
