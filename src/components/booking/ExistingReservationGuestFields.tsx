@@ -1,5 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { isValidBrazilianPhone, normalizeBrazilianPhone } from './existingBookingPreviewUtils';
+import {
+  isValidBrazilianPhone,
+  normalizeBrazilianPhone,
+} from './existingReservationContactValidation';
 import { formatBrazilianDocument, formatBrazilianPhone } from '../../utils/checkoutInputFormatting';
 import { isValidCpf } from '../../utils/cpf';
 
