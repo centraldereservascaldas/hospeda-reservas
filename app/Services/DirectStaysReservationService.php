@@ -7,6 +7,7 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingStaysAction;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class DirectStaysReservationService
@@ -321,6 +322,64 @@ class DirectStaysReservationService
                         $attention++;
                     }
                 });
+        }
+
+        if (config('direct-booking.confirmation_enabled', false)
+            && config('direct-booking.experimental_existing_deposit_enabled', false) === true
+            && config('direct-booking.experimental_existing_ledger_audit_enabled', false) === true
+            && config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true) {
+            // A bounded, ordered query avoids walking an unbounded collection of
+            // recent orders. A durable lease survives worker crashes and does not
+            // depend on unrelated writes to updated_at.
+            $orders = DirectBookingOrder::query()
+                ->where('origin', 'stays_existing')
+                ->where('status', DirectBookingOrderStatus::EntradaConciliada)
+                ->where('payment_status', 'approved')
+                ->whereNotNull('stays_reservation_id')
+                ->where(fn ($query) => $query->whereNull('deposit_verification_due_at')->orWhere('deposit_verification_due_at', '<=', now()))
+                ->where(fn ($query) => $query->whereNull('deposit_verification_lease_until')->orWhere('deposit_verification_lease_until', '<=', now()))
+                ->orderByRaw('COALESCE(deposit_verification_due_at, created_at)')
+                ->orderBy('id')
+                ->limit(20)
+                ->get();
+            foreach ($orders as $order) {
+                $leaseToken = (string) Str::uuid();
+                $claimed = DB::table('direct_booking_orders')->where('id', $order->id)
+                    ->where('origin', 'stays_existing')
+                    ->where('status', DirectBookingOrderStatus::EntradaConciliada->value)
+                    ->where('payment_status', 'approved')
+                    ->where(fn ($query) => $query->whereNull('deposit_verification_due_at')->orWhere('deposit_verification_due_at', '<=', now()))
+                    ->where(fn ($query) => $query->whereNull('deposit_verification_lease_until')->orWhere('deposit_verification_lease_until', '<=', now()))
+                    ->update(['deposit_verification_lease_token' => $leaseToken, 'deposit_verification_lease_until' => now()->addMinutes(5)]);
+                if ($claimed !== 1) {
+                    continue;
+                }
+                try {
+                    $result = $this->payments->confirmPaidReservation($order);
+                    $processed++;
+                    if (! $result['ready']) {
+                        $attention++;
+                    }
+                } catch (\Throwable $exception) {
+                    $processed++;
+                    $attention++;
+                    Log::error('Deposit verification failed unexpectedly.', [
+                        'order_id' => $order->id,
+                        'exception_class' => get_class($exception),
+                    ]);
+                } finally {
+                    // If the verifier failed before it could record a generation,
+                    // defer retry without overwriting a newer verification's due time.
+                    $retrySeconds = min(max(3600, (int) config('direct-booking.settled_payment_reconciliation_interval_seconds', 86400)), max(60, (int) config('direct-booking.payment_reconciliation_interval_seconds', 300)));
+                    DB::table('direct_booking_orders')->where('id', $order->id)
+                        ->where('deposit_verification_lease_token', $leaseToken)
+                        ->where(fn ($query) => $query->whereNull('deposit_verification_due_at')->orWhere('deposit_verification_due_at', '<=', now()))
+                        ->update(['deposit_verification_due_at' => now()->addSeconds($retrySeconds)]);
+                    DB::table('direct_booking_orders')->where('id', $order->id)
+                        ->where('deposit_verification_lease_token', $leaseToken)
+                        ->update(['deposit_verification_lease_token' => null, 'deposit_verification_lease_until' => null]);
+                }
+            }
         }
 
         return ['processed' => $processed, 'attention' => $attention];

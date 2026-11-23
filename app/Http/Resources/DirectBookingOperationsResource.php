@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\DirectBookingEmail;
+use App\Services\ExistingDepositVerificationStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -43,7 +44,10 @@ class DirectBookingOperationsResource extends JsonResource
                 'reviewedBy' => is_string($resumeTokenRevocation['reviewed_by'] ?? null) ? $resumeTokenRevocation['reviewed_by'] : null,
                 'at' => is_string($resumeTokenRevocation['at'] ?? null) ? $resumeTokenRevocation['at'] : null,
             ] : null,
+            'existingDepositReviewRequired' => $this->origin === 'stays_existing'
+                && $this->status->value === 'entrada_conciliada' && app(ExistingDepositVerificationStatus::class)->requiresReview(is_array($this->operational_events) ? $this->operational_events : []),
             'paymentApprovedWithoutConfirmedReservation' => $this->payment_status === 'approved'
+                && ! ($this->origin === 'stays_existing' && $this->status->value === 'entrada_conciliada')
                 && ! in_array($this->status->value, [
                     'confirmado',
                     'concluido',

@@ -46,6 +46,11 @@ class ExistingReservationSettlement
                 return ['ready' => false, 'code' => 'existing_card_amount_mismatch'];
             }
         }
+        $settlementAmountCents = app(ExistingReservationCardAmounts::class)
+            ->settlementAmountCents($attempt, $snapshot['pending_amount_cents']);
+        if ($settlementAmountCents === null) {
+            return ['ready' => false, 'code' => 'existing_payment_amount_mismatch'];
+        }
 
         $channelSnapshot = $snapshot['channel_provider_ids'] ?? null;
         $provider = is_array($channelSnapshot)
@@ -62,7 +67,7 @@ class ExistingReservationSettlement
         $attemptHash = $this->attemptHash($attempt);
         $previous = $order->staysActions()->where('action_type', 'settle_existing_receivable')->first();
         if ($previous !== null) {
-            return $this->reconcilePrevious($order, $attempt->id, $attemptHash, $snapshot, $previous, $endpoint, $provider, $paymentDate);
+            return $this->reconcilePrevious($order, $attempt->id, $attemptHash, $snapshot, $previous, $endpoint, $provider, $paymentDate, $settlementAmountCents);
         }
         if (config('direct-booking.experimental_existing_ledger_audit_enabled', false) === true
             && ! app(ExistingReservationLedgerAudit::class)->confirmsSnapshot($snapshot)) {
@@ -85,7 +90,7 @@ class ExistingReservationSettlement
         $marker = 'CRCN_SETTLEMENT:'.Str::random(32);
         $originalHash = hash('sha256', $originalDesc);
 
-        $claim = app(ExistingReservationPaymentLock::class)->synchronized($order->stays_reservation_id, function () use ($order, $attempt, $attemptHash, $snapshot, $provider, $paymentDate, $marker, $originalHash, $postCompletedPayment): ?DirectBookingStaysAction {
+        $claim = app(ExistingReservationPaymentLock::class)->synchronized($order->stays_reservation_id, function () use ($order, $attempt, $attemptHash, $snapshot, $provider, $paymentDate, $marker, $originalHash, $postCompletedPayment, $settlementAmountCents): ?DirectBookingStaysAction {
             $locked = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
             if ($locked->origin !== 'stays_existing' || $locked->payment_status !== 'approved'
                 || $locked->stays_reservation_id !== $order->stays_reservation_id
@@ -102,7 +107,7 @@ class ExistingReservationSettlement
             }
             $action = DirectBookingStaysAction::query()->firstOrCreate(
                 ['direct_booking_order_id' => $locked->id, 'action_type' => 'settle_existing_receivable'],
-                ['status' => 'pending', 'idempotency_key' => 'direct-booking:'.$locked->id.':settle-existing', 'request_snapshot' => ['attempt_id' => $attempt->id, 'attempt_hash' => $attemptHash, 'payment_id' => $snapshot['payment_id'], 'operation' => $postCompletedPayment ? 'post_completed' : 'patch_pending', 'amount_cents' => $snapshot['pending_amount_cents'], 'payment_date' => $paymentDate, 'provider_id' => $provider, 'marker' => $marker, 'original_desc_hash' => $originalHash]],
+                ['status' => 'pending', 'idempotency_key' => 'direct-booking:'.$locked->id.':settle-existing', 'request_snapshot' => ['attempt_id' => $attempt->id, 'attempt_hash' => $attemptHash, 'payment_id' => $snapshot['payment_id'], 'operation' => $postCompletedPayment ? 'post_completed' : 'patch_pending', 'amount_cents' => $settlementAmountCents, 'base_amount_cents' => $snapshot['pending_amount_cents'], 'payment_date' => $paymentDate, 'provider_id' => $provider, 'marker' => $marker, 'original_desc_hash' => $originalHash]],
             );
             if ($action->status !== 'pending' || (int) $action->attempt_count !== 0) {
                 return null;
@@ -176,7 +181,7 @@ class ExistingReservationSettlement
             $this->stays->request('POST', $endpoint.'/payments', payload: [
                 '_idpaymentProvider' => $provider,
                 'type' => 'credit',
-                '_f_val' => round($snapshot['pending_amount_cents'] / 100, 2),
+                '_f_val' => round($settlementAmountCents / 100, 2),
                 'status' => 'completed',
                 'expirationDate' => $paymentDate,
                 'paymentDate' => $paymentDate,
@@ -184,10 +189,15 @@ class ExistingReservationSettlement
                 'desc' => $description,
             ]);
         } else {
-            $this->stays->request('PATCH', $endpoint.'/payments/'.rawurlencode((string) $paymentId), payload: ['paymentDate' => $paymentDate, 'name' => $paymentName, 'desc' => $description]);
+            $this->stays->request('PATCH', $endpoint.'/payments/'.rawurlencode((string) $paymentId), payload: [
+                '_f_val' => round($settlementAmountCents / 100, 2),
+                'paymentDate' => $paymentDate,
+                'name' => $paymentName,
+                'desc' => $description,
+            ]);
         }
         $claim->refresh();
-        $result = $this->reconcilePrevious($order, $attempt->id, $attemptHash, $snapshot, $claim, $endpoint, $provider, $paymentDate);
+        $result = $this->reconcilePrevious($order, $attempt->id, $attemptHash, $snapshot, $claim, $endpoint, $provider, $paymentDate, $settlementAmountCents);
         if (! $result['ready']) {
             $this->markAttentionIfProcessing($claim, 'existing_settlement_unconfirmed');
         }
@@ -198,14 +208,15 @@ class ExistingReservationSettlement
     /** @param array<string, mixed> $snapshot
      * @return array{ready: bool, code: string}
      */
-    private function reconcilePrevious(DirectBookingOrder $order, string $attemptId, string $attemptHash, array $snapshot, DirectBookingStaysAction $action, string $endpoint, string $provider, string $paymentDate): array
+    private function reconcilePrevious(DirectBookingOrder $order, string $attemptId, string $attemptHash, array $snapshot, DirectBookingStaysAction $action, string $endpoint, string $provider, string $paymentDate, int $settlementAmountCents): array
     {
         $request = is_array($action->request_snapshot) ? $action->request_snapshot : [];
         $postCompletedPayment = ($request['operation'] ?? null) === 'post_completed';
         if (! in_array($action->status, ['succeeded', 'processing', 'attention_required'], true)
             || ($request['payment_id'] ?? null) !== ($snapshot['payment_id'] ?? null)
             || ($request['operation'] ?? null) !== ((($snapshot['receivable_creation_timing'] ?? null) === 'after_capture') ? 'post_completed' : 'patch_pending')
-            || ($request['amount_cents'] ?? null) !== ($snapshot['pending_amount_cents'] ?? null)
+            || ($request['amount_cents'] ?? null) !== $settlementAmountCents
+            || ($request['base_amount_cents'] ?? $snapshot['pending_amount_cents'] ?? null) !== ($snapshot['pending_amount_cents'] ?? null)
             || ($request['payment_date'] ?? null) !== $paymentDate || ($request['provider_id'] ?? null) !== $provider
             || ($request['attempt_id'] ?? null) !== $attemptId || ($request['attempt_hash'] ?? null) !== $attemptHash) {
             return ['ready' => false, 'code' => 'existing_settlement_unconfirmed'];
@@ -232,10 +243,10 @@ class ExistingReservationSettlement
         $verified = is_array($reservation) && $this->guard->matchesReservation($reservation, $snapshot, allowConfirmedTransition: true)
             && is_array($payment) && ($payment['type'] ?? null) === 'credit' && ($payment['status'] ?? null) === 'completed'
             && ($payment['paymentDate'] ?? null) === $paymentDate && ($payment['_idpaymentProvider'] ?? null) === $provider
-            && MoneyAmount::toCents($payment['_f_val'] ?? null) === ($snapshot['pending_amount_cents'] ?? null)
+            && MoneyAmount::toCents($payment['_f_val'] ?? null) === $settlementAmountCents
             && is_string($paymentId) && preg_match('/^[a-f0-9]{24}$/iD', $paymentId)
             && $this->matchesMarker($payment, $marker, $hash)
-            && $this->financeConfirmsSettlement($snapshot, $provider, $paymentDate, $paymentId);
+            && $this->financeConfirmsSettlement($snapshot, $provider, $paymentDate, $paymentId, $settlementAmountCents);
         if (! $verified) {
             return ['ready' => false, 'code' => 'existing_settlement_unconfirmed'];
         }
@@ -313,7 +324,7 @@ class ExistingReservationSettlement
     }
 
     /** @param array<string, mixed> $snapshot */
-    private function financeConfirmsSettlement(array $snapshot, string $provider, string $paymentDate, string $paymentId): bool
+    private function financeConfirmsSettlement(array $snapshot, string $provider, string $paymentDate, string $paymentId, int $settlementAmountCents): bool
     {
         if (! preg_match('/^[a-f0-9]{24}$/iD', $paymentId)) {
             return false;
@@ -325,6 +336,6 @@ class ExistingReservationSettlement
             && ($financial['type'] ?? null) === 'credit' && ($financial['paid'] ?? null) === true
             && ($financial['bankAccountId'] ?? null) === $provider
             && ($financial['payment']['paymentDate'] ?? null) === $paymentDate
-            && MoneyAmount::toCents($financial['_mcval']['BRL'] ?? null) === ($snapshot['pending_amount_cents'] ?? null);
+            && MoneyAmount::toCents($financial['_mcval']['BRL'] ?? null) === $settlementAmountCents;
     }
 }

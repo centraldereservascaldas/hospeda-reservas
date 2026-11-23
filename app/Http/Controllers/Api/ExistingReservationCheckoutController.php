@@ -3,14 +3,19 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RecoverExistingReservationCheckoutRequest;
 use App\Http\Requests\StoreExistingReservationCheckoutRequest;
 use App\Http\Resources\DirectBookingOrderResource;
+use App\Services\ExistingCheckoutRecoveryCredential;
 use App\Services\ExistingReservationBalance;
 use App\Services\ExistingReservationBootstrapOrigin;
 use App\Services\ExistingReservationCheckoutDetails;
+use App\Services\ExistingReservationCheckoutRecoveryService;
 use App\Services\ExistingReservationCheckoutService;
 use App\Services\ExistingReservationLedgerAudit;
 use App\Services\ExistingReservationPaymentChannels;
+use App\Services\ExistingReservationPaymentPlanPolicy;
+use App\Services\ExistingReservationPropertySummary;
 use App\Services\MoneyAmount;
 use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\DirectCheckoutPaymentService;
@@ -19,7 +24,37 @@ use Illuminate\Http\JsonResponse;
 
 class ExistingReservationCheckoutController extends Controller
 {
-    public function show(string $code, StaysExternalApiClient $stays, ExistingReservationBalance $balance, DirectCheckoutPaymentService $gateway, ExistingReservationPaymentChannels $channels): JsonResponse
+    public function recoveryCredential(string $code, ExistingCheckoutRecoveryCredential $credentials): JsonResponse
+    {
+        $headers = ['Cache-Control' => 'no-store, private', 'X-Robots-Tag' => 'noindex, nofollow'];
+        if (! preg_match('/^[A-Z0-9]{5}$/D', $code)) {
+            return response()->json(['success' => false], 404, $headers);
+        }
+
+        return response()->json(['success' => true, 'credential' => $credentials->issue($code)], 200, $headers);
+    }
+
+    public function recover(RecoverExistingReservationCheckoutRequest $request, string $code, ExistingReservationCheckoutRecoveryService $recovery): JsonResponse
+    {
+        $headers = ['Cache-Control' => 'no-store, private', 'X-Robots-Tag' => 'noindex, nofollow'];
+        $result = $recovery->recover($code, $request->validated('recoverySecret'));
+
+        if ($result['kind'] === 'resume') {
+            return response()->json(['success' => true, 'resume' => [
+                'reference' => $result['reference'],
+                'token' => $result['token'],
+                'expiresAt' => $result['expiresAt'],
+            ]], 200, $headers);
+        }
+
+        if ($result['kind'] === 'restart') {
+            return response()->json(['success' => true, 'restart' => true], 200, $headers);
+        }
+
+        return response()->json(['success' => false], 404, $headers);
+    }
+
+    public function show(string $code, StaysExternalApiClient $stays, ExistingReservationBalance $balance, DirectCheckoutPaymentService $gateway, ExistingReservationPaymentChannels $channels, ExistingReservationPropertySummary $propertySummary): JsonResponse
     {
         $headers = ['Cache-Control' => 'no-store, private', 'X-Robots-Tag' => 'noindex, nofollow'];
         if (config('direct-booking.existing_reservation_checkout_enabled', false) !== true) {
@@ -35,6 +70,24 @@ class ExistingReservationCheckoutController extends Controller
         }
         if (($reservation['id'] ?? null) !== $code || ! in_array($reservation['type'] ?? null, ['reserved', 'booked'], true)) {
             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404, $headers);
+        }
+        $price = $reservation['price'] ?? null;
+        $reservationTotal = is_array($price) && ($price['currency'] ?? null) === 'BRL'
+            ? MoneyAmount::toCents($price['_f_total'] ?? null)
+            : null;
+        $reportedPaid = $balance->reportedPaid($reservation);
+        if (($reservation['type'] ?? null) === 'booked' && is_int($reservationTotal) && $reservationTotal > 0
+            && ($reportedPaid['present'] ?? false) === true && is_int($reportedPaid['cents'] ?? null)
+            && $reportedPaid['cents'] >= $reservationTotal) {
+            return response()->json([
+                'success' => true,
+                'reservation' => ['code' => $code, 'state' => 'completed'],
+            ], 200, $headers);
+        }
+        if (($reservation['type'] ?? null) === 'reserved' && is_int($reservationTotal) && $reservationTotal > 0
+            && ($reportedPaid['present'] ?? false) === true && is_int($reportedPaid['cents'] ?? null)
+            && $reportedPaid['cents'] >= $reservationTotal) {
+            return response()->json(['success' => false, 'message' => 'Não foi possível consultar esta reserva agora.'], 503, $headers);
         }
         $payments = $stays->get('/booking/reservations/'.$code.'/payments');
         $paymentReview = is_array($payments) ? $balance->inspect($reservation, $payments) : ['status' => 'review_required', 'candidate_cents' => null];
@@ -62,27 +115,17 @@ class ExistingReservationCheckoutController extends Controller
         $price = $reservation['price'] ?? [];
         $total = is_array($price) && ($price['currency'] ?? null) === 'BRL' ? MoneyAmount::toCents($price['_f_total'] ?? null) : null;
         $listingId = $reservation['_idlisting'] ?? null;
-        $catalog = json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true);
-        $property = collect(is_array($catalog) ? $catalog : [])->first(fn ($item) => is_array($item) && is_string($listingId) && in_array($listingId, [$item['id'] ?? null, $item['staysListingId'] ?? null], true));
-        if (! is_array($property) && is_string($listingId) && preg_match('/^[a-f0-9]{24}$/iD', $listingId)) {
-            $listing = $stays->get('/content/listings/'.rawurlencode($listingId));
-            if (is_array($listing) && in_array($listingId, [$listing['_id'] ?? null, $listing['id'] ?? null], true)) {
-                $titles = is_array($listing['_mstitle'] ?? null) ? $listing['_mstitle'] : [];
-                $imageMeta = is_array($listing['_t_mainImageMeta'] ?? null) ? $listing['_t_mainImageMeta'] : [];
-                $title = $titles['pt_BR'] ?? null;
-                $image = $imageMeta['url'] ?? null;
-                $property = [
-                    'title' => is_string($title) && trim($title) !== '' ? trim($title) : null,
-                    'images' => is_string($image) && str_starts_with($image, 'https://') ? [$image] : [],
-                ];
-            }
-        }
+        $property = $propertySummary->find($listingId);
         $guests = $reservation['guestsDetails'] ?? [];
         $guests = is_array($guests) ? $guests : [];
         $available = ['methods' => [], 'card_installments' => []];
         $details = app(ExistingReservationCheckoutDetails::class);
         $reportedPaid = $balance->reportedPaid($reservation);
-        if ($details->validGuests($reservation) && $details->validIdentity($reservation)
+        $policy = app(ExistingReservationPaymentPlanPolicy::class);
+        $fullAvailable = $policy->fullBalanceMatches($reservation, $paymentReview, $reportedPaid);
+        $depositAvailable = $policy->depositMatches($reservation, $paymentReview, $reportedPaid);
+        if (($fullAvailable || $depositAvailable)
+            && $details->validGuests($reservation) && $details->validIdentity($reservation)
             && config('direct-booking.existing_reservation_checkout_enabled', false)
             && CieloDirectConfiguration::isProvider((string) config('direct-booking.payment_provider')) && is_array($payments)) {
             if ($paymentReview['status'] === 'pending_candidate') {
@@ -92,7 +135,9 @@ class ExistingReservationCheckoutController extends Controller
                 $available = $channels->availableForNewReceivable($gateway->availableMethods());
             }
         }
-        $methods = $available['methods'];
+        $depositMethods = $depositAvailable ? array_values(array_intersect($available['methods'], ['pix'])) : [];
+        $methods = $fullAvailable ? $available['methods'] : [];
+        $available['card_installments'] = $fullAvailable ? $available['card_installments'] : [];
 
         return response()->json([
             'success' => true,
@@ -101,6 +146,8 @@ class ExistingReservationCheckoutController extends Controller
                 'status' => $reservation['type'],
                 'listingId' => is_string($listingId) ? $listingId : null,
                 'property' => is_array($property) ? ($property['title'] ?? null) : null,
+                'partnerCode' => is_string($reservation['partner']['name'] ?? null) && mb_strtolower(trim($reservation['partner']['name'])) === 'api booking.com' && is_string($reservation['partnerCode'] ?? null) ? mb_substr($reservation['partnerCode'], 0, 100) : null,
+                'propertyDetails' => is_array($property) ? array_intersect_key($property, array_flip(['images', 'description', 'condoTitle', 'condoDescription', 'condoImages'])) : null,
                 'image' => is_array($property) ? ($property['images'][0] ?? null) : null,
                 'checkIn' => $reservation['checkInDate'] ?? null,
                 'checkOut' => $reservation['checkOutDate'] ?? null,
@@ -110,8 +157,14 @@ class ExistingReservationCheckoutController extends Controller
                 'infants' => $guests['infants'] ?? null,
                 'totalCents' => $total,
                 'candidateBalanceCents' => $paymentReview['candidate_cents'],
+                'outstandingBalanceCents' => is_int($total) && ($reportedPaid['present'] ?? false) === true && is_int($reportedPaid['cents'] ?? null)
+                    ? max(0, $total - $reportedPaid['cents']) : null,
                 'balanceStatus' => $paymentReview['status'],
                 'paymentEnabled' => $methods !== [],
+                'paymentPlans' => [
+                    'full' => ['methods' => $methods, 'amountCents' => $methods !== [] ? $paymentReview['candidate_cents'] : null],
+                    'deposit' => ['methods' => $depositMethods, 'amountCents' => $depositMethods !== [] ? intdiv($total + 1, 2) : null],
+                ],
                 'paymentMethods' => $methods,
                 'cardInstallments' => $available['card_installments'],
             ],
@@ -124,8 +177,13 @@ class ExistingReservationCheckoutController extends Controller
         $order = $result['order'];
         $response = ['success' => $order !== null, 'code' => $result['code']];
         if ($order !== null) {
-            $methods = app(ExistingReservationPaymentChannels::class)->availableMethods($gateway->availableMethods($order));
+            $methods = $result['code'] === 'existing_checkout_replay_only'
+                ? []
+                : app(ExistingReservationPaymentChannels::class)->availableMethods($gateway->availableMethods($order));
             $snapshot = is_array($order->quote_snapshot) ? ($order->quote_snapshot['existing_reservation'] ?? null) : null;
+            if (is_array($snapshot) && ! app(ExistingReservationPaymentPlanPolicy::class)->canStartOrderPayment($order, (string) ($snapshot['selected_payment_method'] ?? ''))) {
+                $methods = [];
+            }
             if (is_array($snapshot)) {
                 $selected = $snapshot['selected_payment_method'] ?? null;
                 if (is_string($selected)) {

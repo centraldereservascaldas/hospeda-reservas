@@ -28,6 +28,15 @@ class AppServiceProvider extends ServiceProvider
     {
         DirectBookingOrder::observe(DirectBookingOrderObserver::class);
 
+        // The shared limit bounds enumeration across reservation codes and endpoints.
+        RateLimiter::for('existing-reservation-global', fn (Request $request): Limit => Limit::perMinute(30)->by('existing-reservation:ip:'.(string) $request->ip())
+        );
+
+        foreach (['summary' => 10, 'checkout' => 5, 'recover' => 10, 'credential' => 10] as $purpose => $maximum) {
+            RateLimiter::for('existing-reservation-'.$purpose, fn (Request $request): Limit => Limit::perMinute($maximum)->by('existing-reservation:'.$purpose.':ip:'.(string) $request->ip())
+            );
+        }
+
         RateLimiter::for('checkout-resume', function (Request $request): array {
             $ip = (string) $request->ip();
             $reference = (string) $request->route('publicReference');

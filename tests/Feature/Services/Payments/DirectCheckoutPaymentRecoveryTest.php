@@ -78,7 +78,7 @@ class DirectCheckoutPaymentRecoveryTest extends TestCase
     public function test_stale_pending_payment_is_reconciled_from_gateway_after_webhook_was_missed(): void
     {
         $this->freezeTime();
-        config(['services.mercadopago.access_token' => 'test-access-token']);
+        config(['services.mercadopago.access_token' => 'test-access-token', 'direct-booking.existing_reservation_checkout_enabled' => false]);
         Http::preventStrayRequests();
 
         $order = $this->createPendingOrder();

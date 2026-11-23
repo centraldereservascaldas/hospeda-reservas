@@ -32,17 +32,21 @@ class ExistingReservationPaymentGuard
                 && $expectedPaymentId === null
                 && ($snapshot['pending_provider_id'] ?? null) === ($snapshot['channel_provider_ids']['pix'] ?? null)
                 && $candidate['status'] === 'unrecorded_candidate'
-                && $candidate['candidate_cents'] === $expectedAmount
+                && $candidate['candidate_cents'] === ($snapshot['outstanding_balance_cents'] ?? $expectedAmount)
                 && $candidate['payment_id'] === null;
         }
         if (! is_string($expectedPaymentId) || $expectedPaymentId === '') {
+            return false;
+        }
+        $expectedReceivableAmount = $snapshot['receivable_amount_cents'] ?? $expectedAmount;
+        if (! is_int($expectedReceivableAmount) || $expectedReceivableAmount <= 0) {
             return false;
         }
         $matches = array_values(array_filter($payments, fn (mixed $payment): bool => is_array($payment) && ($payment['_id'] ?? null) === $expectedPaymentId));
         $expectedProvider = $snapshot['pending_provider_id'] ?? null;
 
         return $candidate['status'] === 'pending_candidate'
-            && $candidate['candidate_cents'] === $expectedAmount
+            && $candidate['candidate_cents'] === $expectedReceivableAmount
             && is_string($candidate['payment_id'])
             && hash_equals($expectedPaymentId, $candidate['payment_id'])
             && is_string($expectedProvider) && count($matches) === 1

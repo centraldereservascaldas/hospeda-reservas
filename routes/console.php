@@ -16,6 +16,7 @@ Artisan::command('inspire', function () {
 Schedule::command('direct-booking:recover-reservations')->everyMinute()->withoutOverlapping(5);
 Schedule::command('direct-booking:recover-confirmation-emails')->everyMinute()->withoutOverlapping(5)->onOneServer();
 Schedule::command('direct-booking:prune-expired-resume-tokens')->dailyAt('03:30')->withoutOverlapping(10);
+Schedule::command('direct-booking:prune-existing-checkout-recovery-credentials')->dailyAt('03:40')->withoutOverlapping(10);
 
 Schedule::command('stays:sync-discovery')->hourly()->withoutOverlapping(120)->onOneServer()->runInBackground();
 

@@ -8,6 +8,7 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
 use App\Services\DirectStaysPaymentService;
+use App\Services\LegalPageRegistry;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -112,8 +113,11 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
             }
             $this->fail('Unexpected synthetic external request.');
         });
+        $contract = app(LegalPageRegistry::class)->find('contrato');
+        $this->assertIsArray($contract);
         $createdOrder = $this->withHeader('Idempotency-Key', 'synthetic-bootstrap-order-123')->postJson('/api/existing-reservations/ZX91K/checkout', [
-            'expectedBalanceCents' => 101600, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Synthetic Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true,
+            'expectedBalanceCents' => 101600, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Synthetic Guest', 'email' => 'guest@example.test', 'phone' => '64999999999', 'cpf' => '52998224725'], 'acceptedPayment' => true,
+            'acceptedContract' => ['version' => $contract['version'], 'contentHash' => hash('sha256', json_encode($contract, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))],
         ])->assertCreated();
         $this->assertFalse($created);
         $this->assertFalse($settled);
@@ -123,7 +127,7 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
         $reference = $createdOrder->json('resume.reference');
         $token = $createdOrder->json('resume.token');
         $this->withHeaders(['Idempotency-Key' => 'synthetic-bootstrap-pix-1234', 'X-Checkout-Resume-Token' => $token])
-            ->postJson('/api/checkout/'.$reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix', 'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']])
+            ->postJson('/api/checkout/'.$reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix', 'payerIdentification' => ['type' => 'CPF', 'number' => '52998224725']])
             ->assertCreated()->assertJsonPath('payment.status', 'pending')->assertJsonPath('payment.pix.copyPaste', 'synthetic-pix');
         $this->assertFalse($settled);
         $this->assertFalse($booked);

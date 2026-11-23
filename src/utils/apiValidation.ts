@@ -70,6 +70,7 @@ const checkoutOrderStatuses = [
   'liberacao_pendente',
   'pagamento_pendente',
   'pago_em_confirmacao',
+  'entrada_conciliada',
   'confirmado',
   'concluido',
   'expirado',
@@ -167,6 +168,8 @@ export const isDirectBookingOperationsOrder = (
         typeof value.resumeTokenRevocation.reviewedBy === 'string') &&
       (value.resumeTokenRevocation.at === null ||
         isIsoDateTime(value.resumeTokenRevocation.at)))) &&
+  (value.existingDepositReviewRequired === undefined ||
+    typeof value.existingDepositReviewRequired === 'boolean') &&
   typeof value.paymentApprovedWithoutConfirmedReservation === 'boolean' &&
   typeof value.latePaymentAfterHold === 'boolean' &&
   typeof value.staysActionFailed === 'boolean' &&

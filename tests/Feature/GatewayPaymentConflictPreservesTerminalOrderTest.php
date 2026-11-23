@@ -21,6 +21,12 @@ class GatewayPaymentConflictPreservesTerminalOrderTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+    }
+
     public function test_initial_submission_keeps_invalid_gateway_ids_unknown_without_lookup(): void
     {
         config([

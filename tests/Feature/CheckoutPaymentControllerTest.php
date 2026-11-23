@@ -21,6 +21,7 @@ class CheckoutPaymentControllerTest extends TestCase
 
         config([
             'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
+            'direct-booking.existing_reservation_checkout_enabled' => false,
             'services.cielo.checkout_sop_client_id' => 'test-client-id',
             'services.cielo.checkout_sop_client_secret' => 'test-client-secret',
             'services.cielo.checkout_merchant_id' => 'cielo-merchant-test',

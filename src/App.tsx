@@ -19,6 +19,7 @@ import { SofiaAssistantTrigger } from './components/assistant/SofiaAssistantTrig
 import { getAuthCallbackError } from './utils/authCallback';
 import { MainContentRouter } from './components/MainContentRouter';
 import { AppOverlayLayer } from './components/AppOverlayLayer';
+import { CheckoutLoadingSkeleton } from './components/booking/CheckoutLoadingSkeleton';
 import type { AppOverlayBookingPayload } from './types/booking';
 import { createDefaultSearchFilters, parseSearchFilters } from './utils/searchUrlState';
 import { useSearchUrlSync } from './hooks/useSearchUrlSync';
@@ -678,7 +679,9 @@ export default function App() {
 
   if (existingReservationCode) {
     return (
-      <Suspense fallback={<main role="status">Consultando reserva…</main>}>
+      <Suspense
+        fallback={<CheckoutLoadingSkeleton fullPage label="Consultando os dados da reserva" />}
+      >
         <ExistingReservationCheckout code={existingReservationCode} />
       </Suspense>
     );

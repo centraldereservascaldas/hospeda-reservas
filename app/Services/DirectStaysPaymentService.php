@@ -9,6 +9,7 @@ use App\Models\DirectBookingStaysAction;
 use App\Services\Payments\CieloDirectConfiguration;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class DirectStaysPaymentService
 {
@@ -23,6 +24,11 @@ class DirectStaysPaymentService
         $order->refresh();
         if ($order->status === DirectBookingOrderStatus::Contestado || $order->payment_status === 'charged_back') {
             return $this->result(false, 'gateway_chargeback_requires_review', 'A contestação do pagamento exige revisão operacional; nenhuma confirmação automática foi iniciada.');
+        }
+
+        if ($order->origin === 'stays_existing' && $order->status === DirectBookingOrderStatus::EntradaConciliada
+            && $order->payment_status === 'approved') {
+            return $this->revalidateSettledDeposit($order);
         }
 
         if (! config('direct-booking.confirmation_enabled', false)) {
@@ -145,6 +151,16 @@ class DirectStaysPaymentService
             return $this->attention($order, 'existing_reservation_changed', 'O estado da reserva mudou após o pagamento e requer conferência.');
         }
         if (! $guard->hasFullyPaidReservation($reservation, $snapshot)) {
+            if (($snapshot['payment_plan'] ?? null) === 'deposit' && ($reservation['type'] ?? null) === 'reserved'
+                && $this->confirmExistingDepositReservation($order, $snapshot, $endpoint, $reservation)) {
+                return $this->result(true, 'existing_deposit_settled', 'Entrada registrada e reserva confirmada. O saldo restante permanece pendente.');
+            }
+
+            if (($snapshot['payment_plan'] ?? null) === 'deposit' && ($reservation['type'] ?? null) === 'booked'
+                && $this->markVerifiedDeposit($order, $snapshot)) {
+                return $this->result(true, 'existing_deposit_settled', 'Entrada registrada e reserva confirmada. O saldo restante permanece pendente.');
+            }
+
             return $this->attention($order, 'existing_balance_remaining', 'O pagamento foi registrado, mas o saldo total da reserva ainda não aparece como pago na Stays.');
         }
 
@@ -182,6 +198,224 @@ class DirectStaysPaymentService
         $this->markActionSucceeded($action, (string) $order->stays_reservation_id, $this->safeExistingReservationSnapshot($verified));
 
         return $this->markConfirmed($order, $verified);
+    }
+
+    /** @param array<string, mixed> $snapshot
+     * @param  array<string, mixed>  $reservation
+     */
+    private function confirmExistingDepositReservation(DirectBookingOrder $order, array $snapshot, string $endpoint, array $reservation): bool
+    {
+        if (! $this->hasVerifiedDepositBalance($order, $snapshot)) {
+            return false;
+        }
+
+        $action = $this->action($order, 'confirm_reservation', ['type' => 'booked', 'payment_plan' => 'deposit']);
+        if ($action->status === 'succeeded') {
+            return $this->markVerifiedDeposit($order, $snapshot);
+        }
+        if ($action->attempt_count > 0 || $action->status !== 'pending') {
+            $this->markAttention($action, $order, 'existing_confirmation_unconfirmed', 'A confirmação anterior exige conferência; nenhuma repetição foi enviada.');
+
+            return false;
+        }
+
+        $claim = $this->claim($action, $order);
+        if (! $claim['claimed']) {
+            return false;
+        }
+
+        $latest = $this->stays->get($endpoint);
+        if (! is_array($latest) || ! app(ExistingReservationPaymentGuard::class)->matchesReservation($latest, $snapshot, allowConfirmedTransition: true)
+            || ($latest['type'] ?? null) !== 'reserved' || ! $this->hasVerifiedDepositBalance($order, $snapshot)) {
+            $this->markAttention($action, $order, 'existing_reservation_changed', 'A reserva ou a entrada mudou antes da confirmação.');
+
+            return false;
+        }
+
+        $order->refresh();
+        if ($order->payment_status !== 'approved'
+            || ! in_array($order->status, [DirectBookingOrderStatus::PagoEmConfirmacao, DirectBookingOrderStatus::AtencaoOperacional], true)) {
+            $this->markAttention($action, $order, 'existing_payment_state_changed', 'O estado do pagamento mudou antes da confirmação.');
+
+            return false;
+        }
+
+        $this->stays->request('PATCH', $endpoint, payload: ['type' => 'booked']);
+        $verified = $this->stays->get($endpoint);
+        if (! is_array($verified) || ($verified['type'] ?? null) !== 'booked'
+            || ! app(ExistingReservationPaymentGuard::class)->matchesReservation($verified, $snapshot, allowConfirmedTransition: true)
+            || ! $this->hasVerifiedDepositBalance($order, $snapshot)) {
+            $this->markAttention($action, $order, 'existing_confirmation_unconfirmed', 'A Stays não confirmou a reserva mantendo o saldo restante em aberto.');
+
+            return false;
+        }
+
+        $this->markActionSucceeded($action, (string) $order->stays_reservation_id, $this->safeExistingReservationSnapshot($verified));
+
+        return $this->markVerifiedDeposit($order, $snapshot);
+    }
+
+    /** @param array<string, mixed> $snapshot */
+    private function hasVerifiedDepositBalance(DirectBookingOrder $order, array $snapshot): bool
+    {
+        if (config('direct-booking.experimental_existing_deposit_enabled', false) !== true
+            || config('direct-booking.experimental_existing_cycle_settlement_enabled', false) !== true
+            || config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
+            return false;
+        }
+
+        $cycle = DB::table('existing_reservation_payment_cycles')->where('direct_booking_order_id', $order->id)
+            ->where('state', 'settled')->first();
+        if ($cycle === null) {
+            return false;
+        }
+
+        $audit = app(ExperimentalExistingCycleSettlement::class)->revalidateHistorical($cycle);
+
+        return is_array($audit) && is_int($audit['balance_cents'] ?? null) && $audit['balance_cents'] > 0
+            && ($audit['total_cents'] ?? null) === ($snapshot['reservation_total_cents'] ?? null);
+    }
+
+    /** @return array{ready: bool, code: string, message: string} */
+    private function revalidateSettledDeposit(DirectBookingOrder $order): array
+    {
+        $verificationId = $this->beginDepositVerification($order);
+        $unverified = function () use ($order, $verificationId): array {
+            if ($verificationId !== null) {
+                $this->recordDepositVerification($order, $verificationId, false);
+            }
+
+            return $this->result(false, 'existing_deposit_revalidation_required', 'Não foi possível confirmar novamente a entrada na Stays. Consulte o atendimento.');
+        };
+        $snapshot = $order->quote_snapshot['existing_reservation'] ?? null;
+        if ($verificationId === null || ! is_array($snapshot) || ($snapshot['payment_plan'] ?? null) !== 'deposit'
+            || ! is_string($order->stays_reservation_id) || $order->stays_reservation_id === ''
+            || config('direct-booking.experimental_existing_deposit_enabled', false) !== true
+            || config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true
+            || config('direct-booking.experimental_existing_cycle_settlement_enabled', false) !== true) {
+            return $unverified();
+        }
+        $cycle = DB::table('existing_reservation_payment_cycles')->where('direct_booking_order_id', $order->id)
+            ->where('state', 'settled')->first();
+        if ($cycle === null || ! is_string($cycle->settlement_proof_hash)) {
+            return $unverified();
+        }
+        // Revalidation reads the Stays outside the reservation lock. The local
+        // proof is checked again afterwards before reporting a successful replay.
+        $audit = app(ExperimentalExistingCycleSettlement::class)->revalidateHistorical($cycle);
+        if (! is_array($audit) || ($audit['total_cents'] ?? null) !== ($snapshot['reservation_total_cents'] ?? null)) {
+            return $unverified();
+        }
+        $verified = app(ExistingReservationPaymentLock::class)->synchronized($order->stays_reservation_id, function () use ($order, $snapshot, $cycle, $verificationId): bool {
+            $locked = DirectBookingOrder::query()->lockForUpdate()->find($order->id);
+            $current = DB::table('existing_reservation_payment_cycles')->where('id', $cycle->id)->lockForUpdate()->first();
+
+            $latestStart = collect($locked?->operational_events ?? [])->filter(fn ($event) => is_array($event) && ($event['event'] ?? null) === 'existing_deposit_verification_started')->last();
+            if (($latestStart['id'] ?? null) !== $verificationId) {
+                return false;
+            }
+            $valid = $locked !== null && $current !== null && $locked->origin === 'stays_existing'
+                && $locked->status === DirectBookingOrderStatus::EntradaConciliada && $locked->payment_status === 'approved'
+                && ($locked->quote_snapshot['existing_reservation'] ?? null) === $snapshot
+                && is_string($current->settlement_proof_hash) && hash_equals($cycle->settlement_proof_hash, $current->settlement_proof_hash)
+                && config('direct-booking.experimental_existing_deposit_enabled', false) === true
+                && config('direct-booking.experimental_existing_ledger_audit_enabled', false) === true
+                && app(ExperimentalExistingCycleSettlement::class)->recordedProofValid($current);
+            if ($valid) {
+                $events = $locked->operational_events ?? [];
+                $events[] = ['event' => 'existing_deposit_verification', 'id' => $verificationId, 'verified' => true, 'at' => now()->toISOString()];
+                $locked->operational_events = $events;
+                $locked->deposit_verification_due_at = now()->addSeconds(max(3600, (int) config('direct-booking.settled_payment_reconciliation_interval_seconds', 86400)));
+                $locked->save();
+            }
+
+            return $valid;
+        });
+
+        if (! $verified) {
+            return $unverified();
+        }
+
+        return $this->result(true, 'existing_deposit_settled', 'Entrada registrada. Consulte o saldo atual da reserva.');
+    }
+
+    private function beginDepositVerification(DirectBookingOrder $order): ?string
+    {
+        return DB::transaction(function () use ($order): ?string {
+            $locked = DirectBookingOrder::query()->lockForUpdate()->find($order->id);
+            if (! $locked || $locked->origin !== 'stays_existing' || $locked->status !== DirectBookingOrderStatus::EntradaConciliada || $locked->payment_status !== 'approved') {
+                return null;
+            }
+            $id = (string) Str::uuid();
+            $events = $locked->operational_events ?? [];
+            $events[] = ['event' => 'existing_deposit_verification_started', 'id' => $id, 'at' => now()->toISOString()];
+            $locked->deposit_verification_due_at = now()->addSeconds(min(max(3600, (int) config('direct-booking.settled_payment_reconciliation_interval_seconds', 86400)), max(60, (int) config('direct-booking.payment_reconciliation_interval_seconds', 300))));
+            $locked->operational_events = $events;
+            $locked->save();
+
+            return $id;
+        });
+    }
+
+    private function recordDepositVerification(DirectBookingOrder $order, string $verificationId, bool $verified): void
+    {
+        DB::transaction(function () use ($order, $verificationId, $verified): void {
+            $locked = DirectBookingOrder::query()->lockForUpdate()->find($order->id);
+            if (! $locked || $locked->origin !== 'stays_existing' || $locked->status !== DirectBookingOrderStatus::EntradaConciliada || $locked->payment_status !== 'approved') {
+                return;
+            }
+            $events = $locked->operational_events ?? [];
+            $latestStart = collect($events)->filter(fn ($event) => is_array($event) && ($event['event'] ?? null) === 'existing_deposit_verification_started')->last();
+            if (($latestStart['id'] ?? null) !== $verificationId) {
+                return;
+            }
+            $events[] = ['event' => 'existing_deposit_verification', 'id' => $verificationId, 'verified' => $verified, 'at' => now()->toISOString()];
+            $locked->operational_events = $events;
+            $locked->save();
+        });
+    }
+
+    /** @param array<string, mixed> $snapshot */
+    private function markVerifiedDeposit(DirectBookingOrder $order, array $snapshot): bool
+    {
+        if (config('direct-booking.experimental_existing_deposit_enabled', false) !== true
+            || config('direct-booking.experimental_existing_cycle_settlement_enabled', false) !== true
+            || config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true
+            || ! is_string($order->stays_reservation_id)) {
+            return false;
+        }
+        $cycle = DB::table('existing_reservation_payment_cycles')->where('direct_booking_order_id', $order->id)
+            ->where('state', 'settled')->first();
+        if ($cycle === null || ! is_string($cycle->settlement_proof_hash)) {
+            return false;
+        }
+        $audit = app(ExperimentalExistingCycleSettlement::class)->revalidateHistorical($cycle);
+        if (! is_array($audit) || ! is_int($audit['balance_cents'] ?? null) || $audit['balance_cents'] <= 0
+            || ($audit['total_cents'] ?? null) !== ($snapshot['reservation_total_cents'] ?? null)) {
+            return false;
+        }
+
+        return app(ExistingReservationPaymentLock::class)->synchronized($order->stays_reservation_id, function () use ($order, $snapshot, $cycle): bool {
+            $locked = DirectBookingOrder::query()->lockForUpdate()->find($order->id);
+            $current = DB::table('existing_reservation_payment_cycles')->where('id', $cycle->id)->lockForUpdate()->first();
+            if (! $locked || ! $current || $locked->origin !== 'stays_existing' || $locked->payment_status !== 'approved'
+                || ($locked->quote_snapshot['existing_reservation'] ?? null) !== $snapshot
+                || ! in_array($locked->status, [DirectBookingOrderStatus::PagoEmConfirmacao, DirectBookingOrderStatus::AtencaoOperacional], true)
+                || ! is_string($current->settlement_proof_hash) || ! hash_equals($cycle->settlement_proof_hash, $current->settlement_proof_hash)
+                || ! app(ExperimentalExistingCycleSettlement::class)->recordedProofValid($current)
+                || config('direct-booking.experimental_existing_deposit_enabled', false) !== true
+                || config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
+                return false;
+            }
+            $locked->transitionTo(DirectBookingOrderStatus::EntradaConciliada, ['source' => 'existing_deposit_settled']);
+            $locked->reservation_status = 'booked';
+            $events = $locked->operational_events ?? [];
+            $events[] = ['event' => 'existing_deposit_reservation_confirmed', 'at' => now()->toISOString(), 'snapshot' => $snapshot];
+            $locked->operational_events = $events;
+            $locked->save();
+
+            return true;
+        });
     }
 
     /** @return array{ready: bool, code: string, message: string} */
@@ -662,8 +896,14 @@ class DirectStaysPaymentService
     /** @return array{ready: bool, code: string, message: string} */
     private function attention(DirectBookingOrder $order, string $code, string $message): array
     {
-        DB::transaction(function () use ($order, $code): void {
+        $alreadySettled = DB::transaction(function () use ($order, $code): bool {
             $lockedOrder = DirectBookingOrder::query()->lockForUpdate()->findOrFail($order->id);
+            if ($lockedOrder->origin === 'stays_existing' && $lockedOrder->status === DirectBookingOrderStatus::EntradaConciliada
+                && $lockedOrder->payment_status === 'approved'
+                && in_array($code, ['existing_payment_not_confirmable', 'existing_settlement_already_started'], true)
+                && $order->status !== DirectBookingOrderStatus::EntradaConciliada) {
+                return true;
+            }
             if (! in_array($lockedOrder->status, [
                 DirectBookingOrderStatus::AtencaoOperacional,
                 DirectBookingOrderStatus::Expirado,
@@ -681,7 +921,13 @@ class DirectStaysPaymentService
             }
             $lockedOrder->operational_events = $events;
             $lockedOrder->save();
+
+            return false;
         });
+
+        if ($alreadySettled) {
+            return $this->revalidateSettledDeposit($order->fresh());
+        }
 
         return $this->result(false, $code, $message);
     }

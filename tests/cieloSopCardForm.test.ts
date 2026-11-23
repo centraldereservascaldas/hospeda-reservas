@@ -22,8 +22,14 @@ Object.assign(globalThis, {
 const React = (await import('react')).default;
 const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 const { CieloSopCardForm } = await import('../src/components/booking/CieloSopCardForm.tsx');
-const { formatBrazilianDocument, formatBrazilianPhone, formatCardExpiration, formatCardNumber } =
-  await import('../src/utils/checkoutInputFormatting.ts');
+const {
+  formatBrazilianDocument,
+  formatBrazilianPhone,
+  formatCardExpiration,
+  formatCardNumber,
+  isValidCardNumber,
+} = await import('../src/utils/checkoutInputFormatting.ts');
+const { isValidBrazilianTaxId } = await import('../src/utils/cpf.ts');
 
 function submitCardForm(form: HTMLFormElement) {
   const expiry = form.querySelector<HTMLInputElement>('.bp-sop-cardexpirationdate');
@@ -39,6 +45,9 @@ afterEach(() => {
 test('checkout input masks format and preserve CPF, CNPJ, phone and card expiration digits', () => {
   assert.equal(formatBrazilianDocument('12345678909'), '123.456.789-09');
   assert.equal(formatBrazilianDocument('12345678000199'), '12.345.678/0001-99');
+  assert.equal(formatBrazilianDocument('12abc34501de35', true), '12.ABC.345/01DE-35');
+  assert.equal(isValidBrazilianTaxId('12.ABC.345/01DE-35'), true);
+  assert.equal(isValidBrazilianTaxId('12.ABC.345/01DE-36'), false);
   assert.equal(formatBrazilianDocument('1234'), '123.4');
   assert.equal(formatBrazilianPhone('64999999999'), '(64) 99999-9999');
   assert.equal(formatBrazilianPhone('6433334444'), '(64) 3333-4444');
@@ -46,6 +55,12 @@ test('checkout input masks format and preserve CPF, CNPJ, phone and card expirat
   assert.equal(formatCardExpiration('12/2030'), '12/30');
   assert.equal(formatCardNumber('4111111111111111'), '4111 1111 1111 1111');
   assert.equal(formatCardExpiration('1230'), '12/30');
+});
+
+test('card number validation rejects repeated digits and keeps Luhn-valid card numbers', () => {
+  assert.equal(isValidCardNumber('0000000000000000'), false);
+  assert.equal(isValidCardNumber('1111111111111111'), false);
+  assert.equal(isValidCardNumber('4111111111111111'), true);
 });
 
 test('a R$ 2 booking clearly disables card while normal amounts offer installments', () => {
@@ -532,4 +547,37 @@ test('SOP validation errors restore the form so the guest can submit again', asy
   } finally {
     checkoutApi.getCieloSopAccessToken = originalGetToken;
   }
+});
+
+test('existing reservation card layout copies and updates the reservation holder CPF without changing installments total', () => {
+  const view = render(
+    React.createElement(CieloSopCardForm, {
+      reference: '',
+      amount: '885.00',
+      credentials: null,
+      onAttemptFinished: () => {},
+      preparePayment: async () => {
+        throw new Error('must not submit');
+      },
+      existingReservationHolderCpf: '12345678909',
+    }),
+  );
+  const documentField = view.getByLabelText('CPF ou CNPJ do titular do cartão') as HTMLInputElement;
+  const cardField = view.getByLabelText('Número do cartão');
+  assert.ok(documentField.compareDocumentPosition(cardField) & Node.DOCUMENT_POSITION_FOLLOWING);
+  fireEvent.click(view.getByLabelText('Usar o CPF do titular da reserva'));
+  assert.equal(documentField.value, '123.456.789-09');
+  fireEvent.change(documentField, { target: { value: '11222333000181' } });
+  assert.equal(documentField.value, '11.222.333/0001-81');
+  fireEvent.change(documentField, { target: { value: '12ABC34501DE35' } });
+  assert.equal(documentField.value, '12.ABC.345/01DE-35');
+  assert.equal(
+    (view.getByLabelText('Usar o CPF do titular da reserva') as HTMLInputElement).checked,
+    false,
+  );
+  const picker = view.getByRole('button', { name: /^Parcelamento .*1x/ });
+  fireEvent.click(picker);
+  fireEvent.click(view.getByRole('option', { name: /3x/ }));
+  assert.match(picker.textContent ?? '', /3x/);
+  assert.ok(view.getByText(/Total no cartão:/));
 });

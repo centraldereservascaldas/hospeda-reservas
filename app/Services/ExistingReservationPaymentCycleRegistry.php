@@ -104,22 +104,47 @@ class ExistingReservationPaymentCycleRegistry
                         $snapshot = $order->quote_snapshot['existing_reservation'] ?? null;
                         $pending = $currentAudit['pending_cents'] ?? null;
                         $previousOrder = DirectBookingOrder::query()->find($cycle->direct_booking_order_id);
-                        $previousPaymentId = $previousOrder?->quote_snapshot['existing_reservation']['payment_id'] ?? null;
-                        if (! is_array($snapshot) || ! is_int($balance) || ! is_int($pending) || $pending <= 0 || $pending > $balance
-                            || MoneyAmount::toCents($order->quote_total) !== $pending
-                            || ($snapshot['pending_amount_cents'] ?? null) !== $pending
-                            || ! is_string($previousPaymentId) || $previousPaymentId === ($snapshot['payment_id'] ?? null)
-                            || ($currentAudit['pending_payment_id'] ?? null) !== ($snapshot['payment_id'] ?? null)
-                            || ($currentAudit['pending_provider_id'] ?? null) !== ($snapshot['pending_provider_id'] ?? null)) {
+                        $previousPaymentId = $previousOrder?->staysActions()
+                            ->where('action_type', 'settle_existing_receivable')->where('status', 'succeeded')->value('external_id');
+                        $bootstrap = is_array($snapshot) && ($snapshot['bootstrap_receivable'] ?? false) === true
+                            && ($snapshot['receivable_creation_timing'] ?? null) === 'after_capture';
+                        $bootstrapMatches = $bootstrap && ($snapshot['payment_id'] ?? null) === null
+                            && array_key_exists('pending_payment_id', $currentAudit) && $currentAudit['pending_payment_id'] === null
+                            && array_key_exists('pending_provider_id', $currentAudit) && $currentAudit['pending_provider_id'] === null
+                            && array_key_exists('pending_cents', $currentAudit) && $currentAudit['pending_cents'] === null
+                            && ($snapshot['reported_paid_present'] ?? null) === true
+                            && is_int($currentAudit['paid_cents'] ?? null)
+                            && $currentAudit['paid_cents'] === ($snapshot['reported_paid_cents'] ?? null)
+                            && ($currentAudit['total_cents'] ?? null) === ($snapshot['reservation_total_cents'] ?? null)
+                            && ($snapshot['pending_provider_id'] ?? null) === ($snapshot['channel_provider_ids']['pix'] ?? null)
+                            && is_string($snapshot['pending_provider_id'] ?? null)
+                            && $snapshot['pending_provider_id'] !== ''
+                            && in_array($snapshot['selected_payment_method'] ?? null, ['pix', 'card'], true)
+                            && is_int($balance) && $balance > 0
+                            && ($snapshot['outstanding_balance_cents'] ?? null) === $balance
+                            && is_int($snapshot['pending_amount_cents'] ?? null) && $snapshot['pending_amount_cents'] > 0
+                            && $snapshot['pending_amount_cents'] <= $balance
+                            && MoneyAmount::toCents($order->quote_total) === $snapshot['pending_amount_cents'];
+                        $pendingMatches = ! $bootstrap && is_array($snapshot) && is_int($balance) && is_int($pending)
+                            && $pending > 0 && $pending <= $balance
+                            && MoneyAmount::toCents($order->quote_total) === $pending
+                            && ($snapshot['pending_amount_cents'] ?? null) === $pending
+                            && is_string($snapshot['payment_id'] ?? null)
+                            && $previousPaymentId !== $snapshot['payment_id']
+                            && ($currentAudit['pending_payment_id'] ?? null) === $snapshot['payment_id']
+                            && ($currentAudit['pending_provider_id'] ?? null) === ($snapshot['pending_provider_id'] ?? null);
+                        if (! is_string($previousPaymentId) || ! preg_match('/^[a-f0-9]{24}$/iD', $previousPaymentId)
+                            || (! $bootstrapMatches && ! $pendingMatches)) {
                             return ['status' => 'payment_requires_reconciliation', 'cycle_id' => null];
                         }
                     }
                 }
 
-                $aliases = array_filter([$canonical, strtoupper($canonical), $verifiedCode]);
                 $unresolved = DirectBookingPaymentAttempt::query()
-                    ->where(fn ($query) => $query->where('stays_reservation_canonical_id', $canonical)
-                        ->orWhereHas('order', fn ($query) => $query->whereIn('stays_reservation_id', $aliases)))
+                    ->where(fn ($query) => $query->whereRaw('LOWER(stays_reservation_canonical_id) = ?', [$canonical])
+                        ->orWhereHas('order', fn ($query) => $query
+                            ->where(fn ($identity) => $identity->whereRaw('LOWER(stays_reservation_id) = ?', [$canonical])
+                                ->when($verifiedCode !== null, fn ($identity) => $identity->orWhere('stays_reservation_id', $verifiedCode)))))
                     ->whereIn('status', ['processing', 'pending', 'in_process', 'approved', 'unknown', 'attention_required'])
                     ->get();
                 foreach ($unresolved as $attempt) {
