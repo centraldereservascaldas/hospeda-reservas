@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { readLegalPageSummaries, type LegalPageSummary } from '../../utils/legalPages';
 
-export function CheckoutFooter() {
+export function CheckoutFooter({
+  hideContractLink = false,
+}: {
+  hideContractLink?: boolean;
+}) {
   const [legalPages, setLegalPages] = useState<LegalPageSummary[]>([]);
 
   useEffect(() => {
@@ -37,18 +41,20 @@ export function CheckoutFooter() {
           >
             Fale com a gente
           </a>
-          {legalPages.map((page) => (
-            <a
-              key={page.slug}
-              href={page.path}
-              target={page.slug === 'contrato' ? '_blank' : undefined}
-              rel={page.slug === 'contrato' ? 'noopener noreferrer' : undefined}
-              className="min-h-11 inline-flex items-center underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-            >
-              {page.title}
-              {page.slug === 'contrato' && <span className="sr-only"> (abre em nova aba)</span>}
-            </a>
-          ))}
+          {legalPages
+            .filter((page) => !hideContractLink || page.slug !== 'contrato')
+            .map((page) => (
+              <a
+                key={page.slug}
+                href={page.path}
+                target={page.slug === 'contrato' ? '_blank' : undefined}
+                rel={page.slug === 'contrato' ? 'noopener noreferrer' : undefined}
+                className="min-h-11 inline-flex items-center underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+              >
+                {page.title}
+                {page.slug === 'contrato' && <span className="sr-only"> (abre em nova aba)</span>}
+              </a>
+            ))}
         </nav>
       </div>
     </footer>

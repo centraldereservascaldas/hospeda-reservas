@@ -10,8 +10,10 @@ use App\Services\ExistingReservationLedgerAudit;
 use App\Services\ExistingReservationPaymentChannels;
 use App\Services\ExistingReservationPaymentCycleRegistry;
 use App\Services\ExistingReservationPaymentLock;
+use App\Services\ExistingReservationPaymentPlanPolicy;
 use App\Services\ExistingReservationSettlement;
 use App\Services\ExperimentalExistingCycleSettlement;
+use App\Services\LegalPageRegistry;
 use App\Services\Payments\CieloCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
 use App\Services\StaysReservationIdentity;
@@ -109,6 +111,22 @@ class ExistingReservationPaymentCycleRegistryTest extends TestCase
         $this->assertSame('payment_requires_reconciliation', $registry->open($reservation, $existing->id, 'cycle-key-12345678', 'AB12C')['status']);
         $attempt->update(['stays_reservation_canonical_id' => $reservation]);
         $this->assertSame('payment_requires_reconciliation', $registry->open($reservation, $existing->id, 'cycle-key-12345678')['status']);
+        $this->assertDatabaseCount('existing_reservation_payment_cycles', 0);
+    }
+
+    public function test_unresolved_attempt_with_mixed_case_reservation_id_blocks_cycle(): void
+    {
+        $reservation = str_repeat('a', 24);
+        $existing = $this->order($reservation);
+        $legacy = $this->order(str_repeat('aA', 12));
+        $legacy->paymentAttempts()->create([
+            'idempotency_key' => 'mixed-case-attempt-12345678', 'request_fingerprint' => str_repeat('b', 64),
+            'payment_method' => 'pix', 'payment_method_id' => 'pix', 'status' => 'pending', 'amount' => '10.00', 'currency' => 'BRL',
+        ]);
+
+        $result = app(ExistingReservationPaymentCycleRegistry::class)->open($reservation, $existing->id, 'mixed-case-cycle-12345678');
+
+        $this->assertSame('payment_requires_reconciliation', $result['status']);
         $this->assertDatabaseCount('existing_reservation_payment_cycles', 0);
     }
 
@@ -410,13 +428,16 @@ class ExistingReservationPaymentCycleRegistryTest extends TestCase
         $thirdSnapshot['guests'] = 1;
         $thirdSnapshot['channel_provider_ids'] = ['pix' => $snapshot['pending_provider_id']];
         $third->quote_snapshot = ['existing_reservation' => $thirdSnapshot];
+        $contract = app(LegalPageRegistry::class)->find('contrato');
+        $this->assertIsArray($contract);
+        $third->accepted_terms_snapshot = ['contract' => $contract, 'contract_content_hash' => hash('sha256', json_encode($contract, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))];
         $third->payment_status = null;
         $third->gateway_provider = 'cielo_sandbox';
         $third->gateway_merchant_id = 'test-merchant';
         $third->reservation_status = 'booked';
         $third->expires_at = now()->addHour();
         $third->save();
-        $audit->shouldReceive('inspect')->twice()->andReturn(['status' => 'consistent_candidate', 'total_cents' => 2000, 'paid_cents' => 1600, 'balance_cents' => 400,
+        $audit->shouldReceive('inspect')->times(4)->andReturn(['status' => 'consistent_candidate', 'total_cents' => 2000, 'paid_cents' => 1600, 'balance_cents' => 400,
             'pending_payment_id' => str_repeat('e', 24), 'pending_provider_id' => str_repeat('f', 24), 'pending_cents' => 400]);
         $audit->shouldReceive('confirmsSnapshot')->zeroOrMoreTimes()->andReturnTrue();
         config(['direct-booking.enabled' => true, 'direct-booking.payments_enabled' => true, 'direct-booking.confirmation_enabled' => true,
@@ -430,7 +451,7 @@ class ExistingReservationPaymentCycleRegistryTest extends TestCase
         $this->mock(StaysReservationIdentity::class)->shouldReceive('resolve')->andReturn(['canonical' => $snapshot['_id'], 'code' => 'ZY92K']);
         $input = $this->mock(StoreCheckoutPaymentRequest::class);
         $input->shouldReceive('validated')->andReturn(['idempotencyKey' => 'isolated-third-payment-123456', 'paymentMethod' => 'pix', 'paymentMethodId' => 'pix',
-            'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']]);
+            'payerIdentification' => ['type' => 'CPF', 'number' => '52998224725']]);
         Http::preventStrayRequests();
         Http::fake(function (Request $request) {
             $this->assertSame(0, DB::transactionLevel());
@@ -439,6 +460,7 @@ class ExistingReservationPaymentCycleRegistryTest extends TestCase
                 'Type' => 'Pix', 'Status' => 2, 'Amount' => 400, 'Currency' => 'BRL', 'CapturedDate' => now()->toIso8601String(), 'ExpirationDate' => now()->addMinutes(30)->toIso8601String(),
                 'QrCodeString' => 'synthetic-pix-code', 'QrCodeBase64Image' => base64_encode("\x89PNG\r\n\x1a\nsynthetic")]], 201);
         });
+        $this->assertTrue(app(ExistingReservationPaymentPlanPolicy::class)->canStartOrderPayment($third, 'pix'));
         $result = app(CieloCheckoutPaymentService::class)->createAttempt($third, $input);
         $this->assertSame('approved', $result['attempt']?->status, $result['code']);
         $this->assertSame('4.00', $result['attempt']?->amount);
@@ -540,6 +562,84 @@ class ExistingReservationPaymentCycleRegistryTest extends TestCase
         $this->assertDatabaseHas('existing_reservation_payment_cycles', ['id' => $cycle, 'state' => 'open']);
     }
 
+    #[DataProvider('postedSettlementCases')]
+    public function test_experimental_posted_settlement_requires_a_unique_verified_payment(string $mode, bool $expected): void
+    {
+        [$order, $attempt, $cycle] = $this->settledFixture($mode);
+        config(['direct-booking.experimental_existing_cycle_settlement_enabled' => true]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('inspect')->once()->andReturn([
+            'status' => 'consistent_candidate', 'total_cents' => 2000, 'paid_cents' => 1000, 'balance_cents' => 1000,
+        ]);
+        $this->assertSame($expected, app(ExperimentalExistingCycleSettlement::class)->close($order));
+        $this->assertDatabaseHas('existing_reservation_payment_cycles', ['id' => $cycle, 'state' => $expected ? 'settled' : 'open']);
+    }
+
+    public static function postedSettlementCases(): array
+    {
+        return ['verified' => ['post', true], 'finance not paid' => ['post_unpaid', false], 'duplicate marker' => ['post_duplicate', false], 'changed marker' => ['post_marker', false]];
+    }
+
+    public function test_posted_settlement_rejects_action_with_a_different_verified_payment_id(): void
+    {
+        [$order, $attempt, $cycle] = $this->settledFixture('post');
+        config(['direct-booking.experimental_existing_cycle_settlement_enabled' => true]);
+        $action = $order->staysActions()->firstOrFail();
+        $response = $action->response_snapshot;
+        $response['payment_id'] = str_repeat('c', 24);
+        $action->update(['response_snapshot' => $response]);
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldNotReceive('inspect');
+        $this->assertFalse(app(ExperimentalExistingCycleSettlement::class)->close($order));
+        $this->assertDatabaseHas('existing_reservation_payment_cycles', ['id' => $cycle, 'state' => 'open']);
+    }
+
+    #[DataProvider('nextBootstrapCases')]
+    public function test_verified_posted_payment_allows_only_the_audited_remaining_bootstrap(string $case, bool $allowed): void
+    {
+        [$first, $attempt, $cycle] = $this->settledFixture('post');
+        config(['direct-booking.experimental_existing_cycle_settlement_enabled' => true]);
+        $audit = ['status' => 'consistent_candidate', 'total_cents' => 2000, 'paid_cents' => 1000, 'balance_cents' => 1000,
+            'pending_payment_id' => null, 'pending_provider_id' => null, 'pending_cents' => null];
+        $current = $audit;
+        if ($case === 'pending_exists') {
+            $current['pending_payment_id'] = str_repeat('b', 24);
+            $current['pending_provider_id'] = str_repeat('f', 24);
+            $current['pending_cents'] = 1000;
+        }
+        if ($case === 'incomplete_audit') {
+            unset($current['pending_cents']);
+        }
+        $this->mock(ExistingReservationLedgerAudit::class)->shouldReceive('inspect')->twice()->andReturn($audit, $current);
+        $this->assertTrue(app(ExperimentalExistingCycleSettlement::class)->close($first));
+
+        $next = $first->replicate(['website_stays_reservation_id']);
+        $next->idempotency_key = 'bootstrap-next-order-123456';
+        $snapshot = $first->quote_snapshot['existing_reservation'];
+        $snapshot['reported_paid_cents'] = $case === 'stale_paid' ? 0 : 1000;
+        $snapshot['outstanding_balance_cents'] = 1000;
+        $snapshot['channel_provider_ids'] = ['pix' => str_repeat('f', 24)];
+        $snapshot['selected_payment_method'] = $case === 'card' ? 'card' : 'pix';
+        if ($case === 'amount_mismatch') {
+            $snapshot['pending_amount_cents'] = 999;
+        }
+        $next->quote_snapshot = ['existing_reservation' => $snapshot];
+        $next->save();
+        $registry = app(ExistingReservationPaymentCycleRegistry::class);
+        $prepared = $registry->prepare($first->stays_reservation_id);
+        $result = $registry->open($first->stays_reservation_id, $next->id, 'bootstrap-next-cycle-123456', null, $prepared);
+        $this->assertSame($allowed ? 'opened' : 'payment_requires_reconciliation', $result['status']);
+        if ($allowed) {
+            $this->assertSame('replayed', $registry->open($first->stays_reservation_id, $next->id, 'bootstrap-next-cycle-123456', null, $prepared)['status']);
+            $this->assertSame('cycle_in_progress', $registry->open($first->stays_reservation_id, $next->id, 'bootstrap-other-cycle-123456', null, $prepared)['status']);
+        }
+    }
+
+    public static function nextBootstrapCases(): array
+    {
+        return ['audited balance' => ['valid', true], 'pending exists' => ['pending_exists', false],
+            'incomplete audit' => ['incomplete_audit', false], 'stale paid' => ['stale_paid', false],
+            'different amount' => ['amount_mismatch', false], 'card bootstrap' => ['card', true]];
+    }
+
     private function settledFixture(string $mode = 'normal'): array
     {
         $id = str_repeat('a', 24);
@@ -563,15 +663,29 @@ class ExistingReservationPaymentCycleRegistryTest extends TestCase
                 'payment_date' => $attempt->fresh()->paid_at->setTimezone('America/Sao_Paulo')->toDateString()],
             'response_snapshot' => ['payment_id' => $snapshot['payment_id'], 'status' => 'completed',
                 'payment_date' => $attempt->fresh()->paid_at->setTimezone('America/Sao_Paulo')->toDateString()]]);
+        if (str_starts_with($mode, 'post')) {
+            $snap = $order->quote_snapshot;
+            $snap['existing_reservation']['payment_id'] = null;
+            $snap['existing_reservation']['bootstrap_receivable'] = true;
+            $snap['existing_reservation']['receivable_creation_timing'] = 'after_capture';
+            $order->update(['quote_snapshot' => $snap]);
+            $action = $order->staysActions()->first();
+            $request = $action->request_snapshot;
+            $request['payment_id'] = null;
+            $request['operation'] = 'post_completed';
+            $action->update(['request_snapshot' => $request]);
+        }
         $paymentDate = $attempt->fresh()->paid_at->setTimezone('America/Sao_Paulo')->toDateString();
         $this->mock(StaysExternalApiClient::class)->shouldReceive('get')->zeroOrMoreTimes()->andReturnUsing(function (string $path) use ($snapshot, $paymentDate, $mode) {
             if (str_contains($path, '/finance/')) {
-                return ['_id' => $snapshot['payment_id'], 'reserveId' => $snapshot['_id'], 'type' => 'credit', 'paid' => $mode !== 'finance_unpaid',
+                return ['_id' => $snapshot['payment_id'], 'reserveId' => $snapshot['_id'], 'type' => 'credit', 'paid' => ! in_array($mode, ['finance_unpaid', 'post_unpaid'], true),
                     'bankAccountId' => $snapshot['pending_provider_id'], 'payment' => ['paymentDate' => $paymentDate], '_mcval' => ['BRL' => 10]];
             }
 
-            return [['_id' => $snapshot['payment_id'], 'type' => 'credit', 'status' => 'completed', 'paymentDate' => $paymentDate,
-                '_idpaymentProvider' => $snapshot['pending_provider_id'], '_f_val' => 10, 'desc' => 'CRCN_SETTLEMENT:'.str_repeat($mode === 'changed_marker' ? 'y' : 'x', 32)]];
+            $payment = ['_id' => $snapshot['payment_id'], 'type' => 'credit', 'status' => 'completed', 'paymentDate' => $paymentDate,
+                '_idpaymentProvider' => $snapshot['pending_provider_id'], '_f_val' => 10, 'desc' => 'CRCN_SETTLEMENT:'.str_repeat(in_array($mode, ['changed_marker', 'post_marker'], true) ? 'y' : 'x', 32)];
+
+            return $mode === 'post_duplicate' ? [$payment, array_replace($payment, ['_id' => str_repeat('c', 24)])] : [$payment];
         });
 
         return [$order->fresh(), $attempt->fresh(), $cycle];

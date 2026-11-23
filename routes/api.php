@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CheckoutPaymentController;
 use App\Http\Controllers\Api\CieloSopController;
 use App\Http\Controllers\Api\CieloWebhookController;
 use App\Http\Controllers\Api\ExistingReservationCheckoutController;
+use App\Http\Controllers\Api\ExistingReservationContractController;
 use App\Http\Controllers\Api\GuestReservationController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OwnerAccessController;
@@ -41,8 +42,12 @@ Route::get('/accommodations/{id}', [AccommodationController::class, 'show']);
 Route::post('/search', [AccommodationController::class, 'search']);
 Route::get('/accommodations/{id}/calendar', [AccommodationController::class, 'calendar']);
 Route::post('/price', [BookingController::class, 'price']);
-Route::get('/existing-reservations/{code}/checkout-summary', [ExistingReservationCheckoutController::class, 'show'])->middleware('throttle:5,1');
-Route::post('/existing-reservations/{code}/checkout', [ExistingReservationCheckoutController::class, 'store'])->middleware('throttle:5,1');
+Route::middleware('throttle:existing-reservation-global')->group(function (): void {
+    Route::get('/existing-reservations/{code}/checkout-summary', [ExistingReservationCheckoutController::class, 'show'])->middleware('throttle:existing-reservation-summary');
+    Route::post('/existing-reservations/{code}/checkout', [ExistingReservationCheckoutController::class, 'store'])->middleware('throttle:existing-reservation-checkout');
+    Route::post('/existing-reservations/{code}/recover', [ExistingReservationCheckoutController::class, 'recover'])->middleware('throttle:existing-reservation-recover');
+    Route::post('/existing-reservations/{code}/recovery-credential', [ExistingReservationCheckoutController::class, 'recoveryCredential'])->middleware('throttle:existing-reservation-credential');
+});
 Route::get('/stays/status', [BookingController::class, 'staysStatus']);
 Route::get('/stays-checkout/readiness', [BookingController::class, 'staysCheckoutReadiness'])
     ->middleware('throttle:30,1');
@@ -86,6 +91,7 @@ Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->mid
 Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');
 Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
+Route::post('/checkout/{publicReference}/existing-contract', [ExistingReservationContractController::class, 'store'])->middleware('throttle:5,1');
 Route::post('/checkout/{publicReference}/guests', [CheckoutGuestsController::class, 'store'])->middleware('throttle:5,1');
 Route::post('/checkout/{publicReference}/cielo-checkout', [CheckoutPaymentController::class, 'createCieloCheckout'])->middleware('throttle:5,1');
 Route::post('/checkout/{publicReference}/payments', [CheckoutPaymentController::class, 'store'])->middleware('throttle:5,1');

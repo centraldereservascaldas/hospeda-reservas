@@ -8,6 +8,7 @@ use App\Jobs\ReconcileMercadoPagoPayment;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
+use App\Services\BrazilianTaxId;
 use App\Services\DirectStaysReservationService;
 use App\Services\ExistingReservationPaymentChannels;
 use App\Services\ExistingReservationPaymentLock;
@@ -21,6 +22,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class DirectCheckoutPaymentService
@@ -586,6 +588,22 @@ class DirectCheckoutPaymentService
     /** @return array{attempt: DirectBookingPaymentAttempt|null, code: string, message: string, status: int, replayed: bool} */
     public function createAttempt(DirectBookingOrder $order, StoreCheckoutPaymentRequest $request): array
     {
+        if ($order->origin === 'stays_existing' && CieloDirectConfiguration::isProvider($order->gateway_provider)) {
+            $replay = $this->cieloPayments->replayExistingAttempt($order, $request);
+            if ($replay !== null) {
+                return $replay;
+            }
+        }
+
+        if ($order->origin === 'stays_existing') {
+            $identification = $request->validated()['payerIdentification'] ?? null;
+            if (! is_array($identification) || ! is_string($identification['type'] ?? null)
+                || ! is_string($identification['number'] ?? null)
+                || ! BrazilianTaxId::isValid($identification['type'], $identification['number'])) {
+                throw ValidationException::withMessages(['payerIdentification.number' => 'Informe um CPF ou CNPJ válido do pagador.']);
+            }
+        }
+
         if ($this->availableMethods($order) === []) {
             $this->logCheckoutPaymentEvent('warning', 'checkout.payment.blocked', [
                 'order_id' => $order->id,

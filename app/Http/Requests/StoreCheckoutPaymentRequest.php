@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\DirectBookingOrder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -9,6 +10,8 @@ use Illuminate\Validation\Validator;
 class StoreCheckoutPaymentRequest extends FormRequest
 {
     private const MAX_CARD_INSTALLMENTS = 6;
+
+    private ?bool $existingReservationOrder = null;
 
     public function authorize(): bool
     {
@@ -38,7 +41,14 @@ class StoreCheckoutPaymentRequest extends FormRequest
             'issuerId' => ['nullable', 'integer', 'min:1', 'prohibited_if:paymentMethod,pix'],
             'payerIdentification' => ['nullable', 'array:type,number', 'required_if:paymentMethod,card', Rule::requiredIf(fn (): bool => $this->input('paymentMethod') === 'pix' && config('services.cielo.direct_environment') === 'production')],
             'payerIdentification.type' => ['required_with:payerIdentification', 'string', 'in:CPF,CNPJ'],
-            'payerIdentification.number' => ['required_with:payerIdentification', 'string', 'max:20', 'regex:/^[0-9]+$/'],
+            'payerIdentification.number' => [
+                'required_with:payerIdentification',
+                'string',
+                'max:20',
+                $this->isExistingReservationOrder()
+                    ? 'regex:/^(?:[0-9]{11}|[0-9]{14}|[A-Za-z0-9]{12}[0-9]{2})$/'
+                    : 'regex:/^[0-9]+$/',
+            ],
         ];
     }
 
@@ -68,5 +78,30 @@ class StoreCheckoutPaymentRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->merge(['idempotencyKey' => $this->header('Idempotency-Key')]);
+        $identification = $this->input('payerIdentification');
+        if ($this->isExistingReservationOrder() && is_array($identification)
+            && ($identification['type'] ?? null) === 'CNPJ' && is_string($identification['number'] ?? null)) {
+            $this->merge(['payerIdentification' => [
+                ...$identification,
+                'number' => strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $identification['number']) ?? ''),
+            ]]);
+        }
+    }
+
+    private function isExistingReservationOrder(): bool
+    {
+        if ($this->existingReservationOrder !== null) {
+            return $this->existingReservationOrder;
+        }
+
+        $publicReference = $this->route('publicReference');
+        if (! is_string($publicReference) || $publicReference === '') {
+            return $this->existingReservationOrder = false;
+        }
+
+        return $this->existingReservationOrder = DirectBookingOrder::query()
+            ->where('public_reference', $publicReference)
+            ->where('origin', 'stays_existing')
+            ->exists();
     }
 }

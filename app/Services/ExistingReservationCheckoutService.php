@@ -9,7 +9,9 @@ use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ExistingReservationCheckoutService
 {
@@ -27,6 +29,73 @@ class ExistingReservationCheckoutService
      */
     public function create(string $code, array $input): array
     {
+        if (! preg_match('/^[A-Z0-9]{5}$/D', $code)) {
+            return $this->result(null, 'reservation_not_found', 404);
+        }
+        $plan = $input['paymentPlan'] ?? null;
+        $fingerprintData = [
+            $code,
+            $input['expectedBalanceCents'],
+            $input['guest'],
+            $input['paymentMethod'],
+            $input['paymentMethod'] === 'card' ? (int) $input['installments'] : null,
+            true,
+        ];
+        if ($plan !== null) {
+            $fingerprintData[] = $plan;
+        }
+        if (isset($input['acceptedContract'])) {
+            $fingerprintData[] = $input['acceptedContract'];
+        }
+        if (isset($input['recoverySecret'])) {
+            $fingerprintData[] = hash_hmac('sha256', $input['recoverySecret'], (string) config('app.key'));
+        }
+        $fingerprint = hash_hmac('sha256', json_encode($fingerprintData, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), (string) config('app.key'));
+        $existing = DirectBookingOrder::query()->where('idempotency_key', $input['idempotencyKey'])->first();
+        if ($existing !== null) {
+            if ($existing->origin !== 'stays_existing' || ! hash_equals($existing->request_fingerprint, $fingerprint)
+                || ! $existing->hasValidResumeToken($existing->resume_token ?? '')) {
+                return $this->result(null, 'existing_checkout_unavailable', 409);
+            }
+
+            // Returning the protected resume token must not depend on a gateway outage or
+            // a feature switch. This path performs no external writes and cannot initiate a payment.
+            if (! $this->canCreateCheckout()
+                || ! in_array($input['paymentMethod'], $this->channels->availableMethods($this->payments->availableMethods($existing)), true)
+                || ! is_string($existing->gateway_merchant_id)
+                || ! hash_equals($existing->gateway_merchant_id, (string) $this->cielo->merchantId())
+                || ! app(ExistingReservationPaymentPlanPolicy::class)->canStartOrderPayment($existing, $input['paymentMethod'])) {
+                return $this->result($existing, 'existing_checkout_replay_only', 200);
+            }
+
+            return $this->completeUnrecordedReceivable($existing, $input, 200);
+        }
+
+        $guestErrors = [];
+        if (! isset($input['guest']['cpf']) || ! BrazilianTaxId::isValid('CPF', $input['guest']['cpf'])) {
+            $guestErrors['guest.cpf'] = 'Informe um CPF válido do titular da reserva.';
+        }
+        $normalizedPhone = BrazilianPhone::normalize($input['guest']['phone']);
+        if ($normalizedPhone === null) {
+            $guestErrors['guest.phone'] = 'Informe um telefone brasileiro válido com DDD.';
+        }
+        if ($guestErrors !== []) {
+            throw ValidationException::withMessages($guestErrors);
+        }
+
+        if (! isset($input['acceptedContract'])) {
+            return $this->result(null, 'existing_contract_required', 409);
+        }
+
+        $contract = null;
+        if (isset($input['acceptedContract'])) {
+            $contract = app(LegalPageRegistry::class)->find('contrato');
+            if (! is_array($contract) || $contract['version'] !== $input['acceptedContract']['version']
+                || ! hash_equals(hash('sha256', json_encode($contract, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)), $input['acceptedContract']['contentHash'])) {
+                return $this->result(null, 'existing_contract_changed', 409);
+            }
+        }
+
         if (config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true
             && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true) {
             return $this->result(null, 'existing_balance_unverified', 409);
@@ -36,25 +105,8 @@ class ExistingReservationCheckoutService
             || $this->channels->availableMethods($this->payments->availableMethods()) === [] || $this->cielo->merchantId() === null) {
             return $this->result(null, 'existing_checkout_disabled', 503);
         }
-        if (! preg_match('/^[A-Z0-9]{5}$/D', $code)) {
-            return $this->result(null, 'reservation_not_found', 404);
-        }
-        $fingerprint = hash_hmac('sha256', json_encode([
-            $code,
-            $input['expectedBalanceCents'],
-            $input['guest'],
-            $input['paymentMethod'],
-            $input['paymentMethod'] === 'card' ? (int) $input['installments'] : null,
-            true,
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), (string) config('app.key'));
-        $existing = DirectBookingOrder::query()->where('idempotency_key', $input['idempotencyKey'])->first();
-        if ($existing !== null) {
-            if ($existing->origin !== 'stays_existing' || ! hash_equals($existing->request_fingerprint, $fingerprint)
-                || ! $existing->hasValidResumeToken($existing->resume_token ?? '')) {
-                return $this->result(null, 'existing_checkout_unavailable', 409);
-            }
-
-            return $this->completeUnrecordedReceivable($existing, $input, 200);
+        if ($plan === 'deposit' && (config('direct-booking.experimental_existing_deposit_enabled', false) !== true || $input['paymentMethod'] !== 'pix')) {
+            return $this->result(null, 'existing_deposit_unavailable', 409);
         }
 
         $reservation = $this->stays->get('/booking/reservations/'.$code);
@@ -75,6 +127,14 @@ class ExistingReservationCheckoutService
         if (($reservation['id'] ?? null) !== $code || (! $bootstrap && $candidate['status'] !== 'pending_candidate')
             || $candidate['candidate_cents'] !== $input['expectedBalanceCents']) {
             return $this->result(null, 'existing_balance_unverified', 409);
+        }
+        if ($plan === null || $plan === 'full') {
+            if (! app(ExistingReservationPaymentPlanPolicy::class)->fullBalanceMatches($reservation, $candidate, $reportedPaid)) {
+                return $this->result(null, 'existing_balance_unverified', 409);
+            }
+        }
+        if ($plan === 'deposit' && ! app(ExistingReservationPaymentPlanPolicy::class)->depositMatches($reservation, $candidate, $reportedPaid)) {
+            return $this->result(null, 'existing_deposit_unavailable', 409);
         }
         $detailsValidator = app(ExistingReservationCheckoutDetails::class);
         if (! $detailsValidator->validGuests($reservation)) {
@@ -118,13 +178,22 @@ class ExistingReservationCheckoutService
         $snapshot['reservation_type'] = $reservation['type'] ?? null;
         $snapshot['partner_name'] = is_string($reservation['partner']['name'] ?? null) ? mb_strtolower(trim($reservation['partner']['name'])) : null;
         $snapshot['reservation_total_cents'] = MoneyAmount::toCents($reservation['price']['_f_total'] ?? null);
-        $snapshot['pending_amount_cents'] = $candidate['candidate_cents'];
+        if ($bootstrap) {
+            $snapshot['outstanding_balance_cents'] = $candidate['candidate_cents'];
+        } else {
+            $snapshot['receivable_amount_cents'] = $candidate['candidate_cents'];
+        }
+        $snapshot['pending_amount_cents'] = $plan === 'deposit'
+            ? intdiv($snapshot['reservation_total_cents'] + 1, 2) : $candidate['candidate_cents'];
         $snapshot['currency'] = 'BRL';
         $snapshot['payment_id'] = $candidate['payment_id'];
         $snapshot['bootstrap_receivable'] = $bootstrap;
         $snapshot['channel_provider_ids'] = $this->channels->snapshot();
         $method = $input['paymentMethod'];
         $installments = $method === 'card' ? (int) $input['installments'] : null;
+        if ($plan !== null) {
+            $snapshot['payment_plan'] = $plan;
+        }
         $snapshot['selected_payment_method'] = $method;
         $snapshot['selected_installments'] = $installments;
         $pending = array_values(array_filter($payments, fn (mixed $payment): bool => is_array($payment) && ($payment['_id'] ?? null) === $candidate['payment_id']));
@@ -152,7 +221,15 @@ class ExistingReservationCheckoutService
         $merchantId = $this->cielo->merchantId();
         $cyclePreparation = app(ExistingReservationPaymentCycleRegistry::class)->prepare($snapshot['_id']);
         try {
-            $created = app(ExistingReservationPaymentLock::class)->synchronized($snapshot['_id'], function () use ($code, $input, $fingerprint, $ttl, $snapshot, $reservation, $guests, $candidate, $merchantId, $provider, $cyclePreparation): array {
+            $created = app(ExistingReservationPaymentLock::class)->synchronized($snapshot['_id'], function () use ($code, $input, $fingerprint, $ttl, $snapshot, $reservation, $guests, $candidate, $merchantId, $cyclePreparation, $contract, $normalizedPhone, $plan): array {
+                if (isset($input['recoverySecret'])) {
+                    $recoveryHash = app(ExistingCheckoutRecoveryCredential::class)->hash($input['recoverySecret']);
+                    $credential = DB::table('existing_checkout_recovery_credentials')->where('credential_hash', $recoveryHash)->lockForUpdate()->first();
+                    if (! $credential || $credential->reservation_code !== $code || $credential->state !== 'issued'
+                        || app(ExistingCheckoutRecoveryCredential::class)->expired($credential->created_at)) {
+                        return ['order' => null, 'code' => 'existing_checkout_recovery_revoked', 'status' => 409];
+                    }
+                }
                 if (app(ReservationReleaseGuard::class)->paymentBlocked(strtolower($snapshot['_id']), $reservation['id'])) {
                     return ['order' => null, 'code' => 'existing_checkout_unavailable', 'status' => 409];
                 }
@@ -165,25 +242,28 @@ class ExistingReservationCheckoutService
 
                     return ['order' => $existing, 'code' => 'existing_checkout_ready', 'status' => 200];
                 }
-                $reservationIds = [$snapshot['_id'], strtoupper($snapshot['_id']), $code];
+                $canonicalReservationId = strtolower($snapshot['_id']);
                 $activeAttempts = DirectBookingPaymentAttempt::query()
                     ->whereIn('status', ['processing', 'pending', 'in_process', 'approved', 'unknown', 'attention_required'])
                     ->whereHas('order', fn ($query) => $query
                         ->where('origin', 'stays_existing')
-                        ->whereIn('stays_reservation_id', $reservationIds))
+                        ->where(fn ($identity) => $identity->whereRaw('LOWER(stays_reservation_id) = ?', [$canonicalReservationId])
+                            ->orWhere('stays_reservation_id', $code)))
                     ->with('order')
                     ->orderByDesc('created_at')
                     ->orderByDesc('id')
                     ->get();
                 $verifiedSettlements = is_array($cyclePreparation['verified'] ?? null) ? $cyclePreparation['verified'] : [];
                 $activeAttempt = $activeAttempts->first(fn (DirectBookingPaymentAttempt $attempt): bool => $attempt->status !== 'approved' || ! isset($verifiedSettlements[$attempt->id]));
-                if ($activeAttempt !== null && $activeAttempt->order instanceof DirectBookingOrder
-                    && $activeAttempt->order->hasValidResumeToken($activeAttempt->order->resume_token ?? '')) {
-                    return ['order' => $activeAttempt->order, 'code' => 'existing_checkout_ready', 'status' => 200];
+                if ($activeAttempt !== null) {
+                    // A new key must never be acknowledged without a durable binding.
+                    // The original key can still resume its own order through the lookup above.
+                    return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
                 }
                 $existingOrder = DirectBookingOrder::query()
                     ->where('origin', 'stays_existing')
-                    ->where('stays_reservation_id', $snapshot['_id'])
+                    ->where(fn ($identity) => $identity->whereRaw('LOWER(stays_reservation_id) = ?', [$canonicalReservationId])
+                        ->orWhere('stays_reservation_id', $code))
                     ->orderByDesc('created_at')
                     ->orderByDesc('id')
                     ->lockForUpdate()
@@ -193,18 +273,13 @@ class ExistingReservationCheckoutService
                         ->orderByDesc('created_at')
                         ->orderByDesc('id')
                         ->first();
-                    $sameBalance = MoneyAmount::toCents($existingOrder->quote_total) === $candidate['candidate_cents'];
+                    $sameBalance = MoneyAmount::toCents($existingOrder->quote_total) === $snapshot['pending_amount_cents'];
                     $orderExpired = $existingOrder->status === DirectBookingOrderStatus::Expirado
                         || $existingOrder->expires_at?->isPast() === true;
-                    $lastAttemptIsTerminal = $lastAttempt === null
-                        || in_array($lastAttempt->status, ['rejected', 'cancelled', 'expired'], true);
                     $retryable = $existingOrder->status === DirectBookingOrderStatus::PagamentoRecusado
                         && in_array($existingOrder->payment_status, ['rejected', 'cancelled'], true)
                         && $lastAttempt !== null
                         && in_array($lastAttempt->status, ['rejected', 'cancelled'], true);
-                    $unstarted = $existingOrder->status === DirectBookingOrderStatus::PreReservado
-                        && in_array($existingOrder->payment_status, [null, 'not_started'], true)
-                        && $lastAttempt === null;
                     $previousSnapshot = is_array($existingOrder->quote_snapshot)
                         ? ($existingOrder->quote_snapshot['existing_reservation'] ?? null)
                         : null;
@@ -218,10 +293,12 @@ class ExistingReservationCheckoutService
                         ? $previousSnapshot['pending_amount_cents']
                         : null;
                     $currentAuditMatchesCandidate = $currentAudit !== null
-                        && (($snapshot['payment_id'] ?? null) === null
+                        && (($candidate['status'] ?? null) === 'unrecorded_candidate'
                             ? ($currentAudit['pending_payment_id'] ?? null) === null
+                                && ($currentAudit['pending_cents'] ?? null) === null
                                 && ($currentAudit['balance_cents'] ?? null) === $candidate['candidate_cents']
-                            : ($currentAudit['pending_payment_id'] ?? null) === $snapshot['payment_id']
+                            : ($candidate['status'] ?? null) === 'pending_candidate'
+                                && ($currentAudit['pending_payment_id'] ?? null) === ($candidate['payment_id'] ?? null)
                                 && ($currentAudit['pending_cents'] ?? null) === $candidate['candidate_cents']);
                     $previousPaymentWasRecorded = $previousReportedPaid !== null && $previousPendingAmount !== null
                         && is_int($currentAudit['paid_cents'] ?? null)
@@ -235,76 +312,57 @@ class ExistingReservationCheckoutService
                         && (($snapshot['payment_id'] ?? null) === null
                             || ($previousSnapshot['payment_id'] ?? null) !== $snapshot['payment_id']);
 
-                    if (! $sameBalance && ! ($orderExpired && $lastAttemptIsTerminal) && ! $previousCycleSettled) {
+                    // A new request key can create a new order only after an independently
+                    // verified terminal gateway result has closed its reservation cycle.
+                    $closedCycle = ($retryable || ($orderExpired && $lastAttempt !== null
+                        && in_array($lastAttempt->status, ['rejected', 'cancelled', 'expired'], true))) && $lastAttempt !== null
+                        && $lastAttempt->gateway_status === $lastAttempt->status
+                        && is_string($lastAttempt->gateway_payment_id) && $lastAttempt->gateway_payment_id !== ''
+                        && $lastAttempt->paid_at === null
+                        && $lastAttempt->gateway_provider === $existingOrder->gateway_provider
+                        && is_string($existingOrder->gateway_merchant_id) && $existingOrder->gateway_merchant_id !== ''
+                        && $lastAttempt->gateway_merchant_id === $existingOrder->gateway_merchant_id
+                        && DB::table('existing_reservation_payment_cycles')
+                            ->where('direct_booking_order_id', $existingOrder->id)
+                            ->where('direct_booking_payment_attempt_id', $lastAttempt->id)
+                            ->where('state', 'declined')->whereNull('active_reservation_id')->exists();
+                    $expiredWithoutCycle = $orderExpired && $lastAttempt === null
+                        && ! DB::table('existing_reservation_payment_cycles')
+                            ->where('direct_booking_order_id', $existingOrder->id)->exists();
+
+                    if (! $sameBalance && ! $closedCycle && ! $expiredWithoutCycle && ! $previousCycleSettled) {
                         return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
                     }
 
-                    if (! ($orderExpired && $lastAttemptIsTerminal) && ! $previousCycleSettled) {
-                        if ((! $retryable && ! $unstarted)
-                            || ! $existingOrder->hasValidResumeToken($existingOrder->resume_token ?? '')) {
-                            return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
-                        }
-
-                        $quote = is_array($existingOrder->quote_snapshot) ? $existingOrder->quote_snapshot : [];
-                        $reservationSnapshot = $quote['existing_reservation'] ?? null;
-                        if (! is_array($reservationSnapshot)
-                            || ($reservationSnapshot['reservation_code'] ?? null) !== $code
-                            || ($reservationSnapshot['pending_amount_cents'] ?? null) !== $candidate['candidate_cents']) {
-                            return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
-                        }
-
-                        $reservationSnapshot['selected_payment_method'] = $input['paymentMethod'];
-                        $reservationSnapshot['selected_installments'] = $input['paymentMethod'] === 'card' ? (int) $input['installments'] : null;
-                        $reservationSnapshot['channel_provider_ids'] = $this->channels->snapshot();
-                        $reservationSnapshot['pending_provider_id'] = $provider;
-                        $quote['existing_reservation'] = $reservationSnapshot;
-                        $updatedContactFields = [];
-                        $guestName = trim($input['guest']['fullName']);
-                        $guestEmail = mb_strtolower(trim($input['guest']['email']));
-                        $guestPhone = trim($input['guest']['phone']);
-                        if ($existingOrder->guest_name !== $guestName) {
-                            $updatedContactFields[] = 'name';
-                        }
-                        if ($existingOrder->guest_email !== $guestEmail) {
-                            $updatedContactFields[] = 'email';
-                        }
-                        if ($existingOrder->guest_phone !== $guestPhone) {
-                            $updatedContactFields[] = 'phone';
-                        }
-                        $operationalEvents = $existingOrder->operational_events ?? [];
-                        if ($updatedContactFields !== []) {
-                            $operationalEvents[] = [
-                                'event' => 'existing_checkout_contact_updated',
-                                'fields' => $updatedContactFields,
-                                'at' => now()->toISOString(),
-                            ];
-                        }
-                        $existingOrder->forceFill([
-                            'quote_snapshot' => $quote,
-                            'expires_at' => now()->addHours(3),
-                            'guest_name' => $guestName,
-                            'guest_email' => $guestEmail,
-                            'guest_phone' => $guestPhone,
-                            'operational_events' => $operationalEvents,
-                        ])->save();
-
-                        return ['order' => $existingOrder, 'code' => 'existing_checkout_ready', 'status' => 200];
+                    if (! $expiredWithoutCycle && ! $previousCycleSettled && ! $closedCycle) {
+                        // A different key cannot safely reuse an order unless the key is
+                        // recorded. Reject it and preserve the original key for retries.
+                        return ['order' => null, 'code' => 'existing_checkout_already_started', 'status' => 409];
                     }
                 }
                 $order = DirectBookingOrder::query()->create([
                     'status' => DirectBookingOrderStatus::PreReservado,
                     'idempotency_key' => $input['idempotencyKey'], 'request_fingerprint' => $fingerprint,
+                    'existing_checkout_recovery_hash' => isset($input['recoverySecret']) ? hash_hmac('sha256', $input['recoverySecret'], (string) config('app.key')) : null,
                     'public_reference' => Str::random(40), 'resume_token' => Str::random(64), 'resume_token_expires_at' => now()->addDays($ttl),
                     'listing_id' => $snapshot['_idlisting'], 'stays_listing_id' => $snapshot['_idlisting'], 'stays_client_id' => $snapshot['_idclient'],
                     'stays_reservation_id' => $snapshot['_id'], 'reservation_status' => $reservation['type'],
                     'check_in' => $snapshot['checkInDate'], 'check_out' => $snapshot['checkOutDate'], 'guests' => $guests,
-                    'guest_name' => trim($input['guest']['fullName']), 'guest_email' => mb_strtolower(trim($input['guest']['email'])), 'guest_phone' => trim($input['guest']['phone']),
-                    'quote_total' => sprintf('%d.%02d', intdiv($candidate['candidate_cents'], 100), $candidate['candidate_cents'] % 100), 'currency' => 'BRL',
+                    'guest_name' => trim($input['guest']['fullName']), 'guest_email' => mb_strtolower(trim($input['guest']['email'])), 'guest_phone' => $normalizedPhone,
+                    'guest_cpf' => $input['guest']['cpf'] ?? null,
+                    'quote_total' => sprintf('%d.%02d', intdiv($snapshot['pending_amount_cents'], 100), $snapshot['pending_amount_cents'] % 100), 'currency' => 'BRL',
                     'quote_snapshot' => [
                         'existing_reservation' => $snapshot,
                         'apartment_max_guests' => $snapshot['apartment_max_guests'],
                     ], 'accepted_terms_version' => 'existing-booking-payment-v1',
-                    'accepted_terms_snapshot' => ['version' => 'existing-booking-payment-v1', 'payment' => 'Pagamento do saldo exibido da reserva existente.'],
+                    'accepted_terms_snapshot' => [
+                        'version' => 'existing-booking-payment-v1',
+                        'payment_plan' => $plan === 'deposit' ? 'deposit' : 'full',
+                        'payment' => $plan === 'deposit'
+                            ? 'Entrada de 50% do saldo em aberto da reserva existente.'
+                            : 'Quitação integral do saldo em aberto da reserva existente.',
+                        ...($contract !== null ? ['contract' => $contract, 'contract_content_hash' => $input['acceptedContract']['contentHash']] : []),
+                    ],
                     'terms_accepted_at' => now(), 'origin' => 'stays_existing', 'expires_at' => now()->addHours(3),
                     'gateway_provider' => (string) config('direct-booking.payment_provider'), 'gateway_merchant_id' => $merchantId,
                     'operational_events' => [['event' => 'existing_reservation_checkout_created', 'at' => now()->toISOString()]],
@@ -385,6 +443,17 @@ class ExistingReservationCheckoutService
         return $updated instanceof DirectBookingOrder
             ? $this->result($updated, 'existing_checkout_ready', $successStatus)
             : $this->result(null, 'existing_receivable_unconfirmed', 503);
+    }
+
+    private function canCreateCheckout(): bool
+    {
+        return ! (config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true
+                && config('direct-booking.experimental_existing_ledger_audit_enabled', false) !== true)
+            && config('direct-booking.enabled', false)
+            && config('direct-booking.existing_reservation_checkout_enabled', false)
+            && CieloDirectConfiguration::isProvider((string) config('direct-booking.payment_provider'))
+            && $this->channels->availableMethods($this->payments->availableMethods()) !== []
+            && $this->cielo->merchantId() !== null;
     }
 
     private function result(?DirectBookingOrder $order, string $code, int $status): array

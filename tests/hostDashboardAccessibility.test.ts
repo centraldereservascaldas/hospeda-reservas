@@ -293,6 +293,74 @@ test('owner admin operations cards wrap long guest and integration identifiers o
   }
 });
 
+test('settled deposit in operations does not assert an unpaid balance', async () => {
+  const originalGetRequests = crcnBackendApi.getOwnerAccessRequests;
+  const originalGetOrders = crcnBackendApi.getDirectBookingOperationsOrders;
+  crcnBackendApi.getOwnerAccessRequests = async () => [];
+  crcnBackendApi.getDirectBookingOperationsOrders = async () => ({
+    orders: [
+      {
+        id: 'order-fixture',
+        publicReference: '0123456789abcdef',
+        status: 'entrada_conciliada',
+        listingId: 'listing-fixture',
+        from: '2026-10-20',
+        to: '2026-10-22',
+        guestName: 'Pessoa de teste',
+        guestEmail: 'guest-with-a-very-long-unbroken-address@example.invalid',
+        quoteTotal: '850.00',
+        currency: 'BRL',
+        paymentStatus: 'approved',
+        paymentMethod: null,
+        gatewayPaymentId: 'payment_identifier_with_a_very_long_unbroken_value_123456789',
+        staysReservationId: null,
+        existingDepositReviewRequired: true,
+        paymentApprovedWithoutConfirmedReservation: false,
+        latePaymentAfterHold: false,
+        staysActionFailed: false,
+        confirmationEmail: null,
+        staysCancellationConfirmed: false,
+        gatewayRefundConfirmed: false,
+        manualCancellationReview: null,
+        manualGatewayRefundReview: null,
+        createdAt: null,
+        updatedAt: null,
+        lastEvent: {
+          event:
+            'payment_state_changed_during_reservation_release_with_an_extended_event_identifier',
+        },
+        issue: null,
+      },
+    ],
+    unmatchedWebhooks: [],
+    unmatchedWebhookTotal: 0,
+    unmatchedWebhookCurrentPage: 1,
+    unmatchedWebhookLastPage: 1,
+    currentPage: 1,
+    lastPage: 1,
+    total: 1,
+  });
+  try {
+    const { findByText, queryByText } = render(
+      React.createElement(OwnerAccessAdminView, {
+        accessToken: 'test-token',
+        canManagePayments: true,
+      }),
+    );
+    assert.ok(await findByText('Entrada registrada'));
+    assert.ok(
+      await findByText(
+        'A entrada está em conferência. Verifique o pagamento e o lançamento na Stays.',
+      ),
+    );
+    assert.equal(queryByText(/saldo pendente/i), null);
+    assert.equal(queryByText(/Pagamento aprovado sem reserva confirmada/i), null);
+  } finally {
+    crcnBackendApi.getOwnerAccessRequests = originalGetRequests;
+    crcnBackendApi.getDirectBookingOperationsOrders = originalGetOrders;
+  }
+});
+
 test('owner access search exposes touch-sized, announced selections without approving them', async () => {
   const originalGetRequests = crcnBackendApi.getOwnerAccessRequests;
   const originalGetOrders = crcnBackendApi.getDirectBookingOperationsOrders;

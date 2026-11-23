@@ -6,10 +6,24 @@ use App\Models\DirectBookingPaymentAttempt;
 use App\Services\Payments\CieloCardPricing;
 use InvalidArgumentException;
 
-/** Validates the captured split; does not assert how Stays accounts for its fee. */
+/** Validates the Cielo amount against the base balance and configured card fee. */
 class ExistingReservationCardAmounts
 {
     public function __construct(private readonly CieloCardPricing $pricing) {}
+
+    public function settlementAmountCents(DirectBookingPaymentAttempt $attempt, int $expectedBaseCents): ?int
+    {
+        $amountCents = MoneyAmount::toCents($attempt->amount);
+        if ($amountCents === null || $amountCents <= 0) {
+            return null;
+        }
+
+        if ($attempt->payment_method === 'pix') {
+            return $amountCents === $expectedBaseCents ? $amountCents : null;
+        }
+
+        return $this->matches($attempt, $expectedBaseCents) ? $amountCents : null;
+    }
 
     public function matches(DirectBookingPaymentAttempt $attempt, int $expectedBaseCents): bool
     {

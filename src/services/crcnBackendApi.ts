@@ -182,6 +182,7 @@ export interface DirectBookingOperationsOrder {
     reviewedBy: string | null;
     at: string | null;
   } | null;
+  existingDepositReviewRequired?: boolean;
   paymentApprovedWithoutConfirmedReservation: boolean;
   latePaymentAfterHold: boolean;
   staysActionFailed: boolean;

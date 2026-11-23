@@ -21,6 +21,12 @@ class ReconcileMercadoPagoPaymentTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+    }
+
     public function test_successful_gateway_reconciliation_marks_webhook_processed_and_increments_attempts(): void
     {
         $webhook = $this->createWebhook();

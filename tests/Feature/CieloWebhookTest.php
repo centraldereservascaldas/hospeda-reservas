@@ -259,6 +259,30 @@ class CieloWebhookTest extends TestCase
             && $request->url() === 'https://apiquerysandbox.cieloecommerce.cielo.com.br/1/sales/123e4567-e89b-12d3-a456-426614174041');
     }
 
+    public function test_approved_existing_deposit_webhook_revalidates_stays_only_when_experimental_flags_are_enabled(): void
+    {
+        $this->configureWebhook();
+        $order = $this->createCieloOrder();
+        $order->forceFill(['origin' => 'stays_existing', 'status' => DirectBookingOrderStatus::EntradaConciliada, 'payment_status' => 'approved'])->save();
+        $attempt = $this->createCieloAttempt($order);
+        $attempt->forceFill(['status' => 'approved'])->save();
+        $payments = \Mockery::mock(DirectCheckoutPaymentService::class);
+        $payments->shouldReceive('reconcileCieloPaymentId')->twice()->andReturn(['status' => 200, 'attempt' => $attempt]);
+        $reservations = \Mockery::mock(DirectStaysPaymentService::class);
+        $reservations->shouldReceive('confirmPaidReservation')->once()->withArgs(fn ($value) => $value->id === $order->id)
+            ->andReturn(['ready' => true, 'code' => 'existing_deposit_settled', 'message' => '']);
+        config(['direct-booking.experimental_existing_deposit_enabled' => true, 'direct-booking.experimental_existing_ledger_audit_enabled' => true, 'direct-booking.experimental_existing_cycle_settlement_enabled' => true]);
+        foreach ([true, false] as $enabled) {
+            config(['direct-booking.experimental_existing_ledger_audit_enabled' => $enabled]);
+            $webhook = DirectBookingPaymentWebhook::query()->create([
+                'event_key' => hash('sha256', 'deposit-webhook-'.(int) $enabled), 'gateway_provider' => 'cielo_sandbox',
+                'gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174041', 'status' => 'received', 'received_at' => now(),
+            ]);
+            (new ReconcileCieloPaymentWebhook($webhook->id))->handle($payments, $reservations);
+            $this->assertSame('processed', $webhook->fresh()->status);
+        }
+    }
+
     public function test_unknown_payment_id_is_not_attached_to_an_existing_attempt(): void
     {
         $this->configureWebhook();
@@ -431,6 +455,7 @@ class CieloWebhookTest extends TestCase
     private function configureWebhook(): void
     {
         config([
+            'direct-booking.existing_reservation_checkout_enabled' => false,
             'services.cielo.webhook_header_name' => 'X-Cielo-Secret',
             'services.cielo.webhook_header_value' => 'synthetic-cielo-webhook-secret',
             'services.cielo.webhook_queue_connection' => 'database',

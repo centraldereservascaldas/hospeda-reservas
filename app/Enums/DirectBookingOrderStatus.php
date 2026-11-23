@@ -10,6 +10,7 @@ enum DirectBookingOrderStatus: string
     case LiberacaoPendente = 'liberacao_pendente';
     case PagamentoPendente = 'pagamento_pendente';
     case PagoEmConfirmacao = 'pago_em_confirmacao';
+    case EntradaConciliada = 'entrada_conciliada';
     case Confirmado = 'confirmado';
     case Concluido = 'concluido';
     case Expirado = 'expirado';

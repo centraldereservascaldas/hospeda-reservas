@@ -1,4 +1,6 @@
 export interface CheckoutSupportDetails {
+  requestType?: 'payment_help' | 'reservation_changes';
+  message?: string;
   listingId?: string;
   listingTitle?: string;
   from?: string;
@@ -23,7 +25,12 @@ const date = (value: string) => {
 
 /** Only booking context is shared. Never serialize customer, token, Pix or card objects. */
 export function getCheckoutSupportUrl(details: CheckoutSupportDetails): string {
-  const lines = ['Olá! Preciso de ajuda para concluir uma reserva no checkout da CRCN.'];
+  const lines = [
+    details.message ??
+      (details.requestType === 'reservation_changes'
+        ? 'Olá! Gostaria de solicitar uma alteração nos dados da minha reserva.'
+        : 'Olá! Preciso de ajuda para concluir uma reserva no checkout da CRCN.'),
+  ];
   if (details.reservationCode && /^[A-Z0-9]{5}$/.test(details.reservationCode)) {
     lines.push(`Código da reserva: ${details.reservationCode}`);
   }
@@ -64,8 +71,10 @@ export function getCheckoutSupportUrl(details: CheckoutSupportDetails): string {
   if (details.reference && /^[A-Za-z0-9]{40}$/.test(details.reference)) {
     lines.push(`Referência do pedido: ${details.reference}`);
   }
-  lines.push(
-    'Houve uma falha no checkout. Por favor, confiram a situação antes de iniciar outra cobrança.',
-  );
+  if (details.message === undefined && details.requestType !== 'reservation_changes') {
+    lines.push(
+      'Houve uma falha no checkout. Por favor, confiram a situação antes de iniciar outra cobrança.',
+    );
+  }
   return `https://wa.me/${supportNumber}?text=${encodeURIComponent(lines.join('\n'))}`;
 }

@@ -1,13 +1,6 @@
+import { isValidBrazilianTaxId } from '../../utils/cpf';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  ArrowLeft,
-  BadgeCheck,
-  CircleAlert,
-  Clock3,
-  LoaderCircle,
-  Printer,
-  ShieldCheck,
-} from 'lucide-react';
+import { ArrowLeft, BadgeCheck, CircleAlert, Clock3, LoaderCircle, Printer, ShieldCheck } from 'lucide-react';
 import { checkoutApi } from '../../services/checkoutApi';
 import {
   navigateToPaymentConfirmation,
@@ -29,6 +22,7 @@ import {
 import { CieloCheckoutIframe } from './CieloCheckoutIframe';
 import { GuestDetailsForm } from './GuestDetailsForm';
 import { CheckoutFooter } from './CheckoutFooter';
+import { ExistingReservationContractAcceptance } from './ExistingReservationContractAcceptance';
 import {
   clearCheckoutResumeToken,
   getCheckoutResumeToken,
@@ -141,6 +135,11 @@ const statusDetails: Record<
     detail: 'Estamos verificando a confirmação da sua reserva.',
     tone: 'neutral',
   },
+  entrada_conciliada: {
+    title: 'Entrada registrada',
+    detail: 'A entrada foi registrada. Consulte o saldo atualizado da sua reserva com nosso atendimento.',
+    tone: 'positive',
+  },
   confirmado: {
     title: 'Reserva confirmada',
     detail: 'Sua reserva foi confirmada.',
@@ -245,6 +244,12 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
   }
 
   if (order.origin === 'stays_existing') {
+    if (order.status === 'entrada_conciliada' && order.existingDepositReviewRequired)
+      return {
+        title: 'Entrada em conferência',
+        detail: 'Não foi possível confirmar novamente o registro da entrada. Fale com nosso atendimento antes de fazer outro pagamento.',
+        tone: 'attention' as const,
+      };
     if (order.status === 'pre_reservado')
       return {
         title: 'Pagamento disponível',
@@ -262,7 +267,7 @@ function getOrderStatusDetails(order: DirectBookingOrderSummary) {
       return {
         title: 'Pagamento aprovado, reserva em atualização',
         detail:
-          'O pagamento foi aprovado. Estamos registrando e conferindo a baixa na Stays antes de confirmar a reserva. Não é necessário pagar novamente.',
+          'O pagamento foi aprovado. Estamos confirmando o pagamento e atualizando sua reserva. Não é necessário pagar novamente.',
         tone: 'neutral' as const,
       };
     if (order.status === 'pagamento_recusado')
@@ -390,7 +395,10 @@ export function CheckoutResumePage({
   const startPixPayment = async (order: DirectBookingOrderSummary): Promise<void> => {
     if (pixPaymentSubmissionInFlightRef.current) return;
     const payerIdentification = getPixPayerIdentification(pixPayerDocument);
-    if (!payerIdentification) {
+    if (
+      !payerIdentification ||
+      (order.origin === 'stays_existing' && !isValidBrazilianTaxId(payerIdentification.number))
+    ) {
       setPaymentStartError('Informe o CPF ou CNPJ de quem vai pagar o Pix.');
       return;
     }
@@ -459,6 +467,11 @@ export function CheckoutResumePage({
   const order = resumeState.kind === 'ready' ? resumeState.data.order : null;
   const paymentAttempt =
     resumeState.kind === 'ready' ? (resumeState.data.payment.attempt ?? null) : null;
+  const canAcceptExistingContract = order?.existingContractAcceptable === true;
+  const contractResumeToken =
+    resumeState.kind === 'ready' && resumeState.credentials.type === 'resume-token'
+      ? resumeState.credentials.resumeToken
+      : getCheckoutResumeToken(reference);
   const existingReservationCode =
     order?.origin === 'stays_existing'
       ? getExistingReservationCodeForResumeReference(reference)
@@ -702,6 +715,33 @@ export function CheckoutResumePage({
                     </div>
                   </div>
                   {order.origin === 'stays_existing' &&
+                    order.existingContractRequired &&
+                    !!contractResumeToken &&
+                    canAcceptExistingContract && (
+                      <ExistingReservationContractAcceptance
+                        reference={reference}
+                        resumeToken={contractResumeToken!}
+                        onAccepted={() => setRetryKey((value) => value + 1)}
+                      />
+                    )}
+                  {order.origin === 'stays_existing' &&
+                    (order.existingContractReviewRequired ||
+                      (order.existingContractRequired &&
+                        (!contractResumeToken || !canAcceptExistingContract))) && (
+                      <div
+                        className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+                        role="status"
+                      >
+                        <p>
+                          Precisamos conferir o contrato deste pedido. Entre em contato com nosso
+                          atendimento para continuar.
+                        </p>
+                        {supportLink}
+                      </div>
+                    )}
+                  {order.origin === 'stays_existing' &&
+                    !order.existingContractReviewRequired &&
+                    !order.existingContractRequired &&
                     (order.status === 'pre_reservado' ||
                       order.status === 'pagamento_recusado' ||
                       order.status === 'expirado' ||
@@ -941,6 +981,7 @@ export function CheckoutResumePage({
                               value={pixPayerDocument}
                               onChange={setPixPayerDocument}
                               disabled={isStartingPixPayment}
+                              allowAlphanumericCnpj={order.origin === 'stays_existing'}
                             />
                             <div>
                               <h2 id="checkout-start-payment-title" className="font-extrabold">
@@ -983,6 +1024,7 @@ export function CheckoutResumePage({
 
                         {showCardPaymentForm && isCieloProvider && (
                           <CieloSopCardForm
+                            validatePayerDocument={order.origin === 'stays_existing'}
                             failureContent={supportLink}
                             reference={reference}
                             amount={order.quoteTotal}
