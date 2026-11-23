@@ -103,16 +103,16 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
   }
   if (!authorized) return message ? <p role="status">{message}</p> : null;
   return (
-    <section className="space-y-4 border-t pt-4">
-      <h2 className="text-xl font-bold">Administração</h2>
+    <section className="affiliate-admin">
+      <div className="affiliate-card-head"><div><h2>Centro de administração</h2><p className="affiliate-card-subtitle">Controle afiliados, catálogo e repasses com segurança.</p></div><span className="affiliate-badge">● Operação interna</span></div>
       {message && <p role="status">{message}</p>}
-      <h3 className="font-bold">Solicitações de afiliados</h3>
+      <div className="affiliate-admin-section"><h3>Solicitações de afiliados</h3>
       {accounts.length === 0 ? (
         <p>Nenhuma solicitação pendente.</p>
       ) : (
         <ul>
           {accounts.map((account) => (
-            <li key={account.user_id} className="my-2 border p-2">
+            <li key={account.user_id} className="affiliate-admin-item">
               <p>{account.full_name}</p>
               <label>
                 Percentual de comissão{' '}
@@ -126,7 +126,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                   onChange={(e) => setValues({ ...values, [account.user_id]: e.target.value })}
                 />
               </label>
-              <button
+              <button className="affiliate-secondary"
                 type="button"
                 onClick={() => {
                   const number = Number(values[account.user_id]);
@@ -147,7 +147,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
               >
                 Aprovar afiliado
               </button>
-              <button
+              <button className="affiliate-danger"
                 type="button"
                 onClick={() =>
                   void submit(
@@ -162,19 +162,20 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
           ))}
         </ul>
       )}
+      </div>
       <AffiliatePagination
         page={pendingPage}
         hasMore={pendingMore}
         onChange={setPendingPage}
         label="Páginas de solicitações"
       />
-      <h3 className="font-bold">Afiliados cadastrados</h3>
+      <div className="affiliate-admin-section"><h3>Afiliados cadastrados</h3>
       {approvedAccounts.length === 0 ? (
         <p>Nenhum afiliado cadastrado.</p>
       ) : (
         <ul>
           {approvedAccounts.map((account) => (
-            <li key={account.user_id} className="my-2 border p-2">
+            <li key={account.user_id} className="affiliate-admin-item">
               <p>
                 {account.full_name} · Percentual atual:{' '}
                 {Number(account.commission_basis_points ?? 0) / 100}% ·{' '}
@@ -199,7 +200,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                   }
                 />
               </label>
-              <button
+              <button className="affiliate-secondary"
                 type="button"
                 disabled={account.status !== 'approved'}
                 onClick={() => {
@@ -218,7 +219,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                 Salvar percentual
               </button>
               {account.status === 'rejected' && (
-                <button
+                <button className="affiliate-secondary"
                   type="button"
                   onClick={() =>
                     void submit(
@@ -231,7 +232,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                 </button>
               )}
               {account.status !== 'rejected' && (
-                <button
+                <button className="affiliate-danger"
                   type="button"
                   onClick={() =>
                     void submit(
@@ -247,13 +248,14 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
           ))}
         </ul>
       )}
+      </div>
       <AffiliatePagination
         page={managedPage}
         hasMore={managedMore}
         onChange={setManagedPage}
         label="Páginas de afiliados"
       />
-      <h3 className="font-bold">Imóveis para divulgação</h3>
+      <div className="affiliate-admin-section"><h3>Imóveis para divulgação</h3>
       <p>
         Todos os imóveis ativos estão liberados inicialmente. Imóveis bloqueados não aparecem para
         afiliados nem geram novos links; links já distribuídos continuam válidos.
@@ -265,11 +267,11 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
       ) : (
         <ul>
           {listings.map((listing) => (
-            <li key={listing.id} className="my-2 border p-2">
+            <li key={listing.id} className="affiliate-admin-item">
               <span>
                 {listing.title} · {listing.enabled ? 'Liberado' : 'Bloqueado'}
               </span>{' '}
-              <button
+              <button className="affiliate-secondary"
                 type="button"
                 onClick={() =>
                   void submit(
@@ -284,13 +286,14 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
           ))}
         </ul>
       )}
-      <h3 className="font-bold">Comissões</h3>
+      </div>
+      <div className="affiliate-admin-section"><h3>Comissões</h3>
       {commissions.length === 0 ? (
         <p>Nenhuma comissão registrada.</p>
       ) : (
         <ul>
           {commissions.map((item) => (
-            <li key={item.id} className="my-2 border p-2">
+            <li key={item.id} className="affiliate-admin-item">
               <p>
                 {item.full_name} · Imóvel {item.listing_id} · Reserva: {item.booking_status} ·
                 Pagamento: {item.payment_status || 'pendente'} · Comissão: {item.status}
@@ -312,7 +315,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                       onChange={(e) => setValues({ ...values, [`c${item.id}`]: e.target.value })}
                     />
                   </label>
-                  <button
+                  <button className="affiliate-secondary"
                     type="button"
                     onClick={() => {
                       const number = Number(values[`c${item.id}`]);
@@ -345,7 +348,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                       onChange={(e) => setValues({ ...values, [`p${item.id}`]: e.target.value })}
                     />
                   </label>
-                  <button
+                  <button className="affiliate-secondary"
                     type="button"
                     onClick={() => {
                       const paymentReference = (values[`p${item.id}`] || '').trim();
@@ -366,6 +369,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
           ))}
         </ul>
       )}
+      </div>
       <AffiliatePagination
         page={commissionPage}
         hasMore={commissionMore}

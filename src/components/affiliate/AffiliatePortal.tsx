@@ -5,6 +5,7 @@ import { supabase } from '../../services/supabase';
 import { apiFetch } from '../../services/apiFetch';
 import { AffiliateAdminPanel } from './AffiliateAdminPanel';
 import { AffiliatePagination } from './AffiliatePagination';
+import './affiliate-portal.css';
 
 type Property = {
   id: string;
@@ -196,13 +197,12 @@ export function AffiliatePortal() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-6">
-      <h1 className="text-3xl font-bold">Portal de afiliados</h1>
-      {session && (
-        <button type="button" onClick={() => void supabase?.auth.signOut()}>
-          Sair da conta
-        </button>
-      )}
+    <main className="affiliate-shell">
+      <div className="affiliate-wrap">
+      <header className="affiliate-topbar">
+        <div className="affiliate-brand"><span className="affiliate-mark">C</span><div><p className="affiliate-kicker">Central de Reservas</p><h1 className="affiliate-title">Portal de afiliados</h1></div></div>
+        {session && <div className="affiliate-user-actions"><span className="affiliate-user-pill">Área segura do parceiro</span><button className="affiliate-logout" type="button" onClick={() => void supabase?.auth.signOut()}>Sair</button></div>}
+      </header>
       {message && <p role="status">{message}</p>}
       {status === 'loading' && <p role="status">Carregando…</p>}
       {status === 'unavailable' && <p>O acesso está temporariamente indisponível.</p>}
@@ -272,48 +272,47 @@ export function AffiliatePortal() {
       )}
       {status === 'approved' && (
         <>
-          <section>
-            <h2 className="text-xl font-bold">Imóveis para divulgar</h2>
-            <p>Preços e disponibilidade são confirmados para as datas escolhidas pelo cliente.</p>
+          <section className="affiliate-hero"><div className="affiliate-hero-card"><h2>Seu catálogo, suas indicações, seu crescimento.</h2><p>Escolha os imóveis que combinam com o seu público, gere um link exclusivo e acompanhe cada reserva em um só lugar.</p></div><div className="affiliate-stat-card"><span className="affiliate-stat-label">Imóveis disponíveis</span><strong className="affiliate-stat-value">{properties.length}</strong><span className="affiliate-stat-foot">Atualizados pela Central</span></div></section>
+          <div className="affiliate-grid"><section className="affiliate-card affiliate-card-wide">
+            <div className="affiliate-card-head"><div><h2>Imóveis para divulgar</h2><p className="affiliate-card-subtitle">Links rastreáveis para você compartilhar. Preços e disponibilidade são confirmados pelo cliente.</p></div></div>
             <label>
-              Buscar imóvel{' '}
               <input
-                className="block w-full border p-2"
+                className="affiliate-search"
+                aria-label="Buscar imóvel"
+                placeholder="Buscar por nome ou código do imóvel"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </label>
-            {properties.length === 0 && <p>Nenhum imóvel disponível no catálogo agora.</p>}
+            {properties.length === 0 && <p className="affiliate-empty">Nenhum imóvel disponível no catálogo agora.</p>}
             {properties.length > 0 && visibleProperties.length === 0 && (
               <p>Nenhum imóvel encontrado.</p>
             )}
-            <ul>
+            <ul className="affiliate-listing-grid">
               {visibleProperties.map((property) => {
                 const id = property.id;
                 const link = links[id];
                 return (
-                  <li key={id} className="my-3 rounded border p-3">
+                  <li key={id} className="affiliate-listing">
                     {property.images?.[0] && (
                       <img
                         src={property.images[0]}
                         alt=""
                         loading="lazy"
-                        className="h-36 w-full rounded object-cover"
+                        className=""
                       />
                     )}
-                    <p>{property.title || property.name || id}</p>
+                    <div className="affiliate-listing-body"><p className="affiliate-listing-title">{property.title || property.name || id}</p><div className="affiliate-listing-meta"><span>Link individual</span>
                     {!link && (
-                      <button type="button" onClick={() => void generateLink(id)}>
+                      <button className="affiliate-primary" type="button" onClick={() => void generateLink(id)}>
                         Gerar link
                       </button>
                     )}
                     {link && (
                       <>
-                        <label>
-                          Seu link
-                          <input className="block w-full border p-2" readOnly value={link} />
-                        </label>
+                        <div className="affiliate-linkbox"><input aria-label="Seu link" readOnly value={link} />
                         <button
+                          className="affiliate-secondary"
                           type="button"
                           onClick={() =>
                             void navigator.clipboard
@@ -324,27 +323,26 @@ export function AffiliatePortal() {
                         >
                           Copiar link
                         </button>
+                        </div>
                       </>
                     )}
+                    </div>
+                    </div>
                   </li>
                 );
               })}
             </ul>
-          </section>
-          <section>
-            <h2 className="text-xl font-bold">Reservas e comissões</h2>
-            <p>As comissões dependem de conferência e aprovação da Central.</p>
+          </section><section className="affiliate-card affiliate-card-wide">
+            <div className="affiliate-card-head"><div><h2>Reservas e comissões</h2><p className="affiliate-card-subtitle">Acompanhe a jornada de cada indicação com transparência.</p></div><span className="affiliate-badge">● Em acompanhamento</span></div>
             {conversions.length === 0 ? (
               <p>Nenhuma reserva atribuída ainda.</p>
             ) : (
               <ul>
                 {conversions.map((item, index) => (
-                  <li key={`${item.listing_id}-${index}`} className="my-2 border p-2">
-                    Imóvel {item.listing_id} · {item.check_in} a {item.check_out} · Reserva:{' '}
-                    {bookingLabels[item.booking_status] || 'Em andamento'} · Comissão:{' '}
-                    {commissionLabels[item.commission_status] || 'Em análise'}
+                  <li key={`${item.listing_id}-${index}`} className="affiliate-conversion"><div className="affiliate-conversion-main"><p className="affiliate-conversion-title">Imóvel {item.listing_id}</p><span className="affiliate-conversion-meta">{item.check_in} a {item.check_out} · Reserva: {bookingLabels[item.booking_status] || 'Em andamento'}</span></div><span className="affiliate-badge">{commissionLabels[item.commission_status] || 'Em análise'}
                     {item.approved_amount_cents !== null &&
                       ` · R$ ${(item.approved_amount_cents / 100).toFixed(2).replace('.', ',')}`}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -355,10 +353,11 @@ export function AffiliatePortal() {
               onChange={setConversionPage}
               label="Páginas de reservas e comissões"
             />
-          </section>
+          </section></div>
         </>
       )}
       {session && <AffiliateAdminPanel token={session.access_token} />}
+      </div>
     </main>
   );
 }
