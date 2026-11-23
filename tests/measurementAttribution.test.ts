@@ -25,7 +25,7 @@ afterEach(() => {
 
 test('captures only the strict allowlist allowed by each consent category', () => {
   const search =
-    '?utm_source=search&utm_medium=cpc&utm_campaign=summer_2026&utm_content=hero&utm_term=flats&gclid=G-123&gbraid=GB-123&wbraid=WB-123&fbclid=FB-123&email=guest%40example.test&custom=secret';
+    '?utm_source=search&utm_medium=cpc&utm_campaign=summer%20sale&utm_id=12345678&utm_source_platform=meta%20ads&utm_campaign_id=23456789&utm_adset_id=34567890&utm_ad_id=45678901&utm_creative_format=video&utm_marketing_tactic=remarketing&utm_content=hero&utm_term=flats&gclid=G-123&gbraid=GB-123&wbraid=WB-123&fbclid=FB-123&email=guest%40example.test&custom=secret';
   const result = updateMeasurementAttribution(
     { analytics: true, advertising: false },
     search,
@@ -35,7 +35,14 @@ test('captures only the strict allowlist allowed by each consent category', () =
   assert.deepEqual(result?.firstTouch.values, {
     utm_source: 'search',
     utm_medium: 'cpc',
-    utm_campaign: 'summer_2026',
+    utm_campaign: 'summer sale',
+    utm_id: '12345678',
+    utm_source_platform: 'meta ads',
+    utm_campaign_id: '23456789',
+    utm_adset_id: '34567890',
+    utm_ad_id: '45678901',
+    utm_creative_format: 'video',
+    utm_marketing_tactic: 'remarketing',
     utm_content: 'hero',
     utm_term: 'flats',
   });
@@ -77,7 +84,7 @@ test('rejects oversized, unsafe, repeated, and excessive URL values', () => {
   window.sessionStorage.clear();
   const tooManyRecognizedPairs = updateMeasurementAttribution(
     { analytics: true, advertising: true },
-    '?utm_source=a&utm_medium=b&utm_campaign=c&utm_content=d&utm_term=e&gclid=f&gbraid=g&wbraid=h&fbclid=i&fbclid=j',
+    '?utm_source=a&utm_medium=b&utm_campaign=c&utm_id=1&utm_source_platform=p&utm_campaign_id=2&utm_adset_id=3&utm_ad_id=4&utm_creative_format=image&utm_marketing_tactic=remarketing&utm_content=d&utm_term=e&gclid=f&gbraid=g&wbraid=h&fbclid=i&fbclid=j',
     3000,
   );
   assert.equal(tooManyRecognizedPairs, null);

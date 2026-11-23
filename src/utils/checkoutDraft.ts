@@ -2,7 +2,12 @@ import type { AppOverlayBookingPayload } from '../types/booking';
 
 const KEY = 'crcn.checkout.draft.v1.';
 export const CHECKOUT_DRAFT_HISTORY_KEY = '__crcnCheckoutDraftId';
-export const NEW_CHECKOUT_PATH = '/checkout/nova';
+export const NEW_CHECKOUT_PATH = '/checkout';
+export const LEGACY_NEW_CHECKOUT_PATH = '/checkout/nova';
+
+export function isNewCheckoutPath(path: string): boolean {
+  return path === NEW_CHECKOUT_PATH || path === LEGACY_NEW_CHECKOUT_PATH;
+}
 export type CheckoutDraft = Pick<AppOverlayBookingPayload, 'checkIn' | 'checkOut' | 'guests'> & {
   propertyId: string;
 };
@@ -72,7 +77,7 @@ export type CheckoutContact = { fullName: string; email: string; phone: string }
 
 function contactKey(): string | null {
   const id: unknown = window.history.state?.[CHECKOUT_DRAFT_HISTORY_KEY];
-  return window.location.pathname === NEW_CHECKOUT_PATH &&
+  return isNewCheckoutPath(window.location.pathname) &&
     typeof id === 'string' &&
     /^[a-f0-9-]{36}$/i.test(id)
     ? `${KEY}${id}.contact`

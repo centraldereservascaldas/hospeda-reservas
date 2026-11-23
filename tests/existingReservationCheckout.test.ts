@@ -112,7 +112,7 @@ test('existing reservation displays server data without enabling payment', async
     assert.ok(view.getAllByText(/197,50/).length > 0);
     assert.match(view.getByRole('status').textContent || '', /Saldo em aberto/);
     assert.equal(view.queryByRole('button', { name: /pagar/i }), null);
-    assert.equal(new URLSearchParams(window.location.search).get('adultos'), '4');
+    assert.equal(new URLSearchParams(window.location.search).get('adults'), '4');
   } finally {
     cleanup();
     globalThis.fetch = originalFetch;

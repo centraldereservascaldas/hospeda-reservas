@@ -19,6 +19,13 @@ export type AttributionParameter =
   | 'utm_source'
   | 'utm_medium'
   | 'utm_campaign'
+  | 'utm_id'
+  | 'utm_source_platform'
+  | 'utm_campaign_id'
+  | 'utm_adset_id'
+  | 'utm_ad_id'
+  | 'utm_creative_format'
+  | 'utm_marketing_tactic'
   | 'utm_content'
   | 'utm_term'
   | 'gclid'
@@ -31,12 +38,22 @@ const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const MAX_SEARCH_LENGTH = 4096;
 const MAX_VALUE_LENGTH = 100;
-const SAFE_VALUE_PATTERN = /^[A-Za-z0-9._~-]+$/;
+const SAFE_VALUE_PATTERN = /^[\p{L}\p{N}._~%+ ,:/()&-]+$/u;
 const NUMERIC_IDENTIFIER_PATTERN = /^\d{7,}$/;
+const NUMERIC_CAMPAIGN_ID_PARAMETERS = new Set<AttributionParameter>([
+  'utm_id', 'utm_campaign_id', 'utm_adset_id', 'utm_ad_id',
+]);
 const ANALYTICS_PARAMETERS = new Set<AttributionParameter>([
   'utm_source',
   'utm_medium',
   'utm_campaign',
+  'utm_id',
+  'utm_source_platform',
+  'utm_campaign_id',
+  'utm_adset_id',
+  'utm_ad_id',
+  'utm_creative_format',
+  'utm_marketing_tactic',
   'utm_content',
   'utm_term',
 ]);
@@ -50,6 +67,11 @@ const ALLOWED_PARAMETERS = new Set<AttributionParameter>([
   ...ANALYTICS_PARAMETERS,
   ...ADVERTISING_PARAMETERS,
 ]);
+
+function isSafeAttributionValue(key: string, value: string): boolean {
+  return value.length <= MAX_VALUE_LENGTH && SAFE_VALUE_PATTERN.test(value) &&
+    (NUMERIC_CAMPAIGN_ID_PARAMETERS.has(key as AttributionParameter) || !NUMERIC_IDENTIFIER_PATTERN.test(value));
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -65,9 +87,7 @@ function sanitizeValues(value: unknown): Partial<Record<AttributionParameter, st
     if (
       ALLOWED_PARAMETERS.has(key as AttributionParameter) &&
       typeof candidate === 'string' &&
-      candidate.length <= MAX_VALUE_LENGTH &&
-      SAFE_VALUE_PATTERN.test(candidate) &&
-      !NUMERIC_IDENTIFIER_PATTERN.test(candidate)
+      isSafeAttributionValue(key, candidate)
     ) {
       sanitized[key as AttributionParameter] = candidate;
     }
@@ -197,9 +217,7 @@ function collectAllowedParameters(
     const [candidate] = values;
     if (
       candidate !== undefined &&
-      candidate.length <= MAX_VALUE_LENGTH &&
-      SAFE_VALUE_PATTERN.test(candidate) &&
-      !NUMERIC_IDENTIFIER_PATTERN.test(candidate)
+      isSafeAttributionValue(key, candidate)
     ) {
       collected[key] = candidate;
     }
