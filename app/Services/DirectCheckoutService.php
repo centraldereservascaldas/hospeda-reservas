@@ -10,7 +10,6 @@ use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 
 class DirectCheckoutService
 {
@@ -19,6 +18,7 @@ class DirectCheckoutService
         private readonly DirectSaleTermsRegistry $terms,
         private readonly DirectStaysReservationService $reservations,
         private readonly DirectCheckoutPaymentService $payments,
+        private readonly AffiliateAttributionService $affiliateAttribution,
     ) {}
 
     /** @return array{order: DirectBookingOrder|null, code: string|null, message: string|null, status: int, replayed: bool, success: bool, resumeReference: string|null, resumeToken: string|null} */
@@ -52,6 +52,7 @@ class DirectCheckoutService
         }
 
         $input = $request->validated();
+        $affiliateAttributionId = $request->cookie(AffiliateAttributionService::COOKIE_NAME);
         $idempotencyKey = $input['idempotencyKey'];
         $fingerprint = $this->requestFingerprint($input);
 
@@ -67,13 +68,13 @@ class DirectCheckoutService
             return $this->continueOrder($existingOrder, replayed: true);
         }
 
-        return $this->createOrderOnce($input, $idempotencyKey, $fingerprint, $resumeTokenTtlDays);
+        return $this->createOrderOnce($input, $idempotencyKey, $fingerprint, $resumeTokenTtlDays, $affiliateAttributionId);
     }
 
     /** @param array<string, mixed> $input
      * @return array{order: DirectBookingOrder|null, code: string|null, message: string|null, status: int, replayed: bool, success: bool, resumeReference: string|null, resumeToken: string|null}
      */
-    private function createOrderOnce(array $input, string $idempotencyKey, string $fingerprint, int $resumeTokenTtlDays): array
+    private function createOrderOnce(array $input, string $idempotencyKey, string $fingerprint, int $resumeTokenTtlDays, ?string $affiliateAttributionId): array
     {
         $property = $this->terms->findApprovedListing($input['listingId']);
         $termsSnapshot = is_array($property) ? ($property['directSaleTermsSnapshot'] ?? null) : null;
@@ -148,7 +149,7 @@ class DirectCheckoutService
         }
 
         try {
-            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $guestCapacity, $idempotencyKey, $fingerprint, $resumeTokenTtlDays): DirectBookingOrder {
+            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $guestCapacity, $idempotencyKey, $fingerprint, $resumeTokenTtlDays, $affiliateAttributionId): DirectBookingOrder {
                 $quoteSnapshot = $quote['snapshot'];
                 $quoteSnapshot['apartment_max_guests'] = $guestCapacity;
                 $order = DirectBookingOrder::create([
@@ -188,29 +189,13 @@ class DirectCheckoutService
                     ]],
                 ]);
 
-                $referral = $input['affiliateReferral'] ?? '';
-                $signature = $input['affiliateSignature'] ?? '';
-                $issuedAt = $input['affiliateIssuedAt'] ?? 0;
-                $expectedSignature = hash_hmac('sha256', 'affiliate-click:'.$referral.':'.$input['listingId'].':'.$issuedAt, (string) config('app.key'));
-                if (is_string(config('app.key')) && config('app.key') !== '' && $referral !== '' && is_string($signature) && is_numeric($issuedAt) && (int) $issuedAt <= now()->timestamp && (int) $issuedAt > now()->subDays(30)->timestamp && hash_equals($expectedSignature, $signature)) {
-                    $affiliate = DB::table('affiliate_accounts')->where('referral_code', $input['affiliateReferral'])
-                        ->where('status', 'approved')->lockForUpdate()->first();
-                    if ($affiliate === null) {
-                        throw ValidationException::withMessages(['affiliateReferral' => 'Indicação indisponível. Atualize o link e tente novamente.']);
-                    }
-                    if ($affiliate !== null) {
-                        DB::table('affiliate_conversions')->insert([
-                            'affiliate_user_id' => $affiliate->user_id,
-                            'direct_booking_order_id' => $order->id,
-                            'commission_basis_points' => $affiliate->commission_basis_points,
-                            'status' => 'pending',
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ]);
-                    }
-                } elseif ($referral !== '' || $signature !== '' || $issuedAt !== 0) {
-                    throw ValidationException::withMessages(['affiliateReferral' => 'Indicação inválida ou expirada. Atualize o link e tente novamente.']);
-                }
+                $acceptedListingIds = array_values(array_unique(array_filter([
+                    $input['listingId'],
+                    $property['id'] ?? null,
+                    $property['staysListingId'] ?? null,
+                    $staysListingId,
+                ], fn (mixed $listingId): bool => is_string($listingId) && $listingId !== '')));
+                $this->affiliateAttribution->recordConversion($affiliateAttributionId, $acceptedListingIds, $order->id);
 
                 return $order;
             });

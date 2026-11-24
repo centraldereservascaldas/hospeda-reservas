@@ -5,6 +5,7 @@ import { AffiliatePagination } from './AffiliatePagination';
 type Account = {
   user_id: string;
   full_name: string;
+  nickname?: string | null;
   status: 'pending' | 'approved' | 'suspended' | 'rejected';
   commission_basis_points?: number;
 };
@@ -12,7 +13,11 @@ type Listing = { id: string; title: string; enabled: boolean };
 type Commission = {
   id: number;
   full_name: string;
+  nickname: string | null;
   listing_id: string;
+  short_link_token: string | null;
+  attributed_at: string | null;
+  last_clicked_at: string | null;
   booking_status: string;
   payment_status: string | null;
   status: string;
@@ -177,7 +182,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
           {approvedAccounts.map((account) => (
             <li key={account.user_id} className="affiliate-admin-item">
               <p>
-                {account.full_name} · Percentual atual:{' '}
+                {account.full_name}{account.nickname ? ` · @${account.nickname}` : ''} · Percentual atual:{' '}
                 {Number(account.commission_basis_points ?? 0) / 100}% ·{' '}
                 {account.status === 'approved'
                   ? 'Ativo'
@@ -258,7 +263,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
       <div className="affiliate-admin-section"><h3>Imóveis para divulgação</h3>
       <p>
         Todos os imóveis ativos estão liberados inicialmente. Imóveis bloqueados não aparecem para
-        afiliados nem geram novos links; links já distribuídos continuam válidos.
+        afiliados, não geram novos links e deixam de registrar cliques em links existentes.
       </p>
       {listingsUnavailable ? (
         <p>Não foi possível carregar os imóveis. Tente novamente.</p>
@@ -295,9 +300,12 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
           {commissions.map((item) => (
             <li key={item.id} className="affiliate-admin-item">
               <p>
-                {item.full_name} · Imóvel {item.listing_id} · Reserva: {item.booking_status} ·
+                {item.full_name}{item.nickname ? ` · @${item.nickname}` : ''} · Imóvel {item.listing_id} · Reserva: {item.booking_status} ·
                 Pagamento: {item.payment_status || 'pendente'} · Comissão: {item.status}
               </p>
+              {item.short_link_token && (
+                <p>Link /a/{item.short_link_token} · Atribuída em: {item.attributed_at || 'indisponível'} · Último clique: {item.last_clicked_at || 'indisponível'}</p>
+              )}
               <p>
                 Valor da reserva: R$ {item.quote_total} · Percentual registrado:{' '}
                 {Number(item.commission_basis_points ?? 0) / 100}%

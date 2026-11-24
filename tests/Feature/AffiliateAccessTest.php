@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\AffiliateAccount;
+use App\Services\AffiliateAttributionService;
 use App\Services\StaysAccommodationCatalog;
+use App\Services\StaysDiscoveryCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -50,34 +52,30 @@ class AffiliateAccessTest extends TestCase
         $this->assertSame(500, (int) $account->commission_basis_points);
         $this->assertSame(40, strlen($account->referral_code));
         $this->withToken('test')->getJson('/api/affiliate/access')->assertOk()
-            ->assertJsonPath('referralCode', $account->referral_code)
+            ->assertJsonMissingPath('referralCode')
             ->assertJsonPath('commissionBasisPoints', 500)
             ->assertHeader('Cache-Control', 'no-store, private');
         $this->mock(StaysAccommodationCatalog::class)->shouldReceive('get')->twice()->andReturn([
             'success' => true, 'data' => [['id' => 'JQ08G']], 'count' => 1, 'source' => 'test',
         ]);
-        $this->withToken('test')->getJson('/api/affiliate/links/JQ08G')->assertOk()
-            ->assertJsonPath('signature', hash_hmac('sha256', $account->referral_code.':JQ08G', (string) config('app.key')));
+        $this->mock(StaysDiscoveryCatalog::class)->shouldReceive('listing')->andReturn([
+            'id' => 'JQ08G', 'slug' => 'imovel', 'name' => 'Imóvel', 'city' => 'Caldas Novas',
+            'description' => 'Descrição', 'images' => [], 'indexable' => true,
+        ]);
+        $link = $this->withToken('test')->getJson('/api/affiliate/links/JQ08G')->assertOk()
+            ->assertJsonPath('nickname', $account->nickname)->json('shortUrl');
         $this->withToken('test')->getJson('/api/affiliate/links/NOTFOUND')->assertNotFound();
-        $click = ['referral' => $account->referral_code, 'listingId' => 'JQ08G', 'signature' => hash_hmac('sha256', $account->referral_code.':JQ08G', (string) config('app.key'))];
-        $captured = $this->postJson('/api/affiliate/capture', $click)->assertOk()->assertHeader('Cache-Control', 'no-store, private');
-        $transfer = ['referral' => $account->referral_code, 'listingId' => 'JQ08G', 'issuedAt' => $captured->json('issuedAt'), 'signature' => $captured->json('signature')];
-        $this->travel(10)->days();
-        $this->postJson('/api/affiliate/capture', $transfer)->assertOk()->assertJsonPath('issuedAt', $transfer['issuedAt'])->assertJsonPath('signature', $transfer['signature']);
-        $this->travel(20)->days();
-        $this->postJson('/api/affiliate/capture', $transfer)->assertForbidden();
-        $this->travel(-30)->days();
-        $this->postJson('/api/affiliate/capture', array_merge($click, ['listingId' => 'OTHER']))->assertForbidden();
+        $this->get('/api/affiliate/capture')->assertNotFound();
         AffiliateAccount::query()->whereKey($id)->update(['status' => 'suspended']);
-        $this->postJson('/api/affiliate/capture', $click)->assertForbidden();
         AffiliateAccount::query()->whereKey($id)->update(['status' => 'approved']);
         $this->withToken('test')->getJson('/api/owner/admin/affiliates/approved')->assertOk()
-            ->assertJsonPath('accounts.0.commission_basis_points', 500);
+            ->assertJsonPath('accounts.0.commission_basis_points', 500)
+            ->assertJsonPath('accounts.0.nickname', $account->nickname);
         $this->withToken('test')->postJson("/api/owner/admin/affiliates/{$id}/rate", ['commissionBasisPoints' => 700])->assertOk();
         $this->assertDatabaseHas('affiliate_accounts', ['user_id' => $id, 'commission_basis_points' => 700, 'referral_code' => $account->referral_code]);
     }
 
-    public function test_admin_controls_affiliate_status_and_catalog_without_revoking_existing_links(): void
+    public function test_admin_controls_affiliate_status_and_stops_clicks_for_excluded_listings(): void
     {
         $id = '575c8054-6646-443c-bf62-07945019a32f';
         config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key', 'services.hospeda.owner_admin_emails' => ['admin@example.test']]);
@@ -95,12 +93,13 @@ class AffiliateAccessTest extends TestCase
         $this->withToken('test')->postJson("/api/owner/admin/affiliates/{$id}/status", ['action' => 'reactivate'])->assertOk();
         $this->assertDatabaseHas('affiliate_accounts', ['user_id' => $id, 'status' => 'approved', 'referral_code' => str_repeat('A', 40)]);
         $this->mock(StaysAccommodationCatalog::class)->shouldReceive('get')->andReturn(['data' => [['id' => 'JQ08G', 'title' => 'Primeiro'], ['id' => 'OTHER', 'title' => 'Segundo']]]);
+        $this->withToken('test')->getJson('/api/affiliate/links/JQ08G')->assertOk();
+        $existingToken = (string) DB::table('affiliate_short_links')->where('affiliate_user_id', $id)->value('token');
         $this->withToken('test')->getJson('/api/affiliate/catalog')->assertJsonCount(2, 'data');
         $this->withToken('test')->postJson('/api/owner/admin/affiliate-listings/JQ08G', ['enabled' => false])->assertOk();
         $this->withToken('test')->getJson('/api/affiliate/catalog')->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', 'OTHER');
         $this->withToken('test')->getJson('/api/affiliate/links/JQ08G')->assertNotFound();
-        $click = ['referral' => str_repeat('A', 40), 'listingId' => 'JQ08G', 'signature' => hash_hmac('sha256', str_repeat('A', 40).':JQ08G', (string) config('app.key'))];
-        $this->postJson('/api/affiliate/capture', $click)->assertOk();
+        $this->assertNull(app(AffiliateAttributionService::class)->recordClick(request(), $existingToken));
         $this->withToken('test')->getJson('/api/owner/admin/affiliate-listings')->assertJsonPath('listings.0.enabled', false);
         $this->withToken('test')->postJson('/api/owner/admin/affiliate-listings/JQ08G', ['enabled' => true])->assertOk();
         $this->withToken('test')->getJson('/api/affiliate/catalog')->assertJsonCount(2, 'data');

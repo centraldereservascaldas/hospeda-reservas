@@ -3,7 +3,6 @@ import {
   navigateToPaymentRejection,
 } from '../../utils/paymentConfirmation';
 import { checkoutUrlWithStay } from '../../utils/checkoutUrl';
-import { affiliateTransferUrl, retryAffiliateCapture } from '../../utils/affiliateAttribution';
 import { isValidCpf } from '../../utils/cpf';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import { ArrowLeft, BadgeCheck, CreditCard, LockKeyhole, QrCode, ShieldCheck } from 'lucide-react';
@@ -96,24 +95,6 @@ export function SinglePageCheckout({
   const [statusUnavailable, setStatusUnavailable] = useState(false);
   const [statusRetry, setStatusRetry] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
-  const [transferUrl, setTransferUrl] = useState<string>();
-  const [transferCopied, setTransferCopied] = useState(false);
-  const transferListingId = bookingData?.property.id;
-  useEffect(() => {
-    let active = true;
-    if (transferListingId && !previewOnly) {
-      void retryAffiliateCapture(transferListingId, window.localStorage).then(() => {
-        if (active)
-          setTransferUrl(
-            affiliateTransferUrl(transferListingId, window.localStorage, window.location.origin),
-          );
-      });
-    }
-    return () => {
-      active = false;
-    };
-  }, [transferListingId, previewOnly]);
-
   useEffect(() => {
     if (!bookingData) return;
     if (previewOnly) {
@@ -425,44 +406,6 @@ export function SinglePageCheckout({
         </div>
       </header>
       <div className="mx-auto w-full max-w-6xl flex-1 px-5 pt-8 sm:px-10 sm:pt-10">
-        {transferUrl && !prepared && (
-          <section
-            className="mb-5 rounded-xl border border-neutral-200 bg-white p-4"
-            aria-label="Continuar em outro dispositivo"
-          >
-            <p className="text-sm font-semibold">Continuar em outro dispositivo</p>
-            <p className="mt-1 text-sm text-neutral-700">
-              Envie este link para o outro dispositivo e escolha novamente as datas e os hóspedes. A
-              indicação será mantida.
-            </p>
-            <div className="mt-2 flex gap-2">
-              <input
-                aria-label="Link para continuar em outro dispositivo"
-                className="min-w-0 flex-1 rounded border border-neutral-400 p-2 text-sm"
-                readOnly
-                value={transferUrl}
-                onFocus={(event) => event.currentTarget.select()}
-              />
-              <button
-                type="button"
-                className="rounded bg-neutral-900 px-3 py-2 text-sm text-white"
-                onClick={() => {
-                  void navigator.clipboard
-                    .writeText(transferUrl)
-                    .then(() => setTransferCopied(true))
-                    .catch(() => setTransferCopied(false));
-                }}
-              >
-                Copiar
-              </button>
-            </div>
-            {transferCopied && (
-              <p role="status" className="mt-1 text-sm">
-                Link copiado.
-              </p>
-            )}
-          </section>
-        )}
         <div className="mb-7 flex items-center gap-4 sm:mb-9">
           {!prepared && (
             <button

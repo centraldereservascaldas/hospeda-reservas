@@ -44,8 +44,12 @@ class AffiliateDashboardController extends Controller
                 'created_at' => $row->created_at,
             ];
         });
+        $clicks = DB::table('affiliate_clicks as click')
+            ->join('affiliate_short_links as link', 'link.id', '=', 'click.affiliate_short_link_id')
+            ->where('link.affiliate_user_id', $guest->id)
+            ->count();
 
-        return response()->json(['success' => true, 'conversions' => $conversions, 'hasMore' => $results->hasMorePages()])
+        return response()->json(['success' => true, 'clicks' => $clicks, 'conversions' => $conversions, 'hasMore' => $results->hasMorePages()])
             ->header('Cache-Control', 'private, no-store');
     }
 }

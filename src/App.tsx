@@ -53,7 +53,6 @@ import { existingReservationCodeFromPath } from './utils/checkoutUrl';
 import { NotFoundPage } from './components/NotFoundPage';
 import { isNewCheckoutPath, NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
 import { useCheckoutDraftRecovery } from './hooks/useCheckoutDraftRecovery';
-import { captureAffiliateReferral } from './utils/affiliateAttribution';
 import { AffiliatePortal } from './components/affiliate/AffiliatePortal';
 
 const CheckoutResumePage = lazy(() =>
@@ -695,14 +694,6 @@ function MarketplaceApp() {
 export default function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname);
   usePageMetadata(pathname);
-
-  useEffect(() => {
-    try {
-      captureAffiliateReferral(new URL(window.location.href), window.localStorage);
-    } catch {
-      /* storage unavailable */
-    }
-  }, [pathname]);
 
   useEffect(() => {
     const handlePopState = () => setPathname(window.location.pathname);

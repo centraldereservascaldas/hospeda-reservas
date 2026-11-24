@@ -12,5 +12,5 @@ class AffiliateAccount extends Model
 
     protected $keyType = 'string';
 
-    protected $fillable = ['user_id', 'full_name', 'status'];
+    protected $fillable = ['user_id', 'full_name', 'nickname', 'status'];
 }

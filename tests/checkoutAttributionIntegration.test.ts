@@ -26,7 +26,6 @@ const { checkoutApi } = await import('../src/services/checkoutApi.ts');
 const { STAYS_NET_APARTMENTS } = await import('../src/data/staysApartments.ts');
 const { saveMeasurementConsent } = await import('../src/utils/measurementConsent.ts');
 const { updateMeasurementAttribution } = await import('../src/utils/measurementAttribution.ts');
-const { captureAffiliateReferral } = await import('../src/utils/affiliateAttribution.ts');
 
 const quote = {
   success: true,
@@ -82,26 +81,15 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test('checkout includes the signed referral only for its matching property', async () => {
-  const reference = 'a'.repeat(40);
-  const signature = 'b'.repeat(64);
+test('checkout relies on the server-managed attribution cookie and sends no browser referral fields', async () => {
   let body: Record<string, unknown> = {};
   globalThis.fetch = async (input, init) => {
-    if (String(input).includes('/api/affiliate/capture'))
-      return new Response(
-        JSON.stringify({ success: true, signature, issuedAt: Math.floor(Date.now() / 1000) }),
-        { status: 200 },
-      );
     body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     return new Response(JSON.stringify({ success: false }), {
       status: 422,
       headers: { 'Content-Type': 'application/json' },
     });
   };
-  await captureAffiliateReferral(
-    new URL(`http://localhost/apartamento/JQ08G?ref=${reference}&sig=${signature}`),
-    window.localStorage,
-  );
   const payload = {
     listingId: 'JQ08G',
     from: '2027-05-01',
@@ -114,24 +102,20 @@ test('checkout includes the signed referral only for its matching property', asy
     idempotencyKey: 'test-affiliate-123456',
   };
   await checkoutApi.createCheckout(payload);
-  assert.equal(body.affiliateReferral, reference);
-  assert.equal(body.affiliateSignature, signature);
+  assert.equal(body.affiliateReferral, undefined);
+  assert.equal(body.affiliateSignature, undefined);
+  assert.equal(body.affiliateAttributionId, undefined);
   await checkoutApi.createCheckout({ ...payload, listingId: 'OTHER' });
   assert.equal(body.affiliateReferral, undefined);
   assert.equal(body.affiliateSignature, undefined);
 });
 
-test('checkout is not sent while the affiliate capture remains unavailable', async () => {
-  const reference = 'z'.repeat(40);
+test('checkout proceeds when affiliate tracking is unavailable', async () => {
   let checkoutRequests = 0;
   globalThis.fetch = async (input) => {
     if (String(input).includes('/api/checkout')) checkoutRequests++;
-    return new Response('{}', { status: 503 });
+    return new Response(JSON.stringify({ success: false }), { status: 422 });
   };
-  await captureAffiliateReferral(
-    new URL(`http://localhost/apartamento/JQ08G?ref=${reference}&sig=${'d'.repeat(64)}`),
-    window.localStorage,
-  );
   const result = await checkoutApi.createCheckout({
     listingId: 'JQ08G',
     from: '2027-05-01',
@@ -143,21 +127,8 @@ test('checkout is not sent while the affiliate capture remains unavailable', asy
     acceptedTerms: true,
     idempotencyKey: 'test-affiliate-unavailable',
   });
-  assert.equal(result?.code, 'affiliate_capture_unavailable');
-  assert.equal(checkoutRequests, 0);
-  globalThis.fetch = async () =>
-    new Response(
-      JSON.stringify({
-        success: true,
-        issuedAt: Math.floor(Date.now() / 1000),
-        signature: 'c'.repeat(64),
-      }),
-      { status: 200 },
-    );
-  await captureAffiliateReferral(
-    new URL(`http://localhost/apartamento/JQ08G?ref=${reference}&sig=${'d'.repeat(64)}`),
-    window.localStorage,
-  );
+  assert.equal(result?.code, 'invalid_checkout_request');
+  assert.equal(checkoutRequests, 1);
 });
 
 async function submitCheckoutWithConsent(consent: {

@@ -64,7 +64,7 @@ return [
                 [
                     'key' => 'cookies_tracking',
                     'title' => 'Cookies e preferências',
-                    'content' => 'O site pode usar cookies necessários ao funcionamento e, conforme sua escolha, cookies de análise ou publicidade. Você pode rever as preferências pelo controle de cookies disponibilizado no site. Bloquear cookies necessários pode afetar algumas funções, como manter a sessão ou concluir etapas da reserva.',
+                    'content' => 'O site pode usar cookies necessários ao funcionamento e, conforme sua escolha, cookies de análise ou publicidade. Ao acessar um link de afiliado, podemos armazenar por até 7 dias um identificador aleatório em cookie próprio protegido, sem incluir nome ou dados de contato, para associar uma eventual reserva ao último link de afiliado acessado. Esse registro é usado para atribuição e apuração de comissão, não para publicidade. Você pode rever as preferências de cookies pelo controle disponibilizado no site. Bloquear cookies necessários pode afetar algumas funções, como manter a sessão, concluir etapas da reserva ou registrar essa atribuição.',
                 ],
                 [
                     'key' => 'retention_deletion',

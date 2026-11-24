@@ -52,6 +52,8 @@ export function AffiliatePortal() {
   const [properties, setProperties] = useState<Property[]>([]);
   const [search, setSearch] = useState('');
   const [conversions, setConversions] = useState<Conversion[]>([]);
+  const [clicks, setClicks] = useState(0);
+  const [nickname, setNickname] = useState('');
   const [conversionPage, setConversionPage] = useState(1);
   const [conversionMore, setConversionMore] = useState(false);
   const [message, setMessage] = useState('');
@@ -100,6 +102,7 @@ export function AffiliatePortal() {
         if (!response.ok || !data.success)
           throw new Error('Não foi possível consultar seu acesso.');
         setStatus(data.status);
+        setNickname(typeof data.nickname === 'string' ? data.nickname : '');
         if (data.status !== 'approved') return;
         const [catalogResponse, dashboardResponse] = await Promise.all([
           apiFetch('/api/affiliate/catalog', { headers: { Authorization: `Bearer ${token}` } }),
@@ -116,6 +119,7 @@ export function AffiliatePortal() {
         if (activeToken.current !== token || version !== loadVersion.current) return;
         setProperties(Array.isArray(catalog.data) ? catalog.data : []);
         setConversions(Array.isArray(dashboard.conversions) ? dashboard.conversions : []);
+        setClicks(Number.isSafeInteger(dashboard.clicks) ? dashboard.clicks : 0);
         setConversionMore(dashboard.hasMore === true);
       } catch {
         if (activeToken.current !== token || version !== loadVersion.current) return;
@@ -180,16 +184,14 @@ export function AffiliatePortal() {
       });
       const data = await response.json();
       if (activeToken.current !== token) return;
-      if (
-        !response.ok ||
-        !/^[A-Za-z0-9]{40}$/.test(data.referralCode) ||
-        !/^[a-f0-9]{64}$/.test(data.signature)
-      )
+      if (!response.ok || typeof data.shortUrl !== 'string')
         throw new Error();
-      const query = new URLSearchParams({ ref: data.referralCode, sig: data.signature });
+      const shortUrl = new URL(data.shortUrl, window.location.origin);
+      if (shortUrl.origin !== window.location.origin || !/^\/a\/[A-Za-z0-9]{24}$/.test(shortUrl.pathname))
+        throw new Error();
       setLinks((current) => ({
         ...current,
-        [id]: `${window.location.origin}/apartamento/${encodeURIComponent(id)}?${query}`,
+        [id]: shortUrl.toString(),
       }));
     } catch {
       setMessage('Não foi possível gerar o link. Confira se o imóvel continua disponível.');
@@ -272,7 +274,7 @@ export function AffiliatePortal() {
       )}
       {status === 'approved' && (
         <>
-          <section className="affiliate-hero"><div className="affiliate-hero-card"><h2>Seu catálogo, suas indicações, seu crescimento.</h2><p>Escolha os imóveis que combinam com o seu público, gere um link exclusivo e acompanhe cada reserva em um só lugar.</p></div><div className="affiliate-stat-card"><span className="affiliate-stat-label">Imóveis disponíveis</span><strong className="affiliate-stat-value">{properties.length}</strong><span className="affiliate-stat-foot">Atualizados pela Central</span></div></section>
+          <section className="affiliate-hero"><div className="affiliate-hero-card"><h2>Seu catálogo, suas indicações, seu crescimento.</h2><p>Escolha os imóveis que combinam com o seu público, gere um link exclusivo e acompanhe cada reserva em um só lugar.</p>{nickname && <p className="affiliate-stat-foot">Nickname: <strong>{nickname}</strong></p>}</div><div className="affiliate-stat-card"><span className="affiliate-stat-label">Cliques registrados</span><strong className="affiliate-stat-value">{clicks}</strong><span className="affiliate-stat-foot">Atribuição válida por 7 dias</span></div></section>
           <div className="affiliate-grid"><section className="affiliate-card affiliate-card-wide">
             <div className="affiliate-card-head"><div><h2>Imóveis para divulgar</h2><p className="affiliate-card-subtitle">Links rastreáveis para você compartilhar. Preços e disponibilidade são confirmados pelo cliente.</p></div></div>
             <label>

@@ -30,7 +30,7 @@ class AffiliateAdminController extends Controller
     {
         $page = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:100000']])['page'] ?? 1;
         $accounts = AffiliateAccount::query()->whereIn('status', ['approved', 'suspended', 'rejected'])->orderBy('full_name')->orderBy('user_id')
-            ->simplePaginate(50, ['user_id', 'full_name', 'status', 'commission_basis_points'], 'page', $page);
+            ->simplePaginate(50, ['user_id', 'full_name', 'nickname', 'status', 'commission_basis_points'], 'page', $page);
 
         return response()->json(['success' => true, 'accounts' => $accounts->items(), 'hasMore' => $accounts->hasMorePages()])->header('Cache-Control', 'private, no-store');
     }
@@ -106,6 +106,7 @@ class AffiliateAdminController extends Controller
             }
             $account->status = 'approved';
             $account->referral_code = Str::random(40);
+            $account->nickname = $this->uniqueNickname($account->full_name);
             $account->commission_basis_points = $request->validated('commissionBasisPoints');
             $account->reviewed_at = now();
             $account->reviewed_by = $reviewer->id;
@@ -119,14 +120,28 @@ class AffiliateAdminController extends Controller
             : response()->json(['success' => false, 'code' => 'affiliate_not_pending'], 409);
     }
 
+    private function uniqueNickname(string $fullName): string
+    {
+        $base = Str::slug($fullName);
+        $base = $base !== '' ? Str::limit($base, 40, '') : 'parceiro';
+
+        do {
+            $nickname = $base.'-'.Str::lower(Str::random(5));
+        } while (AffiliateAccount::query()->where('nickname', $nickname)->exists());
+
+        return $nickname;
+    }
+
     public function commissions(Request $request): JsonResponse
     {
         $page = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:100000']])['page'] ?? 1;
         $items = DB::table('affiliate_conversions as conversion')
             ->join('affiliate_accounts as affiliate', 'affiliate.user_id', '=', 'conversion.affiliate_user_id')
             ->join('direct_booking_orders as booking', 'booking.id', '=', 'conversion.direct_booking_order_id')
+            ->leftJoin('affiliate_short_links as link', 'link.id', '=', 'conversion.affiliate_short_link_id')
             ->orderByDesc('conversion.created_at')->orderByDesc('conversion.id')
-            ->simplePaginate(50, ['conversion.id', 'affiliate.full_name', 'booking.listing_id', 'booking.status as booking_status',
+            ->simplePaginate(50, ['conversion.id', 'affiliate.full_name', 'affiliate.nickname', 'booking.listing_id',
+                'link.token as short_link_token', 'conversion.attributed_at', 'conversion.last_clicked_at', 'booking.status as booking_status',
                 'booking.payment_status', 'booking.quote_total', 'booking.currency', 'conversion.commission_basis_points',
                 'conversion.status', 'conversion.approved_amount_cents', 'conversion.created_at'], 'page', $page);
 

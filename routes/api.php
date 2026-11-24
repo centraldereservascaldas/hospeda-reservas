@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\OwnerDashboardController;
 use App\Http\Controllers\Api\PropertyMetadataController;
 use App\Http\Controllers\Api\PublicLegalPageController;
 use App\Http\Controllers\Api\SofiaController;
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
@@ -105,8 +106,7 @@ Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->gro
     Route::post('/direct-booking-orders/{publicReference}/verify-manual-gateway-refund', [OwnerAdminController::class, 'verifyManualDirectBookingGatewayRefund'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/revoke-resume-token', [OwnerAdminController::class, 'revokeDirectBookingResumeToken'])->middleware('throttle:10,1');
 });
-Route::post('/affiliate/capture', [AffiliateAccessController::class, 'capture'])->middleware('throttle:30,1');
-Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->middleware('throttle:5,1');
+Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->middleware([EncryptCookies::class, 'throttle:5,1']);
 Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');
 Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');

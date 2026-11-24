@@ -7,7 +7,6 @@ import { saveCheckoutResumeToken } from '../utils/checkoutResumeStorage';
 import { apiFetch } from './apiFetch';
 import { readMeasurementAttribution, type AttributionTouch } from '../utils/measurementAttribution';
 import { readMeasurementConsent } from '../utils/measurementConsent';
-import { readAffiliateReferral, retryAffiliateCapture } from '../utils/affiliateAttribution';
 
 export interface CheckoutRequestPayload {
   listingId: string;
@@ -487,21 +486,6 @@ export const checkoutApi = {
   async createCheckout(payload: CheckoutRequestPayload): Promise<CheckoutResponse | null> {
     try {
       const marketingAttribution = getCheckoutMarketingAttribution();
-      if (!(await retryAffiliateCapture(payload.listingId, window.localStorage))) {
-        return {
-          success: false,
-          code: 'affiliate_capture_unavailable',
-          message: 'Não foi possível validar a indicação. Tente novamente ou peça um novo link.',
-          payment: { enabled: false, methods: [], publicKey: null, provider: 'unavailable' },
-          idempotentReplay: false,
-        };
-      }
-      let affiliateReferral: ReturnType<typeof readAffiliateReferral>;
-      try {
-        affiliateReferral = readAffiliateReferral(payload.listingId, window.localStorage);
-      } catch {
-        /* storage unavailable */
-      }
       const res = await apiFetch('/api/checkout', {
         method: 'POST',
         headers: {
@@ -518,27 +502,10 @@ export const checkoutApi = {
           acceptedTermsVersion: payload.acceptedTermsVersion,
           acceptedTerms: payload.acceptedTerms,
           ...(marketingAttribution ? { marketingAttribution } : {}),
-          ...(affiliateReferral
-            ? {
-                affiliateReferral: affiliateReferral.reference,
-                affiliateSignature: affiliateReferral.signature,
-                affiliateIssuedAt: affiliateReferral.issuedAt,
-              }
-            : {}),
         }),
       });
       const json: unknown = await res.json();
       if (res.status === 422 && isRecord(json)) {
-        if (isRecord(json.errors) && Array.isArray(json.errors.affiliateReferral)) {
-          return {
-            success: false,
-            code: 'affiliate_invalid',
-            message:
-              'A indicação expirou ou não está disponível. Peça um novo link antes de continuar.',
-            payment: { enabled: false, methods: [], publicKey: null, provider: 'unavailable' },
-            idempotentReplay: false,
-          };
-        }
         const fieldErrors = parseCheckoutFieldErrors(json.errors);
 
         return {
