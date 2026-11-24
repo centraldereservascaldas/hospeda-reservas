@@ -39,16 +39,21 @@ class ExistingReservationLedgerAudit
             return false;
         }
         $audit = $this->inspect($snapshot['reservation_code'], $snapshot['_id']);
+        if (($snapshot['reported_paid_present'] ?? false) === true
+            && (! is_int($snapshot['reported_paid_cents'] ?? null)
+                || ($audit['paid_cents'] ?? null) !== $snapshot['reported_paid_cents'])) {
+            return false;
+        }
         if (($snapshot['bootstrap_receivable'] ?? false) === true && ($snapshot['payment_id'] ?? null) === null) {
             return $audit['status'] === 'consistent_candidate' && $audit['total_cents'] === $snapshot['reservation_total_cents']
                 && ($audit['pending_payment_id'] ?? null) === null && ($audit['pending_cents'] ?? null) === null
-                && ($audit['balance_cents'] ?? null) === $snapshot['pending_amount_cents'];
+                && ($audit['balance_cents'] ?? null) === ($snapshot['outstanding_balance_cents'] ?? $snapshot['pending_amount_cents']);
         }
 
         return $audit['status'] === 'consistent_candidate' && $audit['total_cents'] === $snapshot['reservation_total_cents']
             && ($audit['pending_payment_id'] ?? null) === ($snapshot['payment_id'] ?? null)
             && ($audit['pending_provider_id'] ?? null) === ($snapshot['pending_provider_id'] ?? null)
-            && ($audit['pending_cents'] ?? null) === $snapshot['pending_amount_cents']
+            && ($audit['pending_cents'] ?? null) === ($snapshot['receivable_amount_cents'] ?? $snapshot['pending_amount_cents'])
             && is_int($audit['balance_cents'] ?? null) && $audit['balance_cents'] >= $snapshot['pending_amount_cents'];
     }
 

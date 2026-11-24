@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\DirectBookingOrder;
+use App\Services\LegalPageRegistry;
 use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,7 +56,9 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
     {
         $this->configure();
         $this->fakeStays('success');
-        $this->withHeader('Idempotency-Key', 'bootstrap-original-key-123456')->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())->assertCreated();
+        $recoverySecret = $this->postJson('/api/existing-reservations/ZX91K/recovery-credential', [])->assertOk()->json('credential');
+        $this->withHeaders(['Idempotency-Key' => 'bootstrap-original-key-123456', 'X-Checkout-Recovery-Secret' => $recoverySecret])
+            ->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())->assertCreated();
         $this->stripMarker = $removeMarker;
         if ($revokeApproval) {
             config(['direct-booking.experimental_existing_approved_balances' => []]);
@@ -63,10 +66,9 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
         $this->getJson('/api/existing-reservations/ZX91K/checkout-summary')
             ->assertOk()->assertJsonPath('reservation.balanceStatus', 'unrecorded_candidate')->assertJsonPath('reservation.paymentEnabled', true);
         $firstReference = DirectBookingOrder::query()->sole()->public_reference;
-        $response = $this->withHeader('Idempotency-Key', 'bootstrap-new-device-key-123')
-            ->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
-            ->assertOk()->assertJsonPath('success', true);
-        $this->assertSame($firstReference, $response->json('order.publicReference'));
+        $response = $this->withHeader('X-Checkout-Recovery-Secret', $recoverySecret)
+            ->postJson('/api/existing-reservations/ZX91K/recover', [])->assertOk()->assertJsonPath('success', true);
+        $this->assertSame($firstReference, $response->json('resume.reference'));
         $this->assertDatabaseCount('direct_booking_orders', 1);
         Http::assertNotSent(fn (Request $r) => $r->method() !== 'GET');
     }
@@ -101,7 +103,9 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
         $this->configure();
         $this->fakeStays('pending_inflates_paid');
         $this->getJson('/api/existing-reservations/ZX91K/checkout-summary')
-            ->assertOk()->assertJsonPath('reservation.balanceStatus', 'review_required')->assertJsonPath('reservation.paymentEnabled', false);
+            ->assertStatus(503)
+            ->assertExactJson(['success' => false, 'message' => 'Não foi possível consultar esta reserva agora.'])
+            ->assertDontSee('listing')->assertDontSee('2030-11-19')->assertDontSee('1016');
         $this->withHeader('Idempotency-Key', 'experimental-bootstrap-stats-123')->postJson('/api/existing-reservations/ZX91K/checkout', $this->payload())
             ->assertStatus(409)->assertJsonPath('code', 'existing_balance_unverified')->assertJsonMissingPath('resume.token');
         $this->assertDatabaseCount('direct_booking_payment_attempts', 0);
@@ -151,7 +155,11 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
 
     private function payload(): array
     {
-        return ['expectedBalanceCents' => 101600, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true];
+        $contract = app(LegalPageRegistry::class)->find('contrato');
+        $this->assertIsArray($contract);
+
+        return ['expectedBalanceCents' => 101600, 'paymentMethod' => 'pix', 'guest' => ['fullName' => 'Hóspede Teste', 'email' => 'guest@example.test', 'phone' => '64999999999', 'cpf' => '52998224725'], 'acceptedPayment' => true,
+            'acceptedContract' => ['version' => $contract['version'], 'contentHash' => hash('sha256', json_encode($contract, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))]];
     }
 
     private function approval(): array

@@ -209,6 +209,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         config([
             'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
             'direct-booking.enabled' => true,
+            'direct-booking.existing_reservation_checkout_enabled' => false,
             'direct-booking.payment_provider' => 'mercadopago',
             'direct-booking.payments_enabled' => true,
             'direct-booking.confirmation_enabled' => true,

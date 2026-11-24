@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from 'react';
 import { checkoutApi } from '../../services/checkoutApi';
+import { InstallmentPicker } from './InstallmentPicker';
+import { isValidBrazilianTaxId } from '../../utils/cpf';
 import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
 import { loadCieloSopSdk } from '../../services/cieloSopSdk';
 import type { CieloSopEnvironment } from '../../services/cieloSopSdk';
@@ -17,6 +19,7 @@ import {
   formatBrazilianDocument,
   formatCardExpiration,
   formatCardNumber,
+  isValidCardNumber,
 } from '../../utils/checkoutInputFormatting';
 
 interface CieloSopCardFormProps {
@@ -38,6 +41,10 @@ interface CieloSopCardFormProps {
   lockInstallments?: boolean;
   allowedInstallments?: number[];
   failureContent?: ReactNode;
+  cardNumberLabel?: string;
+  validateCardNumber?: boolean;
+  validatePayerDocument?: boolean;
+  existingReservationHolderCpf?: string;
 }
 
 export interface CieloPaymentContext {
@@ -132,6 +139,10 @@ export function CieloSopCardForm({
   lockInstallments = false,
   allowedInstallments,
   failureContent,
+  cardNumberLabel,
+  validateCardNumber = false,
+  validatePayerDocument = false,
+  existingReservationHolderCpf,
 }: CieloSopCardFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const accessTokenRef = useRef<string | null>(null);
@@ -146,10 +157,24 @@ export function CieloSopCardForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [environment, setEnvironment] = useState<CieloSopEnvironment>('sandbox');
   const [error, setError] = useState<string | null>(null);
+  const [cardNumberHasEnoughDigits, setCardNumberHasEnoughDigits] = useState(false);
+  const [cardNumberIsValid, setCardNumberIsValid] = useState(false);
   const [installments, setInstallments] = useState(1);
-  const installmentOptions = useMemo(() => getInstallmentOptions(amount).filter(
-    (option) => allowedInstallments === undefined || allowedInstallments.includes(option.installments),
-  ), [amount, allowedInstallments]);
+  const [payerDocument, setPayerDocument] = useState('');
+  const [useHolderCpf, setUseHolderCpf] = useState(false);
+  const existingCardLayout = existingReservationHolderCpf !== undefined;
+
+  useEffect(() => {
+    if (useHolderCpf) setPayerDocument(formatBrazilianDocument(existingReservationHolderCpf ?? ''));
+  }, [existingReservationHolderCpf, useHolderCpf]);
+  const installmentOptions = useMemo(
+    () =>
+      getInstallmentOptions(amount).filter(
+        (option) =>
+          allowedInstallments === undefined || allowedInstallments.includes(option.installments),
+      ),
+    [amount, allowedInstallments],
+  );
   const selectedPricing =
     installmentOptions.find((option) => option.installments === installments) ??
     installmentOptions[0];
@@ -222,13 +247,15 @@ export function CieloSopCardForm({
         ?.value.trim();
       const documentNumber = formRef.current
         ?.querySelector<HTMLInputElement>('[name="payerDocument"]')
-        ?.value.replace(/\D/g, '');
+        ?.value.replace(existingCardLayout ? /[^a-z\d]/gi : /\D/g, '')
+        .toUpperCase();
       const documentType = documentNumber?.length === 14 ? 'CNPJ' : 'CPF';
       if (
         !cardholderName ||
         !cardholderEmail ||
         !documentNumber ||
-        (documentNumber.length !== 11 && documentNumber.length !== 14)
+        (documentNumber.length !== 11 && documentNumber.length !== 14) ||
+        (validatePayerDocument && !isValidBrazilianTaxId(documentNumber))
       ) {
         setError('Informe o nome, e-mail e CPF ou CNPJ do titular.');
         return;
@@ -284,7 +311,16 @@ export function CieloSopCardForm({
         }
       }
     },
-    [amount, credentials, installments, onAttemptFinished, reference, selectedPricing],
+    [
+      amount,
+      credentials,
+      installments,
+      onAttemptFinished,
+      reference,
+      selectedPricing,
+      validatePayerDocument,
+      existingCardLayout,
+    ],
   );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
@@ -317,6 +353,20 @@ export function CieloSopCardForm({
       setError(
         'O pagamento com cartão exige parcelas de no mínimo R$ 5,00. Escolha Pix ou fale com o atendimento.',
       );
+      return;
+    }
+    const payerDocumentInput =
+      formRef.current?.querySelector<HTMLInputElement>('[name="payerDocument"]');
+    if (validatePayerDocument && !isValidBrazilianTaxId(payerDocumentInput?.value ?? '')) {
+      setError('Informe um CPF ou CNPJ válido do titular do cartão.');
+      payerDocumentInput?.focus();
+      return;
+    }
+    const cardNumberInput = formRef.current?.querySelector<HTMLInputElement>('.bp-sop-cardnumber');
+    const cardNumberDigits = cardNumberInput?.value.replace(/\D/g, '') ?? '';
+    if (validateCardNumber && !isValidCardNumber(cardNumberDigits)) {
+      setError('Confira o número do cartão. Alguns dígitos podem estar incorretos.');
+      cardNumberInput?.focus();
       return;
     }
     const expirationInput = formRef.current?.querySelector<HTMLInputElement>(
@@ -468,19 +518,79 @@ export function CieloSopCardForm({
             )}
             Pague com cartão
           </legend>
+          {existingCardLayout && (
+            <div className="space-y-3 sm:col-span-2">
+              <label className="block space-y-1 text-sm font-semibold text-neutral-800">
+                CPF ou CNPJ do titular do cartão
+                <input
+                  disabled={previewOnly}
+                  name="payerDocument"
+                  required
+                  minLength={11}
+                  autoComplete="off"
+                  inputMode="text"
+                  maxLength={18}
+                  value={payerDocument}
+                  onChange={(event) => {
+                    setUseHolderCpf(false);
+                    setPayerDocument(
+                      formatBrazilianDocument(event.currentTarget.value, existingCardLayout),
+                    );
+                  }}
+                  className="min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
+                />
+              </label>
+              <label className="flex min-h-11 items-center gap-3 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={useHolderCpf}
+                  disabled={previewOnly}
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked;
+                    setUseHolderCpf(checked);
+                    setPayerDocument(
+                      checked ? formatBrazilianDocument(existingReservationHolderCpf ?? '') : '',
+                    );
+                  }}
+                  className="h-5 w-5 accent-orange-800"
+                />
+                Usar o CPF do titular da reserva
+              </label>
+            </div>
+          )}
           <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
             Número do cartão
             <input
               disabled={previewOnly}
+              aria-label={cardNumberLabel}
               autoComplete="cc-number"
               required
               inputMode="numeric"
+              aria-invalid={validateCardNumber && cardNumberHasEnoughDigits && !cardNumberIsValid}
+              aria-describedby={validateCardNumber ? 'cielo-card-number-hint' : undefined}
               maxLength={23}
               onChange={(event) => {
-                event.currentTarget.value = formatCardNumber(event.currentTarget.value);
+                const formattedNumber = formatCardNumber(event.currentTarget.value);
+                event.currentTarget.value = formattedNumber;
+                const digits = formattedNumber.replace(/\D/g, '');
+                setCardNumberHasEnoughDigits(digits.length >= 12);
+                setCardNumberIsValid(isValidCardNumber(digits));
               }}
               className="bp-sop-cardnumber min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
+            {validateCardNumber && (
+              <span
+                id="cielo-card-number-hint"
+                className="block text-xs font-normal leading-5 text-neutral-600"
+              >
+                Verificamos os dígitos do cartão para ajudar a evitar erros de digitação.
+              </span>
+            )}
+            {validateCardNumber && cardNumberHasEnoughDigits && !cardNumberIsValid && (
+              <span className="block text-xs font-semibold text-rose-700" role="alert">
+                Confira o número do cartão. Alguns dígitos podem estar incorretos.
+              </span>
+            )}
           </label>
           <label className="space-y-1 text-sm font-semibold text-neutral-800">
             Validade (MM/AA)
@@ -530,59 +640,88 @@ export function CieloSopCardForm({
               className="min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
             />
           </label>
-          <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
-            CPF ou CNPJ do titular
-            <input
-              disabled={previewOnly}
-              name="payerDocument"
-              required
-              minLength={11}
-              autoComplete="off"
-              inputMode="numeric"
-              maxLength={18}
-              onChange={(event) => {
-                event.currentTarget.value = formatBrazilianDocument(event.currentTarget.value);
-              }}
-              className="min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
-            />
-          </label>
-          <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
-            Parcelamento
-            <select
-              name="installments"
-              required
-              disabled={lockInstallments || installmentOptions.length === 0}
-              value={selectedPricing?.installments ?? installments}
-              onChange={(event) => setInstallments(Number(event.target.value))}
-              className="min-h-11 w-full rounded-xl border border-neutral-400/70 bg-white px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
-            >
-              {installmentOptions.length === 0 && (
-                <option value={1}>Cartão indisponível para este valor</option>
-              )}
-              {installmentOptions.map((option) => (
-                <option key={option.installments} value={option.installments}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <span className="block text-xs font-normal leading-5 text-neutral-600">
-              {installmentOptions.length === 0 ? (
-                'A parcela mínima no cartão é de R$ 5,00. Escolha Pix ou fale com o atendimento.'
+          {!existingCardLayout && (
+            <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
+              CPF ou CNPJ do titular
+              <input
+                disabled={previewOnly}
+                name="payerDocument"
+                required
+                minLength={11}
+                autoComplete="off"
+                inputMode="numeric"
+                maxLength={18}
+                onChange={(event) => {
+                  event.currentTarget.value = formatBrazilianDocument(event.currentTarget.value);
+                }}
+                className="min-h-11 w-full rounded-xl border border-neutral-400/70 px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
+              />
+            </label>
+          )}
+          {existingCardLayout ? (
+            <div className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
+              <span id="existing-card-installments-label">Parcelamento</span>
+              {installmentOptions.length > 0 ? (
+                <InstallmentPicker
+                  options={installmentOptions.map((option) => ({
+                    installments: option.installments,
+                    label: option.label,
+                  }))}
+                  value={selectedPricing?.installments ?? installments}
+                  onChange={setInstallments}
+                  disabled={lockInstallments || isSubmitting}
+                  labelledBy="existing-card-installments-label"
+                />
               ) : (
-                <>
-                  Hospedagem {moneyFormatter.format(Number(amount))} + acréscimo do cartão{' '}
-                  {selectedPricing
-                    ? `${moneyFormatter.format(selectedPricing.feeCents / 100)} (${selectedPricing.ratePercent.toLocaleString('pt-BR')}%)`
-                    : 'indisponível'}
-                  . Total final{' '}
-                  {selectedPricing
-                    ? moneyFormatter.format(selectedPricing.totalCents / 100)
-                    : 'indisponível'}
-                  .
-                </>
+                <p className="text-sm text-neutral-600">
+                  Cartão indisponível para este valor. Escolha Pix ou fale com o atendimento.
+                </p>
               )}
-            </span>
-          </label>
+              {selectedPricing && (
+                <p className="pt-2 text-sm font-normal text-neutral-500">
+                  Total no cartão: {moneyFormatter.format(selectedPricing.totalCents / 100)}
+                </p>
+              )}
+            </div>
+          ) : (
+            <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
+              Parcelamento
+              <select
+                name="installments"
+                required
+                disabled={lockInstallments || installmentOptions.length === 0}
+                value={selectedPricing?.installments ?? installments}
+                onChange={(event) => setInstallments(Number(event.target.value))}
+                className="min-h-11 w-full rounded-xl border border-neutral-400/70 bg-white px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
+              >
+                {installmentOptions.length === 0 && (
+                  <option value={1}>Cartão indisponível para este valor</option>
+                )}
+                {installmentOptions.map((option) => (
+                  <option key={option.installments} value={option.installments}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="block text-xs font-normal leading-5 text-neutral-600">
+                {installmentOptions.length === 0 ? (
+                  'A parcela mínima no cartão é de R$ 5,00. Escolha Pix ou fale com o atendimento.'
+                ) : (
+                  <>
+                    Hospedagem {moneyFormatter.format(Number(amount))} + acréscimo do cartão{' '}
+                    {selectedPricing
+                      ? `${moneyFormatter.format(selectedPricing.feeCents / 100)} (${selectedPricing.ratePercent.toLocaleString('pt-BR')}%)`
+                      : 'indisponível'}
+                    . Total final{' '}
+                    {selectedPricing
+                      ? moneyFormatter.format(selectedPricing.totalCents / 100)
+                      : 'indisponível'}
+                    .
+                  </>
+                )}
+              </span>
+            </label>
+          )}
         </fieldset>
       ) : (
         alternativeContent

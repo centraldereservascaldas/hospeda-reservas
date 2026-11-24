@@ -359,6 +359,7 @@ class DirectStaysReservationTest extends TestCase
         config([
             'app.key' => 'base64:'.base64_encode(str_repeat('a', 32)),
             'direct-booking.enabled' => true,
+            'direct-booking.existing_reservation_checkout_enabled' => false,
             'direct-booking.payments_enabled' => true,
             'direct-booking.confirmation_enabled' => true,
             'direct-booking.resume_token_ttl_days' => 30,

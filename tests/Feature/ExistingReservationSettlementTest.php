@@ -19,12 +19,12 @@ class ExistingReservationSettlementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_previously_captured_card_settles_base_when_capture_amount_matches_pricing(): void
+    public function test_previously_captured_card_settles_gross_amount_when_capture_matches_pricing(): void
     {
         [$order] = $this->fixture();
         $order->paymentAttempts()->first()->update(['payment_method' => 'card', 'installments' => 6,
             'amount' => '240.86', 'base_amount' => '197.50', 'processing_fee_amount' => '43.36', 'processing_fee_basis_points' => 1800]);
-        $this->assertSuccessfulPatchSettlement($order);
+        $this->assertSuccessfulPatchSettlement($order, 24086);
     }
 
     public function test_card_amount_check_is_applied_before_settlement(): void
@@ -32,7 +32,7 @@ class ExistingReservationSettlementTest extends TestCase
         [$order] = $this->fixture();
         $order->paymentAttempts()->first()->update(['payment_method' => 'card', 'installments' => 6,
             'amount' => '240.86', 'base_amount' => '197.50', 'processing_fee_amount' => '43.36', 'processing_fee_basis_points' => 1800]);
-        $this->assertSuccessfulPatchSettlement($order);
+        $this->assertSuccessfulPatchSettlement($order, 24086);
     }
 
     public function test_experimental_card_amount_mismatch_prevents_stays_settlement(): void
@@ -718,22 +718,25 @@ class ExistingReservationSettlementTest extends TestCase
 
     private function financial(array $reservation, array $payment, bool $paid): array
     {
+        $settlementAmount = (float) ($payment['_f_val'] ?? 197.50);
+
         return ['_id' => $payment['_id'], 'reserveId' => $reservation['_id'], 'bankAccountId' => str_repeat('f', 24),
-            'type' => 'credit', 'paid' => $paid, '_mcval' => ['BRL' => 197.50],
+            'type' => 'credit', 'paid' => $paid, '_mcval' => ['BRL' => $settlementAmount],
             ...($paid ? ['payment' => ['paymentDate' => '2026-11-10']] : [])];
     }
 
-    private function assertSuccessfulPatchSettlement(DirectBookingOrder $order): void
+    private function assertSuccessfulPatchSettlement(DirectBookingOrder $order, int $expectedAmountCents = 19750): void
     {
         [, $reservation, $payment] = $this->fixtureForOrder($order);
         $completed = false;
         $description = null;
         Http::preventStrayRequests();
-        Http::fake(function (Request $request) use (&$reservation, $payment, &$completed, &$description) {
+        Http::fake(function (Request $request) use (&$reservation, &$payment, &$completed, &$description, $expectedAmountCents) {
             if ($request->method() === 'PATCH' && str_contains($request->url(), '/payments/')) {
                 $completed = true;
                 $description = $request['desc'];
-                $reservation['stats']['_f_totalPaid'] = 395;
+                $reservation['stats']['_f_totalPaid'] = $expectedAmountCents / 100 + 197.50;
+                $payment['_f_val'] = $expectedAmountCents / 100;
 
                 return Http::response([]);
             }
@@ -749,7 +752,7 @@ class ExistingReservationSettlementTest extends TestCase
         $this->assertTrue(app(ExistingReservationSettlement::class)->settle($order)['ready']);
         Http::assertSent(fn (Request $request) => $request->method() === 'PATCH'
             && ($request['name'] ?? null) === 'Cielo Site Externo'
-            && ! array_key_exists('_f_val', $request->data()));
+            && (int) round(((float) ($request['_f_val'] ?? 0)) * 100) === $expectedAmountCents);
     }
 
     private function fixtureForOrder(DirectBookingOrder $order): array

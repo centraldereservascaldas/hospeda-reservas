@@ -435,6 +435,7 @@ class CheckoutPaymentEndpointTest extends TestCase
             'direct-booking.enabled' => true,
             'direct-booking.payments_enabled' => true,
             'direct-booking.confirmation_enabled' => true,
+            'direct-booking.existing_reservation_checkout_enabled' => false,
             'direct-booking.reservation_hold_minutes' => 60,
             'direct-booking.resume_token_ttl_days' => 2,
             'direct-booking.stays_payment_type' => 'credit',

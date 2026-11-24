@@ -106,6 +106,11 @@ class ExistingReservationLedgerAuditTest extends TestCase
         $snapshot = ['reservation_code' => 'ZY92K', '_id' => str_repeat('c', 24), 'reservation_total_cents' => 10000,
             'pending_amount_cents' => 3000, 'payment_id' => str_repeat('b', 24), 'pending_provider_id' => str_repeat('f', 24)];
         $this->assertTrue($audit->confirmsSnapshot($snapshot));
+        $snapshot['reported_paid_present'] = true;
+        $snapshot['reported_paid_cents'] = 4000;
+        $this->assertFalse($audit->confirmsSnapshot($snapshot));
+        $snapshot['reported_paid_cents'] = 5000;
+        $this->assertTrue($audit->confirmsSnapshot($snapshot));
         $snapshot['payment_id'] = str_repeat('d', 24);
         $this->assertFalse($audit->confirmsSnapshot($snapshot));
         $snapshot['payment_id'] = str_repeat('b', 24);

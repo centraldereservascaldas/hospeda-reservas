@@ -37,7 +37,7 @@ class ExperimentalExistingCycleSettlement
         if (($audit['status'] ?? null) !== 'consistent_candidate' || ! is_int($paid) || ! is_int($oldPaid) || $paid < $oldPaid
             || ($audit['total_cents'] ?? null) !== ($proof['audit']['total_cents'] ?? null)
             || ($audit['balance_cents'] ?? null) !== max(0, $audit['total_cents'] - $paid)
-            || ! $this->readback($snapshot, $action->request_snapshot)) {
+            || ! $this->readback($snapshot, $action)) {
             return null;
         }
 
@@ -96,7 +96,7 @@ class ExperimentalExistingCycleSettlement
         if (($audit['status'] ?? null) !== 'consistent_candidate' || ($audit['total_cents'] ?? null) !== $snapshot['reservation_total_cents']
             || ! is_int($audit['paid_cents'] ?? null) || $audit['paid_cents'] < $expectedPaid
             || ($audit['balance_cents'] ?? null) !== max(0, $snapshot['reservation_total_cents'] - $audit['paid_cents'])
-            || ! $this->readback($snapshot, $action->request_snapshot)) {
+            || ! $this->readback($snapshot, $action)) {
             return false;
         }
 
@@ -136,12 +136,13 @@ class ExperimentalExistingCycleSettlement
         return $order->origin === 'stays_existing' && $order->payment_status === 'approved'
             && $attempt->direct_booking_order_id === $order->id && $attempt->status === 'approved'
             && $action->direct_booking_order_id === $order->id && $action->action_type === 'settle_existing_receivable'
-            && $action->status === 'succeeded' && $action->external_id === ($snapshot['payment_id'] ?? null)
-            && is_array($response) && ($response['payment_id'] ?? null) === ($snapshot['payment_id'] ?? null)
+            && $action->status === 'succeeded' && $this->verifiedPaymentId($snapshot, $action) !== null
+            && is_array($response) && ($response['payment_id'] ?? null) === $action->external_id
             && ($response['status'] ?? null) === 'completed' && ($response['payment_date'] ?? null) === ($request['payment_date'] ?? null)
             && $action->attempt_count === 1 && is_array($request) && ($request['write_started'] ?? null) === true
             && ($request['attempt_id'] ?? null) === $attempt->id && ($request['payment_id'] ?? null) === ($snapshot['payment_id'] ?? null)
-            && ($request['amount_cents'] ?? null) === ($snapshot['pending_amount_cents'] ?? null)
+            && ($request['amount_cents'] ?? null) === MoneyAmount::toCents($attempt->amount)
+            && ($request['base_amount_cents'] ?? $snapshot['pending_amount_cents'] ?? null) === ($snapshot['pending_amount_cents'] ?? null)
             && is_string($request['marker'] ?? null) && preg_match('/^CRCN_SETTLEMENT:[A-Za-z0-9]{32}$/D', $request['marker']) === 1
             && is_string($request['original_desc_hash'] ?? null) && preg_match('/^[a-f0-9]{64}$/D', $request['original_desc_hash']) === 1
             && is_string($request['provider_id'] ?? null) && $request['provider_id'] !== ''
@@ -155,9 +156,29 @@ class ExperimentalExistingCycleSettlement
             && MoneyAmount::toCents($attempt->base_amount ?? $attempt->amount) === $snapshot['pending_amount_cents'];
     }
 
-    private function readback(array $snapshot, array $request): bool
+    private function verifiedPaymentId(array $snapshot, DirectBookingStaysAction $action): ?string
     {
-        $id = $snapshot['payment_id'] ?? null;
+        $request = $action->request_snapshot;
+        $id = $action->external_id;
+        if (! is_array($request) || ! is_string($id) || ! preg_match('/^[a-f0-9]{24}$/iD', $id)) {
+            return null;
+        }
+        if (($snapshot['receivable_creation_timing'] ?? null) === 'after_capture') {
+            return ($snapshot['bootstrap_receivable'] ?? false) === true
+                && ($snapshot['payment_id'] ?? null) === null
+                && array_key_exists('payment_id', $request) && $request['payment_id'] === null
+                && ($request['operation'] ?? null) === 'post_completed' ? $id : null;
+        }
+
+        return ($snapshot['payment_id'] ?? null) === $id
+            && ($request['payment_id'] ?? null) === $id
+            && in_array($request['operation'] ?? 'patch_pending', ['patch_pending'], true) ? $id : null;
+    }
+
+    private function readback(array $snapshot, DirectBookingStaysAction $action): bool
+    {
+        $request = $action->request_snapshot;
+        $id = $this->verifiedPaymentId($snapshot, $action);
         if (! is_string($id) || ! preg_match('/^[a-f0-9]{24}$/iD', $id)) {
             return false;
         }
@@ -165,6 +186,13 @@ class ExperimentalExistingCycleSettlement
         $payments = $stays->get('/booking/reservations/'.rawurlencode($snapshot['_id']).'/payments');
         $matches = is_array($payments) && array_is_list($payments) ? array_values(array_filter($payments, fn ($p) => is_array($p) && ($p['_id'] ?? null) === $id)) : [];
         $payment = count($matches) === 1 ? $matches[0] : null;
+        if (($request['operation'] ?? null) === 'post_completed' && is_array($payments) && array_is_list($payments)) {
+            $marked = array_values(array_filter($payments, fn ($p) => is_array($p) && is_string($p['desc'] ?? null)
+                && str_ends_with($p['desc'], $request['marker'])));
+            if (count($marked) !== 1 || ($marked[0]['_id'] ?? null) !== $id) {
+                return false;
+            }
+        }
         $finance = $stays->get('/finance/accounting-transactions/'.rawurlencode($id));
         $marker = $request['marker'];
         $description = is_array($payment) ? ($payment['desc'] ?? null) : null;
@@ -181,12 +209,12 @@ class ExperimentalExistingCycleSettlement
             && ($payment['type'] ?? null) === 'credit' && ($payment['status'] ?? null) === 'completed'
             && ($payment['paymentDate'] ?? null) === $request['payment_date']
             && ($payment['_idpaymentProvider'] ?? null) === $request['provider_id']
-            && MoneyAmount::toCents($payment['_f_val'] ?? null) === $snapshot['pending_amount_cents']
+            && MoneyAmount::toCents($payment['_f_val'] ?? null) === ($request['amount_cents'] ?? null)
             && is_array($finance) && ($finance['_id'] ?? null) === $id && ($finance['reserveId'] ?? null) === $snapshot['_id']
             && ($finance['type'] ?? null) === 'credit' && ($finance['paid'] ?? null) === true
             && ($finance['bankAccountId'] ?? null) === $request['provider_id']
             && ($finance['payment']['paymentDate'] ?? null) === $request['payment_date']
-            && MoneyAmount::toCents($finance['_mcval']['BRL'] ?? null) === $snapshot['pending_amount_cents'];
+            && MoneyAmount::toCents($finance['_mcval']['BRL'] ?? null) === ($request['amount_cents'] ?? null);
     }
 
     private function attemptHash(DirectBookingPaymentAttempt $attempt): string

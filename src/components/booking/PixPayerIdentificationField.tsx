@@ -3,10 +3,15 @@ import { formatBrazilianDocument } from '../../utils/checkoutInputFormatting';
 
 export function getPixPayerIdentification(
   value: string,
+  allowAlphanumericCnpj = false,
 ): { type: 'CPF' | 'CNPJ'; number: string } | null {
-  const number = value.replace(/\D/g, '');
+  const number = allowAlphanumericCnpj
+    ? value.replace(/[^a-z\d]/gi, '').toUpperCase()
+    : value.replace(/\D/g, '');
   if (number.length === 11) return { type: 'CPF', number };
-  if (number.length === 14) return { type: 'CNPJ', number };
+  if (number.length === 14 && (allowAlphanumericCnpj || /^\d{14}$/.test(number))) {
+    return { type: 'CNPJ', number };
+  }
   return null;
 }
 
@@ -14,10 +19,12 @@ export function PixPayerIdentificationField({
   value,
   onChange,
   disabled = false,
+  allowAlphanumericCnpj = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  allowAlphanumericCnpj?: boolean;
 }) {
   const id = useId();
   return (
@@ -29,12 +36,14 @@ export function PixPayerIdentificationField({
         value={formatBrazilianDocument(value)}
         required
         disabled={disabled}
-        inputMode="numeric"
+        inputMode={allowAlphanumericCnpj && /[a-z]/i.test(value) ? 'text' : 'numeric'}
         autoComplete="off"
-        pattern="(?:[0-9]{3}\.[0-9]{3}\.[0-9]{3}-[0-9]{2}|[0-9]{2}\.[0-9]{3}\.[0-9]{3}/[0-9]{4}-[0-9]{2})"
+        pattern={allowAlphanumericCnpj
+          ? '(?:[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}|[A-Z0-9]{2}\\.[A-Z0-9]{3}\\.[A-Z0-9]{3}/[A-Z0-9]{4}-[0-9]{2})'
+          : '(?:[0-9]{3}\\.[0-9]{3}\\.[0-9]{3}-[0-9]{2}|[0-9]{2}\\.[0-9]{3}\\.[0-9]{3}/[0-9]{4}-[0-9]{2})'}
         maxLength={18}
-        title="Informe os 11 dígitos do CPF ou os 14 dígitos do CNPJ."
-        onChange={(event) => onChange(event.target.value.replace(/\D/g, '').slice(0, 14))}
+        title="Informe um CPF com 11 dígitos ou um CNPJ válido com 14 caracteres."
+        onChange={(event) => onChange(formatBrazilianDocument(event.target.value, allowAlphanumericCnpj))}
         className="mt-1.5 min-h-12 w-full rounded-xl border border-neutral-400/70 bg-white px-3 text-base outline-none focus-visible:border-orange-700 focus-visible:ring-2 focus-visible:ring-orange-700/20 disabled:bg-neutral-100"
       />
       <span className="mt-1 block text-xs font-normal text-neutral-600">

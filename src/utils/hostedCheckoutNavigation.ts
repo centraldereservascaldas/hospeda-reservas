@@ -10,11 +10,19 @@ const FORWARDED_ATTRIBUTION_PARAMETERS = new Set([
   'utm_source',
   'utm_medium',
   'utm_campaign',
+  'utm_id',
+  'utm_source_platform',
+  'utm_campaign_id',
+  'utm_adset_id',
+  'utm_ad_id',
+  'utm_creative_format',
+  'utm_marketing_tactic',
   'utm_content',
   'utm_term',
   'gclid',
   'gbraid',
   'wbraid',
+  'fbclid',
 ]);
 
 export function isSafeStaysCheckoutUrl(value: string): boolean {

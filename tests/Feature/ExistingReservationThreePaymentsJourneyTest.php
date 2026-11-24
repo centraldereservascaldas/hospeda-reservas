@@ -6,6 +6,7 @@ use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Services\DirectStaysPaymentService;
 use App\Services\ExistingReservationPaymentCycleRegistry;
+use App\Services\LegalPageRegistry;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -22,12 +23,13 @@ class ExistingReservationThreePaymentsJourneyTest extends TestCase
         $this->artisan('migrate');
     }
 
-    public function test_three_sequential_checkout_capture_and_settlements(): void
+    public function test_deposit_and_remaining_balance_are_settled_sequentially(): void
     {
         $this->withoutExceptionHandling();
         config([
             'direct-booking.enabled' => true, 'direct-booking.payments_enabled' => true, 'direct-booking.confirmation_enabled' => true,
             'direct-booking.existing_reservation_checkout_enabled' => true, 'direct-booking.experimental_existing_order_history_enabled' => true,
+            'direct-booking.experimental_existing_deposit_enabled' => true,
             'direct-booking.experimental_existing_cycle_settlement_enabled' => true, 'direct-booking.experimental_existing_ledger_audit_enabled' => true,
             'direct-booking.payment_provider' => 'cielo_sandbox',
             'direct-booking.notification_queue_connection' => 'database', 'direct-booking.resume_token_ttl_days' => 2,
@@ -39,7 +41,7 @@ class ExistingReservationThreePaymentsJourneyTest extends TestCase
         ]);
         $reservationId = str_repeat('c', 24);
         $provider = str_repeat('f', 24);
-        $amounts = [10, 5, 5];
+        $amounts = [10, 10];
         $index = 0;
         $paid = 0;
         $completed = [];
@@ -118,39 +120,42 @@ class ExistingReservationThreePaymentsJourneyTest extends TestCase
             $current = ['_id' => str_repeat((string) ($index + 1), 24), '_idreserve' => $reservationId, '_idpaymentProvider' => $provider,
                 'type' => 'credit', 'status' => 'pending', '_f_val' => $amount, 'name' => 'Pagamento da reserva'];
             $created = $this->withHeader('Idempotency-Key', 'three-order-key-123456-'.$index)
-                ->postJson('/api/existing-reservations/ZY92K/checkout', ['expectedBalanceCents' => $amount * 100, 'paymentMethod' => 'pix',
-                    'guest' => ['fullName' => 'Test Guest', 'email' => 'guest@example.test', 'phone' => '64999999999'], 'acceptedPayment' => true]);
+                ->postJson('/api/existing-reservations/ZY92K/checkout', ['expectedBalanceCents' => $amount * 100, 'paymentMethod' => 'pix', 'paymentPlan' => $index === 0 ? 'deposit' : 'full',
+                    'guest' => ['fullName' => 'Test Guest', 'email' => 'guest@example.test', 'phone' => '64999999999', 'cpf' => '52998224725'], 'acceptedPayment' => true, ...$this->contractAcceptance()]);
             $this->assertSame(201, $created->status(), json_encode($created->json()));
             $reference = $created->json('resume.reference');
             $token = $created->json('resume.token');
             $payment = $this->withHeaders(['Idempotency-Key' => 'three-payment-key-123456-'.$index, 'X-Checkout-Resume-Token' => $token])
                 ->postJson('/api/checkout/'.$reference.'/payments', ['paymentMethod' => 'pix', 'paymentMethodId' => 'pix',
-                    'payerIdentification' => ['type' => 'CPF', 'number' => '12345678901']]);
+                    'payerIdentification' => ['type' => 'CPF', 'number' => '52998224725']]);
             $this->assertSame(201, $payment->status(), json_encode($payment->json()));
             $payment->assertJsonPath('payment.status', 'approved');
             $order = DirectBookingOrder::query()->where('public_reference', $reference)->firstOrFail();
             $result = app(DirectStaysPaymentService::class)->confirmPaidReservation($order);
-            if ($index < 2) {
-                $this->assertFalse($result['ready'], json_encode($result));
-                $this->assertSame('existing_balance_remaining', $result['code']);
-                if ($index === 0) {
-                    $settledCycleCount = DB::table('existing_reservation_payment_cycles')->where('state', 'settled')->count();
-                    $preparedCycles = app(ExistingReservationPaymentCycleRegistry::class)->prepare($reservationId);
-                    $this->assertSame(1, $settledCycleCount);
-                    $this->assertCount(1, $preparedCycles['verified'] ?? []);
-                }
-                if ($index === 2) {
-                    $previousOrder = DirectBookingOrder::query()->where('public_reference', '!=', $reference)->latest()->firstOrFail();
-                    $this->assertSame($previousOrder->quote_total, (string) $amount.'.00');
-                }
+            if ($index === 0) {
+                $this->assertTrue($result['ready'], json_encode($result));
+                $this->assertSame('existing_deposit_settled', $result['code']);
+                $settledCycleCount = DB::table('existing_reservation_payment_cycles')->where('state', 'settled')->count();
+                $preparedCycles = app(ExistingReservationPaymentCycleRegistry::class)->prepare($reservationId);
+                $this->assertSame(1, $settledCycleCount);
+                $this->assertCount(1, $preparedCycles['verified'] ?? []);
             } else {
                 $this->assertTrue($result['ready'], json_encode($result));
             }
         }
         $this->assertSame(20, $paid);
-        $this->assertCount(3, $completed);
-        $this->assertDatabaseCount('direct_booking_orders', 3);
-        $this->assertDatabaseCount('direct_booking_payment_attempts', 3);
-        $this->assertSame(3, DB::table('existing_reservation_payment_cycles')->where('state', 'settled')->count());
+        $this->assertCount(2, $completed);
+        $this->assertDatabaseCount('direct_booking_orders', 2);
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 2);
+        $this->assertSame(2, DB::table('existing_reservation_payment_cycles')->where('state', 'settled')->count());
+    }
+
+    /** @return array{acceptedContract: array{version: string, contentHash: string}} */
+    private function contractAcceptance(): array
+    {
+        $contract = app(LegalPageRegistry::class)->find('contrato');
+        $this->assertIsArray($contract);
+
+        return ['acceptedContract' => ['version' => $contract['version'], 'contentHash' => hash('sha256', json_encode($contract, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))]];
     }
 }

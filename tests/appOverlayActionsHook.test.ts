@@ -152,7 +152,15 @@ test('closes property detail before handing the booking payload to checkout stat
 
   assert.deepEqual(hook.result.current.calls, ['set-booking-payload']);
   assert.equal(hook.result.current.bookingPayload, payload);
-  assert.equal(window.location.pathname, '/checkout/nova');
+  assert.equal(window.location.pathname, '/checkout');
+  const checkoutUrl = new URL(window.location.href);
+  assert.equal(
+    checkoutUrl.searchParams.get('accommodation'),
+    property.staysListingId || property.id,
+  );
+  assert.equal(checkoutUrl.searchParams.get('checkin'), payload.checkIn);
+  assert.equal(checkoutUrl.searchParams.get('checkout'), payload.checkOut);
+  assert.equal(checkoutUrl.searchParams.get('adults'), String(payload.guests.adults));
   assert.deepEqual(
     JSON.parse(
       window.sessionStorage.getItem(

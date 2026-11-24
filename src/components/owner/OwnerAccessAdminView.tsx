@@ -355,6 +355,7 @@ const orderStatusLabels: Record<DirectBookingOperationsOrder['status'], string> 
   liberacao_pendente: 'Liberação pendente',
   pagamento_pendente: 'Pagamento pendente',
   pago_em_confirmacao: 'Pago, aguardando Stays',
+  entrada_conciliada: 'Entrada registrada',
   confirmado: 'Confirmado',
   concluido: 'Concluído',
   expirado: 'Expirado',
@@ -428,6 +429,10 @@ const getSuggestedNextAction = (order: DirectBookingOperationsOrder): string | n
     order.staysReservationId !== null
   ) {
     return 'Verifique a disponibilidade e a reserva na Stays. Registre a revisão do pagamento tardio quando o pedido permitir; não confirme nem cancele automaticamente.';
+  }
+
+  if (order.existingDepositReviewRequired) {
+    return 'Confira o pagamento e o lançamento da entrada na Stays antes de orientar o hóspede.';
   }
 
   if (order.paymentApprovedWithoutConfirmedReservation) {
@@ -607,11 +612,16 @@ const DirectBookingOperationsCard: React.FC<{
           {operationsMoney.format(Number(order.quoteTotal))}
         </p>
       </div>
-      {(order.paymentApprovedWithoutConfirmedReservation || order.staysActionFailed) && (
+      {(order.existingDepositReviewRequired ||
+        order.paymentApprovedWithoutConfirmedReservation ||
+        order.staysActionFailed) && (
         <ul
           className="mt-4 space-y-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-xs font-semibold text-rose-950"
           aria-label="Alertas operacionais prioritários"
         >
+          {order.existingDepositReviewRequired && (
+            <li role="alert">A entrada está em conferência. Verifique o pagamento e o lançamento na Stays.</li>
+          )}
           {order.paymentApprovedWithoutConfirmedReservation && (
             <li role="alert">
               Pagamento aprovado sem reserva confirmada na Stays. Conferir antes de qualquer ação

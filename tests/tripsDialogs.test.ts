@@ -101,6 +101,23 @@ const cancellationOrder = {
   },
 };
 
+test('a settled deposit does not claim that a later balance remains unpaid', () => {
+  const { getByText, queryByText } = render(
+    React.createElement(TripsView, {
+      reservations: [],
+      directBookingOrders: [
+        { ...cancellationOrder, status: 'entrada_conciliada' as const, cancellationReceipt: null },
+      ],
+      currency: 'BRL',
+      onCancelReservation: async () => {},
+      onExploreMore: () => {},
+    }),
+  );
+
+  assert.ok(getByText('Entrada registrada'));
+  assert.equal(queryByText(/saldo pendente/i), null);
+});
+
 test('voucher and cancellation dialogs have names, initial focus, Escape and focus return', () => {
   const { getByRole, getByText, queryByRole } = render(
     React.createElement(TripsView, {

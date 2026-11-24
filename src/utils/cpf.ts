@@ -18,3 +18,24 @@ export function isValidCpf(value: string): boolean {
 
   return true;
 }
+
+export function isValidCnpj(value: string): boolean {
+  const cnpj = value.replace(/[^a-z\d]/gi, '').toUpperCase();
+  if (!/^[A-Z\d]{12}\d{2}$/.test(cnpj) || /^(.)\1{13}$/.test(cnpj)) return false;
+  const check = (numbers: string, weights: number[]): number => {
+    const remainder =
+      numbers
+        .split('')
+        .reduce((sum, character, index) => sum + (character.charCodeAt(0) - 48) * weights[index], 0) %
+      11;
+    return remainder < 2 ? 0 : 11 - remainder;
+  };
+  const first = check(cnpj.slice(0, 12), [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  const second = check(cnpj.slice(0, 12) + first, [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]);
+  return cnpj.endsWith(`${first}${second}`);
+}
+
+export function isValidBrazilianTaxId(value: string): boolean {
+  const normalized = value.replace(/[^a-z\d]/gi, '').toUpperCase();
+  return normalized.length === 11 ? isValidCpf(normalized) : isValidCnpj(normalized);
+}

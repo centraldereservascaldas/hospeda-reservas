@@ -23,6 +23,10 @@ class PublicLegalPageController extends Controller
             abort(404);
         }
 
+        if ($slug === 'contrato') {
+            $page['contentHash'] = hash('sha256', json_encode($page, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        }
+
         return response()->json(['page' => $page])
             ->header('Cache-Control', 'no-store, private');
     }

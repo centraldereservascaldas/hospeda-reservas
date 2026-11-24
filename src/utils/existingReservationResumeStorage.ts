@@ -44,6 +44,16 @@ export function getExistingReservationResumeReference(code: string): string | nu
   return null;
 }
 
+export function clearExistingReservationResumeReference(code: string): void {
+  if (!validCode(code) || typeof window === 'undefined') return;
+  inMemoryReferences.delete(code);
+  try {
+    window.sessionStorage.removeItem(`${prefix}${code}`);
+  } catch {
+    /* Storage may be unavailable. */
+  }
+}
+
 export function getExistingReservationCodeForResumeReference(reference: string): string | null {
   if (!validReference(reference) || typeof window === 'undefined') return null;
 

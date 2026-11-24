@@ -39,6 +39,7 @@ const directBookingStatusLabels: Record<DirectBookingOrderListItem['status'], st
   liberacao_pendente: 'Liberação pendente',
   pagamento_pendente: 'Pagamento pendente',
   pago_em_confirmacao: 'Pagamento aprovado · confirmação pendente',
+  entrada_conciliada: 'Entrada registrada',
   confirmado: 'Aprovada',
   concluido: 'Concluída',
   expirado: 'Pedido expirado',

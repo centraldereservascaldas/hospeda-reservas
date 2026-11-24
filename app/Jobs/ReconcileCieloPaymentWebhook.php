@@ -79,7 +79,11 @@ class ReconcileCieloPaymentWebhook implements ShouldQueue
             $attempt = $result['attempt'] ?? null;
             if ($attempt instanceof DirectBookingPaymentAttempt && $attempt->status === 'approved') {
                 $order = $attempt->order->fresh();
-                if (in_array($order->status, [DirectBookingOrderStatus::PagoEmConfirmacao, DirectBookingOrderStatus::AtencaoOperacional], true)) {
+                if (in_array($order->status, [DirectBookingOrderStatus::PagoEmConfirmacao, DirectBookingOrderStatus::AtencaoOperacional], true)
+                    || ($order->origin === 'stays_existing' && $order->status === DirectBookingOrderStatus::EntradaConciliada
+                        && config('direct-booking.experimental_existing_deposit_enabled', false) === true
+                        && config('direct-booking.experimental_existing_ledger_audit_enabled', false) === true
+                        && config('direct-booking.experimental_existing_cycle_settlement_enabled', false) === true)) {
                     $confirmation = $reservations->confirmPaidReservation($order);
                     if (! $confirmation['ready']) {
                         throw new \RuntimeException('Stays confirmation requires reconciliation.');

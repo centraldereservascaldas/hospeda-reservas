@@ -43,12 +43,17 @@ function getCheckoutMarketingAttribution(): CheckoutMarketingAttribution | undef
 
 export interface DirectBookingOrderSummary {
   origin?: string;
+  existingDepositReviewRequired?: boolean;
+  existingContractRequired?: boolean;
+  existingContractAcceptable?: boolean;
+  existingContractReviewRequired?: boolean;
   status:
     | 'iniciado'
     | 'cotado'
     | 'pre_reservado'
     | 'pagamento_pendente'
     | 'pago_em_confirmacao'
+    | 'entrada_conciliada'
     | 'confirmado'
     | 'atencao_operacional'
     | 'expirado'

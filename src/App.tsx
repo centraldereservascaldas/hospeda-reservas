@@ -20,6 +20,7 @@ import { SofiaAssistantTrigger } from './components/assistant/SofiaAssistantTrig
 import { getAuthCallbackError } from './utils/authCallback';
 import { MainContentRouter } from './components/MainContentRouter';
 import { AppOverlayLayer } from './components/AppOverlayLayer';
+import { CheckoutLoadingSkeleton } from './components/booking/CheckoutLoadingSkeleton';
 import type { AppOverlayBookingPayload } from './types/booking';
 import {
   buildHomeUrl,
@@ -50,7 +51,7 @@ import { countOccupancyGuests } from './utils/guestCounts';
 import { LegalDocumentPage } from './components/LegalDocumentPage';
 import { existingReservationCodeFromPath } from './utils/checkoutUrl';
 import { NotFoundPage } from './components/NotFoundPage';
-import { NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
+import { isNewCheckoutPath, NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
 import { useCheckoutDraftRecovery } from './hooks/useCheckoutDraftRecovery';
 import { captureAffiliateReferral } from './utils/affiliateAttribution';
 import { AffiliatePortal } from './components/affiliate/AffiliatePortal';
@@ -222,7 +223,7 @@ function MarketplaceApp() {
         CHECKOUT_MODAL_HISTORY_ENTRY in state &&
         (state as Record<string, unknown>)[CHECKOUT_MODAL_HISTORY_ENTRY] === true;
 
-      if (window.location.pathname === NEW_CHECKOUT_PATH) {
+      if (isNewCheckoutPath(window.location.pathname)) {
         setBookingPayload(null);
         setCheckoutNavigation((value) => value + 1);
       } else if (bookingPayloadRef.current && !isCheckoutModalEntry) {
@@ -440,6 +441,7 @@ function MarketplaceApp() {
     handleAssistantApplyFilters,
     handleSelectPropertyFromSofia,
   } = useAppOverlayActions({
+    currency,
     setProperties,
     setFilters,
     setIsSofiaOpen,
@@ -610,7 +612,7 @@ function MarketplaceApp() {
         compactMobileFloating={isCondominiumView && filteredProperties.length === 0}
       />
 
-      {window.location.pathname === NEW_CHECKOUT_PATH &&
+      {isNewCheckoutPath(window.location.pathname) &&
         !bookingPayload &&
         checkoutRecovery.status !== 'idle' && (
           <div
@@ -778,7 +780,9 @@ export default function App() {
 
   if (existingReservationCode) {
     return (
-      <Suspense fallback={<main role="status">Consultando reserva…</main>}>
+      <Suspense
+        fallback={<CheckoutLoadingSkeleton fullPage label="Consultando os dados da reserva" />}
+      >
         <ExistingReservationCheckout code={existingReservationCode} />
       </Suspense>
     );
@@ -803,6 +807,7 @@ export default function App() {
 
   if (
     normalizedPathname !== '/' &&
+    normalizedPathname !== NEW_CHECKOUT_PATH &&
     normalizedPathname !== '/condominios' &&
     normalizedPathname !== '/s/homes' &&
     !legalSlug &&
