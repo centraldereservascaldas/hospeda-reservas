@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SearchAccommodationsRequest;
 use App\Http\Resources\AccommodationSearchResource;
+use App\Services\DiogoPropertyCatalog;
 use App\Services\StaysAccommodationCatalog;
 use App\Services\StaysAccommodationMapper;
 use App\Services\StaysCalendarService;
@@ -19,26 +20,39 @@ use Illuminate\Http\Request;
 
 class AccommodationController extends Controller
 {
-    public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysAccommodationMapper $mapper, private readonly StaysAccommodationCatalog $accommodationCatalog, private readonly StaysContentReadCache $contentReads) {}
+    public function __construct(
+        private readonly StaysExternalApiClient $stays,
+        private readonly StaysAccommodationMapper $mapper,
+        private readonly StaysAccommodationCatalog $accommodationCatalog,
+        private readonly StaysContentReadCache $contentReads,
+        private readonly DiogoPropertyCatalog $diogo,
+    ) {}
 
     public function resorts(): JsonResponse
     {
+        $properties = null;
         try {
             $properties = $this->contentReads->get('/content/properties', ['status' => 'active', 'limit' => 100, 'skip' => 0]);
         } catch (StaysContentRateLimited) {
-            $properties = null;
+            // The public partner catalog can still provide its approved condominium names.
         }
-        if ($properties === null) {
+        $partnerProperties = $this->diogo->all();
+        if ($properties === null && $partnerProperties === null) {
             return response()->json(['success' => false, 'source' => 'unavailable', 'data' => []], 503);
         }
 
-        $resorts = collect($properties)->map(fn (array $item): array => [
+        $staysResorts = collect($properties ?? [])->map(fn (array $item): array => [
             'id' => (string) ($item['_id'] ?? $item['id'] ?? ''),
             'name' => $this->mapper->localized($item['_mstitle'] ?? null) ?: ($item['internalName'] ?? ''),
         ])->filter(fn (array $item): bool => $item['id'] !== '' && trim($item['name']) !== '')
-            ->unique('id')->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();
+            ->unique('id');
+        $partnerResorts = collect($partnerProperties ?? [])->map(fn (array $item): array => [
+            'id' => is_string($item['partnerCondominiumId'] ?? null) ? $item['partnerCondominiumId'] : '',
+            'name' => is_string($item['complexName'] ?? null) ? $item['complexName'] : '',
+        ])->filter(fn (array $item): bool => $item['id'] !== '' && trim($item['name']) !== '');
+        $resorts = $staysResorts->concat($partnerResorts)->unique('id')->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();
 
-        return response()->json(['success' => true, 'source' => 'stays-live', 'total' => $resorts->count(), 'data' => $resorts]);
+        return response()->json(['success' => true, 'source' => $properties === null ? 'partner-live' : 'stays-live', 'total' => $resorts->count(), 'data' => $resorts]);
     }
 
     public function index(StaysSimulator $simulator): JsonResponse
@@ -52,14 +66,24 @@ class AccommodationController extends Controller
         $fallback = $this->catalog();
         if (! $this->stays->isConfigured()) {
             if (app()->isProduction()) {
+                $partnerProperties = $this->diogo->all();
+                if (is_array($partnerProperties) && $partnerProperties !== []) {
+                    return $this->catalogResponse($partnerProperties, 'partner-live');
+                }
+
                 return response()->json(['success' => false, 'source' => 'unavailable', 'count' => 0, 'data' => []], 503);
             }
 
-            return response()->json(['success' => true, 'source' => 'local-catalog', 'count' => count($fallback), 'data' => $fallback]);
+            return $this->catalogResponse([...$fallback, ...($this->diogo->all() ?? [])], 'local-catalog');
         }
 
         $catalog = $this->accommodationCatalog->get();
         if ($catalog === null) {
+            $partnerProperties = $this->diogo->all();
+            if (is_array($partnerProperties) && $partnerProperties !== []) {
+                return $this->catalogResponse($partnerProperties, 'partner-live');
+            }
+
             return response()->json([
                 'success' => false,
                 'source' => 'unavailable',
@@ -67,6 +91,14 @@ class AccommodationController extends Controller
                 'count' => 0,
                 'data' => [],
             ], 503);
+        }
+
+        $partnerProperties = $this->diogo->all();
+        if (is_array($partnerProperties) && $partnerProperties !== []) {
+            return $this->catalogResponse(
+                [...($catalog['data'] ?? []), ...$partnerProperties],
+                ($catalog['data'] ?? []) === [] ? 'partner-live' : 'stays-live-with-partner',
+            );
         }
 
         return response()->json($catalog);
@@ -80,6 +112,14 @@ class AccommodationController extends Controller
             return $property
                 ? response()->json(['success' => true, 'data' => $property, 'source' => 'stays-simulated'])
                 : response()->json(['success' => false, 'message' => 'Acomodação não encontrada na base simulada.'], 404);
+        }
+
+        if (preg_match('/^PAR-[1-9]\d{0,8}-[1-9]\d{0,11}$/D', $id) === 1) {
+            $property = $this->diogo->find($id);
+
+            return $property
+                ? response()->json(['success' => true, 'data' => $property, 'source' => 'partner-live'])
+                : response()->json(['success' => false, 'message' => 'Acomodação não encontrada.'], 404);
         }
 
         $fallback = $this->catalog();
@@ -114,7 +154,7 @@ class AccommodationController extends Controller
         return response()->json(['success' => true, 'data' => $existing]);
     }
 
-    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchAvailabilityService $availabilityService, StaysOfferWarmup $warmup): JsonResponse
+    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchAvailabilityService $availabilityService, StaysOfferWarmup $warmup, DiogoPropertyOffers $partnerOffers): JsonResponse
     {
         $input = $request->validated();
         $from = $input['from'] ?? null;
@@ -130,7 +170,8 @@ class AccommodationController extends Controller
                 if (($property['maxGuests'] ?? 0) < $guests) {
                     return false;
                 }
-                if (isset($input['propertyId']) && ($property['staysPropertyId'] ?? null) !== $input['propertyId']) {
+                if (isset($input['propertyId']) && ($property['staysPropertyId'] ?? null) !== $input['propertyId']
+                    && ($property['partnerCondominiumId'] ?? null) !== $input['propertyId']) {
                     return false;
                 }
                 if (! empty($input['destination'])) {
@@ -159,6 +200,17 @@ class AccommodationController extends Controller
             return response()->json(['success' => true, 'total' => $total, 'from' => $from, 'to' => $to, 'guests' => $guests, 'data' => $data, 'source' => 'stays-simulated']);
         }
         if ($from && $to) {
+            $isPartnerSpecificSearch = is_string($input['propertyId'] ?? null)
+                && preg_match('/^(?:PAR-[1-9]\d{0,8}-[1-9]\d{0,11}|condo-[A-Za-z0-9_-]{1,80})$/D', $input['propertyId']) === 1;
+            if (($input['provider'] ?? null) === 'partner' || $isPartnerSpecificSearch) {
+                $observedOffers = $partnerOffers->search($input);
+                if ($observedOffers !== null) {
+                    return $this->partnerOffersResponse($observedOffers, $from, $to, $guests, $skip);
+                }
+
+                return response()->json(['success' => false, 'code' => 'partner_offers_unavailable', 'message' => 'As ofertas do parceiro não podem ser consultadas agora.'], 503);
+            }
+
             $resolved = $availabilityService->search($input);
             if ($resolved === null) {
                 return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Não foi possível confirmar a disponibilidade agora. Tente novamente.'], 503);
@@ -175,6 +227,13 @@ class AccommodationController extends Controller
 
                 return $property;
             }, $resolved['items']);
+
+            if ($mapped === [] && $skip === 0) {
+                $observedOffers = $partnerOffers->search($input);
+                if ($observedOffers !== null && $observedOffers['items'] !== []) {
+                    return $this->partnerOffersResponse($observedOffers, $from, $to, $guests, $skip);
+                }
+            }
 
             return (new AccommodationSearchResource([
                 'data' => $mapped,
@@ -199,7 +258,8 @@ class AccommodationController extends Controller
 
             $catalog = $catalogResponse->getData(true)['data'] ?? [];
             $results = collect($catalog)->filter(function (array $item) use ($input, $guests): bool {
-                if (($item['maxGuests'] ?? 0) < $guests || (isset($input['propertyId']) && ($item['staysPropertyId'] ?? null) !== $input['propertyId'])) {
+                if (($item['maxGuests'] ?? 0) < $guests || (isset($input['propertyId']) && ($item['staysPropertyId'] ?? null) !== $input['propertyId']
+                    && ($item['partnerCondominiumId'] ?? null) !== $input['propertyId'])) {
                     return false;
                 }
                 if (! empty($input['destination'])) {
@@ -219,7 +279,8 @@ class AccommodationController extends Controller
         }
 
         $results = collect($this->catalog())->filter(function (array $item) use ($input, $guests): bool {
-            if (($item['maxGuests'] ?? 0) < $guests || (isset($input['propertyId']) && ($item['staysPropertyId'] ?? null) !== $input['propertyId'])) {
+            if (($item['maxGuests'] ?? 0) < $guests || (isset($input['propertyId']) && ($item['staysPropertyId'] ?? null) !== $input['propertyId']
+                && ($item['partnerCondominiumId'] ?? null) !== $input['propertyId'])) {
                 return false;
             }
             if (! empty($input['destination'])) {
@@ -247,6 +308,40 @@ class AccommodationController extends Controller
         return response()->json(['success' => true, 'total' => $results->count(), 'from' => null, 'to' => null, 'guests' => $guests, 'data' => $data]);
     }
 
+    /** @param array<string, mixed> $offers */
+    private function partnerOffersResponse(array $offers, string $from, string $to, int $guests, int $skip): JsonResponse
+    {
+        $items = $offers['items'];
+        $receivedCount = count($items);
+
+        return (new AccommodationSearchResource([
+            'source' => 'partner-offers-live',
+            'data' => $items,
+            'from' => $from,
+            'to' => $to,
+            'guests' => $guests,
+            'unquotedCount' => 0,
+            'meta' => [
+                'fetchedAt' => $offers['observedAt'],
+                'expiresAt' => $offers['expiresAt'],
+                'availabilityConfirmed' => false,
+                'guestCountVerified' => false,
+                'guestCompositionVerified' => false,
+                'childPricingVerified' => false,
+                'feeBreakdownAvailable' => false,
+                'additionalChargesKnown' => false,
+                'bookingEnabled' => false,
+                'paymentEnabled' => false,
+                'absenceMeans' => 'unknown',
+            ],
+            'pagination' => [
+                'receivedCount' => $receivedCount,
+                'nextSkip' => $skip + $receivedCount,
+                'hasMore' => $offers['pagination']['hasMore'],
+            ],
+        ]))->response()->header('Cache-Control', 'private, max-age=0, must-revalidate');
+    }
+
     public function calendar(Request $request, string $id, StaysSimulator $simulator, StaysCalendarService $calendarService): JsonResponse
     {
         $input = $request->validate(['from' => ['nullable', 'date_format:Y-m-d'], 'to' => ['nullable', 'date_format:Y-m-d']]);
@@ -254,6 +349,13 @@ class AccommodationController extends Controller
         $to = $input['to'] ?? now()->addDays(89)->toDateString();
         if ($to <= $from) {
             return response()->json(['success' => false, 'code' => 'invalid_calendar_range', 'message' => 'Período do calendário inválido.'], 400);
+        }
+        if (preg_match('/^PAR-[1-9]\d{0,8}-[1-9]\d{0,11}$/D', $id) === 1) {
+            return response()->json([
+                'success' => false,
+                'code' => 'availability_unconfirmed',
+                'message' => 'A disponibilidade deste imóvel ainda não é consultada pelo site.',
+            ], 409);
         }
         if ($simulator->enabled()) {
             $property = $simulator->find($id);
@@ -377,6 +479,15 @@ class AccommodationController extends Controller
     private function catalog(): array
     {
         return $this->accommodationCatalog->fallback();
+    }
+
+    /** @param list<array<string, mixed>> $properties */
+    private function catalogResponse(array $properties, string $source): JsonResponse
+    {
+        $data = collect($properties)->filter(fn (mixed $property): bool => is_array($property) && is_string($property['id'] ?? null))
+            ->unique('id')->values()->all();
+
+        return response()->json(['success' => true, 'source' => $source, 'count' => count($data), 'data' => $data]);
     }
 
     private function listingPayload(array $property): array

@@ -19,6 +19,8 @@ export interface Review {
 
 export interface Property {
   id: string;
+  bookingProvider?: 'stays' | 'partner';
+  partnerCondominiumId?: string | null;
   staysPropertyId?: string;
   publicPagePath?: string;
   complexName?: string;
@@ -90,7 +92,7 @@ export interface Property {
   staysSynced?: boolean;
   reviewsSynced?: boolean;
   simulatedData?: boolean;
-  dataSource?: 'stays-live' | 'stays-simulated' | 'local-catalog';
+  dataSource?: 'stays-live' | 'stays-simulated' | 'local-catalog' | 'stays-live-with-partner' | 'partner-live';
   calculatedPrice?: {
     /** Absolute validity deadline of the confirmed search quote. */
     expiresAt?: number;
@@ -102,6 +104,21 @@ export interface Property {
     totalAmount: number;
     currency: string;
     fees?: unknown[];
+  };
+  observedOffer?: {
+    from: string;
+    to: string;
+    guests: number;
+    totalAmount: number;
+    currency: 'BRL';
+    paymentMethod: 'pix';
+    nights: number;
+    observedAt: string;
+    expiresAt: number;
+    availabilityConfirmed: false;
+    guestCountVerified: false;
+    feeBreakdownAvailable: false;
+    additionalChargesKnown: false;
   };
 }
 

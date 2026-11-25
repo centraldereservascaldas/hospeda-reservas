@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import '../public/brand-theme.css';
+@import './components/site-control/site-control.css';
 
 @font-face {
   font-family: 'Plus Jakarta Sans';

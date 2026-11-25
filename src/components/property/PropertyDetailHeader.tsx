@@ -17,6 +17,12 @@ export function PropertyDetailHeader({
   titleRef,
 }: PropertyDetailHeaderProps) {
   const displayTitle = getPublicPropertyTitle(property.title);
+  const locality = [property.complexName, property.location.neighborhood, property.location.city, property.location.state]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join(', ');
+  const canShowReviewSection = property.bookingProvider !== 'partner' &&
+    (hasReviews || !property.staysSynced || !property.reviewsSynced);
 
   return (
     <div>
@@ -29,6 +35,11 @@ export function PropertyDetailHeader({
         {displayTitle}
       </h1>
       <div className="mt-2 flex flex-wrap items-center gap-y-2 gap-x-4 text-xs sm:text-sm text-neutral-600">
+        {property.bookingProvider === 'partner' && (
+          <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 font-semibold text-orange-800">
+            Imóvel de parceiro
+          </span>
+        )}
         {hasReviews && (
           <>
             <div className="flex items-center gap-1 font-semibold text-neutral-900">
@@ -41,7 +52,7 @@ export function PropertyDetailHeader({
             <span>•</span>
           </>
         )}
-        {(hasReviews || !property.staysSynced || !property.reviewsSynced) && (
+        {canShowReviewSection && (
           <>
             <button
               type="button"
@@ -69,9 +80,7 @@ export function PropertyDetailHeader({
             <span>•</span>
           </>
         )}
-        <span className="font-medium text-neutral-600">
-          {property.location.neighborhood}, {property.location.city} - {property.location.state}
-        </span>
+        {locality && <span className="font-medium text-neutral-600">{locality}</span>}
       </div>
     </div>
   );

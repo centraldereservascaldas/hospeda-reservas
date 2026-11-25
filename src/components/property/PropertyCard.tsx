@@ -20,6 +20,8 @@ interface PropertyCardProps {
   hasSearchDates?: boolean;
   availabilityConfirmed?: boolean;
   searchGuestCount?: number;
+  searchCheckIn?: string;
+  searchCheckOut?: string;
   prioritizeImage?: boolean;
 }
 
@@ -33,6 +35,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   hasSearchDates = false,
   availabilityConfirmed = false,
   searchGuestCount = 1,
+  searchCheckIn = '',
+  searchCheckOut = '',
   prioritizeImage = false,
 }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -115,7 +119,10 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
     onToggleSave(property.id);
   };
 
-  const displayPrice = getPropertyDisplayPrice(property, hasSearchDates, showTotalWithTaxes);
+  const displayPrice = getPropertyDisplayPrice(property, hasSearchDates, showTotalWithTaxes, {
+    checkIn: searchCheckIn,
+    checkOut: searchCheckOut,
+  });
   const hasConfirmedAvailability =
     availabilityConfirmed && getConfirmedPropertyQuote(property) !== null;
   const sixInstallmentAmount =
@@ -182,7 +189,11 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
           {/* Host badge */}
           <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-3.75rem)] pointer-events-none">
-            {property.staysSynced && property.isSuperhost ? (
+            {property.bookingProvider === 'partner' ? (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full liquid-glass text-caption font-bold text-neutral-900 shadow-sm border border-white/90 truncate">
+                Imóvel de parceiro
+              </span>
+            ) : property.staysSynced && property.isSuperhost ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full liquid-glass text-caption font-bold text-neutral-900 shadow-sm border border-white/90 truncate">
                 <span className="truncate">Anfitrião destaque</span>
               </span>
@@ -282,7 +293,13 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
           {/* Location & Caldas Novas • GO */}
           <p className="text-neutral-500 font-medium text-sm truncate">
-            {property.location.city} • {property.location.state}
+            {[
+              property.complexName,
+              [property.location.city, property.location.state].filter(Boolean).join(' - '),
+            ]
+              .filter((value): value is string => Boolean(value?.trim()))
+              .filter((value, index, values) => values.indexOf(value) === index)
+              .join(' • ') || 'Acomodação'}
           </p>
 
           {hasConfirmedAvailability && (
@@ -298,13 +315,22 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
           {/* Room & Guest capacity */}
           <p className="text-neutral-700 font-semibold text-sm">
-            {property.bedrooms} {property.bedrooms === 1 ? 'quarto' : 'quartos'} •{' '}
-            {property.maxGuests} hóspedes {property.beds ? `• ${property.beds} camas` : ''}
+            {[
+              property.bedrooms > 0
+                ? `${property.bedrooms} ${property.bedrooms === 1 ? 'quarto' : 'quartos'}`
+                : '',
+              property.maxGuests > 0 ? `Até ${property.maxGuests} hóspedes` : '',
+              property.beds > 0 ? `${property.beds} ${property.beds === 1 ? 'cama' : 'camas'}` : '',
+            ]
+              .filter(Boolean)
+              .join(' • ')}
           </p>
 
           {/* Search total pricing */}
           <div id={priceDescriptionId} className="mt-1 flex items-baseline gap-1">
-            {displayPrice.kind === 'quote' || displayPrice.kind === 'reference' ? (
+            {displayPrice.kind === 'quote' ||
+            displayPrice.kind === 'reference' ||
+            displayPrice.kind === 'observed' ? (
               <div className="flex flex-col items-start gap-1">
                 <span className="text-base font-black text-neutral-950 sm:text-lg">
                   {formatCurrency(displayPrice.amount, currency)}
@@ -319,6 +345,11 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
                 )}
                 {displayPrice.kind === 'reference' && (
                   <span className="text-caption font-semibold text-neutral-500">
+                    {displayPrice.note}
+                  </span>
+                )}
+                {displayPrice.kind === 'observed' && (
+                  <span className="text-caption font-semibold text-amber-800">
                     {displayPrice.note}
                   </span>
                 )}

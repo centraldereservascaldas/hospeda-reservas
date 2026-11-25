@@ -12,6 +12,8 @@ interface InteractiveMapProps {
   hasSearchDates: boolean;
   availabilityConfirmed?: boolean;
   searchGuestCount?: number;
+  searchCheckIn?: string;
+  searchCheckOut?: string;
   showTotalWithTaxes: boolean;
   onSelectProperty: (property: Property) => void;
   selectedProperty: Property | null;
@@ -60,6 +62,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   hasSearchDates,
   availabilityConfirmed = false,
   searchGuestCount = 1,
+  searchCheckIn = '',
+  searchCheckOut = '',
   showTotalWithTaxes,
   onSelectProperty,
   selectedProperty,
@@ -81,7 +85,10 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const shouldReflowCompactPins = size.width <= 639 && size.height <= 180;
   const isCompactMap = size.width <= 360 && size.height <= 180;
   const activePropertyDisplayPrice = activeProperty
-    ? getPropertyDisplayPrice(activeProperty, hasSearchDates, showTotalWithTaxes)
+    ? getPropertyDisplayPrice(activeProperty, hasSearchDates, showTotalWithTaxes, {
+        checkIn: searchCheckIn,
+        checkOut: searchCheckOut,
+      })
     : null;
   const activePropertyAmenitySummary = activeProperty
     ? getPropertyAmenitySummary(
@@ -474,9 +481,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       {pinPositions.map(({ property, x, y }) => {
         const isActive = activeProperty?.id === property.id;
         const displayTitle = getPublicPropertyTitle(property.title);
-        const displayPrice = getPropertyDisplayPrice(property, hasSearchDates, showTotalWithTaxes);
+        const displayPrice = getPropertyDisplayPrice(property, hasSearchDates, showTotalWithTaxes, {
+          checkIn: searchCheckIn,
+          checkOut: searchCheckOut,
+        });
         const pinPrice =
-          displayPrice.kind === 'quote' || displayPrice.kind === 'reference'
+          displayPrice.kind === 'quote' ||
+          displayPrice.kind === 'reference' ||
+          displayPrice.kind === 'observed'
             ? formatCurrency(displayPrice.amount, currency)
             : displayPrice.kind === 'select-dates'
               ? 'Ver preço'
@@ -488,10 +500,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               : '/ noite'
             : displayPrice.kind === 'reference'
               ? '/ noite'
+              : displayPrice.kind === 'observed'
+                ? 'Pix'
               : '';
         const accessiblePriceLabel =
           displayPrice.kind === 'quote'
             ? `${pinPrice}, ${displayPrice.detail}`
+            : displayPrice.kind === 'observed'
+              ? `${pinPrice}, ${displayPrice.detail}. ${displayPrice.note}`
             : displayPrice.kind === 'reference'
               ? `${pinPrice} por noite, tarifa de referência`
               : displayPrice.message;
@@ -715,6 +731,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                     </span>
                     {activePropertyDisplayPrice.kind === 'reference' && (
                       <p className="mt-0.5 text-[11px] text-neutral-500">
+                        {activePropertyDisplayPrice.note}
+                      </p>
+                    )}
+                    {activePropertyDisplayPrice.kind === 'observed' && (
+                      <p className="mt-0.5 text-[11px] text-amber-800">
                         {activePropertyDisplayPrice.note}
                       </p>
                     )}

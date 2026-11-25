@@ -75,7 +75,7 @@ export function PropertyOverviewSection({ property }: PropertyOverviewSectionPro
         <div className="flex min-w-0 items-center justify-between gap-3">
           <div className="min-w-0">
             <h2 className="break-words text-lg font-bold text-neutral-900 sm:text-xl">
-              {property.subtitle}
+              {property.subtitle || (property.bookingProvider === 'partner' ? 'Imóvel de parceiro' : '')}
             </h2>
             <p className="text-xs sm:text-sm text-neutral-500 mt-1">
               Até {property.maxGuests} {property.maxGuests === 1 ? 'hóspede' : 'hóspedes'}

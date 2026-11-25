@@ -20,6 +20,7 @@ class SearchAccommodationsRequest extends FormRequest
             'guests' => ['nullable', 'integer', 'min:1', 'max:50'],
             'destination' => ['nullable', 'string', 'max:160'],
             'propertyId' => ['nullable', 'string', 'max:100'],
+            'provider' => ['nullable', 'in:partner'],
             'cities' => ['nullable', 'array', 'max:10'],
             'cities.*' => ['string', 'max:160', 'distinct'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],

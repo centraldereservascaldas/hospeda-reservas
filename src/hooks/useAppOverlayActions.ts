@@ -9,6 +9,7 @@ import {
   NEW_CHECKOUT_PATH,
   saveCheckoutDraft,
 } from '../utils/checkoutDraft';
+import { checkoutUrlWithStay } from '../utils/checkoutUrl';
 
 export const CHECKOUT_MODAL_HISTORY_ENTRY = '__crcnCheckoutModalEntry';
 
@@ -60,10 +61,20 @@ export function useAppOverlayActions({
       const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
       window.history.replaceState(state, '', currentUrl);
       const draftId = saveCheckoutDraft(payload);
+      const checkoutUrl = checkoutUrlWithStay(
+        NEW_CHECKOUT_PATH,
+        {
+          listingId: payload.property.staysListingId || payload.property.id,
+          from: payload.checkIn,
+          to: payload.checkOut,
+          guests: payload.guests,
+        },
+        window.location.search,
+      );
       window.history.pushState(
         { ...state, [CHECKOUT_MODAL_HISTORY_ENTRY]: true, [CHECKOUT_DRAFT_HISTORY_KEY]: draftId },
         '',
-        NEW_CHECKOUT_PATH,
+        checkoutUrl,
       );
       setBookingPayload(payload);
     },

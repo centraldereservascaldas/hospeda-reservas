@@ -5,7 +5,8 @@ import { crcnBackendApi, getCalendarExpiration } from '../services/crcnBackendAp
 import { countOccupancyGuests } from '../utils/guestCounts';
 import { isConfirmedPropertyQuote } from '../utils/propertyPricing';
 import { validateCalendarRange } from '../utils/staysAvailability';
-import { NEW_CHECKOUT_PATH, readCheckoutDraft } from '../utils/checkoutDraft';
+import { isNewCheckoutPath, readCheckoutDraft } from '../utils/checkoutDraft';
+import { checkoutStayFromSearch } from '../utils/checkoutUrl';
 
 export function useCheckoutDraftRecovery(
   properties: Property[],
@@ -17,11 +18,20 @@ export function useCheckoutDraftRecovery(
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    if (window.location.pathname !== NEW_CHECKOUT_PATH || bookingPayload) {
+    if (!isNewCheckoutPath(window.location.pathname) || bookingPayload) {
       setStatus('idle');
       return;
     }
-    const draft = readCheckoutDraft();
+    const storedDraft = readCheckoutDraft();
+    const urlStay = checkoutStayFromSearch(window.location.search);
+    const draft = urlStay
+      ? {
+          propertyId: urlStay.listingId,
+          checkIn: urlStay.from,
+          checkOut: urlStay.to,
+          guests: urlStay.guests,
+        }
+      : storedDraft;
     if (!draft) {
       setStatus('error');
       return;

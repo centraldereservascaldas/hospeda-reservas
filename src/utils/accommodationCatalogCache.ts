@@ -7,8 +7,14 @@ const SOURCE_KEY = 'hospeda_properties_source';
 const META_KEY = 'hospeda_properties_meta';
 const VERSION = 1;
 const TTL_MS = 15 * 60_000;
-const MAX_PROPERTIES = 100;
-const MAX_CHARACTERS = 1_048_576;
+const MAX_PROPERTIES = 200;
+const MAX_CHARACTERS = 2_097_152;
+const LIVE_CATALOG_SOURCES = new Set([
+  'stays-live',
+  'stays-live-with-partner',
+  'partner-live',
+  'local-catalog',
+]);
 
 export function clearAccommodationCatalogCache(): void {
   try {
@@ -38,7 +44,7 @@ export function readAccommodationCatalogCache(): Property[] {
       !deadline ||
       !saved ||
       saved.length > MAX_CHARACTERS ||
-      localStorage.getItem(SOURCE_KEY) !== 'stays-live'
+      !LIVE_CATALOG_SOURCES.has(localStorage.getItem(SOURCE_KEY) || '')
     ) {
       clearAccommodationCatalogCache();
       return [];
@@ -51,7 +57,11 @@ export function readAccommodationCatalogCache(): Property[] {
     return parsed
       .filter(isProperty)
       .filter((property) => !property.id.startsWith('prop-'))
-      .map((property) => ({ ...sanitizePropertyMedia(property), calculatedPrice: undefined }));
+      .map((property) => ({
+        ...sanitizePropertyMedia(property),
+        calculatedPrice: undefined,
+        observedOffer: undefined,
+      }));
   } catch {
     clearAccommodationCatalogCache();
     return [];
@@ -68,6 +78,7 @@ export function writeAccommodationCatalogCache(
       properties.slice(0, MAX_PROPERTIES).map((property) => ({
         ...sanitizePropertyMedia(property),
         calculatedPrice: undefined,
+        observedOffer: undefined,
       })),
     );
     if (!properties.length || saved.length > MAX_CHARACTERS) {

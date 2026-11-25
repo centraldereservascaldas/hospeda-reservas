@@ -303,11 +303,13 @@ class StaysApiService {
       }
       const listings: Property[] = json.data.map(sanitizePropertyMedia);
       const source = typeof json.source === 'string' ? json.source : 'unknown';
-      const live = source === 'stays-live' && listings.length > 0;
+      const live =
+        ['stays-live', 'stays-live-with-partner', 'partner-live'].includes(source) &&
+        listings.length > 0;
       const syncedAt = new Date().toISOString();
 
       if (live) {
-        writeAccommodationCatalogCache(listings, 'stays-live');
+        writeAccommodationCatalogCache(listings, source);
       }
 
       this.saveConfig({

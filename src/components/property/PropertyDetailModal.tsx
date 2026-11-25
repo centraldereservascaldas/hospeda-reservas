@@ -143,11 +143,17 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   });
 
   useEffect(() => {
-    if (!propertyId || !isConfirmedPropertyQuote(staysPrice) || !checkIn || !checkOut) return;
+    if (
+      !propertyId ||
+      property?.bookingProvider === 'partner' ||
+      !isConfirmedPropertyQuote(staysPrice) ||
+      !checkIn ||
+      !checkOut
+    ) return;
     void checkoutApi.getCheckoutReadiness(propertyId);
     void import('../booking/CheckoutEntry');
     void import('../booking/SinglePageCheckout');
-  }, [propertyId, staysPrice, checkIn, checkOut]);
+  }, [property?.bookingProvider, propertyId, staysPrice, checkIn, checkOut]);
 
   useEffect(() => {
     if (!isDatePickerOpen || !calendarCoverageEnd) return;
@@ -553,7 +559,10 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                   onSelectDay={selectCalendarDay}
                 />
 
-                <PropertyLocationSection title={displayTitle} location={property.location} />
+                {(property.bookingProvider !== 'partner' ||
+                  Boolean(property.location.neighborhood || property.location.city || property.location.lat || property.location.lng)) && (
+                  <PropertyLocationSection title={displayTitle} location={property.location} />
+                )}
                 <PropertyHostSection host={property.host} />
               </div>
             </div>

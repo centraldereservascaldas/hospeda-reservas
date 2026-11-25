@@ -145,6 +145,21 @@ export function PropertyBookingPanel({
               </span>
               <span className="mt-0.5 block text-xs text-neutral-500">média por noite</span>
             </div>
+          ) : property.bookingProvider === 'partner' &&
+            property.observedOffer?.from === checkIn &&
+            property.observedOffer?.to === checkOut &&
+            property.observedOffer.expiresAt > Date.now() ? (
+            <div>
+              <span className="block text-2xl font-black leading-tight text-neutral-900">
+                {formatCurrency(property.observedOffer.totalAmount, 'BRL')}
+              </span>
+              <span className="mt-0.5 block text-xs text-neutral-600">
+                Pix observado para {property.observedOffer.nights}{' '}
+                {property.observedOffer.nights === 1 ? 'noite' : 'noites'}
+              </span>
+            </div>
+          ) : property.bookingProvider === 'partner' ? (
+            <span className="text-lg font-bold text-neutral-900">Consulte para ver os valores</span>
           ) : hasExplicitDateSelection ? (
             <span className="text-lg font-bold text-neutral-900">
               {isCalculatingPrice
@@ -179,6 +194,15 @@ export function PropertyBookingPanel({
           </div>
         )}
       </div>
+
+      {property.bookingProvider === 'partner' &&
+        property.observedOffer?.from === checkIn &&
+        property.observedOffer?.to === checkOut &&
+        property.observedOffer.expiresAt > Date.now() && (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900">
+            Oferta Pix observada para estas datas. Disponibilidade e acomodação dos hóspedes não confirmadas; taxas adicionais podem existir.
+          </p>
+        )}
 
       <div className="rounded-2xl border border-neutral-300/80 bg-white/50 backdrop-blur-md divide-y divide-neutral-200/80 shadow-2xs">
         <div className="property-booking-dates grid grid-cols-2">
@@ -253,7 +277,7 @@ export function PropertyBookingPanel({
         <span>{bookingStatusMessage}</span>
       </div>
 
-      {!calendarAvailable && !isLoadingCalendar && (
+      {property.bookingProvider !== 'partner' && !calendarAvailable && !isLoadingCalendar && (
         <button
           type="button"
           onClick={onRetryCalendar}

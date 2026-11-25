@@ -284,12 +284,16 @@ export function SinglePageCheckout({
       window.history.replaceState(
         null,
         '',
-        checkoutUrlWithStay(response.resume.path, {
-          listingId: property.id,
-          from: checkIn,
-          to: checkOut,
-          guests,
-        }),
+        checkoutUrlWithStay(
+          response.resume.path,
+          {
+            listingId: property.id,
+            from: checkIn,
+            to: checkOut,
+            guests,
+          },
+          window.location.search,
+        ),
       );
       await clearCheckoutSubmissionKey(submission);
       if (

@@ -49,6 +49,7 @@ interface UseAccommodationSearchOptions {
   ) => Promise<{
     total: number;
     data: Property[];
+    source?: AccommodationSearchPage['source'];
     unquotedCount?: number;
     pagination?: AccommodationSearchPage['pagination'];
     expiresAt?: number;
@@ -349,6 +350,7 @@ export function useAccommodationSearch({
                     guests: searchParams.persons,
                     destination: searchParams.destination,
                     propertyId: searchParams.propertyId,
+                    ...(searchResult.source === 'partner-offers-live' ? { provider: 'partner' as const } : {}),
                     limit: 12,
                   },
                   nextSkip: pagination.nextSkip,

@@ -46,13 +46,14 @@ export function buildCondominiumCatalog(properties: Property[]): CondominiumSumm
       ];
       const complexPageUrl = listings[0].complexPageUrl || '';
       const staysPropertyId = listings[0].staysPropertyId || '';
-      const pageUrl = /^(?:\/pt\/building\/[a-zA-Z0-9_-]{1,80}\/[a-z0-9-]+|\/condominios\/[a-z0-9-]+)$/.test(
-        complexPageUrl,
-      )
-        ? complexPageUrl
-        : /^[a-zA-Z0-9_-]{1,80}$/.test(staysPropertyId)
-          ? `/condominios/${encodeURIComponent(staysPropertyId)}`
-          : undefined;
+      const pageUrl =
+        /^(?:\/pt\/building\/[a-zA-Z0-9_-]{1,80}\/[a-z0-9-]+|\/condominios\/[a-zA-Z0-9_-]{1,80}(?:\/[a-z0-9-]+)?)$/.test(
+          complexPageUrl,
+        )
+          ? complexPageUrl
+          : /^[a-zA-Z0-9_-]{1,80}$/.test(staysPropertyId)
+            ? `/condominios/${encodeURIComponent(staysPropertyId)}`
+            : undefined;
       return {
         id,
         name,

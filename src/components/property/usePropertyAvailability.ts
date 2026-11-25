@@ -103,7 +103,9 @@ export function usePropertyAvailability({
   const latestCalendarContextKeyRef = useRef('');
   const extensionTargetRef = useRef<{ contextKey: string; targetDate: string } | null>(null);
   const [calendarContextKey, setCalendarContextKey] = useState('');
-  const listingId = property ? property.staysListingId || property.id : '';
+  const listingId = property && property.bookingProvider !== 'partner'
+    ? property.staysListingId || property.id
+    : '';
   calendarSnapshotRef.current = {
     contextKey: calendarContextKey,
     days: calendarDays,
@@ -126,9 +128,13 @@ export function usePropertyAvailability({
       extensionTargetRef.current = null;
       setCalendarDays([]);
       setCalendarAvailable(false);
-      setCalendarMessage('');
+      setCalendarMessage(
+        property?.bookingProvider === 'partner'
+          ? 'Disponibilidade ainda não confirmada para este imóvel.'
+          : '',
+      );
       setIsLoadingCalendar(false);
-      setCalendarContextKey('');
+      setCalendarContextKey(requestedCalendarContextKey);
       setCalendarCoverageEnd('');
       setCalendarExtensionMessage('');
       setIsExtendingCalendar(false);
@@ -222,7 +228,7 @@ export function usePropertyAvailability({
     return () => {
       isMounted = false;
     };
-  }, [listingId, todayIso, calendarRefreshToken, requestedCalendarContextKey]);
+  }, [listingId, todayIso, calendarRefreshToken, requestedCalendarContextKey, property?.bookingProvider]);
 
   useEffect(() => {
     if (calendarExpiresAt === null) return;

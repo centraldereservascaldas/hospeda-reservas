@@ -182,7 +182,9 @@ export function MainContentRouter({
     (isCompletedSearch && filteredProperties.length === 0) ||
     Boolean(searchPagination?.hasMore && filteredProperties.length === 0);
   const hasConfirmedSearchAvailability =
-    isCompletedSearch && Boolean(filters.checkIn && filters.checkOut);
+    isCompletedSearch &&
+    Boolean(filters.checkIn && filters.checkOut) &&
+    filteredProperties.some((property) => property.bookingProvider !== 'partner');
   const visibleCatalogStatus: PropertyCatalogStatus = hasSearchSnapshot ? 'ready' : catalogStatus;
   const searchGuestCount = countOccupancyGuests(filters.guests);
 
@@ -198,6 +200,7 @@ export function MainContentRouter({
       hasAvailableResults={
         hasAvailableSearchResults && (isCondominiumView || viewMode === 'map' || isCompletedSearch)
       }
+      availabilityConfirmed={hasConfirmedSearchAvailability}
       showEmptyResults={viewMode === 'map' && !isCondominiumView}
       showIdleNotice={false}
       onRetry={onRetryAvailabilitySearch}
@@ -327,6 +330,8 @@ export function MainContentRouter({
                     availabilityConfirmed={hasConfirmedSearchAvailability}
                     hasAvailableSearchResults={hasAvailableSearchResults}
                     searchGuestCount={searchGuestCount}
+                    searchCheckIn={filters.checkIn}
+                    searchCheckOut={filters.checkOut}
                     isRefreshingCatalog={!hasConfirmedSearchAvailability && catalogLoading}
                     onRetryCatalog={onRetryCatalog}
                     onToggleSave={onToggleSave}
@@ -352,6 +357,8 @@ export function MainContentRouter({
                           hasSearchDates={Boolean(filters.checkIn && filters.checkOut)}
                           availabilityConfirmed={hasConfirmedSearchAvailability}
                           searchGuestCount={searchGuestCount}
+                          searchCheckIn={filters.checkIn}
+                          searchCheckOut={filters.checkOut}
                           showTotalWithTaxes={showTotalWithTaxes}
                           onSelectProperty={onSelectProperty}
                           selectedProperty={selectedProperty}

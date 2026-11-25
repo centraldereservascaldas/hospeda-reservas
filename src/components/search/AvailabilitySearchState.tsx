@@ -11,6 +11,7 @@ interface AvailabilitySearchStateProps {
   hasResults: boolean;
   hasMoreResults?: boolean;
   hasAvailableResults: boolean;
+  availabilityConfirmed?: boolean;
   showEmptyResults?: boolean;
   showIdleNotice?: boolean;
   onRetry: () => void;
@@ -39,6 +40,7 @@ export function AvailabilitySearchState({
   hasResults,
   hasMoreResults = false,
   hasAvailableResults,
+  availabilityConfirmed = true,
   showEmptyResults = false,
   showIdleNotice = true,
   onRetry,
@@ -60,9 +62,13 @@ export function AvailabilitySearchState({
         className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
       >
         <p>
-          {refreshing
-            ? 'Atualizando preços e disponibilidade…'
-            : 'A consulta anterior perdeu a validade. Atualize para confirmar preços e disponibilidade.'}
+          {availabilityConfirmed
+            ? refreshing
+              ? 'Atualizando preços e disponibilidade…'
+              : 'A consulta anterior perdeu a validade. Atualize para confirmar preços e disponibilidade.'
+            : refreshing
+              ? 'Atualizando as ofertas de preço observadas. A disponibilidade continua sem confirmação.'
+              : 'A oferta observada perdeu a validade. Atualize para consultar o preço novamente; disponibilidade e taxas adicionais não são confirmadas.'}
         </p>
         {!refreshing && (
           <button
@@ -84,8 +90,9 @@ export function AvailabilitySearchState({
         className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
       >
         <p>
-          Não foi possível atualizar a consulta. Tente novamente para confirmar preços e
-          disponibilidade.
+          {availabilityConfirmed
+            ? 'Não foi possível atualizar a consulta. Tente novamente para confirmar preços e disponibilidade.'
+            : 'Não foi possível atualizar as ofertas de preço observadas. A disponibilidade e as taxas adicionais não são confirmadas.'}
         </p>
         <button
           type="button"
@@ -137,8 +144,10 @@ export function AvailabilitySearchState({
 
     return (
       <p className="sr-only" role="status" aria-live="polite">
-        {dateRange
+        {dateRange && availabilityConfirmed
           ? `Encontramos ${count} ${accommodationLabel} com disponibilidade confirmada para ${searchContext}.`
+          : dateRange
+            ? `Encontramos ${count} ${accommodationLabel} com preço Pix observado para ${searchContext}; disponibilidade, acomodação dos hóspedes e taxas adicionais não estão confirmadas.`
           : `Encontramos ${count} ${accommodationLabel} para você explorar. A disponibilidade depende das datas escolhidas.`}
       </p>
     );

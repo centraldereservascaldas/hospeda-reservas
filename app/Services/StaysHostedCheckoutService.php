@@ -38,6 +38,10 @@ class StaysHostedCheckoutService
      */
     public function start(array $input): array
     {
+        if (preg_match('/^(?:PAR-[1-9]\d{0,8}-[1-9]\d{0,11}|imobsys-crcn-[1-9]\d{0,8}-[1-9]\d{0,11})$/D', (string) ($input['listingId'] ?? '')) === 1) {
+            return $this->failure(409, 'partner_booking_unavailable', 'A reserva deste imóvel ainda não está disponível pelo site.');
+        }
+
         $readiness = $this->readiness();
         if (! $readiness['ready']) {
             return $this->failure(503, (string) $readiness['code'], $readiness['message']);

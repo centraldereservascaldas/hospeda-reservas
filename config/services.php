@@ -58,6 +58,15 @@ return [
         'calendar_cache_ttl' => (int) env('STAYS_CALENDAR_CACHE_TTL', 45),
     ],
 
+    'diogo' => [
+        'base_url' => env('DIOGO_API_BASE_URL', 'https://api-do-diogo.caldasindica.com'),
+        'api_key' => env('DIOGO_API_KEY'),
+        'offers_api_key' => env('DIOGO_API_OFFERS_KEY'),
+        'timeout' => (int) env('DIOGO_API_TIMEOUT', 3),
+        'catalog_cache_ttl' => (int) env('DIOGO_API_CATALOG_CACHE_TTL', 300),
+        'offers_cache_ttl' => (int) env('DIOGO_API_OFFERS_CACHE_TTL', 10),
+    ],
+
     'stays_simulator' => [
         'enabled' => (bool) env('STAYS_SIMULATOR_ENABLED', false),
     ],

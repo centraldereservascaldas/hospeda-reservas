@@ -2,6 +2,7 @@ import type { Property } from '../types';
 
 export type PropertyDisplayPrice =
   | { kind: 'quote'; amount: number; detail: string; dailyRate?: number }
+  | { kind: 'observed'; amount: number; detail: string; note: string }
   | { kind: 'reference'; amount: number; detail: string; note: string }
   | { kind: 'unavailable'; message: string }
   | { kind: 'pending'; message: string }
@@ -40,7 +41,30 @@ export function getPropertyDisplayPrice(
   property: Property,
   hasSearchDates: boolean,
   showTotalWithTaxes: boolean,
+  searchPeriod?: { checkIn: string; checkOut: string },
 ): PropertyDisplayPrice {
+  if (property.bookingProvider === 'partner') {
+    const observedOffer = property.observedOffer;
+    if (
+      hasSearchDates &&
+      observedOffer &&
+      searchPeriod?.checkIn === observedOffer.from &&
+      searchPeriod.checkOut === observedOffer.to &&
+      observedOffer.expiresAt > Date.now()
+    ) {
+      return {
+        kind: 'observed',
+        amount: observedOffer.totalAmount,
+        detail: `Pix observado para ${observedOffer.nights} ${observedOffer.nights === 1 ? 'noite' : 'noites'}`,
+        note: 'Oferta Pix observada. Disponibilidade e acomodação dos hóspedes não confirmadas; taxas adicionais podem existir.',
+      };
+    }
+    if (observedOffer && observedOffer.expiresAt <= Date.now()) {
+      return { kind: 'pending', message: 'Preço Pix observado expirou; atualize a busca' };
+    }
+    return { kind: 'no-price', message: 'Consulte para ver os valores' };
+  }
+
   const quote = getConfirmedPropertyQuote(property);
   const storedQuote = getStoredPropertyQuote(property);
   const quoteToDisplay = quote ?? storedQuote;

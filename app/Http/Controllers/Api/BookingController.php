@@ -34,6 +34,9 @@ class BookingController extends Controller
         if (! $id) {
             return response()->json(['success' => false, 'code' => 'invalid_quote_request', 'message' => 'Informe imóvel e datas válidas para cotar.'], 400);
         }
+        if (preg_match('/^(?:PAR-[1-9]\d{0,8}-[1-9]\d{0,11}|imobsys-crcn-[1-9]\d{0,8}-[1-9]\d{0,11})$/D', (string) $id) === 1) {
+            return response()->json(['success' => false, 'code' => 'partner_booking_unavailable', 'message' => 'A cotação deste imóvel ainda não está disponível pelo site.'], 409);
+        }
         if ($simulator->enabled()) {
             $result = $simulator->quote($id, $input['from'], $input['to'], (int) $input['guests']);
             if ($result === null) {
@@ -184,7 +187,13 @@ class BookingController extends Controller
     public function staysPrice(Request $request): JsonResponse
     {
         $input = $request->validate(['listingIds' => ['nullable', 'array'], 'listingIds.*' => ['string'], 'listingId' => ['nullable', 'string'], 'from' => ['required', 'date_format:Y-m-d'], 'to' => ['required', 'date_format:Y-m-d', 'after:from'], 'guests' => ['required', 'integer', 'min:1', 'max:50']]);
-        $result = $this->stays->post('/booking/calculate-price', ['listingIds' => $input['listingIds'] ?? [$input['listingId'] ?? ''], 'from' => $input['from'], 'to' => $input['to'], 'guests' => $input['guests']]);
+        $listingIds = $input['listingIds'] ?? [$input['listingId'] ?? ''];
+        foreach ($listingIds as $listingId) {
+            if (preg_match('/^(?:PAR-[1-9]\d{0,8}-[1-9]\d{0,11}|imobsys-crcn-[1-9]\d{0,8}-[1-9]\d{0,11})$/D', $listingId) === 1) {
+                return response()->json(['success' => false, 'code' => 'partner_booking_unavailable', 'message' => 'A cotação deste imóvel ainda não está disponível pelo site.'], 409);
+            }
+        }
+        $result = $this->stays->post('/booking/calculate-price', ['listingIds' => $listingIds, 'from' => $input['from'], 'to' => $input['to'], 'guests' => $input['guests']]);
         if (! is_array($result)) {
             return response()->json(['error' => 'Price calculation unavailable'], 503);
         }

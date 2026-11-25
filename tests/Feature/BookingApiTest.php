@@ -321,11 +321,11 @@ class BookingApiTest extends TestCase
         $payload['marketingAttribution'] = [
             'firstTouch' => [
                 'capturedAt' => 1792861200000,
-                'values' => ['utm_source' => 'google', 'utm_campaign' => 'summer_launch', 'gclid' => 'click-id-123'],
+                'values' => ['utm_source' => 'google', 'utm_campaign' => 'summer launch', 'utm_id' => '12345678', 'utm_campaign_id' => '87654321', 'gclid' => 'click-id-123'],
             ],
             'lastTouch' => [
                 'capturedAt' => 1792861300000,
-                'values' => ['utm_source' => 'meta', 'utm_medium' => 'paid_social', 'fbclid' => 'meta-click-456'],
+                'values' => ['utm_source' => 'meta', 'utm_medium' => 'paid_social', 'utm_ad_id' => '98765432', 'fbclid' => 'meta-click-456'],
             ],
         ];
 

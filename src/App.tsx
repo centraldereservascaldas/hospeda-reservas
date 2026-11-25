@@ -50,8 +50,9 @@ import { countOccupancyGuests } from './utils/guestCounts';
 import { LegalDocumentPage } from './components/LegalDocumentPage';
 import { existingReservationCodeFromPath } from './utils/checkoutUrl';
 import { NotFoundPage } from './components/NotFoundPage';
-import { NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
+import { isNewCheckoutPath } from './utils/checkoutDraft';
 import { useCheckoutDraftRecovery } from './hooks/useCheckoutDraftRecovery';
+import { SiteControlPortal } from './components/site-control/PortalShell';
 
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
@@ -220,7 +221,7 @@ function MarketplaceApp() {
         CHECKOUT_MODAL_HISTORY_ENTRY in state &&
         (state as Record<string, unknown>)[CHECKOUT_MODAL_HISTORY_ENTRY] === true;
 
-      if (window.location.pathname === NEW_CHECKOUT_PATH) {
+      if (isNewCheckoutPath(window.location.pathname)) {
         setBookingPayload(null);
         setCheckoutNavigation((value) => value + 1);
       } else if (bookingPayloadRef.current && !isCheckoutModalEntry) {
@@ -608,7 +609,7 @@ function MarketplaceApp() {
         compactMobileFloating={isCondominiumView && filteredProperties.length === 0}
       />
 
-      {window.location.pathname === NEW_CHECKOUT_PATH &&
+      {isNewCheckoutPath(window.location.pathname) &&
         !bookingPayload &&
         checkoutRecovery.status !== 'idle' && (
           <div
@@ -709,7 +710,9 @@ export default function App() {
       normalizedPathname,
     );
   const isReservationPath = /^\/reservar\/[a-zA-Z0-9_-]+(?:\/.*)?$/i.test(normalizedPathname);
-  const isCheckoutPath = /^\/checkout\/[a-zA-Z0-9_-]+(?:\/.*)?$/i.test(normalizedPathname);
+  const isCheckoutPath =
+    normalizedPathname === '/checkout' ||
+    /^\/checkout\/[a-zA-Z0-9_-]+(?:\/.*)?$/i.test(normalizedPathname);
   const isLocalizedCatalogPath = /^\/(?:[a-z]{2}(?:\/search)?|search)$/i.test(normalizedPathname);
   const legalSlug =
     normalizedPathname === '/contrato'
@@ -724,6 +727,10 @@ export default function App() {
 
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+
+  if (import.meta.env.DEV && normalizedPathname === '/site-control') {
+    return <SiteControlPortal />;
+  }
 
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/pagamento-confirmado') {
     return (

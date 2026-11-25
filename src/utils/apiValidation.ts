@@ -333,6 +333,8 @@ export const isProperty = (value: unknown): value is Property => {
     typeof value.id === 'string' &&
     value.id.trim() !== '' &&
     (value.staysPropertyId === undefined || typeof value.staysPropertyId === 'string') &&
+    (value.bookingProvider === undefined || value.bookingProvider === 'stays' || value.bookingProvider === 'partner') &&
+    (value.partnerCondominiumId === undefined || value.partnerCondominiumId === null || typeof value.partnerCondominiumId === 'string') &&
     (value.publicPagePath === undefined || typeof value.publicPagePath === 'string') &&
     (value.complexName === undefined || typeof value.complexName === 'string') &&
     (value.complexPageUrl === undefined || typeof value.complexPageUrl === 'string') &&
@@ -374,12 +376,15 @@ export const isProperty = (value: unknown): value is Property => {
     (value.dataSource === undefined ||
       value.dataSource === 'stays-live' ||
       value.dataSource === 'stays-simulated' ||
-      value.dataSource === 'local-catalog') &&
+      value.dataSource === 'local-catalog' ||
+      value.dataSource === 'stays-live-with-partner' ||
+      value.dataSource === 'partner-live') &&
     isStringArray(value.images) &&
     isNonNegativeNumber(value.bedrooms) &&
     isNonNegativeNumber(value.beds) &&
     isNonNegativeNumber(value.bathrooms) &&
-    isPositiveNumber(value.maxGuests) &&
+    (isPositiveNumber(value.maxGuests) ||
+      (value.bookingProvider === 'partner' && value.maxGuests === 0)) &&
     Number.isInteger(value.maxGuests) &&
     isStringArray(value.amenities) &&
     Array.isArray(value.highlights) &&
@@ -398,6 +403,28 @@ export const isProperty = (value: unknown): value is Property => {
     typeof value.host.bio === 'string' &&
     calendarIsValid &&
     (value.calculatedPrice === undefined || isCalculatedPrice(value.calculatedPrice)) &&
+    (value.observedOffer === undefined ||
+      (value.bookingProvider === 'partner' &&
+        isRecord(value.observedOffer) &&
+        isIsoDate(value.observedOffer.from) &&
+        isIsoDate(value.observedOffer.to) &&
+        value.observedOffer.to > value.observedOffer.from &&
+        isFiniteNumber(value.observedOffer.guests) &&
+        Number.isInteger(value.observedOffer.guests) &&
+        value.observedOffer.guests >= 1 &&
+        isPositiveNumber(value.observedOffer.totalAmount) &&
+        value.observedOffer.currency === 'BRL' &&
+        value.observedOffer.paymentMethod === 'pix' &&
+        isFiniteNumber(value.observedOffer.nights) &&
+        Number.isInteger(value.observedOffer.nights) &&
+        value.observedOffer.nights > 0 &&
+        isIsoDateTime(value.observedOffer.observedAt) &&
+        isFiniteNumber(value.observedOffer.expiresAt) &&
+        value.observedOffer.expiresAt > 0 &&
+        value.observedOffer.availabilityConfirmed === false &&
+        value.observedOffer.guestCountVerified === false &&
+        value.observedOffer.feeBreakdownAvailable === false &&
+        value.observedOffer.additionalChargesKnown === false)) &&
     (value.complexImages === undefined || isStringArray(value.complexImages)) &&
     (value.listingAmenities === undefined || isStringArray(value.listingAmenities)) &&
     (value.propertyAmenities === undefined || isStringArray(value.propertyAmenities)) &&

@@ -30,6 +30,7 @@ interface SeasonalDateSuggestionsProps {
 
 interface SuggestionQuote {
   status: 'idle' | 'loading' | 'ready' | 'unavailable' | 'error';
+  isStale?: boolean;
   total?: number;
   expiresAt?: number;
   guests?: number;
@@ -45,8 +46,9 @@ interface SuggestionQuote {
 
 const EMPTY_PROPERTIES: Property[] = [];
 const QUOTE_CACHE_NAMESPACE = 'crcn.home-date-quote.';
-const QUOTE_CACHE_PREFIX = `${QUOTE_CACHE_NAMESPACE}v8.`;
+const QUOTE_CACHE_PREFIX = `${QUOTE_CACHE_NAMESPACE}v9.`;
 const QUOTE_TTL_MS = 45_000;
+const QUOTE_DISPLAY_CACHE_TTL_MS = 15 * 60_000;
 const MAX_CACHED_QUOTES = 60;
 const MAX_CACHED_QUOTE_LENGTH = 8192;
 
@@ -67,9 +69,13 @@ function pruneQuoteCache(limit = MAX_CACHED_QUOTES): void {
       }
       if (
         !isRecord(cached) ||
+        typeof cached.cacheUntil !== 'number' ||
+        !Number.isFinite(cached.cacheUntil) ||
+        cached.cacheUntil <= Date.now() ||
+        typeof cached.cachedAt !== 'number' ||
+        !Number.isFinite(cached.cachedAt) ||
         typeof cached.expiresAt !== 'number' ||
         !Number.isFinite(cached.expiresAt) ||
-        cached.expiresAt <= Date.now() ||
         cached.expiresAt > Date.now() + QUOTE_TTL_MS
       ) {
         window.sessionStorage.removeItem(key);
@@ -119,9 +125,13 @@ function readCachedQuote(
     if (
       !isRecord(cached) ||
       cached.guests !== guestCount ||
+      typeof cached.cacheUntil !== 'number' ||
+      !Number.isFinite(cached.cacheUntil) ||
+      cached.cacheUntil <= Date.now() ||
+      typeof cached.cachedAt !== 'number' ||
+      !Number.isFinite(cached.cachedAt) ||
       typeof cached.expiresAt !== 'number' ||
       !Number.isFinite(cached.expiresAt) ||
-      cached.expiresAt <= Date.now() ||
       cached.expiresAt > Date.now() + QUOTE_TTL_MS
     )
       return null;
@@ -139,6 +149,7 @@ function readCachedQuote(
       return null;
     return {
       status: cached.status,
+      isStale: cached.status === 'ready' && cached.expiresAt <= Date.now(),
       expiresAt: cached.expiresAt,
       guests: guestCount,
       total: typeof cached.total === 'number' ? cached.total : undefined,
@@ -168,7 +179,13 @@ function writeCachedQuote(
   if (quote.status === 'error') return;
   try {
     pruneQuoteCache(MAX_CACHED_QUOTES - 1);
-    const cached = JSON.stringify({ ...quote, featuredProperty: undefined, cachedAt: Date.now() });
+    const cachedAt = Date.now();
+    const cached = JSON.stringify({
+      ...quote,
+      featuredProperty: undefined,
+      cachedAt,
+      cacheUntil: cachedAt + QUOTE_DISPLAY_CACHE_TTL_MS,
+    });
     if (cached.length <= MAX_CACHED_QUOTE_LENGTH) {
       window.sessionStorage.setItem(cacheKey(suggestionId, suggestion, guestCount), cached);
     }
@@ -230,7 +247,6 @@ export function SeasonalDateSuggestions({
   const [catalogQuotes, setCatalogQuotes] = useState<
     Record<string, NonNullable<ReturnType<typeof confirmedQuote>>>
   >({});
-  const [catalogExpiresAt, setCatalogExpiresAt] = useState<number | null>(null);
   const [catalogQuoteGuests, setCatalogQuoteGuests] = useState<number | null>(null);
   const [catalogSearchProperties, setCatalogSearchProperties] = useState<Property[]>([]);
   const [categoryMetadataProperties, setCategoryMetadataProperties] = useState<Property[]>([]);
@@ -377,7 +393,7 @@ export function SeasonalDateSuggestions({
 
   useEffect(() => {
     const expirations = Object.values(quotes).flatMap((quote) =>
-      quote.status === 'ready' && quote.expiresAt ? [quote.expiresAt] : [],
+      quote.status === 'ready' && !quote.isStale && quote.expiresAt ? [quote.expiresAt] : [],
     );
     if (expirations.length === 0) return;
     const timer = window.setTimeout(
@@ -386,8 +402,8 @@ export function SeasonalDateSuggestions({
           Object.fromEntries(
             Object.entries(current).map(([id, quote]) => [
               id,
-              quote.expiresAt && quote.expiresAt <= Date.now()
-                ? { status: 'error', guests: quote.guests }
+              !quote.isStale && quote.expiresAt && quote.expiresAt <= Date.now()
+                ? { ...quote, isStale: true }
                 : quote,
             ]),
           ),
@@ -405,8 +421,6 @@ export function SeasonalDateSuggestions({
       catalogCacheRef.current.expiresAt > Date.now()
     )
       return;
-    setCatalogQuotes({});
-    setCatalogQuoteGuests(null);
     let cancelled = false;
     const controller = new AbortController();
 
@@ -437,17 +451,11 @@ export function SeasonalDateSuggestions({
         setCatalogQuotes(next);
         catalogCacheRef.current = {
           guests: guestCount,
-          expiresAt: Math.min(result.expiresAt ?? Infinity, Date.now() + QUOTE_TTL_MS),
+          expiresAt: Date.now() + QUOTE_DISPLAY_CACHE_TTL_MS,
         };
-        setCatalogExpiresAt(catalogCacheRef.current.expiresAt);
         setCatalogQuoteGuests(guestCount);
       })
-      .catch(() => {
-        if (!cancelled) {
-          setCatalogQuotes({});
-          setCatalogSearchProperties([]);
-        }
-      });
+      .catch(() => undefined);
     return () => {
       cancelled = true;
       controller.abort();
@@ -474,15 +482,6 @@ export function SeasonalDateSuggestions({
       controller.abort();
     };
   }, [catalogVisible]);
-
-  useEffect(() => {
-    if (catalogExpiresAt === null) return;
-    const timer = window.setTimeout(
-      () => setCatalogQuotes({}),
-      Math.max(0, catalogExpiresAt - Date.now()),
-    );
-    return () => window.clearTimeout(timer);
-  }, [catalogExpiresAt]);
 
   const catalogSourceProperties = [
     ...categoryMetadataProperties,
@@ -696,7 +695,7 @@ export function SeasonalDateSuggestions({
                   data-discovery-query={suggestion.id}
                   type="button"
                   onClick={() => void openDateSuggestion(suggestion, quote, selectedGuests)}
-                  aria-label={`${suggestion.label}, ${formatPeriod(suggestion)}${quote.status === 'ready' && quote.total ? `, a partir de ${formatCurrency(quote.total, currency)}` : ', consultar disponibilidade'}`}
+                  aria-label={`${suggestion.label}, ${formatPeriod(suggestion)}${quote.status === 'ready' && quote.total ? `, a partir de ${formatCurrency(quote.total, currency)}${quote.isStale ? ', preço da consulta anterior' : ''}` : ', consultar disponibilidade'}`}
                   className="group w-[72vw] max-w-[17rem] shrink-0 snap-start rounded-2xl text-left transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700 sm:w-auto sm:max-w-none"
                 >
                   <span className="relative block aspect-[4/3] overflow-hidden rounded-2xl border border-white/90 bg-neutral-100 shadow-[0_10px_28px_-18px_rgba(15,23,42,0.7)]">
@@ -760,6 +759,11 @@ export function SeasonalDateSuggestions({
                               {formatCurrency(quote.total, currency)}
                             </strong>{' '}
                             total
+                            {quote.isStale && (
+                              <span className="block text-[10px] leading-4 text-neutral-500">
+                                Preço da consulta anterior
+                              </span>
+                            )}
                           </span>
                         ) : (
                           <span className="line-clamp-2 font-bold text-neutral-700">

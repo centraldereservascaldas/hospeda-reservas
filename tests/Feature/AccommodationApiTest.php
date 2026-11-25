@@ -40,6 +40,131 @@ class AccommodationApiTest extends TestCase
             ->assertJsonPath('source', 'unavailable');
     }
 
+    public function test_partner_catalog_exposes_only_approved_fields_and_keeps_its_public_id_neutral(): void
+    {
+        app()->instance('env', 'production');
+        config([
+            'services.diogo.base_url' => 'https://api-do-diogo.caldasindica.com',
+            'services.diogo.api_key' => 'test-catalog-key',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['api-do-diogo.caldasindica.com/v1/properties*' => Http::response([
+            'success' => true,
+            'data' => [[
+                'id' => 'imobsys-crcn-31-1149',
+                'title' => 'Piazza diRoma 204',
+                'condominiumId' => 'condo-31',
+                'condominiumName' => 'Piazza diRoma',
+                'capacity' => 4,
+                'description' => 'Descrição editorial aprovada.',
+                'amenities' => ['Wi-Fi', 'Ar-condicionado'],
+                'images' => ['https://reservascrcn.com.br/fotos/cr/imoveis/090-00109/fotos/a.jpg'],
+                'mediaStatus' => 'available',
+            ]],
+            'pagination' => ['page' => 1, 'pageSize' => 50, 'total' => 1, 'hasMore' => false],
+            'mediaStatus' => 'available',
+            'catalogueComplete' => false,
+            'availabilityConfirmed' => false,
+            'bookingEnabled' => false,
+            'paymentEnabled' => false,
+        ])]);
+
+        $response = $this->getJson('/api/accommodations')
+            ->assertOk()
+            ->assertJsonPath('source', 'partner-live')
+            ->assertJsonPath('data.0.id', 'PAR-31-1149')
+            ->assertJsonPath('data.0.bookingProvider', 'partner')
+            ->assertJsonPath('data.0.title', 'Piazza diRoma 204')
+            ->assertJsonPath('data.0.description', 'Descrição editorial aprovada.')
+            ->assertJsonPath('data.0.amenities.0', 'Wi-Fi')
+            ->assertJsonPath('data.0.images.0', 'https://reservascrcn.com.br/fotos/cr/imoveis/090-00109/fotos/a.jpg');
+
+        $response->assertDontSee('imobsys-crcn');
+        Http::assertSent(fn (ClientRequest $request): bool => str_contains($request->url(), '/v1/properties?page=1&pageSize=50')
+            && $request->hasHeader('Authorization', 'Bearer test-catalog-key'));
+    }
+
+    public function test_partner_property_cannot_be_quoted_through_the_stays_api(): void
+    {
+        Http::preventStrayRequests();
+
+        $this->postJson('/api/price', [
+            'listingId' => 'PAR-31-1149',
+            'from' => '2026-12-04',
+            'to' => '2026-12-06',
+            'guests' => 2,
+        ])->assertStatus(409)->assertJsonPath('code', 'partner_booking_unavailable');
+
+        Http::assertNothingSent();
+    }
+
+    public function test_stays_listings_stay_first_when_partner_properties_are_appended(): void
+    {
+        app()->instance('env', 'production');
+        config([
+            'services.stays.client_id' => 'stays-client',
+            'services.stays.client_secret' => 'stays-secret',
+            'services.diogo.base_url' => 'https://api-do-diogo.caldasindica.com',
+            'services.diogo.api_key' => 'test-catalog-key-priority',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(function (ClientRequest $request): mixed {
+            if (str_contains($request->url(), 'api-do-diogo.caldasindica.com/v1/properties')) {
+                return Http::response([
+                    'success' => true,
+                    'data' => [[
+                        'id' => 'imobsys-crcn-31-1149', 'title' => 'Piazza diRoma 204',
+                        'condominiumId' => 'condo-31', 'condominiumName' => 'Piazza diRoma',
+                        'capacity' => 4, 'description' => null, 'amenities' => [],
+                        'images' => [], 'mediaStatus' => 'unavailable',
+                    ]],
+                    'pagination' => ['page' => 1, 'pageSize' => 50, 'total' => 1, 'hasMore' => false],
+                    'mediaStatus' => 'unavailable', 'catalogueComplete' => false,
+                    'availabilityConfirmed' => false, 'bookingEnabled' => false, 'paymentEnabled' => false,
+                ]);
+            }
+            if (str_contains($request->url(), 'crcn.stays.net') && str_contains($request->url(), '/content/listings')) {
+                return Http::response([['id' => 'stays-primary', '_mstitle' => ['pt_BR' => 'Anúncio da Stays']]]);
+            }
+
+            return Http::response([]);
+        });
+
+        $this->getJson('/api/accommodations')
+            ->assertOk()
+            ->assertJsonPath('source', 'stays-live-with-partner')
+            ->assertJsonPath('data.0.id', 'stays-primary')
+            ->assertJsonPath('data.1.id', 'PAR-31-1149');
+    }
+
+    public function test_partner_public_property_id_opens_its_editorial_detail_directly(): void
+    {
+        config([
+            'services.diogo.base_url' => 'https://api-do-diogo.caldasindica.com',
+            'services.diogo.api_key' => 'test-detail-key',
+        ]);
+        Http::preventStrayRequests();
+        Http::fake(['*api-do-diogo.caldasindica.com/v1/properties/imobsys-crcn-31-1149' => Http::response([
+            'success' => true,
+            'data' => [[
+                'id' => 'imobsys-crcn-31-1149', 'title' => 'Piazza diRoma 204',
+                'condominiumId' => 'condo-31', 'condominiumName' => 'Piazza diRoma',
+                'capacity' => 4, 'description' => 'Texto do detalhe aprovado.',
+                'amenities' => ['Wi-Fi'], 'images' => [], 'mediaStatus' => 'unavailable',
+            ]],
+            'pagination' => ['page' => 1, 'pageSize' => 50, 'total' => 1, 'hasMore' => false],
+            'mediaStatus' => 'unavailable', 'catalogueComplete' => false,
+            'availabilityConfirmed' => false, 'bookingEnabled' => false, 'paymentEnabled' => false,
+        ])]);
+
+        $this->getJson('/api/accommodations/PAR-31-1149')
+            ->assertOk()
+            ->assertJsonPath('data.id', 'PAR-31-1149')
+            ->assertJsonPath('data.description', 'Texto do detalhe aprovado.')
+            ->assertJsonPath('data.amenities.0', 'Wi-Fi')
+            ->assertDontSee('imobsys-crcn');
+    }
+
     public function test_production_catalog_preserves_a_genuinely_empty_stays_result(): void
     {
         app()->instance('env', 'production');

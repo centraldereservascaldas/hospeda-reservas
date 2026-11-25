@@ -19,9 +19,9 @@ Route::post('/external/v1/booking/calculate-price', [BookingController::class, '
 Route::post('/external/v1/book-request', fn () => response()->json(['error' => 'Use o checkout hospedado da Stays.'], 410));
 
 Route::get('/condominios', [SpaController::class, 'condominiums'])->name('condominiums.index');
-Route::get('/pt/building/{id}/{slug?}', [CondominiumPageController::class, 'show'])
-    ->where('id', '[a-zA-Z0-9_-]{1,80}')->where('slug', '[a-z0-9-]+')->name('condominiums.show');
 Route::get('/condominios/{id}/{slug?}', [CondominiumPageController::class, 'show'])
+    ->where('id', '[a-zA-Z0-9_-]{1,80}')->where('slug', '[a-z0-9-]+')->name('condominiums.show');
+Route::get('/pt/building/{id}/{slug?}', [CondominiumPageController::class, 'show'])
     ->where('id', '[a-zA-Z0-9_-]{1,80}')->where('slug', '[a-z0-9-]+')->name('condominiums.legacy');
 
 Route::get('/robots.txt', [SearchDiscoveryController::class, 'robots'])->name('seo.robots');

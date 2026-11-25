@@ -61,6 +61,7 @@ async function withApiRequestTimeout<T>(
 
 export interface SearchAccommodationsParams {
   purpose?: 'search' | 'discovery';
+  provider?: 'partner';
   from?: string;
   to?: string;
   guests?: number;
@@ -76,6 +77,7 @@ export interface AccommodationSearchPage {
   expiresAt?: number;
   /** Number of usable results in this page, never a global result count. */
   total: number;
+  source?: 'stays-live' | 'stays-simulated' | 'partner-offers-live';
   data: Property[];
   unquotedCount: number;
   pagination: {
@@ -372,7 +374,8 @@ class CrcnBackendApiService {
     });
     if (
       !isRecord(json) ||
-      (json.source !== 'stays-live' && json.source !== 'stays-simulated') ||
+      typeof json.source !== 'string' ||
+      !['stays-live', 'stays-simulated', 'stays-live-with-partner', 'partner-live', 'local-catalog'].includes(json.source) ||
       !Array.isArray(json.data) ||
       !json.data.every(isProperty)
     ) {
@@ -457,12 +460,32 @@ class CrcnBackendApiService {
       !json.data.every(isProperty) ||
       (params.from &&
         params.to &&
-        ((json.source !== 'stays-live' && json.source !== 'stays-simulated') ||
+        (!['stays-live', 'stays-simulated', 'partner-offers-live'].includes(String(json.source)) ||
           json.from !== params.from ||
           json.to !== params.to ||
           json.guests !== (params.guests ?? 1)))
     ) {
       throw new Error('A pesquisa retornou uma resposta inválida.');
+    }
+    if (
+      json.source === 'partner-offers-live' &&
+      (!isRecord(json.meta) ||
+        json.meta.availabilityConfirmed !== false ||
+        json.meta.guestCountVerified !== false ||
+        json.meta.guestCompositionVerified !== false ||
+        json.meta.feeBreakdownAvailable !== false ||
+        json.meta.additionalChargesKnown !== false ||
+        json.meta.bookingEnabled !== false ||
+        json.meta.paymentEnabled !== false ||
+        !json.data.every(
+          (property) =>
+            property.bookingProvider === 'partner' &&
+            property.observedOffer?.from === params.from &&
+            property.observedOffer?.to === params.to &&
+            property.observedOffer?.guests === (params.guests ?? 1),
+        ))
+    ) {
+      throw new Error('As ofertas observadas não correspondem à busca ou aos limites informados.');
     }
     const pageUnquoted = json.unquotedCount ?? 0;
     if (!Number.isSafeInteger(pageUnquoted) || !isFiniteNumber(pageUnquoted) || pageUnquoted < 0) {
@@ -548,7 +571,16 @@ class CrcnBackendApiService {
     for (const item of json.data) {
       const property = sanitizePropertyMedia(item);
       const quote = getConfirmedPropertyQuote(property);
-      if (requestedNights !== null && (!quote || quote.nights !== requestedNights)) {
+      const observedOfferMatchesSearch =
+        json.source === 'partner-offers-live' &&
+        property.observedOffer?.from === params.from &&
+        property.observedOffer?.to === params.to &&
+        property.observedOffer?.nights === requestedNights &&
+        (property.observedOffer?.expiresAt ?? 0) > Date.now();
+      if (
+        requestedNights !== null &&
+        ((!quote || quote.nights !== requestedNights) && !observedOfferMatchesSearch)
+      ) {
         unquotedCount += 1;
         continue;
       }
@@ -571,6 +603,11 @@ class CrcnBackendApiService {
     return {
       ...(expiresAt === undefined ? {} : { expiresAt }),
       total: data.length,
+      ...(json.source === 'stays-live' ||
+      json.source === 'stays-simulated' ||
+      json.source === 'partner-offers-live'
+        ? { source: json.source }
+        : {}),
       data,
       unquotedCount,
       pagination: isRecord(pagination)

@@ -25,7 +25,7 @@ afterEach(() => {
 
 test('captures only the strict allowlist allowed by each consent category', () => {
   const search =
-    '?utm_source=search&utm_medium=cpc&utm_campaign=summer_2026&utm_content=hero&utm_term=flats&gclid=G-123&gbraid=GB-123&wbraid=WB-123&fbclid=FB-123&email=guest%40example.test&custom=secret';
+    '?utm_source=search&utm_medium=cpc&utm_campaign=summer%20sale&utm_id=12345678&utm_campaign_id=87654321&utm_content=hero&utm_term=flats&gclid=G-123&gbraid=GB-123&wbraid=WB-123&fbclid=FB-123&email=guest%40example.test&custom=secret';
   const result = updateMeasurementAttribution(
     { analytics: true, advertising: false },
     search,
@@ -35,7 +35,9 @@ test('captures only the strict allowlist allowed by each consent category', () =
   assert.deepEqual(result?.firstTouch.values, {
     utm_source: 'search',
     utm_medium: 'cpc',
-    utm_campaign: 'summer_2026',
+    utm_campaign: 'summer sale',
+    utm_id: '12345678',
+    utm_campaign_id: '87654321',
     utm_content: 'hero',
     utm_term: 'flats',
   });
@@ -77,7 +79,7 @@ test('rejects oversized, unsafe, repeated, and excessive URL values', () => {
   window.sessionStorage.clear();
   const tooManyRecognizedPairs = updateMeasurementAttribution(
     { analytics: true, advertising: true },
-    '?utm_source=a&utm_medium=b&utm_campaign=c&utm_content=d&utm_term=e&gclid=f&gbraid=g&wbraid=h&fbclid=i&fbclid=j',
+    `?${Array.from({ length: 17 }, (_, index) => `utm_source=source${index}`).join('&')}`,
     3000,
   );
   assert.equal(tooManyRecognizedPairs, null);
