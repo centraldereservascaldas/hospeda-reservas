@@ -70,6 +70,7 @@ test('restores a quoted card order and displays its server total without initiat
     status: 'quoted',
     method: 'card',
     paymentCents: 60000,
+    installments: 6,
   });
   partnerSandboxCheckoutApi.startPayment = async () => {
     paid++;
@@ -78,6 +79,7 @@ test('restores a quoted card order and displays its server total without initiat
   render(React.createElement(PartnerSandboxCheckout));
   await waitFor(() => assert.ok(screen.getByLabelText('Token de cartão sandbox')));
   assert.match(screen.getByText(/Valor total do pagamento de teste/).textContent || '', /600,00/);
+  assert.match(screen.getByText(/6 parcelas de até/).textContent || '', /100,00/);
   assert.equal(paid, 0);
   assert.equal(
     (screen.getByRole('button', { name: 'Confirmar pagamento de teste' }) as HTMLButtonElement)

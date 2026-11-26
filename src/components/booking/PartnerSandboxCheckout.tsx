@@ -44,6 +44,7 @@ export function PartnerSandboxCheckout() {
   const [busy, setBusy] = useState(false);
   const [orderStatus, setOrderStatus] = useState('');
   const [paymentCents, setPaymentCents] = useState<number | null>(null);
+  const [installments, setInstallments] = useState<number | null>(null);
   const [paymentToken, setPaymentToken] = useState('');
   useEffect(() => {
     const savedReference = initialReference.current;
@@ -55,6 +56,7 @@ export function PartnerSandboxCheckout() {
         if (!active) return;
         setOrderStatus(typeof result.status === 'string' ? result.status : '');
         setMethod(result.method === 'card' ? 'card' : 'pix');
+        setInstallments(typeof result.installments === 'number' ? result.installments : null);
         setPaymentCents(typeof result.paymentCents === 'number' ? result.paymentCents : null);
         setPix(typeof result.pix === 'string' ? result.pix : '');
         setMessage(statusMessage(result.status));
@@ -90,6 +92,7 @@ export function PartnerSandboxCheckout() {
       sessionStorage.setItem(storageKey, order.reference);
       setReference(order.reference);
       setOrderStatus('quoted');
+      setInstallments(method === 'card' ? Number(data.get('installments')) : null);
       setPaymentCents(typeof order.paymentCents === 'number' ? order.paymentCents : null);
       setMessage('Confira o valor de teste antes de iniciar o pagamento.');
     } catch {
@@ -228,6 +231,15 @@ export function PartnerSandboxCheckout() {
                     })}
                   </strong>
                 </p>
+                {method === 'card' && installments !== null && installments > 1 && (
+                  <p>
+                    {installments} parcelas de até{' '}
+                    {(Math.ceil(paymentCents / installments) / 100).toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    })}
+                  </p>
+                )}
                 {method === 'card' && (
                   <label>
                     Token de cartão sandbox
