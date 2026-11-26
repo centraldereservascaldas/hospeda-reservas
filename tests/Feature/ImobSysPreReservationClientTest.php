@@ -48,6 +48,16 @@ class ImobSysPreReservationClientTest extends TestCase
         }
     }
 
+    public function test_read_only_lookup_remains_available_when_creation_is_disabled(): void
+    {
+        config(['services.partner_api.reservations_enabled' => false]);
+        $id = '123e4567-e89b-42d3-a456-426614174000';
+        Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['operationId' => $id, 'state' => 'unknown']])]);
+        $this->assertSame('unknown', app(ImobSysPreReservationClient::class)->lookup($id)['state']);
+        Http::assertSent(fn (Request $request): bool => $request->method() === 'GET' && $request->hasHeader('Authorization', 'Bearer reservation-secret'));
+        Http::assertSentCount(1);
+    }
+
     public function test_read_only_key_is_never_used_to_create_a_reservation(): void
     {
         config(['services.partner_api.key' => 'read-only-key', 'services.partner_api.reservation_key' => '']);

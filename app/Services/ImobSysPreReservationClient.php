@@ -27,7 +27,7 @@ class ImobSysPreReservationClient
     {
         $base = (string) config('services.partner_api.base_url');
         $key = (string) config('services.partner_api.reservation_key');
-        if (! config('services.partner_api.reservations_enabled') || ($operationId !== 'by-key' && ! preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/iD', $operationId)) || trim($key) === '' || ! filter_var($base, FILTER_VALIDATE_URL) || parse_url($base, PHP_URL_SCHEME) !== 'https' || parse_url($base, PHP_URL_USER) !== null || parse_url($base, PHP_URL_QUERY) !== null || parse_url($base, PHP_URL_FRAGMENT) !== null) {
+        if (($operationId !== 'by-key' && ! preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/iD', $operationId)) || trim($key) === '' || ! filter_var($base, FILTER_VALIDATE_URL) || parse_url($base, PHP_URL_SCHEME) !== 'https' || parse_url($base, PHP_URL_USER) !== null || parse_url($base, PHP_URL_QUERY) !== null || parse_url($base, PHP_URL_FRAGMENT) !== null) {
             throw new RuntimeException('Consulta do parceiro indisponível.');
         }
         $request = Http::acceptJson()->withToken($key)->withoutRedirecting()->connectTimeout(3)->timeout(35);
