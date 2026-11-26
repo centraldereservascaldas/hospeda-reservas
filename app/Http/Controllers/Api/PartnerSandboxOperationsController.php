@@ -25,6 +25,9 @@ class PartnerSandboxOperationsController extends Controller
             if (($result['propertyId'] ?? null) !== $order->supplier_property_id || ($result['from'] ?? null) !== $order->check_in->format('Y-m-d') || ($result['to'] ?? null) !== $order->check_out->format('Y-m-d') || ($result['guests'] ?? null) !== (int) $order->guests) {
                 throw new \RuntimeException('Dados da operação divergentes.');
             }
+            if (isset($result['amountCents']) && $result['amountCents'] !== (int) $order->base_cents) {
+                throw new \RuntimeException('Valor da operação divergente.');
+            }
             $partnerStatus = $result['partnerStatus'] ?? 'unknown';
             $reference = $result['reservationReference'] ?? null;
             if (! in_array($partnerStatus, ['unknown', 'confirmed', 'cancelled'], true) || ($reference !== null && (! is_string($reference) || ! preg_match('/\A[1-9]\d{0,11}\z/D', $reference)))) {

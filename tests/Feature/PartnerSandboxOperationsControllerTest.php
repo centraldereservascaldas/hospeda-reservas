@@ -6,6 +6,7 @@ use Tests\TestCase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Models\PartnerCheckoutOrder;
+use App\Services\ImobSysPreReservationClient;
 
 class PartnerSandboxOperationsControllerTest extends TestCase
 {
@@ -31,6 +32,17 @@ class PartnerSandboxOperationsControllerTest extends TestCase
         $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders/'.$order->id.'/supplier-status')->assertOk()->assertJsonPath('state', 'unknown')->assertJsonPath('reservationReference', '1600')->assertHeader('Cache-Control', 'no-store, private');
         $this->assertSame('attention_required', $order->fresh()->status);
         Http::assertSent(fn ($request): bool => $request->method() === 'GET' && str_contains($request->url(), '/v1/pre-reservations/'));
+    }
+
+    public function test_read_only_review_rejects_an_operation_with_a_different_amount(): void
+    {
+        config(['services.partner_checkout_sandbox.enabled' => true, 'services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key', 'services.hospeda.owner_admin_emails' => ['admin@example.test']]);
+        Http::fake(['*/auth/v1/user' => Http::response(['id' => '575c8054-6646-443c-bf62-07945019a32f', 'email' => 'admin@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Pessoa Teste']])]);
+        $operation = '123e4567-e89b-42d3-a456-426614174000';
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('V', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown', 'supplier_operation_id' => $operation, 'payment_id' => 'PAY2', 'merchant_order_id' => 'ORDER2', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-123457', 'encrypted_customer' => ['fullName' => 'Teste']]);
+        $this->mock(ImobSysPreReservationClient::class)->shouldReceive('lookup')->once()->with($operation)->andReturn(['state' => 'created', 'propertyId' => 'imobsys-crcn-2-663', 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'amountCents' => 52400]);
+        $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders/'.$order->id.'/supplier-status')->assertStatus(503);
+        $this->assertSame('attention_required', $order->fresh()->status);
     }
 
     public function test_owner_reviewer_cannot_access_partner_payment_operations(): void
