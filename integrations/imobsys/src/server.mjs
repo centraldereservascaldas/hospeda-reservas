@@ -57,6 +57,8 @@ const quoteProvider=async input=>{
    const search={from:query.from,to:query.to,guests:query.guests};
    const result=await (browserQueue.status().connected?browserQueue.query(search):adminProvider.availability(search));
    const quote=checkoutQuote(query,result);
+   const offer=result.offers.find(item=>item.id===query.propertyId);
+   quote.supplierPayableObservedCents=Number.isSafeInteger(offer?.supplierPayableObservedCents)&&offer.supplierPayableObservedCents>0?offer.supplierPayableObservedCents:null;
    const parts=query.propertyId.split('-');
    const request=new URLSearchParams({Ajax:'Ajax',Controller:'parceiro',action:'buscaPrecos',periodo:`${query.from},${query.to}`,e1:'0',s1:'0',ImovRef:parts[3],BaseConsulta:parts[2]});
    const response=await fetch('https://reservascrcn.com.br/',{method:'POST',redirect:'error',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:request,signal:AbortSignal.timeout(15000)});

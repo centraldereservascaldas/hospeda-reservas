@@ -6,7 +6,11 @@ const query={from:'2027-11-19',to:'2027-11-21'};
 const html='<table><tr><td>cr</td><td>FLAT</td><td><a href="https://reservascrcn.com.br/parceiro/1/1149?19-11-2027,21-11-2027,CALDASIN,">00109</a></td><td>Quarto</td><td>4 Pessoas</td><td>1.274,00 Cartão 994,00 Pix 497,00 Entrada 795,00 Pagar</td><td><button>Alugar</button></td></tr></table>';
 const context={Base:'test',User:'test-user',UserId:'1',Token:'test-token',Ambiente:'test'};
 test('parses final guest Pix amount and never mistakes supplier payable amount for guest price',()=>{
- const r=parseAdminAvailability(html,query);assert.equal(r.offers[0].pixCents,99400);assert.equal(r.count,1);assert.equal(r.bookingEnabled,false);assert.equal(r.availabilityConfirmed,false);
+ const r=parseAdminAvailability(html,query);assert.equal(r.offers[0].pixCents,99400);assert.equal(r.offers[0].supplierPayableObservedCents,79500);assert.equal(r.count,1);assert.equal(r.bookingEnabled,false);assert.equal(r.availabilityConfirmed,false);
+});
+test('an absent or ambiguous supplier payable stays unknown',()=>{
+ assert.equal(parseAdminAvailability(html.replace('795,00 Pagar',''),query).offers[0].supplierPayableObservedCents,null);
+ assert.equal(parseAdminAvailability(html.replace('795,00 Pagar','795,00 Pagar 800,00 Pagar'),query).offers[0].supplierPayableObservedCents,null);
 });
 test('distinguishes explicit minimum stay from missing offers and rejects login/errors',()=>{
  assert.equal(parseAdminAvailability('cr: Min de 2 Noites Nenhum registro encontrado',query).status,'restricted');

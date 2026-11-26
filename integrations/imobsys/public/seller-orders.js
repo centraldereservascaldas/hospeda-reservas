@@ -15,7 +15,7 @@ form.addEventListener('submit', async event => {
     for (const order of data.orders) {
       const article = document.createElement('article');
       const details = document.createElement('p');
-      details.textContent = `Pré-reserva ${order.reservation_reference} · ${order.property_id} · ${order.check_in} a ${order.check_out} · ${order.payment_method} · recebido: R$ ${(order.amount_cents / 100).toFixed(2)} · cotação: ${Number.isSafeInteger(order.supplier_amount_cents) ? `R$ ${(order.supplier_amount_cents / 100).toFixed(2)}` : 'não informada'}. Confira o valor na ImobSys.`;
+        details.textContent = `Pré-reserva ${order.reservation_reference} · ${order.property_id} · ${order.check_in} a ${order.check_out} · ${order.payment_method} · recebido: R$ ${(order.amount_cents / 100).toFixed(2)} · valor observado para pagar: ${Number.isSafeInteger(order.supplier_amount_cents) ? `R$ ${(order.supplier_amount_cents / 100).toFixed(2)}` : 'não informado'}. Confirme o valor na ImobSys.`;
       article.append(details);
       const paymentForm = document.createElement('form');
       const operator = field(paymentForm, 'Responsável', 'text'), amount = field(paymentForm, 'Valor pago em reais', 'number'), reference = field(paymentForm, 'Referência do pagamento', 'text'), access = field(paymentForm, 'Chave de acesso local', 'password');

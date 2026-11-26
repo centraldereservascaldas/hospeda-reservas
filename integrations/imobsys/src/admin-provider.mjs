@@ -16,10 +16,11 @@ export function parseAdminAvailability(html, query) {
     if (!u.search.slice(1).startsWith(period+',') && u.search.slice(1)!==period) throw new ConnectorError('admin_period_mismatch','O painel retornou uma oferta para outro período.');
     const amounts = [...htmlToText(cells[5]).matchAll(/([\d.]+,\d{2})\s*(Cart[aã]o|Pix|Entrada|Pagar)/gi)];
     const pix = amounts.filter(m=>/^pix$/i.test(m[2]));
+    const payable = amounts.filter(m=>/^pagar$/i.test(m[2]));
     if (pix.length !== 1) throw new ConnectorError('admin_unrecognized', 'Preço Pix ambíguo na resposta autenticada.');
     const id = `imobsys-crcn-${identity[1]}-${identity[2]}`;
     if (offers.has(id)) throw new ConnectorError('admin_unrecognized', 'Oferta repetida na resposta autenticada.');
-    offers.set(id, { id, base: identity[1], reference: identity[2], supplier: htmlToText(cells[0]), condominium: htmlToText(cells[1]), unit: htmlToText(cells[2]), description: htmlToText(cells[3]), capacityText: htmlToText(cells[4]), pixCents: moneyToCents(pix[0][1]), publicUrl: u.origin+u.pathname, status: 'offered-by-authenticated-search', reservationGuaranteed: false });
+    offers.set(id, { id, base: identity[1], reference: identity[2], supplier: htmlToText(cells[0]), condominium: htmlToText(cells[1]), unit: htmlToText(cells[2]), description: htmlToText(cells[3]), capacityText: htmlToText(cells[4]), pixCents: moneyToCents(pix[0][1]), supplierPayableObservedCents: payable.length === 1 ? moneyToCents(payable[0][1]) : null, publicUrl: u.origin+u.pathname, status: 'offered-by-authenticated-search', reservationGuaranteed: false });
   }
   const restrictions = [...text.matchAll(/\b([a-z]{2,5}):\s*Min\s+de\s+(\d+)\s+Noites/gi)].map(m=>({supplier:m[1],type:'minimum-stay',minimumNights:Number(m[2])}));
   const empty = /Sem im[oó]veis na REDE|Nenhum registro encontrado|Nenhum im[oó]vel pr[oó]prio dispon[ií]vel/i.test(text);

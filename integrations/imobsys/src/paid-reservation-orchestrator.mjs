@@ -32,8 +32,9 @@ export function createPaidReservationOrchestrator({ operations, loadContext, cie
         const reservation = await reservations.create(reservationInput);
         operations.advance(id, 'reservation_returned', { reference: reservation.reference });
         if (await verifyReservation(reservation, quote) !== true) throw new Error('Pré-reserva não conferida.');
-        // O Pix da cotação é o valor do hóspede; o valor devido ao parceiro é outro campo.
-        sellerStore.recordPaid({ ...order, reservationReference: reservation.reference, supplierAmountCents: null, paymentId, simulation: true, paymentVerified: true });
+        // Este é somente o valor "Pagar" observado na consulta, sujeito a conferência.
+        const payable = Number.isSafeInteger(quote.supplierPayableObservedCents) && quote.supplierPayableObservedCents > 0 ? quote.supplierPayableObservedCents : null;
+        sellerStore.recordPaid({ ...order, reservationReference: reservation.reference, supplierAmountCents: payable, paymentId, simulation: true, paymentVerified: true });
         operations.advance(id, 'awaiting_seller_confirmation', { reference: reservation.reference, paymentId });
         return { status: 'awaiting_seller_confirmation', reference: reservation.reference };
       } catch (error) {

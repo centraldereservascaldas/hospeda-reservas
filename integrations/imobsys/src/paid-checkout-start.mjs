@@ -15,7 +15,7 @@ export function createPaidCheckoutStart({ quoteProvider, contextStore, operation
       const order = { id: input.id, merchantOrderId: input.id, simulation: true, propertyId: quote.propertyId, from: quote.from, to: quote.to, guests: quote.guests, amountCents, method: input.method, ...(input.method === 'card' ? { installments: input.installments } : {}) };
       operations.claim(input.id, { order });
       try {
-        const storedQuote = { provider: quote.provider, propertyId: quote.propertyId, from: quote.from, to: quote.to, guests: quote.guests, pix: { totalCents: quote.pix.totalCents } };
+        const storedQuote = { provider: quote.provider, propertyId: quote.propertyId, from: quote.from, to: quote.to, guests: quote.guests, pix: { totalCents: quote.pix.totalCents }, supplierPayableObservedCents: Number.isSafeInteger(quote.supplierPayableObservedCents) && quote.supplierPayableObservedCents > 0 ? quote.supplierPayableObservedCents : null };
         contextStore.save(input.id, { quote: storedQuote, reservationInput: candidate.reservationInput });
         operations.advance(input.id, 'payment_starting', {});
         const common = { merchantOrderId: input.id, amountCents, customerName: customer.name, customerIdentity: customer.cpf };
