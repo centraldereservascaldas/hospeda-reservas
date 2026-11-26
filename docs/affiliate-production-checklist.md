@@ -2,6 +2,13 @@
 
 Este checklist acompanha a homologação funcional e a preparação de publicação do portal. Para riscos técnicos, segurança e banco, consulte [checklist-review-afiliados-seguranca-banco.md](checklist-review-afiliados-seguranca-banco.md). Publicação depende da conclusão dos bloqueadores aplicáveis e dos controles operacionais.
 
+## Validações locais já executadas
+
+- [x] `AffiliateAccessTest.php`: 6 testes, 97 assertions.
+- [x] `DirectCheckoutIntegratedJourneyTest.php`: 17 testes, 338 assertions.
+- [x] `affiliateAttribution.test.ts` + `checkoutAttributionIntegration.test.ts`: 8 testes.
+- [x] TypeScript frontend e build Vite.
+
 ## Funcionalidades entregues
 
 - [x] Cadastro, login e solicitação de acesso via Supabase.
