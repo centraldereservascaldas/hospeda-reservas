@@ -8,7 +8,7 @@ import {
 test('home suggestions combine real weekends with seasonal dates without duplicates', () => {
   const suggestions = getHomeDateSuggestions(new Date(2026, 9, 29, 12), () => 0.25);
 
-  assert.equal(suggestions.length, 5);
+  assert.equal(suggestions.length, 4);
   assert.equal(suggestions.filter((suggestion) => suggestion.kind === 'weekend').length, 2);
   assert.equal(
     new Set(suggestions.map((suggestion) => `${suggestion.checkIn}|${suggestion.checkOut}`)).size,
@@ -30,18 +30,15 @@ test('weekend suggestions always run from Friday to Sunday', () => {
   }
 });
 
-test('home discovery creates pets, event and holiday collections with five cards', () => {
+test('home discovery creates pet and holiday collections when no future event is confirmed', () => {
   const collections = getHomeDiscoveryCollections(new Date(2026, 9, 29, 12), () => 0.25);
 
   assert.deepEqual(
     collections.map((collection) => collection.id),
-    ['pets', 'caldas-country', 'holidays'],
+    ['pets', 'holidays'],
   );
   assert.equal(collections.find((collection) => collection.id === 'pets')?.suggestions.length, 5);
-  assert.equal(
-    collections.find((collection) => collection.id === 'caldas-country')?.suggestions.length,
-    5,
-  );
+  assert.equal(collections.some((collection) => collection.id === 'caldas-country'), false);
   assert.equal(
     collections.find((collection) => collection.id === 'holidays')?.suggestions.length,
     5,

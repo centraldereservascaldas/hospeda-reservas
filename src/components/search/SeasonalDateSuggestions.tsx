@@ -46,7 +46,7 @@ interface SuggestionQuote {
 const EMPTY_PROPERTIES: Property[] = [];
 const QUOTE_CACHE_NAMESPACE = 'crcn.home-date-quote.';
 const QUOTE_CACHE_PREFIX = `${QUOTE_CACHE_NAMESPACE}v8.`;
-const QUOTE_TTL_MS = 45_000;
+const QUOTE_TTL_MS = 600_000;
 const MAX_CACHED_QUOTES = 60;
 const MAX_CACHED_QUOTE_LENGTH = 8192;
 
@@ -380,22 +380,27 @@ export function SeasonalDateSuggestions({
       quote.status === 'ready' && quote.expiresAt ? [quote.expiresAt] : [],
     );
     if (expirations.length === 0) return;
-    const timer = window.setTimeout(
-      () => {
-        setQuotes((current) =>
-          Object.fromEntries(
-            Object.entries(current).map(([id, quote]) => [
-              id,
-              quote.expiresAt && quote.expiresAt <= Date.now()
-                ? { status: 'error', guests: quote.guests }
-                : quote,
-            ]),
-          ),
-        );
-      },
-      Math.max(0, Math.min(...expirations) - Date.now()),
-    );
-    return () => window.clearTimeout(timer);
+    const nextExpiration = Math.min(...expirations);
+    const delay = nextExpiration - Date.now();
+    if (delay > 0) {
+      const timer = window.setTimeout(
+        () => {
+          if (typeof document !== 'undefined' && document.hidden) return;
+          setQuotes((current) =>
+            Object.fromEntries(
+              Object.entries(current).map(([id, quote]) => [
+                id,
+                quote.expiresAt && quote.expiresAt <= Date.now()
+                  ? { status: 'error', guests: quote.guests }
+                  : quote,
+              ]),
+            ),
+          );
+        },
+        delay,
+      );
+      return () => window.clearTimeout(timer);
+    }
   }, [quotes]);
 
   useEffect(() => {

@@ -14,11 +14,8 @@ test('surprise dates are future stays and preserve a positive stay length', () =
   }
 });
 
-test('surprise dates include the officially published 2026 Caldas Country weekend', () => {
+test('surprise dates omit festival dates that are not confirmed for a future edition', () => {
   const options = getSurpriseDateCandidates(new Date(2026, 9, 2, 12));
-  const festival = options.find((option) => option.kind === 'event');
 
-  assert.equal(festival?.checkIn, '2026-11-20');
-  assert.equal(festival?.checkOut, '2026-11-23');
-  assert.match(festival?.occasion || '', /Caldas Country Festival/);
+  assert.equal(options.some((option) => option.kind === 'event'), false);
 });

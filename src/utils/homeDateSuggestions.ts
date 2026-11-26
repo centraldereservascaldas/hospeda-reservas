@@ -163,7 +163,7 @@ export function getHomeDiscoveryCollections(
             eyebrow: 'EVENTO EM CALDAS NOVAS',
             title: 'Caldas Country Festival',
             description:
-              'Opções para 20 a 23 de novembro, com diferentes imóveis e valores para o evento.',
+              'Opções com diferentes imóveis e valores para o evento.',
             suggestions: eventSuggestions,
           },
         ]
