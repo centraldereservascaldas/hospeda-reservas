@@ -62,8 +62,8 @@ class PartnerSandboxOperationsController extends Controller
         abort_unless(app()->environment(['local', 'testing']) && config('services.partner_checkout_sandbox.enabled'), 404);
         $input = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:10000']]);
         $page = (int) ($input['page'] ?? 1);
-        $orders = PartnerCheckoutOrder::query()->whereIn('status', ['awaiting_seller_payment', 'attention_required', 'reservation_starting'])
-            ->orderByRaw("CASE WHEN status IN ('attention_required', 'reservation_starting') THEN 0 ELSE 1 END")
+        $orders = PartnerCheckoutOrder::query()->whereIn('status', ['awaiting_seller_payment', 'attention_required', 'payment_verified', 'reservation_starting'])
+            ->orderByRaw("CASE WHEN status IN ('attention_required', 'payment_verified', 'reservation_starting') THEN 0 ELSE 1 END")
             ->orderBy('updated_at')->orderBy('id')->simplePaginate(50, ['id', 'supplier_property_id', 'check_in', 'check_out', 'guests', 'base_cents', 'payment_cents', 'payment_method', 'installments', 'supplier_payable_observed_cents', 'status', 'attention_reason', 'reservation_reference', 'supplier_operation_id', 'updated_at'], 'page', $page);
 
         return response()->json(['success' => true, 'orders' => $orders->items(), 'nextPage' => $orders->hasMorePages() ? $page + 1 : null])->header('Cache-Control', 'no-store');

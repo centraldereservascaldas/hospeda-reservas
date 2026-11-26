@@ -30,6 +30,8 @@ function stayDate(value: string): string {
 }
 
 function attentionMessage(order: Order): string {
+  if (order.status === 'payment_verified')
+    return 'Pagamento confirmado; aguardando o início da pré-reserva. Confira o processamento antes de qualquer ação.';
   if (order.status === 'reservation_starting')
     return 'Pagamento confirmado; pré-reserva em processamento. Confira o fornecedor antes de repetir.';
   switch (order.attention_reason) {
