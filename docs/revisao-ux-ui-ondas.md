@@ -666,13 +666,15 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 **Validação:** teste direcionado `date calendar enters the Tab order and moves focus by day with arrow keys` passou; lint/TypeScript passou; build frontend/blog passou (com avisos já existentes sobre fonte e tamanho de chunk). No navegador local a 1200 × 885, abrir a aba “Datas” colocou foco em 26/11/2026; ArrowRight moveu para 27/11 e, ao focar 30/11 e pressionar ArrowRight, para 01/12. O catálogo estava em modo de simulação, mas a verificação só percorreu calendário e não consultou nem submeteu uma reserva. O arquivo inteiro `searchModalAccessibility.test.ts` permaneceu pendente no runner Node 26 sem reportar testes individuais; portanto foi usado o teste direcionado. Leitor de tela não testado.
 
-F55 segue pendente. Seu comportamento não foi reproduzido nesta sprint, e nenhuma alteração foi feita no foco dos painéis compartilhados. O código atual já tenta colocar foco no primeiro controle após a montagem do portal; precisa de reprodução específica antes de mudar essa lógica.
+**Pacote F55 · foco nos painéis compartilhados da busca.** A reprodução local a 1200 × 885 confirmou que Enter abria os painéis, mas deixava o foco nos acionadores. A causa estava no seletor do calendário, que encontrava primeiro a célula `div` em vez do botão de data; além disso, a tentativa de foco ocorria antes de o portal ser montado. O foco inicial agora acontece após a montagem visível do portal e seleciona um controle interativo: busca do condomínio, botão de data ou contador de adultos. Escape devolve foco ao segmento. Implementação/teste no commit `ff1172f`.
+
+**Validação F55:** teste direcionado percorreu os três painéis, Escape e a transição condomínio → datas. No navegador local, abrir cada painel por Enter colocou foco em seu primeiro controle; Escape retornou ao acionador; escolher “Todos os condomínios” abriu o calendário e focou 26/11/2026. A interface indicava ambiente de simulação; nenhuma reserva ou consulta de disponibilidade foi enviada. Leitor de tela não testado; a validação responsiva móvel permanece na matriz da onda 5.
 
 ### Onda 2 · Painéis, camadas e interação responsiva
 
 - [ ] Corrigir ciclo de vida e fechamento dos painéis (F02), incluindo rolagem, navegação e mudança de contexto.
 - [ ] Implementar transição datas → hóspedes com ação de busca acessível (F03).
-- [ ] Garantir entrada e saída previsíveis pelo teclado nos painéis de condomínio, datas e hóspedes após abertura e mudança de etapa (F55).
+- [x] Corrigir F55: abertura e retorno por teclado verificados nos painéis de condomínio, datas e hóspedes; a seleção de “Todos os condomínios” transfere o foco para uma data disponível. Testes direcionados e navegador local a 1200 × 885 passaram em 26/11/2026. A matriz móvel continua na validação geral da onda 5.
 - [ ] Reproduzir e resolver corte em altura curta e mudança de largura (F06 e F10).
 - [ ] Delimitar portais ao diálogo correto e revisar modais aninhados (F07).
 - [ ] Corrigir a colisão do segmento de hóspedes com “Buscar” em 640 px (F17) e verificar controles adjacentes.
