@@ -26,6 +26,14 @@ class RecoverPartnerCheckouts extends Command
             return self::FAILURE;
         }
 
+        // A worker can terminate after claiming an order and before persisting the
+        // external response. Never repeat either mutation on that uncertainty.
+        $staleBefore = now()->subMinutes(10);
+        PartnerCheckoutOrder::query()->where('status', 'payment_starting')->where('updated_at', '<', $staleBefore)
+            ->update(['status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown']);
+        PartnerCheckoutOrder::query()->where('status', 'reservation_starting')->where('updated_at', '<', $staleBefore)
+            ->update(['status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown']);
+
         $count = 0;
         PartnerCheckoutOrder::query()->where(function ($query): void {
             $query->whereIn('status', ['payment_pending', 'payment_verified'])

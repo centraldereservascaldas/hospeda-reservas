@@ -63,6 +63,25 @@ class PartnerCheckoutCompletionServiceTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_interrupted_operations_are_flagged_without_repeating_supplier_mutations(): void
+    {
+        Queue::fake();
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true]);
+        $base = ['supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'payment_method' => 'pix', 'encrypted_customer' => ['fullName' => 'Teste']];
+        $payment = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('L', 40), 'merchant_order_id' => 'ORDER9', 'reservation_idempotency_key' => 'partner-order-123464', 'status' => 'payment_starting']);
+        $supplier = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('M', 40), 'merchant_order_id' => 'ORDER10', 'reservation_idempotency_key' => 'partner-order-123465', 'status' => 'reservation_starting', 'payment_id' => 'PAY10']);
+        $recent = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('N', 40), 'merchant_order_id' => 'ORDER11', 'reservation_idempotency_key' => 'partner-order-123466', 'status' => 'payment_starting']);
+        PartnerCheckoutOrder::query()->whereKey([$payment->id, $supplier->id])->update(['updated_at' => now()->subMinutes(11)]);
+
+        $this->artisan('partner-checkout:recover-sandbox')->assertSuccessful();
+
+        $this->assertSame('payment_outcome_unknown', $payment->fresh()->attention_reason);
+        $this->assertSame('supplier_outcome_unknown', $supplier->fresh()->attention_reason);
+        $this->assertSame('payment_starting', $recent->fresh()->status);
+        Queue::assertPushed(CompletePartnerCheckout::class, fn (CompletePartnerCheckout $job): bool => $job->orderId === $payment->id);
+        Queue::assertNotPushed(CompletePartnerCheckout::class, fn (CompletePartnerCheckout $job): bool => $job->orderId === $supplier->id);
+    }
+
     public function test_recovery_rotates_between_pending_orders_when_batch_is_limited(): void
     {
         Queue::fake();
