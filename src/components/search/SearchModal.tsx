@@ -50,6 +50,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const tabListRef = useRef<HTMLDivElement>(null);
   const tabPanelRef = useRef<HTMLDivElement>(null);
   const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const shouldFocusDateRef = useRef(false);
   const mobileCalendarScrollRef = useRef<HTMLDivElement>(null);
   const mobileCalendarSentinelRef = useRef<HTMLDivElement>(null);
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
@@ -147,6 +148,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     const nextDate = toLocalIsoDate(candidate);
     if (nextDate < todayIso) return;
 
+    shouldFocusDateRef.current = true;
     setFocusDate(nextDate);
     const monthDifference =
       (candidate.getFullYear() - visibleMonth.getFullYear()) * 12 +
@@ -158,8 +160,16 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   };
 
   useEffect(() => {
+    if (!shouldFocusDateRef.current) return;
     const button = dateButtonRefs.current.get(focusDate);
-    if (isOpen && activeTab === 'dates') button?.focus();
+    if (!isOpen || activeTab !== 'dates' || !button) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      shouldFocusDateRef.current = false;
+      button.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, [activeTab, focusDate, isOpen, mobile, visibleMonth]);
 
   const handleTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
