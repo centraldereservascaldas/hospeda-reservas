@@ -47,6 +47,8 @@ npm run test:affiliate
 - [ ] Confirmar que `APP_KEY` do teste é diferente da produção.
 - [ ] Confirmar CORS, cookies e HTTPS no domínio de teste.
 
+Um modelo sem credenciais está em `.env.homologation.example`. Ele deve ser preenchido apenas no ambiente de homologação; não copie valores reais para o Git.
+
 ## Roteiro ponta a ponta
 
 1. Criar uma conta de afiliado usando um e-mail de teste.
