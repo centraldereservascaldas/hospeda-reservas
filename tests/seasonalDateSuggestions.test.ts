@@ -27,8 +27,10 @@ import type {
 import type { ScheduledRequestOptions } from '../src/services/requestScheduler.ts';
 
 const originalSearch = crcnBackendApi.searchAccommodationsPage;
+const originalCatalog = crcnBackendApi.getAccommodations;
 
 beforeEach(() => {
+  crcnBackendApi.getAccommodations = async () => [];
   mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 0, 1, 12) });
 });
 
@@ -110,6 +112,7 @@ afterEach(() => {
   VisibilityObserver.automatic = true;
   window.sessionStorage.clear();
   crcnBackendApi.searchAccommodationsPage = originalSearch;
+  crcnBackendApi.getAccommodations = originalCatalog;
 });
 
 test('shows date suggestions with real quoted totals and applies the selected period', async () => {
@@ -411,9 +414,9 @@ test('queries only visible dates, groups equal dates and defers the thematic cat
   assert.equal(calls[0]!.limit, 8);
   assert.ok(calls.every((params) => params.from));
   act(() => VisibilityObserver.show('catalog', true));
-  await waitFor(() => assert.equal(calls.length, 3));
-  assert.equal(calls.filter((params) => !params.from).length, 1);
-  assert.equal(calls.filter((params) => params.limit === 20).length, 2);
+  await waitFor(() => assert.equal(calls.length, 2));
+  assert.equal(calls.filter((params) => !params.from).length, 0);
+  assert.equal(calls.filter((params) => params.limit === 20).length, 1);
 });
 
 test('leaving a date aborts its query and discards a late quote before a fresh re-entry', async () => {

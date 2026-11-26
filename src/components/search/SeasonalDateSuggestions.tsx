@@ -476,13 +476,12 @@ export function SeasonalDateSuggestions({
   useEffect(() => {
     if (!catalogVisible || metadataLoadedRef.current) return;
     let cancelled = false;
-    const controller = new AbortController();
     void crcnBackendApi
-      .searchAccommodationsPage({ limit: 20 }, { signal: controller.signal, priority: 'visible' })
+      .getAccommodations({ reuseFresh: true })
       .then((result) => {
         if (!cancelled) {
           metadataLoadedRef.current = true;
-          setCategoryMetadataProperties(result.data);
+          setCategoryMetadataProperties(result);
         }
       })
       .catch(() => {
@@ -490,7 +489,6 @@ export function SeasonalDateSuggestions({
       });
     return () => {
       cancelled = true;
-      controller.abort();
     };
   }, [catalogVisible]);
 
