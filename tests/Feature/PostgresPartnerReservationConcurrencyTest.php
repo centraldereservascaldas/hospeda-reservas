@@ -10,6 +10,16 @@ class PostgresPartnerReservationConcurrencyTest extends TestCase
 {
     public function test_simultaneous_workers_only_submit_one_supplier_request(): void
     {
+        $this->assertSingleClaim('reservation');
+    }
+
+    public function test_simultaneous_workers_only_submit_one_payment_request(): void
+    {
+        $this->assertSingleClaim('payment');
+    }
+
+    private function assertSingleClaim(string $mode): void
+    {
         $host = (string) config('database.connections.pgsql.host');
         if (DB::connection()->getDriverName() !== 'pgsql' || DB::connection()->getDatabaseName() !== 'hospeda_test'
             || ! app()->environment('testing') || ! (str_starts_with($host, '/tmp/') || str_starts_with($host, '/private/tmp/')
@@ -19,7 +29,7 @@ class PostgresPartnerReservationConcurrencyTest extends TestCase
         $this->assertTrue(function_exists('proc_open'));
         $this->artisan('migrate')->assertSuccessful();
         $unique = bin2hex(random_bytes(12));
-        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('X', 16).$unique, 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2030-05-17', 'check_out' => '2030-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'payment_verified', 'payment_id' => 'PAY-'.$unique, 'merchant_order_id' => 'M-'.$unique, 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-'.$unique, 'encrypted_customer' => ['fullName' => 'Teste']]);
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('X', 16).$unique, 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2030-05-17', 'check_out' => '2030-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => $mode === 'payment' ? 'quoted' : 'payment_verified', 'payment_id' => $mode === 'payment' ? null : 'PAY-'.$unique, 'merchant_order_id' => 'M-'.$unique, 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-'.$unique, 'encrypted_customer' => ['fullName' => 'Teste', 'cpf' => '12345678901']]);
         $worker = <<<'PHP'
 require 'vendor/autoload.php';
 $app = require 'bootstrap/app.php';
@@ -31,14 +41,27 @@ if (!app()->environment('testing') || Illuminate\Support\Facades\DB::connection(
         || (getenv('GITHUB_ACTIONS') === 'true' && $host === '127.0.0.1' && config('database.connections.pgsql.username') === 'hospeda_test'))) exit(2);
 config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true]);
 Illuminate\Support\Facades\Http::preventStrayRequests();
-$mock = Mockery::mock(App\Services\ImobSysPreReservationClient::class);
-$mock->shouldReceive('create')->andReturnUsing(function () {
-    fwrite(STDOUT, "supplier-called\n"); fflush(STDOUT); fgets(STDIN);
-    return ['id' => '1600'];
-});
-$app->instance(App\Services\ImobSysPreReservationClient::class, $mock);
+if ($argv[2] === 'payment') {
+    $offers = Mockery::mock(App\Services\ImobSysSearchClient::class);
+    $offers->shouldReceive('offers')->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
+    $app->instance(App\Services\ImobSysSearchClient::class, $offers);
+    $mock = Mockery::mock(App\Services\Payments\CieloEcommerceClient::class);
+    $mock->shouldReceive('createPixPayment')->andReturnUsing(function () {
+        fwrite(STDOUT, "external-called\n"); fflush(STDOUT); fgets(STDIN);
+        return ['Payment' => ['PaymentId' => '11111111-1111-4111-8111-111111111111', 'QrCodeString' => 'TESTE']];
+    });
+    $app->instance(App\Services\Payments\CieloEcommerceClient::class, $mock);
+} else {
+    $mock = Mockery::mock(App\Services\ImobSysPreReservationClient::class);
+    $mock->shouldReceive('create')->andReturnUsing(function () {
+        fwrite(STDOUT, "external-called\n"); fflush(STDOUT); fgets(STDIN);
+        return ['id' => '1600'];
+    });
+    $app->instance(App\Services\ImobSysPreReservationClient::class, $mock);
+}
 fwrite(STDOUT, "ready\n"); fflush(STDOUT); fgets(STDIN);
-try { app(App\Services\PartnerPaidReservationService::class)->create($argv[1]); fwrite(STDOUT, "done\n"); }
+try { if ($argv[2] === 'payment') app(App\Services\PartnerPaymentStartService::class)->start($argv[1]);
+    else app(App\Services\PartnerPaidReservationService::class)->create($argv[1]); fwrite(STDOUT, "done\n"); }
 catch (Throwable) { fwrite(STDOUT, "not-claimed\n"); }
 fflush(STDOUT);
 PHP;
@@ -47,8 +70,8 @@ PHP;
         $a = $b = null;
         $pa = $pb = [];
         try {
-            $a = proc_open([PHP_BINARY, '-r', $worker, $order->id], $spec, $pa, base_path(), $env);
-            $b = proc_open([PHP_BINARY, '-r', $worker, $order->id], $spec, $pb, base_path(), $env);
+            $a = proc_open([PHP_BINARY, '-r', $worker, $order->id, $mode], $spec, $pa, base_path(), $env);
+            $b = proc_open([PHP_BINARY, '-r', $worker, $order->id, $mode], $spec, $pb, base_path(), $env);
             $this->assertIsResource($a);
             $this->assertIsResource($b);
             $this->assertTrue($this->hasOutput($pa[1], 15));
@@ -57,15 +80,16 @@ PHP;
             $this->assertSame("ready\n", fgets($pb[1]));
             fwrite($pa[0], "go\n"); fflush($pa[0]);
             $this->assertTrue($this->hasOutput($pa[1], 15));
-            $this->assertSame("supplier-called\n", fgets($pa[1]));
+            $this->assertSame("external-called\n", fgets($pa[1]));
             fwrite($pb[0], "go\n"); fflush($pb[0]);
             $this->assertTrue($this->hasOutput($pb[1], 15));
             $this->assertSame("not-claimed\n", fgets($pb[1]));
             fwrite($pa[0], "release\n"); fflush($pa[0]);
             $this->assertTrue($this->hasOutput($pa[1], 15));
             $this->assertSame("done\n", fgets($pa[1]));
-            $this->assertSame('awaiting_seller_payment', $order->fresh()->status);
-            $this->assertSame('1600', $order->fresh()->reservation_reference);
+            $this->assertSame($mode === 'payment' ? 'payment_pending' : 'awaiting_seller_payment', $order->fresh()->status);
+            if ($mode === 'payment') $this->assertSame('11111111-1111-4111-8111-111111111111', $order->fresh()->payment_id);
+            else $this->assertSame('1600', $order->fresh()->reservation_reference);
         } finally {
             foreach ([$pa, $pb] as $pipes) foreach ($pipes as $pipe) if (is_resource($pipe)) fclose($pipe);
             foreach ([$a, $b] as $process) if (is_resource($process)) { if (proc_get_status($process)['running']) proc_terminate($process, 9); proc_close($process); }
