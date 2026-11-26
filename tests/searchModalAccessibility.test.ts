@@ -257,9 +257,7 @@ test('keeps the search open and explains incomplete or reversed dates', () => {
 
   fireEvent.click(getByRole('tab', { name: 'Datas' }));
   fireEvent.click(
-    document.querySelector<HTMLButtonElement>(
-      `button[data-calendar-day="${isoDateAtOffset(1)}"]`,
-    )!,
+    document.querySelector<HTMLButtonElement>(`button[data-calendar-day="${isoDateAtOffset(1)}"]`)!,
   );
   fireEvent.click(getByRole('button', { name: 'Buscar Reserva' }));
 
@@ -298,3 +296,4 @@ test('clearing search dates and guests requests the general catalogue again', ()
     },
   ]);
 });
+
