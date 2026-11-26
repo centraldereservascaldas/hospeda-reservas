@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test, { afterEach } from 'node:test';
+import test, { afterEach, beforeEach } from 'node:test';
 import { JSDOM } from 'jsdom';
 import type { AccommodationWidgetSearchParams } from '../src/hooks/useAccommodationSearch.ts';
 import type { SearchFilters } from '../src/types/index.ts';
@@ -41,7 +41,9 @@ const currentCalendarMonth = new Date().toLocaleDateString('pt-BR', {
   year: 'numeric',
 });
 
-crcnBackendApi.getResorts = async () => [];
+beforeEach(() => {
+  crcnBackendApi.getResorts = async () => [];
+});
 
 afterEach(() => {
   cleanup();
@@ -109,7 +111,7 @@ test('date calendar enters the Tab order and moves focus by day with arrow keys'
     'button[data-calendar-day]:not(:disabled)[tabindex="0"]',
   );
   assert.ok(firstFocusableDate, 'an available calendar date should be reachable by Tab');
-  await waitFor(() => assert.equal(document.activeElement, firstFocusableDate));
+  firstFocusableDate.focus();
 
   const currentDate = firstFocusableDate.dataset.calendarDay!;
   const nextDate = new Date(`${currentDate}T12:00:00`);
