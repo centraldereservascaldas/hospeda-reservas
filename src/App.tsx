@@ -53,6 +53,7 @@ import { existingReservationCodeFromPath } from './utils/checkoutUrl';
 import { NotFoundPage } from './components/NotFoundPage';
 import { isNewCheckoutPath, NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
 import { useCheckoutDraftRecovery } from './hooks/useCheckoutDraftRecovery';
+import { AffiliatePortal } from './components/affiliate/AffiliatePortal';
 
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
@@ -726,6 +727,8 @@ export default function App() {
 
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+
+  if (normalizedPathname === '/afiliados') return <AffiliatePortal />;
 
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/pagamento-confirmado') {
     return (

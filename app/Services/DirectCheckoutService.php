@@ -18,6 +18,7 @@ class DirectCheckoutService
         private readonly DirectSaleTermsRegistry $terms,
         private readonly DirectStaysReservationService $reservations,
         private readonly DirectCheckoutPaymentService $payments,
+        private readonly AffiliateAttributionService $affiliateAttribution,
     ) {}
 
     /** @return array{order: DirectBookingOrder|null, code: string|null, message: string|null, status: int, replayed: bool, success: bool, resumeReference: string|null, resumeToken: string|null} */
@@ -51,6 +52,7 @@ class DirectCheckoutService
         }
 
         $input = $request->validated();
+        $affiliateAttributionId = $request->cookie(AffiliateAttributionService::COOKIE_NAME);
         $idempotencyKey = $input['idempotencyKey'];
         $fingerprint = $this->requestFingerprint($input);
 
@@ -66,13 +68,13 @@ class DirectCheckoutService
             return $this->continueOrder($existingOrder, replayed: true);
         }
 
-        return $this->createOrderOnce($input, $idempotencyKey, $fingerprint, $resumeTokenTtlDays);
+        return $this->createOrderOnce($input, $idempotencyKey, $fingerprint, $resumeTokenTtlDays, $affiliateAttributionId);
     }
 
     /** @param array<string, mixed> $input
      * @return array{order: DirectBookingOrder|null, code: string|null, message: string|null, status: int, replayed: bool, success: bool, resumeReference: string|null, resumeToken: string|null}
      */
-    private function createOrderOnce(array $input, string $idempotencyKey, string $fingerprint, int $resumeTokenTtlDays): array
+    private function createOrderOnce(array $input, string $idempotencyKey, string $fingerprint, int $resumeTokenTtlDays, ?string $affiliateAttributionId): array
     {
         $property = $this->terms->findApprovedListing($input['listingId']);
         $termsSnapshot = is_array($property) ? ($property['directSaleTermsSnapshot'] ?? null) : null;
@@ -147,7 +149,7 @@ class DirectCheckoutService
         }
 
         try {
-            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $guestCapacity, $idempotencyKey, $fingerprint, $resumeTokenTtlDays): DirectBookingOrder {
+            $order = DB::transaction(function () use ($input, $property, $termsSnapshot, $staysListingId, $quote, $guestCapacity, $idempotencyKey, $fingerprint, $resumeTokenTtlDays, $affiliateAttributionId): DirectBookingOrder {
                 $quoteSnapshot = $quote['snapshot'];
                 $quoteSnapshot['apartment_max_guests'] = $guestCapacity;
                 $order = DirectBookingOrder::create([
@@ -186,6 +188,14 @@ class DirectCheckoutService
                         'source' => 'direct_checkout',
                     ]],
                 ]);
+
+                $acceptedListingIds = array_values(array_unique(array_filter([
+                    $input['listingId'],
+                    $property['id'] ?? null,
+                    $property['staysListingId'] ?? null,
+                    $staysListingId,
+                ], fn (mixed $listingId): bool => is_string($listingId) && $listingId !== '')));
+                $this->affiliateAttribution->recordConversion($affiliateAttributionId, $acceptedListingIds, $order->id);
 
                 return $order;
             });

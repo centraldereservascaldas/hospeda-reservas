@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AffiliateRedirectController;
 use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\CondominiumPageController;
@@ -19,6 +20,7 @@ Route::post('/external/v1/booking/calculate-price', [BookingController::class, '
 Route::post('/external/v1/book-request', fn () => response()->json(['error' => 'Use o checkout hospedado da Stays.'], 410));
 
 Route::get('/condominios', [SpaController::class, 'condominiums'])->name('condominiums.index');
+Route::get('/a/{token}', AffiliateRedirectController::class)->where('token', '[A-Za-z0-9]{24}')->middleware('throttle:120,1')->name('affiliate.redirect');
 Route::get('/pt/building/{id}/{slug?}', [CondominiumPageController::class, 'show'])
     ->where('id', '[a-zA-Z0-9_-]{1,80}')->where('slug', '[a-z0-9-]+')->name('condominiums.show');
 Route::get('/condominios/{id}/{slug?}', [CondominiumPageController::class, 'show'])

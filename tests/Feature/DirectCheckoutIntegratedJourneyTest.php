@@ -11,14 +11,17 @@ use App\Models\DirectBookingEmail;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
+use App\Services\AffiliateAttributionService;
 use App\Services\DirectSaleTermsRegistry;
 use App\Services\DirectStaysPaymentService;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
@@ -33,6 +36,66 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->travelTo(Carbon::parse('2026-11-09 12:00:00', 'UTC'));
     }
 
+    public function test_checkout_records_affiliate_referral_only_as_pending(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        Http::preventStrayRequests();
+        $gatewayStatus = 'pending';
+        $this->fakeJourneyHttp($gatewayStatus);
+        $affiliate = '575c8054-6646-443c-bf62-07945019a32f';
+        DB::table('affiliate_accounts')->insert(['user_id' => $affiliate, 'full_name' => 'Afiliado Exemplo',
+            'status' => 'approved', 'referral_code' => str_repeat('A', 40), 'commission_basis_points' => 500,
+            'created_at' => now(), 'updated_at' => now()]);
+        $linkId = (string) Str::uuid();
+        DB::table('affiliate_short_links')->insert(['id' => $linkId, 'affiliate_user_id' => $affiliate, 'token' => 'affiliateTest01', 'listing_id' => 'JQ08G', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $this->assertNotNull(app(AffiliateAttributionService::class)->recordClick(request(), 'affiliateTest01'));
+        $payload = $this->checkoutPayload();
+        $headers = ['Idempotency-Key' => 'affiliate-checkout-journey-001'];
+        $this->withCookie(AffiliateAttributionService::COOKIE_NAME, (string) DB::table('affiliate_attributions')->value('id'))->withCredentials()->postJson('/api/checkout', $payload, $headers)->assertCreated();
+        $conversion = DB::table('affiliate_conversions')->where('direct_booking_order_id', DirectBookingOrder::query()->where('idempotency_key', $headers['Idempotency-Key'])->value('id'))->sole();
+        $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'affiliate_user_id' => $affiliate,
+            'status' => 'pending', 'commission_basis_points' => 500, 'approved_amount_cents' => null]);
+        $this->postJson('/api/checkout', $payload, $headers)->assertSuccessful();
+        $this->assertDatabaseCount('affiliate_conversions', 1);
+    }
+
+    public function test_checkout_ignores_an_affiliate_attribution_for_another_property(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        Http::preventStrayRequests();
+        $gatewayStatus = 'pending';
+        $this->fakeJourneyHttp($gatewayStatus);
+        DB::table('affiliate_accounts')->insert(['user_id' => '575c8054-6646-443c-bf62-07945019a32f',
+            'full_name' => 'Afiliado Exemplo', 'status' => 'approved', 'referral_code' => str_repeat('A', 40),
+            'commission_basis_points' => 500, 'created_at' => now(), 'updated_at' => now()]);
+        $attributionId = (string) Str::uuid();
+        $linkId = (string) Str::uuid();
+        DB::table('affiliate_short_links')->insert(['id' => $linkId, 'affiliate_user_id' => '575c8054-6646-443c-bf62-07945019a32f', 'token' => 'wrongProperty01', 'listing_id' => 'OTHER', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('affiliate_attributions')->insert(['id' => $attributionId, 'affiliate_user_id' => '575c8054-6646-443c-bf62-07945019a32f', 'affiliate_short_link_id' => $linkId, 'listing_id' => 'OTHER', 'first_clicked_at' => now(), 'last_clicked_at' => now(), 'expires_at' => now()->addDays(7), 'created_at' => now(), 'updated_at' => now()]);
+        $payload = $this->checkoutPayload();
+        $this->withCookie(AffiliateAttributionService::COOKIE_NAME, $attributionId)->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'affiliate-wrong-property-001'])->assertCreated();
+        $this->assertDatabaseCount('affiliate_conversions', 0);
+    }
+
+    public function test_expired_attribution_cannot_create_commission_without_blocking_checkout(): void
+    {
+        $this->configureCheckout();
+        $this->bindSyntheticApprovedCatalog();
+        Http::preventStrayRequests();
+        $gatewayStatus = 'pending';
+        $this->fakeJourneyHttp($gatewayStatus);
+        DB::table('affiliate_accounts')->insert(['user_id' => '575c8054-6646-443c-bf62-07945019a32f', 'full_name' => 'Affiliate', 'status' => 'approved', 'referral_code' => str_repeat('A', 40), 'created_at' => now(), 'updated_at' => now()]);
+        $linkId = (string) Str::uuid();
+        DB::table('affiliate_short_links')->insert(['id' => $linkId, 'affiliate_user_id' => '575c8054-6646-443c-bf62-07945019a32f', 'token' => 'expiredTest01', 'listing_id' => 'JQ08G', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $attributionId = (string) Str::uuid();
+        DB::table('affiliate_attributions')->insert(['id' => $attributionId, 'affiliate_user_id' => '575c8054-6646-443c-bf62-07945019a32f', 'affiliate_short_link_id' => $linkId, 'listing_id' => 'JQ08G', 'first_clicked_at' => now()->subDays(8), 'last_clicked_at' => now()->subDays(8), 'expires_at' => now()->subDay(), 'created_at' => now()->subDays(8), 'updated_at' => now()->subDays(8)]);
+        $payload = $this->checkoutPayload();
+        $this->withCookie(AffiliateAttributionService::COOKIE_NAME, $attributionId)->postJson('/api/checkout', $payload, ['Idempotency-Key' => 'affiliate-expired-time-001'])->assertCreated();
+        $this->assertDatabaseCount('affiliate_conversions', 0);
+    }
+
     public function test_checkout_pix_webhook_confirmation_email_and_resume_complete_the_real_order_journey(): void
     {
         $this->configureCheckout();
@@ -42,7 +105,14 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $gatewayStatus = 'pending';
         $this->fakeJourneyHttp($gatewayStatus);
 
-        $checkout = $this->postJson('/api/checkout', $this->checkoutPayload(), [
+        $affiliateId = '575c8054-6646-443c-bf62-07945019a32f';
+        DB::table('affiliate_accounts')->insert(['user_id' => $affiliateId, 'full_name' => 'Afiliado', 'nickname' => 'afiliado-exemplo', 'status' => 'approved', 'referral_code' => str_repeat('A', 40), 'commission_basis_points' => 500, 'created_at' => now(), 'updated_at' => now()]);
+        $shortLinkId = (string) Str::uuid();
+        DB::table('affiliate_short_links')->insert(['id' => $shortLinkId, 'affiliate_user_id' => $affiliateId, 'token' => 'journeyTest01', 'listing_id' => 'JQ08G', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
+        $this->assertNotNull(app(AffiliateAttributionService::class)->recordClick(request(), 'journeyTest01'));
+        $attributionId = (string) DB::table('affiliate_attributions')->value('id');
+        $payload = $this->checkoutPayload();
+        $checkout = $this->withCookie(AffiliateAttributionService::COOKIE_NAME, $attributionId)->withCredentials()->postJson('/api/checkout', $payload, [
             'Idempotency-Key' => 'integrated-checkout-journey-001',
         ])
             ->assertCreated()
@@ -107,6 +177,18 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             && $request->method() === 'POST')->sole()[0];
         $this->assertSame(3001.0, $staysPayment->data()['_f_val']);
         $this->assertSame('completed', $staysPayment->data()['status']);
+
+        $conversion = DB::table('affiliate_conversions')->where('direct_booking_order_id', $order->id)->sole();
+        $this->assertSame('pending', $conversion->status);
+        config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key', 'services.hospeda.owner_admin_emails' => ['admin@example.test']]);
+        $this->withToken('test')->getJson('/api/owner/admin/affiliate-commissions')->assertOk()
+            ->assertJsonPath('commissions.0.nickname', 'afiliado-exemplo')
+            ->assertJsonPath('commissions.0.short_link_token', 'journeyTest01')
+            ->assertJsonPath('commissions.0.last_clicked_at', now()->toDateTimeString());
+        $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/approve', ['amountCents' => 15000])->assertOk();
+        $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'affiliate_user_id' => $affiliateId, 'status' => 'approved', 'approved_amount_cents' => 15000]);
+        $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/mark-paid', ['paymentReference' => 'manual-test'])->assertOk();
+        $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'status' => 'paid', 'payment_reference' => 'manual-test']);
 
         $email = DirectBookingEmail::query()->where('direct_booking_order_id', $order->id)->sole();
         $this->assertSame(DirectBookingEmail::TYPE_BOOKING_CONFIRMED, $email->notification_type);
@@ -670,6 +752,9 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             $path = parse_url($request->url(), PHP_URL_PATH);
             $method = $request->method();
 
+            if ($path === '/auth/v1/user') {
+                return Http::response(['id' => '6c2b1b31-c76e-4881-b11e-38f7d551b7a0', 'email' => 'admin@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Admin Example']], 200);
+            }
             if ($path === '/external/v1/booking/search-listings' && $method === 'POST') {
                 return Http::response([['id' => 'JQ08G']], 200);
             }

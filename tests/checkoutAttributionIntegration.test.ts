@@ -81,6 +81,56 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
+test('checkout relies on the server-managed attribution cookie and sends no browser referral fields', async () => {
+  let body: Record<string, unknown> = {};
+  globalThis.fetch = async (input, init) => {
+    body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    return new Response(JSON.stringify({ success: false }), {
+      status: 422,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  const payload = {
+    listingId: 'JQ08G',
+    from: '2027-05-01',
+    to: '2027-05-03',
+    guests: { adults: 2, children: 0, infants: 0, pets: 0 },
+    quoteTotal: 850,
+    guest: { fullName: 'Pessoa Exemplo', email: 'guest@example.test', phone: '1234567890' },
+    acceptedTermsVersion: 'v1',
+    acceptedTerms: true as const,
+    idempotencyKey: 'test-affiliate-123456',
+  };
+  await checkoutApi.createCheckout(payload);
+  assert.equal(body.affiliateReferral, undefined);
+  assert.equal(body.affiliateSignature, undefined);
+  assert.equal(body.affiliateAttributionId, undefined);
+  await checkoutApi.createCheckout({ ...payload, listingId: 'OTHER' });
+  assert.equal(body.affiliateReferral, undefined);
+  assert.equal(body.affiliateSignature, undefined);
+});
+
+test('checkout proceeds when affiliate tracking is unavailable', async () => {
+  let checkoutRequests = 0;
+  globalThis.fetch = async (input) => {
+    if (String(input).includes('/api/checkout')) checkoutRequests++;
+    return new Response(JSON.stringify({ success: false }), { status: 422 });
+  };
+  const result = await checkoutApi.createCheckout({
+    listingId: 'JQ08G',
+    from: '2027-05-01',
+    to: '2027-05-03',
+    guests: { adults: 2, children: 0, infants: 0, pets: 0 },
+    quoteTotal: 850,
+    guest: { fullName: 'Pessoa Exemplo', email: 'guest@example.test', phone: '1234567890' },
+    acceptedTermsVersion: 'v1',
+    acceptedTerms: true,
+    idempotencyKey: 'test-affiliate-unavailable',
+  });
+  assert.equal(result?.code, 'invalid_checkout_request');
+  assert.equal(checkoutRequests, 1);
+});
+
 async function submitCheckoutWithConsent(consent: {
   analytics: boolean;
   advertising: boolean;

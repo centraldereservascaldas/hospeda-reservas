@@ -95,7 +95,6 @@ export function SinglePageCheckout({
   const [statusUnavailable, setStatusUnavailable] = useState(false);
   const [statusRetry, setStatusRetry] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (!bookingData) return;
     if (previewOnly) {
