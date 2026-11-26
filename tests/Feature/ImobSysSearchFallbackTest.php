@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Services\StaysAccommodationMapper;
 use App\Services\StaysSearchAvailabilityService;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Mockery\MockInterface;
 use Tests\TestCase;
@@ -204,6 +206,132 @@ class ImobSysSearchFallbackTest extends TestCase
 
     }
 
+    public function test_appends_imobsys_offers_after_stays_properties_in_the_same_search_list(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['http://imobsys.test/internal/offers/search*' => Http::response([
+            'success' => true,
+            'source' => 'imobsys-live',
+            'from' => '2027-01-10',
+            'to' => '2027-01-12',
+            'guests' => 2,
+            'observedAt' => '2026-11-20T12:00:00Z',
+            'offers' => [[
+                'id' => 'imobsys-crcn-2-663',
+                'condominiumName' => 'Lacqua',
+                'unit' => '101',
+                'capacity' => 4,
+                'from' => '2027-01-10',
+                'to' => '2027-01-12',
+                'guests' => 2,
+                'nights' => 2,
+                'totalCents' => 52300,
+                'currency' => 'BRL',
+                'status' => 'offer_observed',
+                'availabilityConfirmed' => false,
+                'reservationGuaranteed' => false,
+            ]],
+            'pagination' => ['page' => 1, 'pageSize' => 100, 'hasMore' => false],
+        ])]);
+
+        $staysProperty = [
+            'id' => 'stays-listing-1',
+            'title' => 'Apartamento próprio Stays',
+            'dataSource' => 'stays-live',
+            'location' => ['city' => 'Caldas Novas', 'neighborhood' => 'Lacqua'],
+        ];
+        $this->mock(StaysAccommodationMapper::class)
+            ->shouldReceive('map')->once()->andReturn($staysProperty);
+        $this->mock(StaysSearchAvailabilityService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('search')->once()
+                ->withArgs(fn (array $input): bool => $input['limit'] === 100 && $input['skip'] === 0)
+                ->andReturn([
+                    'items' => [[
+                        'id' => 'stays-listing-1',
+                        'calculatedPrice' => ['totalAmount' => 600, 'dailyRate' => 300],
+                    ]],
+                    'unquotedCount' => 0,
+                    'receivedCount' => 1,
+                    'meta' => ['fetchedAt' => now()->toIso8601String(), 'expiresAt' => now()->addSeconds(45)->toIso8601String()],
+                ]);
+        });
+
+        $this->postJson('/api/search', [
+            'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2,
+            'destination' => 'Lacqua', 'limit' => 12,
+        ])->assertOk()
+            ->assertJsonPath('source', 'stays-live')
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.id', 'stays-listing-1')
+            ->assertJsonPath('data.1.id', 'imobsys-crcn-2-663')
+            ->assertJsonPath('data.1.dataSource', 'imobsys-live')
+            ->assertJsonPath('data.1.imobsysOffer.availabilityConfirmed', false);
+    }
+
+    public function test_appends_imobsys_after_the_last_stays_page_when_all_condominiums_are_searched(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['http://imobsys.test/internal/offers/search*' => Http::response([
+            'success' => true,
+            'source' => 'imobsys-live',
+            'from' => '2027-01-10',
+            'to' => '2027-01-12',
+            'guests' => 2,
+            'observedAt' => '2026-11-20T12:00:00Z',
+            'offers' => [[
+                'id' => 'imobsys-crcn-2-663',
+                'condominiumName' => 'Lacqua',
+                'unit' => '101',
+                'capacity' => 4,
+                'from' => '2027-01-10',
+                'to' => '2027-01-12',
+                'guests' => 2,
+                'nights' => 2,
+                'totalCents' => 52300,
+                'currency' => 'BRL',
+                'status' => 'offer_observed',
+                'availabilityConfirmed' => false,
+                'reservationGuaranteed' => false,
+            ]],
+            'pagination' => ['page' => 1, 'pageSize' => 100, 'hasMore' => false],
+        ])]);
+
+        $this->mock(StaysAccommodationMapper::class)
+            ->shouldReceive('map')->twice()->andReturn(
+                ['id' => 'stays-listing-1', 'title' => 'Stays 1', 'location' => ['city' => 'Caldas Novas']],
+                ['id' => 'stays-listing-2', 'title' => 'Stays 2', 'location' => ['city' => 'Caldas Novas']],
+            );
+        $this->mock(StaysSearchAvailabilityService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('search')->twice()
+                ->andReturn(
+                    [
+                        'items' => [
+                            ['id' => 'stays-listing-1', 'calculatedPrice' => ['totalAmount' => 600, 'dailyRate' => 300]],
+                            ['id' => 'stays-listing-2', 'calculatedPrice' => ['totalAmount' => 700, 'dailyRate' => 350]],
+                        ],
+                        'unquotedCount' => 0,
+                        'receivedCount' => 2,
+                        'meta' => ['fetchedAt' => now()->toIso8601String(), 'expiresAt' => now()->addSeconds(45)->toIso8601String()],
+                    ],
+                    [
+                        'items' => [], 'unquotedCount' => 0, 'receivedCount' => 0,
+                        'meta' => ['fetchedAt' => now()->toIso8601String(), 'expiresAt' => now()->addSeconds(45)->toIso8601String()],
+                    ],
+                );
+        });
+
+        $search = ['from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'limit' => 2];
+        $this->postJson('/api/search', [...$search, 'skip' => 0])
+            ->assertOk()->assertJsonPath('data.0.id', 'stays-listing-1')
+            ->assertJsonPath('data.1.id', 'stays-listing-2')
+            ->assertJsonPath('pagination.hasMore', true);
+
+        $this->postJson('/api/search', [...$search, 'skip' => 2])
+            ->assertOk()->assertJsonPath('source', 'imobsys-live')
+            ->assertJsonPath('data.0.id', 'imobsys-crcn-2-663')
+            ->assertJsonPath('pagination.hasMore', false);
+    }
+
     public function test_keeps_imobsys_disabled_when_the_feature_flag_is_off(): void
     {
         config(['services.partner_api.search_fallback_enabled' => false]);
@@ -218,6 +346,48 @@ class ImobSysSearchFallbackTest extends TestCase
         ])->assertOk()->assertJsonPath('source', 'stays-live')->assertJsonCount(0, 'data');
 
         Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'api.example.test'));
+    }
+
+    public function test_ignores_cached_mixed_pagination_when_imobsys_is_disabled(): void
+    {
+        config(['services.imobsys.search_fallback_enabled' => false]);
+        Http::preventStrayRequests();
+        Http::fake([]);
+
+        $from = '2027-01-10';
+        $to = '2027-01-12';
+        $searchKey = 'imobsys.mixed-search.v1.'.hash('sha256', json_encode([
+            'http://imobsys.test', $from, $to, 2, '', null, [],
+        ], JSON_THROW_ON_ERROR));
+        Cache::put($searchKey, 0, now()->addMinutes(10));
+
+        $this->mock(StaysAccommodationMapper::class)
+            ->shouldReceive('map')->once()->andReturn([
+                'id' => 'stays-listing-1',
+                'title' => 'Apartamento próprio Stays',
+                'location' => ['city' => 'Caldas Novas'],
+            ]);
+        $this->mock(StaysSearchAvailabilityService::class, function (MockInterface $mock): void {
+            $mock->shouldReceive('search')->once()
+                ->withArgs(fn (array $input): bool => $input['skip'] === 0 && $input['limit'] === 12)
+                ->andReturn([
+                    'items' => [[
+                        'id' => 'stays-listing-1',
+                        'calculatedPrice' => ['totalAmount' => 600, 'dailyRate' => 300],
+                    ]],
+                    'unquotedCount' => 0,
+                    'receivedCount' => 1,
+                    'meta' => ['fetchedAt' => now()->toIso8601String(), 'expiresAt' => now()->addSeconds(45)->toIso8601String()],
+                ]);
+        });
+
+        $this->postJson('/api/search', [
+            'from' => $from, 'to' => $to, 'guests' => 2, 'limit' => 12,
+        ])->assertOk()
+            ->assertJsonPath('source', 'stays-live')
+            ->assertJsonPath('data.0.id', 'stays-listing-1');
+
+        Http::assertNothingSent();
     }
 
     public function test_loads_only_safe_media_for_a_property_returned_by_search(): void

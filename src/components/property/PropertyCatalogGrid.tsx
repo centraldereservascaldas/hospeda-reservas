@@ -1,5 +1,5 @@
 import { PropertyCatalogSkeleton } from './PropertyCatalogSkeleton';
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { Search } from 'lucide-react';
 import type { Currency, Property } from '../../types';
 import { emitViewItemList } from '../../utils/measurementEvents';
@@ -46,11 +46,18 @@ export function PropertyCatalogGrid({
   onClearCatalogFilters,
 }: PropertyCatalogGridProps) {
   const emittedListIdentityRef = useRef<string | null>(null);
+  const orderedProperties = [
+    ...properties.filter((property) => property.dataSource !== 'imobsys-live'),
+    ...properties.filter((property) => property.dataSource === 'imobsys-live'),
+  ];
+  const firstMoreOptionIndex = orderedProperties.findIndex(
+    (property) => property.dataSource === 'imobsys-live',
+  );
 
   useEffect(() => {
     if (status !== 'ready' && status !== 'stale') return;
 
-    const itemIds = properties.map((property) => property.staysListingId || property.id);
+    const itemIds = orderedProperties.map((property) => property.staysListingId || property.id);
     if (itemIds.length === 0) {
       emittedListIdentityRef.current = null;
       return;
@@ -110,21 +117,37 @@ export function PropertyCatalogGrid({
     <div>
       {staleNotice}
       <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 sm:gap-y-10 md:grid-cols-3 lg:grid-cols-4">
-        {properties.map((property, index) => (
-          <PropertyCard
-            key={property.id}
-            property={property}
-            currency={currency}
-            isSaved={savedPropertyIds.includes(property.id)}
-            onToggleSave={onToggleSave}
-            onSelectProperty={onSelectProperty}
-            showTotalWithTaxes={showTotalWithTaxes}
-            hasSearchDates={hasSearchDates}
-            availabilityConfirmed={availabilityConfirmed}
-            searchGuestCount={searchGuestCount}
-            prioritizeImage={prioritizeFirstImage && index === 0}
-          />
-        ))}
+        {orderedProperties.map((property, index) => {
+          const isFirstMoreOption = index === firstMoreOptionIndex;
+
+          return (
+            <Fragment key={property.id}>
+              {isFirstMoreOption && (
+                <div className="col-span-full border-t border-neutral-200 pt-7 sm:pt-9">
+                  <h2 className="text-xl font-semibold tracking-tight text-neutral-900">
+                    Mais opções
+                  </h2>
+                  <p className="mt-1 text-sm text-neutral-600">
+                    Mais acomodações para as mesmas datas. Valores e disponibilidade sujeitos a
+                    confirmação.
+                  </p>
+                </div>
+              )}
+              <PropertyCard
+                property={property}
+                currency={currency}
+                isSaved={savedPropertyIds.includes(property.id)}
+                onToggleSave={onToggleSave}
+                onSelectProperty={onSelectProperty}
+                showTotalWithTaxes={showTotalWithTaxes}
+                hasSearchDates={hasSearchDates}
+                availabilityConfirmed={availabilityConfirmed}
+                searchGuestCount={searchGuestCount}
+                prioritizeImage={prioritizeFirstImage && index === 0}
+              />
+            </Fragment>
+          );
+        })}
       </div>
     </div>
   );

@@ -237,11 +237,9 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
           {/* Host badge */}
           <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-3.75rem)] pointer-events-none">
-            {property.dataSource === 'imobsys-live' ? (
-              <span className="inline-flex items-center rounded-full border border-white/90 bg-white/90 px-2.5 py-1 text-caption font-bold text-neutral-900 shadow-sm">
-                Imóvel de parceiro
-              </span>
-            ) : property.staysSynced && property.isSuperhost ? (
+            {property.dataSource !== 'imobsys-live' &&
+            property.staysSynced &&
+            property.isSuperhost ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full liquid-glass text-caption font-bold text-neutral-900 shadow-sm border border-white/90 truncate">
                 <span className="truncate">Anfitrião destaque</span>
               </span>

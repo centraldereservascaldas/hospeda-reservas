@@ -111,6 +111,42 @@ test('renders a catalog grid for matching accommodations', () => {
   assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' }));
 });
 
+test('keeps Stays properties first and places ImobSys offers under Mais opções in the same grid', () => {
+  const staysProperty = STAYS_NET_APARTMENTS[0]!;
+  const imobsysProperty = {
+    ...staysProperty,
+    id: 'imobsys-crcn-2-663',
+    title: 'Lacqua | Apto 101',
+    dataSource: 'imobsys-live' as const,
+    images: ['https://reservascrcn.com.br/fotos/apt101.png'],
+    imobsysOffer: {
+      from: '2027-01-10',
+      to: '2027-01-12',
+      nights: 2,
+      totalAmount: 523,
+      currency: 'BRL' as const,
+      observedAt: '2026-11-20T12:00:00Z',
+      availabilityConfirmed: false as const,
+      expiresAt: Date.now() + 20_000,
+    },
+  };
+
+  const { container } = render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [imobsysProperty, staysProperty],
+    }),
+  );
+
+  const cards = Array.from(container.querySelectorAll('article'));
+  assert.equal(cards.length, 2);
+  assert.match(cards[0]?.textContent ?? '', /Lacqua DiRoma IV/);
+  assert.match(cards[1]?.textContent ?? '', /Lacqua \| Apartamento 101/);
+  assert.ok(screen.getByRole('heading', { name: 'Mais opções' }));
+  assert.equal(screen.queryByText('Imóvel de parceiro'), null);
+});
+
 test('emits view_item_list only for displayed results and ignores catalog rerenders with the same IDs', () => {
   saveMeasurementConsent({ analytics: true, advertising: true });
   loadGtmIfConsented({ analytics: true, advertising: true }, 'GTM-ABC123');

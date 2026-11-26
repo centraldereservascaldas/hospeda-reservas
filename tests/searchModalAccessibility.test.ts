@@ -143,6 +143,8 @@ test('search modal keeps its mobile controls touch-sized and clear of input text
 });
 
 test('searching with dates applies guest filters and requests live availability', () => {
+  const checkIn = isoDateAtOffset(1);
+  const checkOut = isoDateAtOffset(4);
   const searches: AccommodationWidgetSearchParams[] = [];
   const applied: SearchFilters[] = [];
   let closeCount = 0;
@@ -158,9 +160,6 @@ test('searching with dates applies guest filters and requests live availability'
       onSearchInApp: (params: AccommodationWidgetSearchParams) => searches.push(params),
     }),
   );
-
-  const checkIn = isoDateAtOffset(1);
-  const checkOut = isoDateAtOffset(4);
 
   fireEvent.click(getByRole('tab', { name: 'Datas' }));
   fireEvent.click(
@@ -186,6 +185,10 @@ test('searching with dates applies guest filters and requests live availability'
 });
 
 test('resynchronizes destination and dates when external search filters change while open', () => {
+  const checkIn = isoDateAtOffset(1);
+  const checkOut = isoDateAtOffset(4);
+  const restoredCheckIn = isoDateAtOffset(5);
+  const restoredCheckOut = isoDateAtOffset(7);
   const initialFilters = createDefaultSearchFilters();
   const { getByLabelText, getByRole, rerender } = render(
     React.createElement(SearchModal, {
@@ -200,17 +203,17 @@ test('resynchronizes destination and dates when external search filters change w
 
   fireEvent.click(getByRole('tab', { name: 'Datas' }));
   fireEvent.click(
-    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-24"]')!,
+    document.querySelector<HTMLButtonElement>(`button[data-calendar-day="${checkIn}"]`)!,
   );
   fireEvent.click(
-    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-26"]')!,
+    document.querySelector<HTMLButtonElement>(`button[data-calendar-day="${checkOut}"]`)!,
   );
 
   const restoredFilters: SearchFilters = {
     ...initialFilters,
     destination: 'Rio Quente',
-    checkIn: '2026-11-20',
-    checkOut: '2026-11-22',
+    checkIn: restoredCheckIn,
+    checkOut: restoredCheckOut,
     guests: { adults: 2, children: 1, infants: 1, pets: 1 },
   };
   rerender(
@@ -225,11 +228,15 @@ test('resynchronizes destination and dates when external search filters change w
   );
 
   assert.equal(
-    document.querySelector('button[data-calendar-day="2026-11-20"]')?.getAttribute('aria-pressed'),
+    document
+      .querySelector(`button[data-calendar-day="${restoredCheckIn}"]`)
+      ?.getAttribute('aria-pressed'),
     'true',
   );
   assert.equal(
-    document.querySelector('button[data-calendar-day="2026-11-22"]')?.getAttribute('aria-pressed'),
+    document
+      .querySelector(`button[data-calendar-day="${restoredCheckOut}"]`)
+      ?.getAttribute('aria-pressed'),
     'true',
   );
   assert.ok(getByRole('tab', { name: 'Hóspedes (4)' }));

@@ -18,6 +18,7 @@ use App\Services\StaysSimulator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class AccommodationController extends Controller
@@ -230,9 +231,14 @@ class AccommodationController extends Controller
         if ($from && $to) {
             $destination = trim((string) ($input['destination'] ?? ''));
             $verifiedPropertyId = ! empty($input['propertyId']) ? (string) $input['propertyId'] : $imobSys->verifiedStaysPropertyId($destination);
-            $scanPriority = $imobSys->isEnabled()
-                && ($input['purpose'] ?? 'search') !== 'discovery'
+            $canUseImobSys = $imobSys->isEnabled() && ($input['purpose'] ?? 'search') !== 'discovery';
+            $scanPriority = $canUseImobSys
                 && ($destination !== '' || $verifiedPropertyId !== null);
+            $combinedSearchKey = 'imobsys.mixed-search.v1.'.hash('sha256', json_encode([
+                config('services.imobsys.base_url'), $from, $to, $guests, $destination,
+                $input['propertyId'] ?? null, $input['cities'] ?? [],
+            ], JSON_THROW_ON_ERROR));
+            $knownStaysTotal = $canUseImobSys && ! $scanPriority ? Cache::get($combinedSearchKey) : null;
             $searchInput = $input;
             if ($verifiedPropertyId !== null) {
                 $searchInput['propertyId'] = $verifiedPropertyId;
@@ -240,13 +246,26 @@ class AccommodationController extends Controller
             if ($scanPriority) {
                 $searchInput['limit'] = 100;
                 $searchInput['skip'] = 0;
+            } elseif (is_int($knownStaysTotal) && $skip >= $knownStaysTotal) {
+                $searchInput['limit'] = $limit;
+                $searchInput['skip'] = $knownStaysTotal;
+            } else {
+                $searchInput['limit'] = $limit;
+                $searchInput['skip'] = $skip;
             }
-            $resolved = $availabilityService->search($searchInput);
+            $partnerOnlyPage = $canUseImobSys && ! $scanPriority && is_int($knownStaysTotal) && $skip >= $knownStaysTotal;
+            $resolved = $partnerOnlyPage ? [
+                'items' => [], 'unquotedCount' => 0, 'receivedCount' => 0,
+                'meta' => [
+                    'fetchedAt' => now()->toIso8601String(),
+                    'expiresAt' => now()->addSeconds(max(1, min(60, (int) config('services.imobsys.cache_ttl', 25))))->toIso8601String(),
+                ],
+            ] : $availabilityService->search($searchInput);
             if ($resolved === null) {
                 return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Não foi possível confirmar a disponibilidade agora. Tente novamente.'], 503);
             }
 
-            $catalog = $this->catalog();
+            $catalog = $partnerOnlyPage ? [] : $this->catalog();
             $allItems = $resolved['items'];
             $allUnquoted = $resolved['unquotedCount'];
             $meta = $resolved['meta'];
@@ -294,23 +313,31 @@ class AccommodationController extends Controller
                 }));
             }
 
-            if ($mapped === []
+            $verifiedImobsysDestination = $verifiedPropertyId !== null
+                ? $imobSys->verifiedCondominiumName($verifiedPropertyId)
+                : null;
+            $canAppendPartnerOffers = $canUseImobSys
                 && $allUnquoted === 0
-                && $scanPriority) {
-                $imobsysDestination = $verifiedPropertyId !== null
-                    ? $imobSys->verifiedCondominiumName($verifiedPropertyId)
-                    : ($destination !== '' ? $destination : null);
+                && (empty($input['propertyId']) || $verifiedImobsysDestination !== null);
+            $staysPageEnded = $canUseImobSys && ! $scanPriority && $resolved['receivedCount'] < $limit;
+            if ($staysPageEnded && ! $partnerOnlyPage) {
+                $knownStaysTotal = $skip + $resolved['receivedCount'];
+                Cache::put($combinedSearchKey, $knownStaysTotal, now()->addMinutes(10));
+            }
+            if ($canAppendPartnerOffers && ($scanPriority || $partnerOnlyPage || $staysPageEnded)) {
+                $imobsysDestination = $verifiedImobsysDestination ?? $destination;
 
-                $offers = is_string($imobsysDestination) && $imobsysDestination !== ''
-                    ? $imobSys->offers($from, $to, $guests, $imobsysDestination)
-                    : null;
-                if ($offers === null && is_string($imobsysDestination) && $imobsysDestination !== '') {
+                $offers = $imobSys->offers($from, $to, $guests, $imobsysDestination);
+                if ($offers === null && $mapped === [] && ($scanPriority || $partnerOnlyPage || $staysPageEnded)) {
                     return response()->json(['success' => false, 'code' => 'partner_unavailable', 'message' => 'Não foi possível consultar as opções do parceiro agora. Tente novamente.'], 503);
                 }
                 if ($offers !== null) {
                     $mappedOffers = $imobSys->mapOffers($offers, $from, $to);
                     $imobSys->rememberProperties($mappedOffers);
-                    $pageOffers = array_slice($mappedOffers, $skip, $limit);
+                    $staysCount = $scanPriority ? count($mapped) : (int) ($knownStaysTotal ?? $skip);
+                    $partnerOffset = $scanPriority ? 0 : max(0, $skip + $resolved['receivedCount'] - $staysCount);
+                    $partnerSlots = $scanPriority ? count($mappedOffers) : max(0, $limit - $resolved['receivedCount']);
+                    $pageOffers = array_slice($mappedOffers, $partnerOffset, $partnerSlots);
                     $fetchedAt = now();
                     $expiresAt = $fetchedAt->copy()->addSeconds(max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))));
                     foreach ($offers as $offer) {
@@ -319,21 +346,34 @@ class AccommodationController extends Controller
                         }
                     }
 
+                    $combined = $scanPriority
+                        ? [...$mapped, ...$mappedOffers]
+                        : [...$mapped, ...$pageOffers];
+                    $pageItems = $scanPriority ? array_slice($combined, $skip, $limit) : $combined;
+                    $receivedCount = $scanPriority
+                        ? count($pageItems)
+                        : $resolved['receivedCount'] + count($pageOffers);
+                    $hasMore = $scanPriority
+                        ? count($combined) > $skip + $limit
+                        : ($partnerOnlyPage || $staysPageEnded)
+                            && $partnerOffset + count($pageOffers) < count($mappedOffers);
+                    $responseMeta = $meta;
+                    if ($offers !== [] && strtotime($expiresAt->toIso8601String()) < strtotime($meta['expiresAt'])) {
+                        $responseMeta['expiresAt'] = $expiresAt->toIso8601String();
+                    }
+
                     return (new AccommodationSearchResource([
-                        'source' => 'imobsys-live',
-                        'data' => $pageOffers,
+                        'source' => $mapped === [] && $pageItems !== [] ? 'imobsys-live' : 'stays-live',
+                        'data' => $pageItems,
                         'from' => $from,
                         'to' => $to,
                         'guests' => $guests,
-                        'unquotedCount' => 0,
-                        'meta' => [
-                            'fetchedAt' => $fetchedAt->toIso8601String(),
-                            'expiresAt' => $expiresAt->toIso8601String(),
-                        ],
+                        'unquotedCount' => $allUnquoted,
+                        'meta' => $responseMeta,
                         'pagination' => [
-                            'receivedCount' => count($pageOffers),
-                            'nextSkip' => $skip + count($pageOffers),
-                            'hasMore' => count($mappedOffers) > $skip + $limit,
+                            'receivedCount' => $receivedCount,
+                            'nextSkip' => $skip + $receivedCount,
+                            'hasMore' => $hasMore,
                         ],
                     ]))->response();
                 }
