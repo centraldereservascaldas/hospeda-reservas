@@ -13,3 +13,9 @@ Conclusões para a integração:
 - A taxa local é separada do valor anunciado e deve ser comunicada com precisão, após confirmação de aplicação e forma de pagamento. Não deve ser adicionada automaticamente à cobrança da CRCN sem uma regra confirmada.
 - A resposta `/v1/offers` atualmente expõe `guestCountVerified: false` e `additionalChargesKnown: false`. O checkout precisa continuar impedindo cobranças enquanto esses dados não forem confirmados por uma fonte confiável.
 - A reserva é criada depois da cobrança, por decisão do fluxo; a oferta observada não bloqueia estoque. Caso a criação falhe ou fique incerta após pagamento confirmado, encaminhar imediatamente para atendimento e tratamento financeiro, sem criar outra cobrança ou outra reserva automaticamente.
+
+## Consulta de leitura no servidor
+
+Em 26/11/2026, o serviço isolado no Coolify informou conexão presente e a consulta interna autenticada de 17 a 19/05/2027 para 2 hóspedes respondeu com ofertas observadas. Na primeira amostra, unidade `imobsys-crcn-2-663`, o painel retornou R$ 523,00 e capacidade informada de 5; o contexto público para a mesma referência e período também retornou R$ 523,00. A consulta foi somente de leitura, sem reserva ou cobrança.
+
+Essa coincidência de uma amostra comprova o acesso e a comparação de valores nessa consulta, não a disponibilidade garantida nem a composição de taxas e hóspedes: a resposta continua com os indicadores de disponibilidade, hóspedes e encargos não confirmados. O campo público `BaseConsulta` retornou `tt` apesar de a base da consulta ser `2`; não se deve inferir que sejam identificadores intercambiáveis. A verificação de unidade e datas após criar uma pré-reserva permanece pendente.
