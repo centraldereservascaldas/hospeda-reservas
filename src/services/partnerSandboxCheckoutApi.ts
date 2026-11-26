@@ -51,6 +51,7 @@ export const partnerSandboxCheckoutApi = {
       method: 'POST',
       body: JSON.stringify(paymentToken ? { paymentToken } : {}),
     }),
+  cardToken: (reference: string) => request(`${path(reference)}/card-token`, { method: 'POST' }),
   status: (reference: string) => request(path(reference)),
   reconcile: (reference: string) => request(`${path(reference)}/reconcile`, { method: 'POST' }),
 };

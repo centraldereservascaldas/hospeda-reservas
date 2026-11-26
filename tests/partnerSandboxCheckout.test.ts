@@ -28,6 +28,7 @@ afterEach(() => {
   sessionStorage.clear();
   dom.window.history.replaceState(null, '', originalUrl);
   Object.assign(partnerSandboxCheckoutApi, original);
+  delete window.bpSop_silentOrderPost;
 });
 
 test('shows the server total and requires a separate confirmation before creating a test payment', async () => {
@@ -77,15 +78,46 @@ test('restores a quoted card order and displays its server total without initiat
     return {};
   };
   render(React.createElement(PartnerSandboxCheckout));
-  await waitFor(() => assert.ok(screen.getByLabelText('Token de cartão sandbox')));
+  await waitFor(() => assert.ok(screen.getByLabelText('Número do cartão de teste')));
   assert.match(screen.getByText(/Valor total do pagamento de teste/).textContent || '', /600,00/);
   assert.match(screen.getByText(/6 parcelas de até/).textContent || '', /100,00/);
   assert.equal(paid, 0);
-  assert.equal(
-    (screen.getByRole('button', { name: 'Confirmar pagamento de teste' }) as HTMLButtonElement)
-      .disabled,
-    true,
-  );
+  assert.equal(paid, 0);
+});
+
+test('card data goes to the Cielo SDK and only its token is sent to the backend', async () => {
+  sessionStorage.setItem(originalKey, 'B'.repeat(40));
+  partnerSandboxCheckoutApi.status = async () => ({
+    status: 'quoted',
+    method: 'card',
+    paymentCents: 60000,
+    installments: 6,
+  });
+  partnerSandboxCheckoutApi.cardToken = async () => ({
+    environment: 'sandbox',
+    accessToken: 'test-access-token',
+  });
+  let submitted: unknown;
+  partnerSandboxCheckoutApi.startPayment = async (_reference, token) => {
+    submitted = token;
+    return {};
+  };
+  window.bpSop_silentOrderPost = (options) => {
+    assert.equal(options.environment, 'sandbox');
+    options.onSuccess({ PaymentToken: '22222222-2222-4222-8222-222222222222' });
+  };
+  render(React.createElement(PartnerSandboxCheckout));
+  await waitFor(() => assert.ok(screen.getByLabelText('Número do cartão de teste')));
+  fireEvent.change(screen.getByLabelText('Número do cartão de teste'), {
+    target: { value: '4111111111111111' },
+  });
+  fireEvent.change(screen.getByLabelText('Validade'), { target: { value: '1230' } });
+  fireEvent.change(screen.getByLabelText('Código de segurança'), { target: { value: '123' } });
+  const cvvInput = screen.getByLabelText('Código de segurança') as HTMLInputElement;
+  fireEvent.change(screen.getByLabelText('Nome no cartão'), { target: { value: 'Pessoa Teste' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar pagamento de teste' }));
+  await waitFor(() => assert.equal(submitted, '22222222-2222-4222-8222-222222222222'));
+  assert.equal(cvvInput.value, '');
 });
 
 test('a different property or stay never resumes a previous order', async () => {

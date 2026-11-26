@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { partnerSandboxCheckoutApi } from '../../services/partnerSandboxCheckoutApi';
 import { LogoCRCN } from '../LogoCRCN';
+import { loadCieloSopSdk } from '../../services/cieloSopSdk';
+import {
+  formatCardExpiration,
+  formatCardNumber,
+  isValidCardNumber,
+} from '../../utils/checkoutInputFormatting';
 
 function statusMessage(status: unknown): string {
   switch (status) {
@@ -45,7 +51,7 @@ export function PartnerSandboxCheckout() {
   const [orderStatus, setOrderStatus] = useState('');
   const [paymentCents, setPaymentCents] = useState<number | null>(null);
   const [installments, setInstallments] = useState<number | null>(null);
-  const [paymentToken, setPaymentToken] = useState('');
+  const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const savedReference = initialReference.current;
     if (!savedReference) return;
@@ -126,20 +132,84 @@ export function PartnerSandboxCheckout() {
     }
   }
   async function confirmPayment() {
-    if (!reference || busy || paymentCents === null || (method === 'card' && !paymentToken.trim()))
-      return;
+    if (!reference || busy || paymentCents === null) return;
     setBusy(true);
     try {
-      const payment = await partnerSandboxCheckoutApi.startPayment(
-        reference,
-        method === 'card' ? paymentToken : undefined,
-      );
-      setPaymentToken('');
+      let paymentToken: string | undefined;
+      if (method === 'card') {
+        const card = cardRef.current?.querySelector<HTMLInputElement>('.bp-sop-cardnumber');
+        const expiration = cardRef.current?.querySelector<HTMLInputElement>(
+          '.bp-sop-cardexpirationdate',
+        );
+        const cvv = cardRef.current?.querySelector<HTMLInputElement>('.bp-sop-cardcvv');
+        const holder = cardRef.current?.querySelector<HTMLInputElement>('.bp-sop-cardholdername');
+        const digits = expiration?.value.replace(/\D/g, '') ?? '';
+        if (
+          !card ||
+          !expiration ||
+          !cvv ||
+          !holder ||
+          !isValidCardNumber(card.value.replace(/\D/g, '')) ||
+          !/^(0[1-9]|1[0-2])\d{2}$/.test(digits) ||
+          !/^\d{3,4}$/.test(cvv.value) ||
+          holder.value.trim().length < 2
+        ) {
+          setMessage('Confira os dados do cartão de teste.');
+          return;
+        }
+        const token = await partnerSandboxCheckoutApi.cardToken(reference);
+        if (
+          token.environment !== 'sandbox' ||
+          typeof token.accessToken !== 'string' ||
+          !token.accessToken
+        )
+          throw new Error('Token indisponível');
+        await loadCieloSopSdk('sandbox');
+        if (!window.bpSop_silentOrderPost) throw new Error('Cielo indisponível');
+        const displayedCard = card.value;
+        const displayedExpiration = expiration.value;
+        card.value = displayedCard.replace(/\D/g, '');
+        expiration.value = `${digits.slice(0, 2)}/20${digits.slice(2)}`;
+        try {
+          paymentToken = await new Promise<string>((resolve, reject) => {
+            const timer = window.setTimeout(() => reject(new Error('Tempo esgotado')), 30000);
+            window.bpSop_silentOrderPost!({
+              accessToken: token.accessToken as string,
+              environment: 'sandbox',
+              language: 'pt',
+              enableTokenize: false,
+              onSuccess: (response) => {
+                window.clearTimeout(timer);
+                if (
+                  typeof response.PaymentToken === 'string' &&
+                  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+                    response.PaymentToken,
+                  )
+                )
+                  resolve(response.PaymentToken);
+                else reject(new Error('Token inválido'));
+              },
+              onError: () => {
+                window.clearTimeout(timer);
+                reject(new Error('Cartão recusado'));
+              },
+              onInvalid: () => {
+                window.clearTimeout(timer);
+                reject(new Error('Dados inválidos'));
+              },
+            });
+          });
+        } finally {
+          card.value = displayedCard;
+          expiration.value = displayedExpiration;
+          cvv.value = '';
+        }
+      }
+      const payment = await partnerSandboxCheckoutApi.startPayment(reference, paymentToken);
       setPix(typeof payment.pix === 'string' ? payment.pix : '');
       setOrderStatus('payment_pending');
       setMessage('Pagamento de teste iniciado. Consulte a situação abaixo.');
     } catch {
-      setPaymentToken('');
       try {
         const result = await partnerSandboxCheckoutApi.status(reference);
         setOrderStatus(typeof result.status === 'string' ? result.status : '');
@@ -254,17 +324,52 @@ export function PartnerSandboxCheckout() {
                   </p>
                 )}
                 {method === 'card' && (
-                  <label>
-                    Token de cartão sandbox
-                    <input
-                      value={paymentToken}
-                      onChange={(event) => setPaymentToken(event.target.value)}
-                      className="block w-full rounded-xl border p-3"
-                    />
-                  </label>
+                  <div ref={cardRef} className="grid gap-3">
+                    <label>
+                      Número do cartão de teste
+                      <input
+                        autoComplete="cc-number"
+                        inputMode="numeric"
+                        onChange={(event) => {
+                          event.currentTarget.value = formatCardNumber(event.currentTarget.value);
+                        }}
+                        className="bp-sop-cardnumber block w-full rounded-xl border p-3"
+                      />
+                    </label>
+                    <label>
+                      Validade
+                      <input
+                        autoComplete="cc-exp"
+                        placeholder="MM/AA"
+                        maxLength={5}
+                        onChange={(event) => {
+                          event.currentTarget.value = formatCardExpiration(
+                            event.currentTarget.value,
+                          );
+                        }}
+                        className="bp-sop-cardexpirationdate block w-full rounded-xl border p-3"
+                      />
+                    </label>
+                    <label>
+                      Código de segurança
+                      <input
+                        autoComplete="cc-csc"
+                        inputMode="numeric"
+                        maxLength={4}
+                        className="bp-sop-cardcvv bp-sop-cardcvvc block w-full rounded-xl border p-3"
+                      />
+                    </label>
+                    <label>
+                      Nome no cartão
+                      <input
+                        autoComplete="cc-name"
+                        className="bp-sop-cardholdername block w-full rounded-xl border p-3"
+                      />
+                    </label>
+                  </div>
                 )}
                 <button
-                  disabled={busy || (method === 'card' && !paymentToken.trim())}
+                  disabled={busy}
                   onClick={() => void confirmPayment()}
                   className="rounded-xl bg-orange-700 p-3 font-bold text-white"
                 >
