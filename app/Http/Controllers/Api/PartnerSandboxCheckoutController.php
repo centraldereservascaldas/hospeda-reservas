@@ -7,6 +7,7 @@ use App\Jobs\CompletePartnerCheckout;
 use App\Models\PartnerCheckoutOrder;
 use App\Services\PartnerCheckoutOrderFactory;
 use App\Services\PartnerPaymentStartService;
+use App\Services\Payments\CieloSilentOrderPostClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
@@ -44,6 +45,22 @@ class PartnerSandboxCheckoutController extends Controller
         }
 
         return response()->json(['success' => true, 'status' => 'payment_pending', 'pix' => $order->payment_method === 'pix' ? data_get($result, 'Payment.QrCodeString') : null]);
+    }
+
+    public function cardToken(string $reference, CieloSilentOrderPostClient $sop): JsonResponse
+    {
+        abort_unless($this->available(), 404);
+        abort_unless((bool) preg_match('/\A[A-Za-z0-9]{40}\z/D', $reference), 404);
+        $order = PartnerCheckoutOrder::query()->where('public_reference', $reference)->firstOrFail();
+        if ($order->status !== 'quoted' || $order->payment_method !== 'card') {
+            return response()->json(['success' => false], 409)->header('Cache-Control', 'no-store, private');
+        }
+        try {
+            return response()->json(['success' => true, 'environment' => 'sandbox', 'accessToken' => $sop->createBrowserAccessToken()])
+                ->header('Cache-Control', 'no-store, private');
+        } catch (Throwable) {
+            return response()->json(['success' => false], 503)->header('Cache-Control', 'no-store, private');
+        }
     }
 
     public function show(string $reference): JsonResponse

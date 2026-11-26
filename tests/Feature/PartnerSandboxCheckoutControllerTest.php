@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\CompletePartnerCheckout;
 use App\Models\PartnerCheckoutOrder;
+use App\Services\Payments\CieloSilentOrderPostClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -32,5 +33,20 @@ class PartnerSandboxCheckoutControllerTest extends TestCase
         Queue::assertPushed(CompletePartnerCheckout::class, fn (CompletePartnerCheckout $job): bool => $job->orderId === $order->id);
         $order->update(['status' => 'payment_verified']);
         $this->getJson('/api/partner-sandbox/checkout/'.str_repeat('A', 40))->assertOk()->assertJsonPath('pix', null);
+    }
+
+    public function test_card_token_is_only_issued_for_an_active_card_order_in_sandbox(): void
+    {
+        config(['services.partner_checkout_sandbox.enabled' => true, 'services.cielo.direct_environment' => 'sandbox']);
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('B', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 55636, 'currency' => 'BRL', 'status' => 'quoted', 'merchant_order_id' => 'ORDER2', 'payment_method' => 'card', 'installments' => 1, 'reservation_idempotency_key' => 'partner-order-123457', 'encrypted_customer' => ['fullName' => 'Teste']]);
+        $this->mock(CieloSilentOrderPostClient::class)->shouldReceive('createBrowserAccessToken')->once()->andReturn('sandbox-browser-token');
+        $url = '/api/partner-sandbox/checkout/'.str_repeat('B', 40).'/card-token';
+        $this->postJson($url)->assertOk()->assertJsonPath('environment', 'sandbox')->assertJsonPath('accessToken', 'sandbox-browser-token')->assertHeader('Cache-Control', 'no-store, private');
+        $order->update(['status' => 'payment_pending']);
+        $this->postJson($url)->assertStatus(409);
+        $order->update(['status' => 'quoted', 'payment_method' => 'pix']);
+        $this->postJson($url)->assertStatus(409);
+        config(['services.partner_checkout_sandbox.enabled' => false]);
+        $this->postJson($url)->assertNotFound();
     }
 }

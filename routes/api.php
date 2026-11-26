@@ -100,6 +100,7 @@ Route::post('/partner-sandbox/checkout', [PartnerSandboxCheckoutController::clas
 Route::get('/partner-sandbox/checkout/{reference}', [PartnerSandboxCheckoutController::class, 'show'])->middleware('throttle:checkout-resume');
 Route::post('/partner-sandbox/checkout/{reference}/reconcile', [PartnerSandboxCheckoutController::class, 'reconcile'])->middleware('throttle:10,1');
 Route::post('/partner-sandbox/checkout/{reference}/payment', [PartnerSandboxCheckoutController::class, 'payment'])->middleware('throttle:5,1');
+Route::post('/partner-sandbox/checkout/{reference}/card-token', [PartnerSandboxCheckoutController::class, 'cardToken'])->middleware('throttle:5,1');
 Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');
 Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
