@@ -46,21 +46,31 @@ export function PartnerSandboxOperations() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const load = useCallback(async () => {
-    if (!token) return;
-    try {
-      const response = await apiFetch('/api/owner/admin/partner-sandbox/orders', {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
-      });
-      const result = await response.json();
-      if (!response.ok || !Array.isArray(result.orders)) throw new Error();
-      setOrders(result.orders);
-      setMessage('');
-    } catch {
-      setMessage('Não foi possível carregar os pedidos. Confira o acesso da conta.');
-    }
-  }, [token]);
+  const [page, setPage] = useState(1);
+  const [nextPage, setNextPage] = useState<number | null>(null);
+  const load = useCallback(
+    async (requestedPage = 1) => {
+      if (!token) return;
+      try {
+        const response = await apiFetch(
+          `/api/owner/admin/partner-sandbox/orders?page=${requestedPage}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          },
+        );
+        const result = await response.json();
+        if (!response.ok || !Array.isArray(result.orders)) throw new Error();
+        setOrders(result.orders);
+        setPage(requestedPage);
+        setNextPage(typeof result.nextPage === 'number' ? result.nextPage : null);
+        setMessage('');
+      } catch {
+        setMessage('Não foi possível carregar os pedidos. Confira o acesso da conta.');
+      }
+    },
+    [token],
+  );
   useEffect(() => {
     void load();
   }, [load]);
@@ -169,6 +179,27 @@ export function PartnerSandboxOperations() {
               </article>
             ))}
           </div>
+          {(page > 1 || nextPage !== null) && (
+            <div className="mt-5 flex items-center gap-4">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => void load(page - 1)}
+                className="rounded-xl border px-4 py-2 disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <span>Página {page}</span>
+              <button
+                type="button"
+                disabled={nextPage === null}
+                onClick={() => nextPage !== null && void load(nextPage)}
+                className="rounded-xl border px-4 py-2 disabled:opacity-50"
+              >
+                Próxima
+              </button>
+            </div>
+          )}
         </>
       )}
       <p role="status" className="mt-4">

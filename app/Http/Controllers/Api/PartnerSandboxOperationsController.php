@@ -12,12 +12,16 @@ use Throwable;
 
 class PartnerSandboxOperationsController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         abort_unless(app()->environment(['local', 'testing']) && config('services.partner_checkout_sandbox.enabled'), 404);
-        $orders = PartnerCheckoutOrder::query()->whereIn('status', ['awaiting_seller_payment', 'attention_required', 'reservation_starting'])->orderBy('updated_at')->limit(100)->get(['id', 'supplier_property_id', 'check_in', 'check_out', 'guests', 'base_cents', 'payment_cents', 'status', 'attention_reason', 'reservation_reference', 'updated_at']);
+        $input = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:10000']]);
+        $page = (int) ($input['page'] ?? 1);
+        $orders = PartnerCheckoutOrder::query()->whereIn('status', ['awaiting_seller_payment', 'attention_required', 'reservation_starting'])
+            ->orderByRaw("CASE WHEN status IN ('attention_required', 'reservation_starting') THEN 0 ELSE 1 END")
+            ->orderBy('updated_at')->orderBy('id')->simplePaginate(50, ['id', 'supplier_property_id', 'check_in', 'check_out', 'guests', 'base_cents', 'payment_cents', 'status', 'attention_reason', 'reservation_reference', 'updated_at'], 'page', $page);
 
-        return response()->json(['success' => true, 'orders' => $orders])->header('Cache-Control', 'no-store');
+        return response()->json(['success' => true, 'orders' => $orders->items(), 'nextPage' => $orders->hasMorePages() ? $page + 1 : null])->header('Cache-Control', 'no-store');
     }
 
     public function record(Request $request, string $id, PartnerManualPaymentService $payments): JsonResponse

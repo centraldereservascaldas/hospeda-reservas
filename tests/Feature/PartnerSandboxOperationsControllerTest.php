@@ -77,4 +77,19 @@ class PartnerSandboxOperationsControllerTest extends TestCase
             'supplier_paid_cents' => 52300, 'supplier_payment_reference' => 'TEST-1',
         ]);
     }
+
+    public function test_operations_paginates_and_prioritizes_orders_requiring_attention(): void
+    {
+        config(['services.partner_checkout_sandbox.enabled' => true, 'services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key', 'services.hospeda.owner_admin_emails' => ['admin@example.test']]);
+        Http::fake(['*/auth/v1/user' => Http::response(['id' => '575c8054-6646-443c-bf62-07945019a32f', 'email' => 'admin@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Pessoa Teste']])]);
+        $base = ['supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'payment_method' => 'pix', 'encrypted_customer' => ['fullName' => 'Teste']];
+        for ($i = 0; $i < 50; $i++) {
+            PartnerCheckoutOrder::create([...$base, 'public_reference' => str_pad((string) $i, 40, 'A'), 'merchant_order_id' => 'ORDER'.$i, 'reservation_idempotency_key' => 'partner-order-'.str_pad((string) $i, 10, '0', STR_PAD_LEFT), 'status' => 'awaiting_seller_payment']);
+        }
+        $attention = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('Z', 40), 'merchant_order_id' => 'ATTENTION', 'reservation_idempotency_key' => 'partner-order-attention', 'status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown']);
+        $url = '/api/owner/admin/partner-sandbox/orders';
+        $this->withToken('admin-token')->getJson($url)->assertOk()->assertJsonCount(50, 'orders')->assertJsonPath('orders.0.id', $attention->id)->assertJsonPath('nextPage', 2);
+        $this->withToken('admin-token')->getJson($url.'?page=2')->assertOk()->assertJsonCount(1, 'orders')->assertJsonPath('nextPage', null);
+        $this->withToken('admin-token')->getJson($url.'?page=0')->assertUnprocessable();
+    }
 }
