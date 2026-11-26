@@ -26,6 +26,17 @@ const { createDefaultSearchFilters } = await import('../src/utils/searchUrlState
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 const originalGetResorts = crcnBackendApi.getResorts;
 
+const isoDateAtOffset = (days: number): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const currentCalendarMonth = new Date().toLocaleDateString('pt-BR', {
+  month: 'long',
+  year: 'numeric',
+});
+
 crcnBackendApi.getResorts = async () => [];
 
 afterEach(() => {
@@ -107,7 +118,7 @@ test('search modal keeps its mobile controls touch-sized and clear of input text
     /\[@media\(max-height:400px\)\]:space-y-3/,
   );
   assert.match(
-    getByRole('grid', { name: 'Calendário de novembro de 2026' }).parentElement?.parentElement
+    getByRole('grid', { name: `Calendário de ${currentCalendarMonth}` }).parentElement?.parentElement
       ?.className ?? '',
     /grid-cols-1/,
   );
@@ -147,19 +158,22 @@ test('searching with dates applies guest filters and requests live availability'
     }),
   );
 
+  const checkIn = isoDateAtOffset(1);
+  const checkOut = isoDateAtOffset(4);
+
   fireEvent.click(getByRole('tab', { name: 'Datas' }));
   fireEvent.click(
-    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-24"]')!,
+    document.querySelector<HTMLButtonElement>(`button[data-calendar-day="${checkIn}"]`)!,
   );
   fireEvent.click(
-    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-27"]')!,
+    document.querySelector<HTMLButtonElement>(`button[data-calendar-day="${checkOut}"]`)!,
   );
   fireEvent.click(getByRole('button', { name: 'Buscar Reserva' }));
 
   assert.equal(searches.length, 1);
   assert.deepEqual(searches[0], {
-    checkIn: '2026-11-24',
-    checkOut: '2026-11-27',
+    checkIn,
+    checkOut,
     dateFlexibility: 0,
     persons: 1,
     guests: { adults: 1, children: 0, infants: 0, pets: 0 },
@@ -242,7 +256,9 @@ test('keeps the search open and explains incomplete or reversed dates', () => {
 
   fireEvent.click(getByRole('tab', { name: 'Datas' }));
   fireEvent.click(
-    document.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-24"]')!,
+    document.querySelector<HTMLButtonElement>(
+      `button[data-calendar-day="${isoDateAtOffset(1)}"]`,
+    )!,
   );
   fireEvent.click(getByRole('button', { name: 'Buscar Reserva' }));
 
