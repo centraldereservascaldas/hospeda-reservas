@@ -18,7 +18,7 @@ class PartnerPaymentStartServiceTest extends TestCase
     {
         config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true]);
         $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('F', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'quoted', 'merchant_order_id' => 'ORDER1', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-123456', 'encrypted_customer' => ['fullName' => 'Teste', 'cpf' => '12345678901', 'phone' => '64999999999']]);
-        $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->once()->with('2027-05-17', '2027-05-19', 2, '', 'imobsys-crcn-2-663', true)->andReturn([['totalCents' => 52300, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
+        $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->once()->with('2027-05-17', '2027-05-19', 2, '', 'imobsys-crcn-2-663', true)->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
         $this->mock(CieloEcommerceClient::class)->shouldReceive('createPixPayment')->once()->andReturn(['Payment' => ['PaymentId' => '11111111-1111-4111-8111-111111111111', 'QrCodeString' => 'PIX-TESTE']]);
         $service = app(PartnerPaymentStartService::class);
         $service->start($order->id);
@@ -45,7 +45,7 @@ class PartnerPaymentStartServiceTest extends TestCase
     {
         config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true]);
         $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('F', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'quoted', 'merchant_order_id' => 'ORDER1', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-123456', 'encrypted_customer' => ['fullName' => 'Teste', 'cpf' => '12345678901', 'phone' => '64999999999']]);
-        $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->once()->andReturn([['totalCents' => 52300, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
+        $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->once()->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
         $this->mock(CieloEcommerceClient::class)->shouldReceive('createPixPayment')->once()->andThrow(new RuntimeException('timeout'));
         $service = app(PartnerPaymentStartService::class);
         try {
@@ -59,17 +59,19 @@ class PartnerPaymentStartServiceTest extends TestCase
         $service->start($order->id);
     }
 
-    public function test_unverified_guests_or_extra_charges_never_reach_cielo(): void
+    public function test_unverified_availability_guests_or_extra_charges_never_reach_cielo(): void
     {
         config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true]);
         $base = ['supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'quoted', 'payment_method' => 'pix', 'encrypted_customer' => ['fullName' => 'Teste', 'cpf' => '12345678901', 'phone' => '64999999999']];
         $orders = [
             PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('G', 40), 'merchant_order_id' => 'ORDER2', 'reservation_idempotency_key' => 'partner-order-123457']),
             PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('H', 40), 'merchant_order_id' => 'ORDER3', 'reservation_idempotency_key' => 'partner-order-123458']),
+            PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('I', 40), 'merchant_order_id' => 'ORDER4', 'reservation_idempotency_key' => 'partner-order-123459']),
         ];
-        $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->twice()->andReturn(
-            [['totalCents' => 52300, '_crcnGuestCountVerified' => false, 'additionalChargesKnown' => true]],
-            [['totalCents' => 52300, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => false]],
+        $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->times(3)->andReturn(
+            [['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => false, 'additionalChargesKnown' => true]],
+            [['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => false]],
+            [['totalCents' => 52300, 'availabilityConfirmed' => false, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]],
         );
         $this->mock(CieloEcommerceClient::class)->shouldNotReceive('createPixPayment');
         foreach ($orders as $order) {

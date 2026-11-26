@@ -112,7 +112,7 @@ class ImobSysSearchClient
                     || ($offer['currency'] ?? null) !== 'BRL'
                     || ! is_int($offer['nights'] ?? null)
                     || $offer['nights'] < 1
-                    || ($offer['availabilityConfirmed'] ?? null) !== false
+                    || ! is_bool($offer['availabilityConfirmed'] ?? null)
                     || ($offer['reservationGuaranteed'] ?? null) !== false
                     || ($offer['status'] ?? null) !== 'offer_observed') {
                     return false;
