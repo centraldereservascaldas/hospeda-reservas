@@ -784,7 +784,7 @@ export default function App() {
     );
   }
 
-  if (import.meta.env.DEV && pathname === '/checkout-preview/parceiro/operacao') {
+  if (import.meta.env?.DEV && pathname === '/checkout-preview/parceiro/operacao') {
     return (
       <Suspense fallback={<main role="status">Carregando prévia…</main>}>
         <PartnerSandboxOperations />
@@ -792,7 +792,7 @@ export default function App() {
     );
   }
 
-  if (import.meta.env.DEV && pathname === '/checkout-preview/parceiro') {
+  if (import.meta.env?.DEV && pathname === '/checkout-preview/parceiro') {
     return (
       <Suspense fallback={<main role="status">Carregando prévia…</main>}>
         <PartnerSandboxCheckout />

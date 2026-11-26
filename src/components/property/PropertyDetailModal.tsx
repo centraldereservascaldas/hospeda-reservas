@@ -614,7 +614,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                       Oferta observada na rede parceira. A disponibilidade ainda precisa ser
                       confirmada e a reserva não é realizada pelo site.
                     </p>
-                    {import.meta.env.DEV &&
+                    {import.meta.env?.DEV &&
                       !imobSysSearchState?.loading &&
                       !imobSysSearchState?.message &&
                       property.imobsysOffer &&
