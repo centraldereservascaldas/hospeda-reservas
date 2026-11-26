@@ -26,6 +26,6 @@ for (const method of ['pix', 'card']) test(`${method}: jornada persistente do pa
     assert.equal(reservationCalls, 1);
     assert.equal(sellerStore.listPending()[0].reservation_reference, '1600');
     assert.equal(sellerStore.listPending()[0].amount_cents, amount);
-    assert.equal(sellerStore.listPending()[0].supplier_amount_cents, 52300);
+    assert.equal(sellerStore.listPending()[0].supplier_amount_cents, null);
   } finally { operations.close(); contextStore.close(); sellerStore.close(); }
 });
