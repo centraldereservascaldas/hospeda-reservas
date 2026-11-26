@@ -48,11 +48,13 @@ class PartnerCheckoutCompletionServiceTest extends TestCase
         $pending = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('D', 40), 'merchant_order_id' => 'ORDER2', 'reservation_idempotency_key' => 'partner-order-123457', 'status' => 'payment_pending']);
         PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('E', 40), 'merchant_order_id' => 'ORDER3', 'reservation_idempotency_key' => 'partner-order-123458', 'status' => 'reservation_starting']);
         $uncertainPayment = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('F', 40), 'merchant_order_id' => 'ORDER5', 'reservation_idempotency_key' => 'partner-order-123460', 'status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown']);
+        $latePayment = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('P', 40), 'merchant_order_id' => 'ORDER12', 'reservation_idempotency_key' => 'partner-order-123467', 'status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown', 'payment_id' => 'PAY12']);
         PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('G', 40), 'merchant_order_id' => 'ORDER6', 'reservation_idempotency_key' => 'partner-order-123461', 'status' => 'attention_required', 'payment_id' => 'PAY6']);
         $this->artisan('partner-checkout:recover-sandbox')->assertSuccessful();
         Queue::assertPushed(CompletePartnerCheckout::class, fn (CompletePartnerCheckout $job): bool => $job->orderId === $pending->id);
         Queue::assertPushed(CompletePartnerCheckout::class, fn (CompletePartnerCheckout $job): bool => $job->orderId === $uncertainPayment->id);
-        Queue::assertPushed(CompletePartnerCheckout::class, 2);
+        Queue::assertPushed(CompletePartnerCheckout::class, fn (CompletePartnerCheckout $job): bool => $job->orderId === $latePayment->id);
+        Queue::assertPushed(CompletePartnerCheckout::class, 3);
     }
 
     public function test_sandbox_recovery_requires_explicit_feature_flag(): void
@@ -109,6 +111,23 @@ class PartnerCheckoutCompletionServiceTest extends TestCase
         $cielo->shouldReceive('findPaymentByMerchantOrderId')->once()->andReturn($response);
         $cielo->shouldReceive('findPaymentById')->once()->andReturn($response);
         $this->assertSame('awaiting_seller_payment', app(PartnerCheckoutCompletionService::class)->complete($order->id));
+        $this->assertSame('1600', $order->fresh()->reservation_reference);
+        Http::assertSentCount(1);
+    }
+
+    public function test_late_payment_response_is_recovered_to_seller_queue_once(): void
+    {
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.reservation_key' => 'reservation-secret', 'services.partner_api.reservations_enabled' => true]);
+        Http::preventStrayRequests();
+        Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
+        $paymentId = '11111111-1111-4111-8111-111111111111';
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('Q', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown', 'payment_id' => $paymentId, 'merchant_order_id' => 'ORDERL', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-late', 'encrypted_customer' => ['fullName' => 'Teste', 'cpf' => '12345678901', 'phone' => '64999999999']]);
+        $cielo = $this->mock(CieloEcommerceClient::class);
+        $cielo->shouldReceive('findPaymentByMerchantOrderId')->never();
+        $cielo->shouldReceive('findPaymentById')->once()->with($paymentId)->andReturn(['MerchantOrderId' => 'ORDERL', 'Payment' => ['PaymentId' => $paymentId, 'Status' => 2, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']]);
+        $service = app(PartnerCheckoutCompletionService::class);
+        $this->assertSame('awaiting_seller_payment', $service->complete($order->id));
+        $this->assertSame('awaiting_seller_payment', $service->complete($order->id));
         $this->assertSame('1600', $order->fresh()->reservation_reference);
         Http::assertSentCount(1);
     }
