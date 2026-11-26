@@ -49,4 +49,18 @@ class PartnerSandboxCheckoutControllerTest extends TestCase
         config(['services.partner_checkout_sandbox.enabled' => false]);
         $this->postJson($url)->assertNotFound();
     }
+
+    public function test_late_payment_id_can_be_reconciled_without_repeating_supplier_requests(): void
+    {
+        config(['services.partner_checkout_sandbox.enabled' => true, 'services.cielo.direct_environment' => 'sandbox']);
+        Queue::fake();
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('C', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown', 'payment_id' => 'PAYLATE', 'merchant_order_id' => 'ORDERL', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-late', 'encrypted_customer' => ['fullName' => 'Teste']]);
+        $url = '/api/partner-sandbox/checkout/'.str_repeat('C', 40).'/reconcile';
+        $this->postJson($url)->assertAccepted();
+        Queue::assertPushed(CompletePartnerCheckout::class, fn (CompletePartnerCheckout $job): bool => $job->orderId === $order->id);
+        Queue::fake();
+        $order->update(['attention_reason' => 'supplier_outcome_unknown']);
+        $this->postJson($url)->assertAccepted();
+        Queue::assertNothingPushed();
+    }
 }

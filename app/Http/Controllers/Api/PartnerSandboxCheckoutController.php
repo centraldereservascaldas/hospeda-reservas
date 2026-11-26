@@ -77,7 +77,7 @@ class PartnerSandboxCheckoutController extends Controller
         abort_unless($this->available(), 404);
         abort_unless((bool) preg_match('/\A[A-Za-z0-9]{40}\z/D', $reference), 404);
         $order = PartnerCheckoutOrder::query()->where('public_reference', $reference)->firstOrFail();
-        if (in_array($order->status, ['payment_pending', 'payment_verified'], true) || ($order->status === 'attention_required' && $order->attention_reason === 'payment_outcome_unknown' && $order->payment_id === null)) {
+        if (in_array($order->status, ['payment_pending', 'payment_verified'], true) || ($order->status === 'attention_required' && $order->attention_reason === 'payment_outcome_unknown')) {
             CompletePartnerCheckout::dispatch($order->id)->afterCommit();
         }
 
