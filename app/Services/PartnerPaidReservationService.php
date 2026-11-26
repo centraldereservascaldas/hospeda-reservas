@@ -45,7 +45,15 @@ class PartnerPaidReservationService
             ], $claimed->reservation_idempotency_key, function (string $operationId) use ($id): void {
                 PartnerCheckoutOrder::query()->whereKey($id)->whereIn('status', ['reservation_starting', 'attention_required'])->update(['supplier_operation_id' => $operationId]);
             });
-            PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'awaiting_seller_payment', 'reservation_reference' => $result['id'], 'supplier_payable_observed_cents' => $result['supplierPayableObservedCents'] ?? null]);
+            $updated = PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'awaiting_seller_payment', 'reservation_reference' => $result['id'], 'supplier_payable_observed_cents' => $result['supplierPayableObservedCents'] ?? null]);
+            if ($updated === 0) {
+                // Recovery may have marked a slow request uncertain while it was
+                // still running. Preserve the validated response for review, but
+                // do not override the operational state or start another request.
+                PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'attention_required')
+                    ->where('attention_reason', 'supplier_outcome_unknown')->whereNull('reservation_reference')
+                    ->update(['reservation_reference' => $result['id'], 'supplier_payable_observed_cents' => $result['supplierPayableObservedCents'] ?? null]);
+            }
         } catch (Throwable $exception) {
             PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown']);
             throw $exception;

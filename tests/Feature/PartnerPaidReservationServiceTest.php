@@ -49,6 +49,22 @@ class PartnerPaidReservationServiceTest extends TestCase
         }
     }
 
+    public function test_late_supplier_response_is_retained_for_manual_review_without_retry(): void
+    {
+        $order = $this->order('payment_verified');
+        Http::fake(function () use ($order) {
+            PartnerCheckoutOrder::query()->whereKey($order->id)->update(['status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown']);
+            return Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'supplierPayableObservedCents' => 41800, 'currency' => 'BRL']], 201);
+        });
+
+        app(PartnerPaidReservationService::class)->create($order->id);
+        $this->assertSame('attention_required', $order->fresh()->status);
+        $this->assertSame('supplier_outcome_unknown', $order->fresh()->attention_reason);
+        $this->assertSame('1600', $order->fresh()->reservation_reference);
+        $this->assertSame(41800, (int) $order->fresh()->supplier_payable_observed_cents);
+        Http::assertSentCount(1);
+    }
+
     public function test_unknown_supplier_result_requires_manual_review(): void
     {
         Http::fake(['api.example.test/*' => Http::response(['success' => false], 503, ['X-Request-Id' => '123e4567-e89b-42d3-a456-426614174000'])]);
