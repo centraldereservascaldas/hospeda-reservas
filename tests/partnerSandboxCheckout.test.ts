@@ -21,9 +21,12 @@ const { PartnerSandboxCheckout } =
   await import('../src/components/booking/PartnerSandboxCheckout.tsx');
 const { partnerSandboxCheckoutApi } = await import('../src/services/partnerSandboxCheckoutApi.ts');
 const original = { ...partnerSandboxCheckoutApi };
+const originalUrl = dom.window.location.href;
+const originalKey = `partner-sandbox-reference:${JSON.stringify(['imobsys-crcn-2-663', '2027-05-17', '2027-05-19', '2'])}`;
 afterEach(() => {
   cleanup();
   sessionStorage.clear();
+  dom.window.history.replaceState(null, '', originalUrl);
   Object.assign(partnerSandboxCheckoutApi, original);
 });
 
@@ -61,7 +64,7 @@ test('shows the server total and requires a separate confirmation before creatin
 });
 
 test('restores a quoted card order and displays its server total without initiating payment', async () => {
-  sessionStorage.setItem('partner-sandbox-reference', 'B'.repeat(40));
+  sessionStorage.setItem(originalKey, 'B'.repeat(40));
   let paid = 0;
   partnerSandboxCheckoutApi.status = async () => ({
     status: 'quoted',
@@ -81,4 +84,39 @@ test('restores a quoted card order and displays its server total without initiat
       .disabled,
     true,
   );
+});
+
+test('a different property or stay never resumes a previous order', async () => {
+  sessionStorage.setItem(originalKey, 'B'.repeat(40));
+  dom.window.history.replaceState(
+    null,
+    '',
+    '/checkout-preview/parceiro?propertyId=imobsys-crcn-2-664&from=2027-05-17&to=2027-05-19&guests=2&baseCents=52300',
+  );
+  let calls = 0;
+  partnerSandboxCheckoutApi.status = async () => {
+    calls++;
+    return { status: 'quoted' };
+  };
+  render(React.createElement(PartnerSandboxCheckout));
+  assert.equal((screen.getByLabelText('Imóvel') as HTMLInputElement).value, 'imobsys-crcn-2-664');
+  assert.equal(calls, 0);
+  assert.equal(sessionStorage.getItem(originalKey), 'B'.repeat(40));
+});
+
+test('a new quoted price for the same stay does not silently start a second order', async () => {
+  sessionStorage.setItem(originalKey, 'B'.repeat(40));
+  dom.window.history.replaceState(
+    null,
+    '',
+    '/checkout-preview/parceiro?propertyId=imobsys-crcn-2-663&from=2027-05-17&to=2027-05-19&guests=2&baseCents=60000',
+  );
+  let resumed = '';
+  partnerSandboxCheckoutApi.status = async (reference) => {
+    resumed = reference;
+    return { status: 'payment_pending', method: 'pix', paymentCents: 52300 };
+  };
+  render(React.createElement(PartnerSandboxCheckout));
+  await waitFor(() => assert.equal(resumed, 'B'.repeat(40)));
+  assert.equal(screen.queryByRole('button', { name: 'Conferir valor' }), null);
 });

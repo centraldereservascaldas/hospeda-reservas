@@ -32,9 +32,11 @@ function statusMessage(status: unknown): string {
 /** Internal development screen; card input is a sandbox token, never card data. */
 export function PartnerSandboxCheckout() {
   const params = new URLSearchParams(window.location.search);
-  const [reference, setReference] = useState(
-    () => sessionStorage.getItem('partner-sandbox-reference') ?? '',
-  );
+  // Keep orders tied to the exact selected stay; never resume a different property or period.
+  const storageKey = `partner-sandbox-reference:${JSON.stringify(
+    ['propertyId', 'from', 'to', 'guests'].map((name) => params.get(name) ?? ''),
+  )}`;
+  const [reference, setReference] = useState(() => sessionStorage.getItem(storageKey) ?? '');
   const initialReference = useRef(reference);
   const [message, setMessage] = useState('');
   const [pix, setPix] = useState('');
@@ -85,13 +87,13 @@ export function PartnerSandboxCheckout() {
         },
       });
       if (typeof order.reference !== 'string') throw new Error('Pedido precisa de conferência.');
-      sessionStorage.setItem('partner-sandbox-reference', order.reference);
+      sessionStorage.setItem(storageKey, order.reference);
       setReference(order.reference);
       setOrderStatus('quoted');
       setPaymentCents(typeof order.paymentCents === 'number' ? order.paymentCents : null);
       setMessage('Confira o valor de teste antes de iniciar o pagamento.');
     } catch {
-      const savedReference = sessionStorage.getItem('partner-sandbox-reference');
+      const savedReference = sessionStorage.getItem(storageKey);
       if (savedReference) {
         try {
           const result = await partnerSandboxCheckoutApi.status(savedReference);
@@ -264,7 +266,7 @@ export function PartnerSandboxCheckout() {
               <button
                 type="button"
                 onClick={() => {
-                  sessionStorage.removeItem('partner-sandbox-reference');
+                  sessionStorage.removeItem(storageKey);
                   window.location.assign('/');
                 }}
                 className="rounded-xl border border-neutral-300 p-3 font-bold"
