@@ -16,7 +16,7 @@ class PartnerCheckoutCompletionService
     public function complete(string $id): string
     {
         $order = PartnerCheckoutOrder::query()->findOrFail($id);
-        if ($order->status === 'attention_required' && $order->payment_id === null) {
+        if ($order->status === 'attention_required' && $order->attention_reason === 'payment_outcome_unknown' && $order->payment_id === null) {
             $this->recovery->recover($id);
             $order->refresh();
         }

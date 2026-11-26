@@ -47,7 +47,7 @@ class PartnerCheckoutCompletionServiceTest extends TestCase
         $base = ['supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'payment_method' => 'pix', 'encrypted_customer' => ['fullName' => 'Teste']];
         $pending = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('D', 40), 'merchant_order_id' => 'ORDER2', 'reservation_idempotency_key' => 'partner-order-123457', 'status' => 'payment_pending']);
         PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('E', 40), 'merchant_order_id' => 'ORDER3', 'reservation_idempotency_key' => 'partner-order-123458', 'status' => 'reservation_starting']);
-        $uncertainPayment = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('F', 40), 'merchant_order_id' => 'ORDER5', 'reservation_idempotency_key' => 'partner-order-123460', 'status' => 'attention_required']);
+        $uncertainPayment = PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('F', 40), 'merchant_order_id' => 'ORDER5', 'reservation_idempotency_key' => 'partner-order-123460', 'status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown']);
         PartnerCheckoutOrder::create([...$base, 'public_reference' => str_repeat('G', 40), 'merchant_order_id' => 'ORDER6', 'reservation_idempotency_key' => 'partner-order-123461', 'status' => 'attention_required', 'payment_id' => 'PAY6']);
         $this->artisan('partner-checkout:recover-sandbox')->assertSuccessful();
         Queue::assertPushed(CompletePartnerCheckout::class, fn (CompletePartnerCheckout $job): bool => $job->orderId === $pending->id);
@@ -103,6 +103,7 @@ class PartnerCheckoutCompletionServiceTest extends TestCase
         Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
         $paymentId = '11111111-1111-4111-8111-111111111111';
         $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('H', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'merchant_order_id' => 'ORDER4', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-123459', 'encrypted_customer' => ['fullName' => 'Teste', 'cpf' => '12345678901', 'phone' => '64999999999']]);
+        $order->update(['attention_reason' => 'payment_outcome_unknown']);
         $response = ['MerchantOrderId' => 'ORDER4', 'Payment' => ['PaymentId' => $paymentId, 'Status' => 2, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']];
         $cielo = $this->mock(CieloEcommerceClient::class);
         $cielo->shouldReceive('findPaymentByMerchantOrderId')->once()->andReturn($response);

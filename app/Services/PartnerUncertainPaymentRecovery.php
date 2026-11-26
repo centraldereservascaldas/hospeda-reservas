@@ -18,7 +18,7 @@ class PartnerUncertainPaymentRecovery
             throw new RuntimeException('Recuperação disponível apenas em sandbox.');
         }
         $order = PartnerCheckoutOrder::query()->findOrFail($id);
-        if ($order->status !== 'attention_required' || $order->payment_id !== null) {
+        if ($order->status !== 'attention_required' || $order->attention_reason !== 'payment_outcome_unknown' || $order->payment_id !== null) {
             return false;
         }
         $result = $this->cielo->findPaymentByMerchantOrderId($order->merchant_order_id);
@@ -30,7 +30,7 @@ class PartnerUncertainPaymentRecovery
 
         return DB::transaction(function () use ($id, $order, $paymentId, $payment): bool {
             $locked = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
-            if ($locked->status !== 'attention_required' || $locked->payment_id !== null || $locked->merchant_order_id !== $order->merchant_order_id || $locked->payment_cents !== $order->payment_cents) {
+            if ($locked->status !== 'attention_required' || $locked->attention_reason !== 'payment_outcome_unknown' || $locked->payment_id !== null || $locked->merchant_order_id !== $order->merchant_order_id || $locked->payment_cents !== $order->payment_cents) {
                 return false;
             }
             $qr = $locked->payment_method === 'pix' && is_string($payment['QrCodeString'] ?? null) ? $payment['QrCodeString'] : null;
