@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\CheckoutGuestsController;
 use App\Http\Controllers\Api\CheckoutPaymentController;
 use App\Http\Controllers\Api\CieloSopController;
 use App\Http\Controllers\Api\CieloWebhookController;
+use App\Http\Controllers\Api\DiscoveryCampaignController;
 use App\Http\Controllers\Api\ExistingReservationCheckoutController;
 use App\Http\Controllers\Api\ExistingReservationContractController;
 use App\Http\Controllers\Api\GuestReservationController;
@@ -37,6 +38,7 @@ Route::get('/ready', function () {
 });
 
 Route::get('/resorts', [AccommodationController::class, 'resorts']);
+Route::get('/discovery/campaigns', [DiscoveryCampaignController::class, 'index']);
 Route::get('/accommodations', [AccommodationController::class, 'index']);
 Route::get('/accommodations/{id}', [AccommodationController::class, 'show']);
 Route::post('/search', [AccommodationController::class, 'search']);
