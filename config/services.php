@@ -62,8 +62,15 @@ return [
         'base_url' => env('PARTNER_API_BASE_URL'),
         'key' => env('PARTNER_API_KEY'),
         'search_fallback_enabled' => (bool) env('PARTNER_SEARCH_FALLBACK_ENABLED', false),
+        'reservations_enabled' => (bool) env('PARTNER_RESERVATIONS_ENABLED', false),
         'timeout' => (int) env('PARTNER_API_TIMEOUT', 75),
         'cache_ttl' => (int) env('PARTNER_SEARCH_CACHE_TTL', 25),
+    ],
+
+    'partner_checkout_sandbox' => [
+        'enabled' => (bool) env('PARTNER_CHECKOUT_SANDBOX_ENABLED', false),
+        'base_url' => env('PARTNER_CHECKOUT_SANDBOX_BASE_URL'),
+        'key' => env('PARTNER_CHECKOUT_SANDBOX_KEY'),
     ],
 
     'stays_simulator' => [

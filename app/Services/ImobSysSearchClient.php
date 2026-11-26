@@ -12,7 +12,7 @@ use JsonException;
 class ImobSysSearchClient
 {
     /** @return list<array<string, mixed>>|null */
-    public function offers(string $from, string $to, int $guests, string $destination, ?string $propertyId = null): ?array
+    public function offers(string $from, string $to, int $guests, string $destination, ?string $propertyId = null, bool $fresh = false): ?array
     {
         if (! $this->isEnabled()) {
             return null;
@@ -22,7 +22,7 @@ class ImobSysSearchClient
             config('services.partner_api.base_url'), $from, $to, $guests, $propertyId,
         ], JSON_THROW_ON_ERROR));
 
-        $offers = Cache::remember($cacheKey, max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))), function () use ($from, $to, $guests, $propertyId): ?array {
+        $fetch = function () use ($from, $to, $guests, $propertyId, $fresh): ?array {
             $url = rtrim((string) config('services.partner_api.base_url'), '/').'/v1/offers';
 
             try {
@@ -62,10 +62,14 @@ class ImobSysSearchClient
                     }
 
                     $observedAt = $payload['observedAt'] ?? null;
+                    if ($fresh && (! is_string($observedAt) || strtotime($observedAt) === false || strtotime($observedAt) < now()->subSeconds(30)->timestamp || strtotime($observedAt) > now()->addSeconds(5)->timestamp)) {
+                        return null;
+                    }
                     if (! is_string($observedAt) || strtotime($observedAt) === false) {
                         $observedAt = now()->toIso8601String();
                     }
-                    $offers = [...$offers, ...array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnObservedAt' => $observedAt] : $offer, $pageOffers)];
+                    $guestCountVerified = ($payload['guestCountVerified'] ?? null) === true;
+                    $offers = [...$offers, ...array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnObservedAt' => $observedAt, '_crcnGuestCountVerified' => $guestCountVerified] : $offer, $pageOffers)];
                     if ($propertyId !== null && collect($pageOffers)->contains(fn (mixed $offer): bool => is_array($offer) && ($offer['id'] ?? null) === $propertyId)) {
                         $hasMore = false;
                         break;
@@ -83,7 +87,8 @@ class ImobSysSearchClient
             $expiresAt = now()->addSeconds(max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))))->getTimestamp();
 
             return array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnExpiresAt' => $expiresAt] : $offer, $offers);
-        });
+        };
+        $offers = $fresh ? $fetch() : Cache::remember($cacheKey, max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))), $fetch);
 
         if ($offers === null) {
             return null;
@@ -128,6 +133,9 @@ class ImobSysSearchClient
         return (bool) config('services.partner_api.search_fallback_enabled')
             && filter_var($baseUrl, FILTER_VALIDATE_URL) !== false
             && (parse_url($baseUrl, PHP_URL_SCHEME) === 'https' || app()->environment(['local', 'testing']))
+            && parse_url($baseUrl, PHP_URL_USER) === null
+            && parse_url($baseUrl, PHP_URL_QUERY) === null
+            && parse_url($baseUrl, PHP_URL_FRAGMENT) === null
             && trim((string) config('services.partner_api.key')) !== '';
     }
 
@@ -354,7 +362,7 @@ class ImobSysSearchClient
 
     private function request(): PendingRequest
     {
-        return Http::acceptJson()->withToken((string) config('services.partner_api.key'));
+        return Http::acceptJson()->withToken((string) config('services.partner_api.key'))->withoutRedirecting();
     }
 
     /** @return list<string> */

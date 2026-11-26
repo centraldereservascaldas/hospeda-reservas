@@ -13,7 +13,11 @@ test('a fila de testes persiste e não aceita confirmar duas vezes',()=>{
   assert.throws(()=>store.recordPaid({...item,paymentVerified:false}));
   store.recordPaid(item); assert.throws(()=>store.recordPaid(item)); store.close();
   store=openSandboxOrderStore(path); assert.equal(store.listPending()[0].reservation_reference,'TESTE1602');
-  store.confirm('test1602','Operador teste'); assert.equal(store.listPending().length,0);
-  assert.throws(()=>store.confirm('test1602','Operador teste')); store.close();
+  assert.throws(()=>store.recordSupplierPayment('test1602','Operador teste',0,'REF'));
+  store.recordSupplierPayment('test1602','Operador teste',50000,'REF-1'); assert.equal(store.listPending().length,0);
+  assert.equal(store.get('test1602').supplier_paid_cents,50000);
+  assert.equal(store.get('test1602').supplier_payment_reference,'REF-1');
+  assert.equal(store.get('test1602').confirmed_by,'Operador teste');
+  assert.throws(()=>store.recordSupplierPayment('test1602','Operador teste',50000,'REF-1')); store.close();
  } finally {rmSync(dir,{recursive:true,force:true});}
 });

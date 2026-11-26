@@ -18,6 +18,12 @@ Schedule::command('direct-booking:recover-confirmation-emails')->everyMinute()->
 Schedule::command('direct-booking:prune-expired-resume-tokens')->dailyAt('03:30')->withoutOverlapping(10);
 Schedule::command('direct-booking:prune-existing-checkout-recovery-credentials')->dailyAt('03:40')->withoutOverlapping(10);
 
+// This isolated scheduler never runs for production or against production Cielo.
+Schedule::command('partner-checkout:recover-sandbox')->everyMinute()->withoutOverlapping(5)
+    ->when(fn (): bool => app()->environment(['local', 'testing'])
+        && config('services.cielo.direct_environment') === 'sandbox'
+        && (bool) config('services.partner_checkout_sandbox.enabled'));
+
 Schedule::command('stays:sync-discovery')->hourly()->withoutOverlapping(120)->onOneServer()->runInBackground();
 
 Schedule::command('stays:prune-search-cache')->everyFiveMinutes()->withoutOverlapping(5)->runInBackground();

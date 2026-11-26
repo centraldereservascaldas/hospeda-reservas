@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Services\ImobSysSearchClient;
 use App\Services\StaysAccommodationMapper;
 use App\Services\StaysSearchAvailabilityService;
 use Illuminate\Http\Client\Request;
@@ -30,6 +31,36 @@ class ImobSysSearchFallbackTest extends TestCase
         ]);
     }
 
+    public function test_fresh_supplier_lookup_does_not_reuse_site_cache(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response([
+            'success' => true,
+            'from' => '2027-01-10',
+            'to' => '2027-01-12',
+            'guests' => 2,
+            'observedAt' => now()->toIso8601String(),
+            'offers' => [],
+            'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
+        ])]);
+        $client = app(ImobSysSearchClient::class);
+        $client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663');
+        $client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663');
+        $client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663', true);
+        Http::assertSentCount(2);
+    }
+
+    public function test_fresh_supplier_lookup_rejects_stale_or_missing_observation_time(): void
+    {
+        Http::preventStrayRequests();
+        $body = ['success' => true, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'offers' => [], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false]];
+        Http::fakeSequence()->push([...$body, 'observedAt' => now()->subMinute()->toIso8601String()])->push($body);
+        $client = app(ImobSysSearchClient::class);
+        $this->assertNull($client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663', true));
+        $this->assertNull($client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663', true));
+        Http::assertSentCount(2);
+    }
+
     public function test_production_partner_detail_requires_feature_flag_and_specific_property(): void
     {
         $originalEnvironment = $this->app['env'];
@@ -53,6 +84,20 @@ class ImobSysSearchFallbackTest extends TestCase
             ->assertServiceUnavailable();
 
         Http::assertNothingSent();
+    }
+
+    public function test_partner_search_rejects_unsafe_base_urls_and_redirects(): void
+    {
+        Http::preventStrayRequests();
+        foreach (['https://user:password@api.example.test', 'https://api.example.test?destination=elsewhere', 'https://api.example.test#fragment'] as $url) {
+            config(['services.partner_api.base_url' => $url]);
+            $this->assertNull(app(ImobSysSearchClient::class)->offers('2027-01-10', '2027-01-12', 2, ''));
+        }
+        Http::assertNothingSent();
+        config(['services.partner_api.base_url' => 'https://api.example.test']);
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response('', 302, ['Location' => 'https://other.example.test/offers'])]);
+        $this->assertNull(app(ImobSysSearchClient::class)->offers('2027-01-10', '2027-01-12', 2, ''));
+        Http::assertSentCount(1);
     }
 
     public function test_partner_detail_passes_one_guest_without_changing_the_requested_occupancy(): void

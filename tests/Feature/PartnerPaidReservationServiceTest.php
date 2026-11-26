@@ -1,0 +1,63 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\PartnerCheckoutOrder;
+use App\Services\PartnerPaidReservationService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use RuntimeException;
+use Tests\TestCase;
+
+class PartnerPaidReservationServiceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'server-secret', 'services.partner_api.reservations_enabled' => true]);
+        Http::preventStrayRequests();
+    }
+
+    private function order(string $status): PartnerCheckoutOrder
+    {
+        return PartnerCheckoutOrder::create(['public_reference' => str_repeat('A', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => $status, 'payment_id' => 'PAY1', 'merchant_order_id' => 'ORDER1', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-123456', 'encrypted_customer' => ['fullName' => 'Teste', 'cpf' => '12345678901', 'phone' => '64999999999']]);
+    }
+
+    public function test_paid_order_creates_one_reservation_and_replay_is_safe(): void
+    {
+        Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
+        $order = $this->order('payment_verified');
+        app(PartnerPaidReservationService::class)->create($order->id);
+        app(PartnerPaidReservationService::class)->create($order->id);
+        $this->assertSame('awaiting_seller_payment', $order->fresh()->status);
+        $this->assertSame('1600', $order->fresh()->reservation_reference);
+        Http::assertSentCount(1);
+    }
+
+    public function test_unpaid_order_cannot_request_reservation(): void
+    {
+        Http::fake();
+        $order = $this->order('payment_pending');
+        try {
+            app(PartnerPaidReservationService::class)->create($order->id);
+            $this->fail('Unpaid orders cannot reserve.');
+        } catch (RuntimeException) {
+            Http::assertNothingSent();
+        }
+    }
+
+    public function test_unknown_supplier_result_requires_manual_review(): void
+    {
+        Http::fake(['api.example.test/*' => Http::response(['success' => false], 503)]);
+        $order = $this->order('payment_verified');
+        try {
+            app(PartnerPaidReservationService::class)->create($order->id);
+            $this->fail('An unknown result requires review.');
+        } catch (RuntimeException) {
+            $this->assertSame('attention_required', $order->fresh()->status);
+            Http::assertSentCount(1);
+        }
+    }
+}

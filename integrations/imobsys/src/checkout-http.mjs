@@ -10,8 +10,8 @@ export async function handleCheckoutHttp({req,res,url,authorize,flow,operations,
   let raw='';for await(const chunk of req){raw+=chunk;if(Buffer.byteLength(raw)>16000){send(413,{success:false,code:'body_too_large'});return true;}}
   let input;try{input=JSON.parse(raw);}catch{send(400,{success:false,code:'invalid_json'});return true;}
   if(url.pathname==='/internal/checkout/start'){send(201,{success:true,...await flow.start(input)});return true;}
-  if(url.pathname==='/internal/checkout/reconcile'){const item=operations.get(input.id);if(!item?.payload?.order||!item.payload.paymentId){send(409,{success:false,code:'payment_not_ready'});return true;}await reconcile(item);send(200,{success:true,status:'awaiting_seller_confirmation'});return true;}
-  if(url.pathname==='/internal/checkout/seller-confirm'){sellerStore.confirm(input.id,input.operator);send(200,{success:true,status:'confirmed',environment:'sandbox'});return true;}
+  if(url.pathname==='/internal/checkout/reconcile'){const item=operations.get(input.id);if(!item?.payload?.order||!item.payload.paymentId){send(409,{success:false,code:'payment_not_ready'});return true;}const result=await reconcile(item);send(200,{success:true,status:result.status});return true;}
+  if(url.pathname==='/internal/checkout/seller-confirm'){sellerStore.recordSupplierPayment(input.id,input.operator,input.amountCents,input.reference);send(200,{success:true,status:'confirmed',environment:'sandbox'});return true;}
   send(404,{success:false,code:'not_found'});
  }catch{send(409,{success:false,code:'checkout_requires_review'});}
  return true;

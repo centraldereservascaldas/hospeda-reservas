@@ -1,0 +1,167 @@
+import { useCallback, useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
+import { apiFetch } from '../../services/apiFetch';
+import { useSupabaseSession } from '../../hooks/useSupabaseSession';
+
+interface Order {
+  id: string;
+  supplier_property_id: string;
+  check_in: string;
+  check_out: string;
+  guests: number;
+  base_cents: number;
+  status: string;
+  reservation_reference: string | null;
+}
+
+const currency = (cents: number) =>
+  (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/** Internal sandbox only; the server independently enforces admin authorization. */
+export function PartnerSandboxOperations() {
+  const { accountSession } = useSupabaseSession({
+    isConfigured: Boolean(
+      import.meta.env.VITE_SUPABASE_URL?.trim() && import.meta.env.VITE_SUPABASE_ANON_KEY?.trim(),
+    ),
+    initialHash: window.location.hash,
+    initialAuthCallbackError: '',
+  });
+  const token = accountSession?.access_token;
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await apiFetch('/api/owner/admin/partner-sandbox/orders', {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+      const result = await response.json();
+      if (!response.ok || !Array.isArray(result.orders)) throw new Error();
+      setOrders(result.orders);
+      setMessage('');
+    } catch {
+      setMessage('Não foi possível carregar os pedidos. Confira o acesso da conta.');
+    }
+  }, [token]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function record(event: FormEvent<HTMLFormElement>, order: Order) {
+    event.preventDefault();
+    if (!token || busy) return;
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const amount = Number(String(data.get('amount')).replace(',', '.'));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Informe um valor válido.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await apiFetch(
+        `/api/owner/admin/partner-sandbox/orders/${encodeURIComponent(order.id)}/manual-payment`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amountCents: Math.round(amount * 100),
+            reference: String(data.get('reference') || ''),
+          }),
+        },
+      );
+      if (!response.ok) throw new Error();
+      await load();
+      setMessage('Pagamento ao fornecedor registrado no teste.');
+    } catch {
+      setMessage(
+        'Não foi possível registrar. Atualize a fila e confira o pedido antes de tentar novamente.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="mx-auto max-w-4xl p-6 text-slate-900">
+      <h1 className="text-2xl font-bold">Pedidos de parceiros — teste</h1>
+      <p className="mt-2 text-sm">Fila interna de sandbox. Nenhum pagamento é feito nesta tela.</p>
+      {!token ? (
+        <p className="mt-6">Entre com uma conta administradora no site para consultar a fila.</p>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="my-5 rounded-xl border px-4 py-2"
+          >
+            Atualizar fila
+          </button>
+          {orders.length === 0 && !message && <p>Nenhum pedido aguardando atendimento.</p>}
+          <div className="grid gap-4">
+            {orders.map((order) => (
+              <article key={order.id} className="rounded-2xl border bg-white p-5 shadow-sm">
+                <h2 className="font-bold">Imóvel {order.supplier_property_id}</h2>
+                <p>
+                  {order.check_in.slice(0, 10)} até {order.check_out.slice(0, 10)} · {order.guests}{' '}
+                  hóspedes
+                </p>
+                <p>Valor da hospedagem: {currency(order.base_cents)}</p>
+                {order.status === 'awaiting_seller_payment' ? (
+                  <>
+                    <p>
+                      Pré-reserva: {order.reservation_reference} · aguardando pagamento ao
+                      fornecedor
+                    </p>
+                    <form
+                      onSubmit={(event) => void record(event, order)}
+                      className="mt-4 grid gap-2 sm:grid-cols-3"
+                    >
+                      <label>
+                        Valor pago (R$)
+                        <input
+                          name="amount"
+                          inputMode="decimal"
+                          required
+                          className="block w-full rounded border p-2"
+                        />
+                      </label>
+                      <label>
+                        Referência do pagamento
+                        <input
+                          name="reference"
+                          maxLength={100}
+                          required
+                          className="block w-full rounded border p-2"
+                        />
+                      </label>
+                      <button
+                        disabled={busy}
+                        className="self-end rounded bg-orange-700 p-2 font-bold text-white"
+                      >
+                        Registrar pagamento
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <p className="font-semibold text-amber-800">
+                    Precisa de conferência:{' '}
+                    {order.status === 'reservation_starting'
+                      ? 'pré-reserva em processamento'
+                      : 'resultado pendente de análise'}
+                    .
+                  </p>
+                )}
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+      <p role="status" className="mt-4">
+        {message}
+      </p>
+    </main>
+  );
+}

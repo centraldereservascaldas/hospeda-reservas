@@ -1,10 +1,12 @@
 import http from 'node:http';
 import { handleCheckoutHttp } from './checkout-http.mjs';
 import { openCheckoutOperationStore } from './checkout-operation-store.mjs';
-import { createPartnerCheckoutFlow } from './partner-checkout-flow.mjs';
+import { createPaidCheckoutStart } from './paid-checkout-start.mjs';
+import { createPaidReservationOrchestrator } from './paid-reservation-orchestrator.mjs';
+import { openCheckoutContextStore } from './checkout-context-store.mjs';
+import { createSandboxPaymentPoller } from './sandbox-payment-poller.mjs';
 import { createPartnerReservationClient } from './partner-reservation-client.mjs';
 import { createCieloSandboxClient } from './cielo-sandbox-client.mjs';
-import { reconcileSandboxPayment } from './sandbox-reconciliation.mjs';
 import { inspectPartnerContract } from './partner-reservation-check.mjs';
 import { parseReservationContext } from './partner-reservation-context.mjs';
 import { openSandboxOrderStore } from './sandbox-order-store.mjs';
@@ -47,11 +49,10 @@ const sellerStore = openSandboxOrderStore(`${root}/data/sandbox-orders.sqlite`);
 const operations=openCheckoutOperationStore(`${root}/data/checkout-operations.sqlite`);
 const sandboxConfigured=!!process.env.CIELO_SANDBOX_MERCHANT_ID&&!!process.env.CIELO_SANDBOX_MERCHANT_KEY;
 const cielo=sandboxConfigured?createCieloSandboxClient({merchantId:process.env.CIELO_SANDBOX_MERCHANT_ID,merchantKey:process.env.CIELO_SANDBOX_MERCHANT_KEY}):null;
-const checkoutFlow=createPartnerCheckoutFlow({
- enabled:process.env.IMOBSYS_SANDBOX_FLOW_ENABLED==='true'&&sandboxConfigured,
- operations,sellerStore,cielo,
- reservations:createPartnerReservationClient({enabled:process.env.IMOBSYS_RESERVATION_CREATION_ENABLED==='true'}),
- quoteProvider:async input=>{
+const contextKey=process.env.IMOBSYS_CHECKOUT_CONTEXT_KEY || '';
+const contextStore=/^[a-f0-9]{64}$/i.test(contextKey)?openCheckoutContextStore(`${root}/data/checkout-contexts.sqlite`,Buffer.from(contextKey,'hex')):null;
+const flowEnabled=process.env.IMOBSYS_SANDBOX_FLOW_ENABLED==='true'&&sandboxConfigured&&contextStore!==null;
+const quoteProvider=async input=>{
    const query=validateCheckoutQuery({propertyId:input.propertyId,from:input.from,to:input.to,guests:String(input.guests)});
    const search={from:query.from,to:query.to,guests:query.guests};
    const result=await (browserQueue.status().connected?browserQueue.query(search):adminProvider.availability(search));
@@ -61,16 +62,21 @@ const checkoutFlow=createPartnerCheckoutFlow({
    const response=await fetch('https://reservascrcn.com.br/',{method:'POST',redirect:'error',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:request,signal:AbortSignal.timeout(15000)});
    if(!response.ok)throw new Error('Partner quote unavailable.');
    const fields=parseReservationContext(await response.text(),{reference:parts[3],from:query.from,to:query.to,baseCents:quote.pix.totalCents});
-   input.reservationInput={...input.reservationInput,fields:{...fields,idCliente:input.reservationInput?.fields?.idCliente||'new'}};
+   input.reservationInput={...input.reservationInput,sourcePropertyId:query.propertyId,fields:{...fields,idCliente:input.reservationInput?.fields?.idCliente||'new'}};
    return quote;
- },
- verifyReservation:async(reservation,quote)=>{
+ };
+const verifyReservation=async(reservation,quote)=>{
    const response=await fetch(reservation.contractUrl,{redirect:'error',signal:AbortSignal.timeout(15000)});
    if(!response.ok)return false;
    inspectPartnerContract(await response.text(),{reference:reservation.reference,baseCents:quote.pix.totalCents});
    return true;
- },
-});
+ };
+const checkoutFlow=createPaidCheckoutStart({enabled:flowEnabled,operations,contextStore,cielo,quoteProvider});
+const paidReservations=createPaidReservationOrchestrator({enabled:flowEnabled,operations,cielo,sellerStore,verifyReservation,reservations:createPartnerReservationClient({enabled:process.env.IMOBSYS_RESERVATION_CREATION_ENABLED==='true'}),loadContext:async id=>{const item=operations.get(id);const context=contextStore?.load(id);if(!item?.payload?.order||!item.payload.paymentId||!context)throw Error('Contexto indisponível');return {...context,order:item.payload.order,paymentId:item.payload.paymentId};}});
+if(flowEnabled && process.env.IMOBSYS_RESERVATION_CREATION_ENABLED==='true') {
+  const poll=createSandboxPaymentPoller({operations,reconcile:id=>paidReservations.reconcile(id)});
+  const timer=setInterval(()=>void poll(),15000);timer.unref();
+}
 // Only a local bootstrap key and public encryption key are written. Never the upstream session.
 await writeFile(`${root}/data/admin-control.json`,JSON.stringify({port,controlKey:sessionReceiver.controlKey,publicKey:sessionReceiver.publicKey}));
 
@@ -215,7 +221,7 @@ const server = http.createServer(async (req, res) => {
         return json(200, result);
       }
     }
-    if(await handleCheckoutHttp({req,res,url,authorize:request=>request.headers['x-local-control']===sessionReceiver.controlKey,flow:checkoutFlow,operations,sellerStore,reconcile:async item=>{if(!cielo)throw Error('Sandbox unavailable');await reconcileSandboxPayment({client:cielo,store:sellerStore,order:item.payload.order,paymentId:item.payload.paymentId});operations.advance(item.id,'awaiting_seller_confirmation',{});}}))return;
+    if(await handleCheckoutHttp({req,res,url,authorize:request=>request.headers['x-local-control']===sessionReceiver.controlKey,flow:checkoutFlow,operations,sellerStore,reconcile:async item=>paidReservations.reconcile(item.id)}))return;
     if(['/seller-orders','/seller-orders.js'].includes(url.pathname)&&req.method==='GET') {
       const isScript=url.pathname.endsWith('.js');
       const content=await readFile(`${root}/public/seller-orders.${isScript?'js':'html'}`);
@@ -224,7 +230,7 @@ const server = http.createServer(async (req, res) => {
     if(url.pathname==='/internal/seller/orders') {
       if(req.method!=='GET')return json(405,{success:false,code:'read_only_service'});
       if(req.headers['x-local-control']!==sessionReceiver.controlKey)return json(403,{success:false,code:'control_denied'});
-      return json(200,{success:true,environment:'sandbox',orders:sellerStore.listPending()});
+      return json(200,{success:true,environment:'sandbox',orders:sellerStore.listPending(),attention:operations.listAttention()});
     }
     if(url.pathname.startsWith('/internal/browser/')) {
       if(req.headers['x-local-control']!==sessionReceiver.controlKey)return json(403,{success:false,code:'control_denied'});

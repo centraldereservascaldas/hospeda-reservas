@@ -85,6 +85,16 @@ const PaymentConfirmationPreview = lazy(() =>
 );
 
 const ImobSysPreviewPage = lazy(() => import('./components/ImobSysPreviewPage'));
+const PartnerSandboxCheckout = lazy(() =>
+  import('./components/booking/PartnerSandboxCheckout').then(({ PartnerSandboxCheckout }) => ({
+    default: PartnerSandboxCheckout,
+  })),
+);
+const PartnerSandboxOperations = lazy(() =>
+  import('./components/booking/PartnerSandboxOperations').then(({ PartnerSandboxOperations }) => ({
+    default: PartnerSandboxOperations,
+  })),
+);
 const ImobSysPropertyPage = lazy(() => import('./components/ImobSysPropertyPage'));
 
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
@@ -770,6 +780,22 @@ export default function App() {
         }
       >
         <CieloCheckoutPreviewPage />
+      </Suspense>
+    );
+  }
+
+  if (import.meta.env.DEV && pathname === '/checkout-preview/parceiro/operacao') {
+    return (
+      <Suspense fallback={<main role="status">Carregando prévia…</main>}>
+        <PartnerSandboxOperations />
+      </Suspense>
+    );
+  }
+
+  if (import.meta.env.DEV && pathname === '/checkout-preview/parceiro') {
+    return (
+      <Suspense fallback={<main role="status">Carregando prévia…</main>}>
+        <PartnerSandboxCheckout />
       </Suspense>
     );
   }

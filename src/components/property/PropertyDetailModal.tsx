@@ -614,6 +614,21 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                       Oferta observada na rede parceira. A disponibilidade ainda precisa ser
                       confirmada e a reserva não é realizada pelo site.
                     </p>
+                    {import.meta.env.DEV &&
+                      !imobSysSearchState?.loading &&
+                      !imobSysSearchState?.message &&
+                      property.imobsysOffer &&
+                      property.imobsysOffer.expiresAt > Date.now() &&
+                      property.imobsysOffer.from === partnerFrom &&
+                      property.imobsysOffer.to === partnerTo &&
+                      partnerGuests === countOccupancyGuests(initialGuests) && (
+                        <a
+                          className="mt-4 block rounded-xl bg-neutral-900 px-4 py-3 text-center text-sm font-bold text-white"
+                          href={`/checkout-preview/parceiro?${new URLSearchParams({ propertyId: property.id, from: partnerFrom, to: partnerTo, guests: String(partnerGuests), baseCents: String(Math.round(property.imobsysOffer.totalAmount * 100)) }).toString()}`}
+                        >
+                          Abrir checkout de teste
+                        </a>
+                      )}
                     {onImobSysSearch && (
                       <form
                         className="mt-5 space-y-3"
