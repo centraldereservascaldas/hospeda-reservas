@@ -636,7 +636,7 @@ export function SeasonalDateSuggestions({
     <div
       ref={rootRef}
       aria-label="Coleções de hospedagens"
-      className="mb-8 space-y-8 sm:mb-11 sm:space-y-10"
+      className="mb-9 space-y-9 sm:mb-12 sm:space-y-12"
     >
       {collections.map((collection, collectionIndex) => {
         const petSuggestions = collection.includePet
@@ -667,27 +667,31 @@ export function SeasonalDateSuggestions({
         );
 
         return (
-          <section key={collection.id} aria-labelledby={`${collection.id}-title`}>
+          <section
+            key={collection.id}
+            aria-labelledby={`${collection.id}-title`}
+            className="space-y-1"
+          >
             <div className="mb-4 flex items-end justify-between gap-4">
               <div>
-                <p className="mb-1 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-orange-700 sm:text-xs">
+                <p className="mb-1 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-orange-700 sm:text-xs">
                   <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
                   {collection.eyebrow}
                 </p>
                 <h2
                   id={`${collection.id}-title`}
-                  className="text-xl font-extrabold tracking-tight text-neutral-950 sm:text-2xl"
+                  className="text-xl font-semibold tracking-tight text-neutral-950 sm:text-2xl"
                 >
                   {collection.title}
                 </h2>
-                <p className="mt-1 text-xs leading-5 text-neutral-600 sm:text-sm">
+                <p className="mt-1 max-w-2xl text-xs leading-5 text-neutral-600 sm:text-sm">
                   {collection.description}
                 </p>
               </div>
             </div>
 
             {petSuggestions.length > 0 && (
-              <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-5">
+              <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-3 sm:mx-0 sm:grid sm:grid-cols-2 sm:gap-x-5 sm:gap-y-8 sm:overflow-visible sm:px-0 lg:grid-cols-4 xl:grid-cols-5">
                 {petSuggestions.map((suggestion, suggestionIndex) => {
                   const quote =
                     quotes[suggestion.id]?.guests === guestCount
@@ -726,9 +730,9 @@ export function SeasonalDateSuggestions({
                       type="button"
                       onClick={() => void openDateSuggestion(suggestion, quote, selectedGuests)}
                       aria-label={`${suggestion.label}, ${formatPeriod(suggestion)}${quote.status === 'ready' && quote.total ? `, a partir de ${formatCurrency(quote.total, currency)}` : ', consultar disponibilidade'}`}
-                      className="group w-[72vw] max-w-[17rem] shrink-0 snap-start rounded-2xl text-left transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700 sm:w-auto sm:max-w-none"
+                      className="group w-[78vw] max-w-[21rem] shrink-0 snap-start rounded-2xl text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700 sm:w-auto sm:max-w-none"
                     >
-                      <span className="relative block aspect-[4/3] overflow-hidden rounded-2xl border border-white/90 bg-neutral-100 shadow-[0_10px_28px_-18px_rgba(15,23,42,0.7)]">
+                      <span className="relative block aspect-[4/3] overflow-hidden rounded-[1.25rem] bg-neutral-100">
                         {quote.propertyImage ? (
                           <img
                             {...getPropertyCardImageSources(
@@ -737,7 +741,7 @@ export function SeasonalDateSuggestions({
                             )}
                             decoding="async"
                             alt={quote.status === 'ready' ? quote.propertyTitle : suggestion.label}
-                            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]"
                             loading={
                               collectionIndex === 0 && suggestionIndex === 0 ? 'eager' : 'lazy'
                             }
@@ -754,17 +758,17 @@ export function SeasonalDateSuggestions({
                             )}
                           </span>
                         )}
-                        <span className="absolute left-3 top-3 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-orange-700 shadow-sm backdrop-blur-md">
+                        <span className="absolute left-3 top-3 rounded-full bg-white/95 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-neutral-800 shadow-sm">
                           {imageBadge}
                         </span>
-                        <span className="absolute bottom-3 left-3 rounded-full border border-white/80 bg-neutral-950/72 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-md">
+                        <span className="absolute bottom-3 left-3 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-semibold text-neutral-900 shadow-sm">
                           {formatPeriod(suggestion)}
                         </span>
                       </span>
 
                       <span className="mt-3 flex items-start justify-between gap-2 px-0.5">
                         <span className="min-w-0">
-                          <span className="line-clamp-1 text-sm font-extrabold text-neutral-950">
+                          <span className="line-clamp-1 text-sm font-semibold text-neutral-950">
                             {displayTitle}
                           </span>
                           {collection.id === 'holidays' ? (

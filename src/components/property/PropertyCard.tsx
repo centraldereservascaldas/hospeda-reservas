@@ -21,6 +21,7 @@ interface PropertyCardProps {
   availabilityConfirmed?: boolean;
   searchGuestCount?: number;
   prioritizeImage?: boolean;
+  eagerImage?: boolean;
 }
 
 export const PropertyCard: React.FC<PropertyCardProps> = ({
@@ -34,6 +35,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   availabilityConfirmed = false,
   searchGuestCount = 1,
   prioritizeImage = false,
+  eagerImage = prioritizeImage,
 }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -127,14 +129,14 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
       : null;
 
   return (
-    <article className="group relative mx-2 flex flex-col cursor-pointer transition-transform duration-200 rounded-3xl border border-white/80 p-2 liquid-glass shadow-[0_4px_20px_rgba(0,0,0,0.03)] transition-all hover:-translate-y-1 hover:shadow-xl sm:mx-0 sm:p-2.5 md:p-3">
+    <article className="group relative mx-2 flex cursor-pointer flex-col rounded-[1.35rem] border border-transparent bg-transparent p-0 transition-transform duration-200 hover:-translate-y-0.5 sm:mx-0">
       <button
         type="button"
         data-property-detail-trigger={property.id}
         onClick={handlePropertyDetailClick}
         aria-label={`Ver detalhes de ${displayTitle}`}
         aria-describedby={`${priceDescriptionId}${hasConfirmedAvailability ? ` ${availabilityDescriptionId}` : ''}`}
-        className="absolute inset-0 z-0 rounded-3xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-600"
+        className="absolute inset-0 z-0 rounded-[1.35rem] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-600"
         style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
         onTouchStart={handlePhotoTouchStart}
         onTouchEnd={handlePhotoTouchEnd}
@@ -146,7 +148,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         {/* Photo Carousel Container */}
         <div
           ref={photoCarouselRef}
-          className="relative aspect-[4/3] w-full overflow-hidden rounded-[1.35rem] bg-neutral-100/60 border border-white/80 shadow-2xs group-hover:shadow-md transition-all duration-300"
+          className="relative aspect-[4/3] w-full overflow-hidden rounded-[1.35rem] bg-neutral-100 transition-colors duration-300 group-hover:bg-neutral-200"
           style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
         >
           {/* Images */}
@@ -154,8 +156,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             {...getPropertyCardImageSources(currentImage, CATALOG_IMAGE_SIZES)}
             decoding="async"
             alt=""
-            className="h-full w-full object-cover object-center group-hover:scale-105 transition-transform duration-500 ease-out"
-            loading={prioritizeImage ? 'eager' : 'lazy'}
+            className="h-full w-full object-cover object-center transition-transform duration-500 ease-out group-hover:scale-[1.025]"
+            loading={eagerImage ? 'eager' : 'lazy'}
             fetchPriority={prioritizeImage ? 'high' : 'auto'}
           />
 
@@ -169,7 +171,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
                 : `Salvar ${displayTitle} nos favoritos`
             }
             aria-pressed={isSaved}
-            className="pointer-events-auto absolute top-3 right-3 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-white/90 bg-white/95 text-neutral-900 shadow-md transition-all hover:scale-105 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+            className="pointer-events-auto absolute right-3 top-3 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-neutral-900 shadow-sm transition-all hover:scale-105 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
           >
             <Heart
               className={`h-5 w-5 transition-colors duration-200 stroke-[2.2] ${
@@ -245,10 +247,10 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
         </div>
 
         {/* Info Content with High Legibility */}
-        <div className="mt-4 flex flex-col gap-2 px-2 pb-2 text-sm sm:mt-3 sm:gap-1 sm:pb-1">
+        <div className="mt-3 flex flex-col gap-1 px-0.5 pb-1 text-sm">
           {/* Title & Rating */}
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-extrabold text-neutral-950 text-base leading-snug line-clamp-1 group-hover:text-orange-600 transition-colors">
+            <h3 className="line-clamp-1 text-sm font-semibold leading-snug text-neutral-900 transition-colors group-hover:text-orange-700 sm:text-base">
               <a
                 href={accommodationPagePath(property)}
                 className="pointer-events-auto rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
@@ -270,7 +272,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
             </h3>
             {property.reviewsSynced && property.reviewCount > 0 && (
               <div
-                className="flex items-center gap-1 flex-shrink-0 font-bold text-xs liquid-glass px-2 py-0.5 rounded-lg border border-white/80 shadow-2xs"
+                className="flex shrink-0 items-center gap-1 rounded-lg px-1 py-0.5 text-xs font-bold"
                 aria-label={`Média ${property.rating.toFixed(2)} de 5 com ${property.reviewCount} ${property.reviewCount === 1 ? 'avaliação' : 'avaliações'}`}
               >
                 <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
@@ -281,14 +283,14 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           </div>
 
           {/* Location & Caldas Novas • GO */}
-          <p className="text-neutral-500 font-medium text-sm truncate">
+          <p className="truncate text-sm font-medium text-neutral-500">
             {property.location.city} • {property.location.state}
           </p>
 
           {hasConfirmedAvailability && (
             <p
               id={availabilityDescriptionId}
-              className="mt-1 inline-flex items-center gap-1 text-caption font-bold text-emerald-800"
+              className="mt-1 inline-flex items-center gap-1 text-caption font-semibold text-emerald-800"
             >
               <Check aria-hidden="true" className="h-3 w-3 shrink-0" />
               Disponível nas datas selecionadas para {searchGuestCount}{' '}
@@ -297,7 +299,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           )}
 
           {/* Room & Guest capacity */}
-          <p className="text-neutral-700 font-semibold text-sm">
+          <p className="text-xs font-medium text-neutral-600">
             {property.bedrooms} {property.bedrooms === 1 ? 'quarto' : 'quartos'} •{' '}
             {property.maxGuests} hóspedes {property.beds ? `• ${property.beds} camas` : ''}
           </p>
@@ -306,12 +308,10 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           <div id={priceDescriptionId} className="mt-1 flex items-baseline gap-1">
             {displayPrice.kind === 'quote' || displayPrice.kind === 'reference' ? (
               <div className="flex flex-col items-start gap-1">
-                <span className="text-base font-black text-neutral-950 sm:text-lg">
+                <span className="text-sm font-semibold text-neutral-900 sm:text-base">
                   {formatCurrency(displayPrice.amount, currency)}
                 </span>
-                <span className="text-caption font-medium text-neutral-600">
-                  {displayPrice.detail}
-                </span>
+                <span className="text-xs font-medium text-neutral-500">{displayPrice.detail}</span>
                 {sixInstallmentAmount !== null && (
                   <span className="inline-flex w-fit items-center rounded-full border border-neutral-200 bg-white/75 px-2 py-1 text-caption font-semibold text-neutral-600">
                     6x {formatCurrency(sixInstallmentAmount, 'BRL')}
