@@ -15,7 +15,7 @@ Object.assign(globalThis, {
 
 const React = (await import('react')).default;
 const { cleanup, fireEvent, render, screen } = await import('@testing-library/react');
-const { SeasonalDateSuggestions } =
+const { SeasonalDateSuggestions, formatPeriod } =
   await import('../src/components/search/SeasonalDateSuggestions.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 const { STAYS_NET_APARTMENTS } = await import('../src/data/staysApartments.ts');
@@ -41,7 +41,6 @@ function createElement(props: Partial<ComponentProps<typeof SeasonalDateSuggesti
       property('listing-b', 'Apartamento B', 'pet_friendly'),
       property('listing-a', 'Apartamento A', 'pet_friendly'),
     ],
-    onSelect: () => {},
     onOpenProperty: () => {},
     ...props,
   });
@@ -75,9 +74,7 @@ test('renders stable catalog cards without background quote or catalog requests'
   assert.equal(searchCalls, 0);
   assert.equal(catalogCalls, 0);
 
-  const before = screen
-    .getAllByRole('button')
-    .map((button) => button.getAttribute('aria-label'));
+  const before = screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
   view.rerender(
     createElement({
       fallbackProperties: [
@@ -86,35 +83,54 @@ test('renders stable catalog cards without background quote or catalog requests'
       ],
     }),
   );
-  const after = screen
-    .getAllByRole('button')
-    .map((button) => button.getAttribute('aria-label'));
+  const after = screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'));
   assert.deepEqual(after, before);
   assert.equal(searchCalls, 0);
 });
 
-test('selecting a seasonal card passes its future dates and guest details to the existing search flow', () => {
-  const selections: Array<{
-    checkIn: string;
-    checkOut: string;
-    persons?: number;
-    guests?: { adults?: number; pets?: number };
-  }> = [];
-  render(createElement({
-    guests: { adults: 2, children: 1, infants: 0, pets: 0 },
-    onSelect: (params) => {
-      selections.push(params);
-    },
-  }));
+test('seasonal pet card opens the displayed pet-friendly property with dates and guests', () => {
+  const selections: Array<{ propertyId: string; checkIn: string; checkOut: string; pets: number }> =
+    [];
+  const accepting = property('listing-a', 'Apartamento A', 'pet_friendly');
+  const rejecting = {
+    ...property('listing-b', 'Apartamento B', 'family_friendly'),
+    description: 'Não aceita animais',
+  };
+  render(
+    createElement({
+      guests: { adults: 2, children: 1, infants: 0, pets: 0 },
+      fallbackProperties: [accepting, rejecting],
+      onOpenProperty: (selected, params) => {
+        selections.push({
+          propertyId: selected.id,
+          checkIn: params.checkIn,
+          checkOut: params.checkOut,
+          pets: params.guests?.pets ?? 0,
+        });
+      },
+    }),
+  );
 
-  fireEvent.click(screen.getAllByRole('button', { name: /Apartamento A.*ACEITA PET|Apartamento A.*Fim de semana com seu pet/i })[0]!);
-
+  const section = screen
+    .getByRole('heading', { name: 'Hospedagens para viajar com seu pet' })
+    .closest('section')!;
+  assert.doesNotMatch(section.textContent || '', /Apartamento B/);
+  const card = Array.from(section.querySelectorAll('button')).find((button) =>
+    button.getAttribute('aria-label')?.includes('Apartamento A'),
+  )!;
+  fireEvent.click(card);
   assert.equal(selections.length, 1);
-  assert.ok(selections[0]!.checkIn >= new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10));
+  assert.equal(selections[0]!.propertyId, 'listing-a');
   assert.ok(selections[0]!.checkOut > selections[0]!.checkIn);
-  assert.equal(selections[0]!.persons, 2);
-  assert.equal(selections[0]!.guests?.adults, 2);
-  assert.equal(selections[0]!.guests?.pets, 1);
+  assert.equal(selections[0]!.pets, 1);
+  assert.match(card.getAttribute('aria-label') || '', /\b20\d{2}\b/);
+});
+
+test('seasonal date labels distinguish years, including a stay across New Year', () => {
+  assert.match(formatPeriod({ checkIn: '2027-11-19', checkOut: '2027-11-22' }), /2027/);
+  const acrossYears = formatPeriod({ checkIn: '2026-12-31', checkOut: '2027-01-03' });
+  assert.match(acrossYears, /2026/);
+  assert.match(acrossYears, /2027/);
 });
 
 test('offers horizontal carousel controls on desktop and mobile carousels keep a centered inset', () => {

@@ -18,17 +18,18 @@ interface SeasonalDateSuggestionsProps {
   guests: AccommodationWidgetSearchParams['guests'];
   guestCount: number;
   fallbackProperties?: Property[];
-  onSelect: (params: AccommodationWidgetSearchParams) => void | Promise<void>;
   onOpenProperty: (property: Property, params: AccommodationWidgetSearchParams) => void;
 }
 
 const EMPTY_PROPERTIES: Property[] = [];
 
-const formatPeriod = (suggestion: HomeDateSuggestion) => {
+export const formatPeriod = (suggestion: Pick<HomeDateSuggestion, 'checkIn' | 'checkOut'>) => {
   const checkIn = new Date(`${suggestion.checkIn}T12:00:00`);
   const checkOut = new Date(`${suggestion.checkOut}T12:00:00`);
   const format = (date: Date) =>
-    date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }).replace('.', '');
+    date
+      .toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' })
+      .replace('.', '');
   return `${format(checkIn)} – ${format(checkOut)}`;
 };
 
@@ -89,7 +90,6 @@ export function SeasonalDateSuggestions({
   guests,
   guestCount,
   fallbackProperties = EMPTY_PROPERTIES,
-  onSelect,
   onOpenProperty,
 }: SeasonalDateSuggestionsProps) {
   const [collections, setCollections] = useState(() => getHomeDiscoveryCollections());
@@ -170,12 +170,7 @@ export function SeasonalDateSuggestions({
     </div>
   );
 
-  const carouselHeading = (
-    id: string,
-    eyebrow: string,
-    title: string,
-    description: string,
-  ) => (
+  const carouselHeading = (id: string, eyebrow: string, title: string, description: string) => (
     <div className="mb-4 flex items-end justify-between gap-4">
       <div>
         <p className="mb-1 inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-orange-700 sm:text-xs">
@@ -196,14 +191,6 @@ export function SeasonalDateSuggestions({
     </div>
   );
 
-  const selectDates = (suggestion: HomeDateSuggestion, selectedGuests = guests) =>
-    onSelect({
-      checkIn: suggestion.checkIn,
-      checkOut: suggestion.checkOut,
-      persons: guestCount,
-      guests: selectedGuests,
-    });
-
   return (
     <div aria-label="Coleções de hospedagens" className="mb-9 space-y-9 sm:mb-12 sm:space-y-12">
       {collections.map((collection) => {
@@ -213,7 +200,9 @@ export function SeasonalDateSuggestions({
             suggestion,
             property:
               collectionProperties.length > 0
-                ? collectionProperties[(suggestion.propertyIndex ?? 0) % collectionProperties.length]
+                ? collectionProperties[
+                    (suggestion.propertyIndex ?? 0) % collectionProperties.length
+                  ]
                 : undefined,
           }))
           .filter((entry) => Boolean(entry.property));
@@ -255,7 +244,14 @@ export function SeasonalDateSuggestions({
                   <button
                     key={suggestion.id}
                     type="button"
-                    onClick={() => void selectDates(suggestion, petGuests)}
+                    onClick={() =>
+                      onOpenProperty(property, {
+                        checkIn: suggestion.checkIn,
+                        checkOut: suggestion.checkOut,
+                        persons: guestCount,
+                        guests: petGuests,
+                      })
+                    }
                     aria-label={`${title}, ${suggestion.label}, ${formatPeriod(suggestion)}. Ver disponibilidade e preço final`}
                     className="group w-[76vw] max-w-[21rem] shrink-0 snap-center rounded-2xl text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-neutral-800 sm:w-[19rem] lg:w-[21rem]"
                   >

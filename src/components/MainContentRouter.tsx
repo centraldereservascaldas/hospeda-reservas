@@ -149,7 +149,6 @@ export function MainContentRouter({
   onClearPropertyRefinements,
   onClearCatalogFilters,
   onOpenSearch,
-  onSearchInApp,
   onOpenSuggestedProperty,
   onSelectCondominium,
   onToggleSave,
@@ -273,7 +272,6 @@ export function MainContentRouter({
                 guests={filters.guests}
                 guestCount={searchGuestCount}
                 fallbackProperties={filteredProperties}
-                onSelect={onSearchInApp}
                 onOpenProperty={onOpenSuggestedProperty}
               />
             )}
