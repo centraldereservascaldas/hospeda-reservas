@@ -92,6 +92,35 @@ test('renders a catalog grid for matching accommodations', () => {
   assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' }));
 });
 
+test('prioritizes only the opening catalog row and keeps the remaining covers lazy', () => {
+  const properties = Array.from({ length: 5 }, (_, index) => ({
+    ...STAYS_NET_APARTMENTS[0]!,
+    id: `property-${index}`,
+    title: `Apartamento ${index + 1}`,
+  }));
+
+  render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties,
+      prioritizeFirstImage: true,
+    }),
+  );
+
+  const images = Array.from(document.querySelectorAll('article img'));
+  assert.equal(images.length, 5);
+  assert.deepEqual(
+    images.map((image) => image.getAttribute('loading')),
+    ['eager', 'eager', 'eager', 'eager', 'lazy'],
+  );
+  assert.equal(images[0]?.getAttribute('fetchpriority'), 'high');
+  assert.deepEqual(
+    images.slice(1).map((image) => image.getAttribute('fetchpriority')),
+    ['auto', 'auto', 'auto', 'auto'],
+  );
+});
+
 test('emits view_item_list only for displayed results and ignores catalog rerenders with the same IDs', () => {
   saveMeasurementConsent({ analytics: true, advertising: true });
   loadGtmIfConsented({ analytics: true, advertising: true }, 'GTM-ABC123');
