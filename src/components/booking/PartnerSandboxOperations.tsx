@@ -173,6 +173,43 @@ export function PartnerSandboxOperations() {
     }
   }
 
+  async function reviewReservation(event: FormEvent<HTMLFormElement>, order: Order) {
+    event.preventDefault();
+    if (!token || busy) return;
+    const data = new FormData(event.currentTarget);
+    const value = Number(String(data.get('baseAmount')).replace(',', '.'));
+    if (!Number.isFinite(value) || value <= 0) {
+      setMessage('Informe o valor da reserva observado na ImobSys.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await apiFetch(
+        `/api/owner/admin/partner-sandbox/orders/${encodeURIComponent(order.id)}/supplier-review`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reference: String(data.get('reference') || ''),
+            propertyId: String(data.get('propertyId') || ''),
+            from: String(data.get('from') || ''),
+            to: String(data.get('to') || ''),
+            guests: Number(data.get('guests')),
+            baseCents: Math.round(value * 100),
+            confirmed: data.get('confirmed') === 'on',
+          }),
+        },
+      );
+      if (!response.ok) throw new Error();
+      await load(page);
+      setMessage('Conferência registrada. O pedido aguarda pagamento manual ao fornecedor.');
+    } catch {
+      setMessage('Os dados não conferem ou o pedido mudou. Confira novamente na ImobSys.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="mx-auto max-w-4xl p-6 text-slate-900">
       <h1 className="text-2xl font-bold">Pedidos de parceiros — teste</h1>
@@ -215,6 +252,84 @@ export function PartnerSandboxOperations() {
                       Consultar operação
                     </button>
                     {supplierStatus[order.id] && <p role="status">{supplierStatus[order.id]}</p>}
+                    <details className="mt-3">
+                      <summary className="cursor-pointer font-semibold">
+                        Registrar conferência manual
+                      </summary>
+                      <p className="mt-2 text-sm">
+                        Consulte a ImobSys e digite os dados observados. Não crie outra pré-reserva.
+                      </p>
+                      <form
+                        onSubmit={(event) => void reviewReservation(event, order)}
+                        className="mt-3 grid gap-2 sm:grid-cols-2"
+                      >
+                        <label>
+                          Referência da pré-reserva
+                          <input
+                            required
+                            name="reference"
+                            inputMode="numeric"
+                            pattern="[1-9][0-9]{0,11}"
+                            className="block w-full rounded border p-2"
+                          />
+                        </label>
+                        <label>
+                          Código do imóvel
+                          <input
+                            required
+                            name="propertyId"
+                            className="block w-full rounded border p-2"
+                          />
+                        </label>
+                        <label>
+                          Entrada
+                          <input
+                            required
+                            name="from"
+                            type="date"
+                            className="block w-full rounded border p-2"
+                          />
+                        </label>
+                        <label>
+                          Saída
+                          <input
+                            required
+                            name="to"
+                            type="date"
+                            className="block w-full rounded border p-2"
+                          />
+                        </label>
+                        <label>
+                          Hóspedes
+                          <input
+                            required
+                            name="guests"
+                            type="number"
+                            min="1"
+                            className="block w-full rounded border p-2"
+                          />
+                        </label>
+                        <label>
+                          Valor da hospedagem (R$)
+                          <input
+                            required
+                            name="baseAmount"
+                            inputMode="decimal"
+                            className="block w-full rounded border p-2"
+                          />
+                        </label>
+                        <label className="sm:col-span-2">
+                          <input required name="confirmed" type="checkbox" /> Confirmei na ImobSys
+                          que a pré-reserva está ativa e os dados acima correspondem ao pedido.
+                        </label>
+                        <button
+                          disabled={busy}
+                          className="rounded bg-orange-700 p-2 font-bold text-white"
+                        >
+                          Registrar conferência
+                        </button>
+                      </form>
+                    </details>
                   </div>
                 )}
                 {order.status === 'awaiting_seller_payment' ? (

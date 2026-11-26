@@ -6,6 +6,7 @@ use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
 use App\Models\PartnerCheckoutOrder;
 use App\Services\PartnerManualPaymentService;
+use App\Services\PartnerManualReservationReview;
 use App\Services\ImobSysPreReservationClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,23 @@ use Throwable;
 
 class PartnerSandboxOperationsController extends Controller
 {
+    public function review(Request $request, string $id, PartnerManualReservationReview $review): JsonResponse
+    {
+        abort_unless(app()->environment(['local', 'testing']) && config('services.partner_checkout_sandbox.enabled'), 404);
+        $guest = $request->attributes->get('verified_guest');
+        abort_unless($guest instanceof VerifiedGuest, 401);
+        $input = $request->validate(['reference' => ['required', 'string', 'regex:/\A[1-9]\d{0,11}\z/D'], 'propertyId' => ['required', 'string', 'max:80'], 'from' => ['required', 'date_format:Y-m-d'], 'to' => ['required', 'date_format:Y-m-d'], 'guests' => ['required', 'integer', 'min:1'], 'baseCents' => ['required', 'integer', 'min:1'], 'confirmed' => ['required', 'boolean']]);
+        $input['guests'] = (int) $input['guests'];
+        $input['baseCents'] = (int) $input['baseCents'];
+        $input['confirmed'] = $input['confirmed'] === true;
+        try {
+            $review->confirm($id, $guest->email, $input);
+        } catch (Throwable) {
+            return response()->json(['success' => false, 'message' => 'Não foi possível confirmar. Confira os dados na ImobSys.'], 409)->header('Cache-Control', 'no-store, private');
+        }
+        return response()->json(['success' => true, 'status' => 'awaiting_seller_payment'])->header('Cache-Control', 'no-store, private');
+    }
+
     public function supplierStatus(string $id, ImobSysPreReservationClient $supplier): JsonResponse
     {
         abort_unless(app()->environment(['local', 'testing']) && config('services.partner_checkout_sandbox.enabled'), 404);
