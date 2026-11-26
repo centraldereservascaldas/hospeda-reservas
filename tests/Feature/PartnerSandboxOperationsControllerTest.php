@@ -113,11 +113,18 @@ class PartnerSandboxOperationsControllerTest extends TestCase
 
     public function test_admin_review_requires_exact_observed_details_and_is_audited_once(): void
     {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key', 'services.hospeda.owner_admin_emails' => ['admin@example.test']]);
         Http::fake(['*/auth/v1/user' => Http::response(['id' => '575c8054-6646-443c-bf62-07945019a32f', 'email' => 'admin@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Pessoa Teste']])]);
         $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('R', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown', 'reservation_reference' => '1600', 'payment_id' => 'PAY1', 'merchant_order_id' => 'ORDERREVIEW', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-review', 'encrypted_customer' => ['fullName' => 'Teste']]);
         $url = '/api/owner/admin/partner-sandbox/orders/'.$order->id.'/supplier-review';
         $input = ['reference' => '1600', 'propertyId' => 'imobsys-crcn-2-663', 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'baseCents' => 52300, 'confirmed' => true];
+        $order->update(['payment_id' => null]);
+        $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
+        $order->update(['payment_id' => 'PAY1']);
+        config(['services.cielo.direct_environment' => 'production']);
+        $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
+        config(['services.cielo.direct_environment' => 'sandbox']);
         foreach ([['reference' => '1601'], ['propertyId' => 'imobsys-crcn-2-664'], ['from' => '2027-05-18'], ['to' => '2027-05-20'], ['guests' => 3], ['baseCents' => 52301], ['confirmed' => false]] as $difference) {
             $this->withToken('admin-token')->postJson($url, [...$input, ...$difference])->assertStatus(409);
             $this->assertSame('attention_required', $order->fresh()->status);
@@ -126,6 +133,14 @@ class PartnerSandboxOperationsControllerTest extends TestCase
         $this->assertSame('admin@example.test', $order->fresh()->supplier_reviewed_by);
         $this->assertNotNull($order->fresh()->supplier_reviewed_at);
         $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
+        $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders')->assertOk()->assertJsonPath('orders.0.id', $order->id)->assertJsonPath('orders.0.reservation_reference', '1600');
+        $paymentUrl = '/api/owner/admin/partner-sandbox/orders/'.$order->id.'/manual-payment';
+        $this->withToken('admin-token')->postJson($paymentUrl, ['amountCents' => 41800, 'reference' => 'MANUAL-TEST'])->assertOk();
+        $this->assertSame('supplier_payment_recorded', $order->fresh()->status);
+        $this->assertSame('admin@example.test', $order->fresh()->supplier_reviewed_by);
+        $this->assertSame('admin@example.test', $order->fresh()->supplier_paid_by);
+        $this->assertSame(41800, (int) $order->fresh()->supplier_paid_cents);
+        $this->withToken('admin-token')->postJson($paymentUrl, ['amountCents' => 41800, 'reference' => 'MANUAL-TEST'])->assertStatus(409);
     }
 
     public function test_operations_paginates_and_prioritizes_orders_requiring_attention(): void
