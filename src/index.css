@@ -20,7 +20,8 @@
   --color-calendar-unavailable: #fff1f2;
   --color-calendar-unavailable-foreground: #be123c;
   --color-focus-ring: #ea580c;
-  --color-page: #f8fafc;
+  --color-page: #ffffff;
+  --crcn-page-background: none;
   --color-glass-border: rgba(148, 163, 184, 0.3);
   --text-caption: 0.75rem;
   --text-caption--line-height: 1rem;
