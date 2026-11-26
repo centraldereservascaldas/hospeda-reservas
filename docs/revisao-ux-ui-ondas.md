@@ -670,10 +670,14 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 **Validação F55:** teste direcionado percorreu os três painéis, Escape e a transição condomínio → datas. No navegador local, abrir cada painel por Enter colocou foco em seu primeiro controle; Escape retornou ao acionador; escolher “Todos os condomínios” abriu o calendário e focou 26/11/2026. A interface indicava ambiente de simulação; nenhuma reserva ou consulta de disponibilidade foi enviada. Leitor de tela não testado; a validação responsiva móvel permanece na matriz da onda 5.
 
+**Pacote F02/F03 · ciclo de vida e continuidade da busca.** Implementação e testes no commit `e214d24`. A origem do painel agora é fechada quando sai completamente da janela; uma busca válida também fecha o portal antes de chamar a navegação. A seleção do intervalo no desktop avança para hóspedes no mesmo painel e transfere foco ao primeiro controle habilitado; no viewport móvel, o painel fecha e o foco volta a “Quando”, sem avanço automático. F02 permanece parcial porque o navegador local tem conteúdo simulado curto e manteve o segmento visível durante a rolagem; abertura do detalhe e navegação por histórico após a busca precisam ser revalidadas com um catálogo que permita reproduzir a saída real da origem.
+
+**Validação F02/F03:** testes direcionados passaram para origem fora da janela, envio de busca, transição desktop com datas preservadas e ausência de avanço automático no viewport móvel. No navegador local a 1200 × 885, selecionar “Todos os condomínios”, check-in 1/12/2026 e check-out 3/12/2026 abriu “Selecionar hóspedes” e focou “Aumentar adultos”; os campos mantiveram as datas ISO corretas. O catálogo indicava modo de simulação, sem envio de busca/reserva. A rolagem real não retirou o segmento do viewport nessa página curta; a simulação geométrica coberta por teste unitário verifica o fechamento quando isso acontece.
+
 ### Onda 2 · Painéis, camadas e interação responsiva
 
-- [ ] Corrigir ciclo de vida e fechamento dos painéis (F02), incluindo rolagem, navegação e mudança de contexto.
-- [ ] Implementar transição datas → hóspedes com ação de busca acessível (F03).
+- [ ] F02 parcial: painéis fecham após envio ou quando a origem deixa a janela; testes direcionados passaram. Validar detalhe e saída real da origem em página longa/catálogo disponível antes de concluir.
+- [x] Corrigir transição datas → hóspedes no desktop (F03), preservando datas e foco; em mobile, manter o calendário fechado sem abrir hóspedes automaticamente. Testes direcionados e navegador local passaram.
 - [x] Corrigir F55: abertura e retorno por teclado verificados nos painéis de condomínio, datas e hóspedes; a seleção de “Todos os condomínios” transfere o foco para uma data disponível. Testes direcionados e navegador local a 1200 × 885 passaram em 26/11/2026. A matriz móvel continua na validação geral da onda 5.
 - [ ] Reproduzir e resolver corte em altura curta e mudança de largura (F06 e F10).
 - [ ] Delimitar portais ao diálogo correto e revisar modais aninhados (F07).
