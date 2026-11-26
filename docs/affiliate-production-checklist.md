@@ -18,7 +18,9 @@ Este checklist acompanha a homologação funcional e a preparação de publicaç
 - [x] Bloqueio administrativo de imóveis para novos links.
 - [x] Link individual com token opaco aleatório gerado no servidor.
 - [x] Captura da indicação com validade e escopo por imóvel.
-- [x] Indicação armazenada no backend e recuperada pelo cookie no mesmo navegador por sete dias. Não há associação cross-device implementada.
+- [x] Indicação armazenada no backend e recuperada pelo cookie no mesmo navegador por sete dias.
+- [x] Link curto pode ser aberto em outro dispositivo: o redirecionamento cria uma nova atribuição server-side naquele dispositivo.
+- [ ] Recuperação de uma atribuição sem reabrir o link (por login/código) ainda não existe e não faz parte do fluxo atual.
 - [x] Vínculo server-side entre checkout, reserva e afiliado.
 - [x] Comissão pendente e fluxo administrativo de aprovação/registro de pagamento, protegido por elegibilidade de estadia concluída. A regra monetária ainda não é calculada pelo servidor.
 - [x] Isolamento das reservas exibidas para cada afiliado.
@@ -42,7 +44,7 @@ Este checklist acompanha a homologação funcional e a preparação de publicaç
 3. Definir uma comissão de teste, por exemplo 10%.
 4. Liberar um imóvel de teste e gerar o link.
 5. Abrir o link em um navegador de teste.
-6. Confirmar a captura da indicação e a validade do token opaco. Não esperar recuperação em outro navegador ou dispositivo.
+6. Confirmar a captura da indicação e a validade do token opaco, inclusive abrindo o mesmo link em outro dispositivo.
 7. Criar uma reserva de teste no checkout sandbox.
 8. Confirmar que a reserva aparece somente para o afiliado correto.
 9. Confirmar que a comissão nasce como `pending`.
