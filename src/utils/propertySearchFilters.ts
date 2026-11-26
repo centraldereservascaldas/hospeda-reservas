@@ -23,6 +23,7 @@ export function filterPropertiesBySearchFilters(
 ): Property[] {
   return properties.filter((property) => {
     if (!matchesPropertyCategory(property, filters.category)) return false;
+    if (filters.guests.pets > 0 && !matchesPropertyCategory(property, 'pet_friendly')) return false;
 
     if (
       filters.propertyTypes.length > 0 &&

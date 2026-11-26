@@ -8,6 +8,10 @@ import { PropertyCard } from './PropertyCard';
 
 type PropertyCatalogStatus = 'loading' | 'error' | 'stale' | 'ready';
 
+// The opening row is visible on desktop and commonly reached immediately on mobile.
+// Keep the rest native-lazy so an entire catalogue never competes with the first view.
+const INITIAL_EAGER_IMAGE_COUNT = 4;
+
 interface PropertyCatalogGridProps {
   status: PropertyCatalogStatus;
   properties: Property[];
@@ -144,6 +148,7 @@ export function PropertyCatalogGrid({
                 availabilityConfirmed={availabilityConfirmed}
                 searchGuestCount={searchGuestCount}
                 prioritizeImage={prioritizeFirstImage && index === 0}
+                eagerImage={prioritizeFirstImage && index < INITIAL_EAGER_IMAGE_COUNT}
               />
             </Fragment>
           );

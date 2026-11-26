@@ -67,3 +67,11 @@ test('home collections never suggest past dates across holidays and year changes
     }
   }
 });
+
+test('default seasonal dates remain stable across rerenders during the same day', () => {
+  const now = new Date(2026, 10, 26, 9);
+  const first = getHomeDiscoveryCollections(now);
+  const second = getHomeDiscoveryCollections(new Date(2026, 10, 26, 21));
+
+  assert.deepEqual(second, first);
+});

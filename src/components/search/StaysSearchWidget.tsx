@@ -1201,7 +1201,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     <div className={`w-full transition-all ${className}`}>
       {/* Container in Liquid Glass */}
       <div
-        className={`relative ${isHero ? 'search-bar-shell rounded-[2rem] border border-neutral-200/90 bg-white/85 p-0 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.35)] backdrop-blur-xl sm:rounded-full sm:p-0' : 'rounded-3xl liquid-glass-card border border-white/85 p-4 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.07)] sm:p-7 max-[400px]:p-3 [@media(max-height:400px)]:p-0'}`}
+        className={`relative ${isHero ? 'search-bar-shell rounded-[2rem] border border-neutral-200 bg-white p-0 shadow-[0_8px_24px_-16px_rgba(15,23,42,0.35)] sm:rounded-full sm:p-0' : 'rounded-3xl liquid-glass-card border border-white/85 p-4 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.07)] sm:p-7 max-[400px]:p-3 [@media(max-height:400px)]:p-0'}`}
       >
         {/* Search widget heading */}
         <div
@@ -1522,7 +1522,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                 <button
                   type="submit"
                   aria-label="Buscar hospedagens"
-                  className={`flex h-12 shrink-0 items-center justify-center rounded-full bg-orange-600 text-white transition-all hover:bg-orange-700 active:scale-95 ${activeDropdown || activeDatePicker ? 'w-auto gap-2 px-4' : 'w-12'}`}
+                  className={`flex h-12 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-white shadow-sm transition-all hover:bg-neutral-800 active:scale-95 ${activeDropdown || activeDatePicker ? 'w-auto gap-2 px-4' : 'w-12'}`}
                 >
                   <Search className="h-5 w-5 stroke-[2.5]" aria-hidden="true" />
                   <span
@@ -1568,7 +1568,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
             >
               <button
                 type="submit"
-                className={`${isHero ? 'min-h-11 w-full rounded-full bg-orange-600 px-6 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700 active:scale-95 sm:w-auto' : 'flex min-h-11 w-full cursor-pointer items-center justify-center gap-2.5 whitespace-nowrap rounded-2xl px-2 py-3 text-sm font-extrabold text-white shadow-md shadow-orange-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] liquid-glass-accent sm:w-auto sm:px-8 sm:py-3.5 [@media(max-width:639px)_and_(max-height:400px)]:text-xs'}`}
+                className={`${isHero ? 'min-h-11 w-full rounded-full bg-neutral-900 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800 active:scale-95 sm:w-auto' : 'flex min-h-11 w-full cursor-pointer items-center justify-center gap-2.5 whitespace-nowrap rounded-2xl bg-neutral-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-neutral-800 active:scale-[0.98] sm:w-auto sm:px-8 sm:py-3.5 [@media(max-width:639px)_and_(max-height:400px)]:text-xs'}`}
               >
                 {surpriseMe ? (
                   <Sparkles className="w-4 h-4 stroke-[2.5]" />

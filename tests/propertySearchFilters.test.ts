@@ -222,3 +222,44 @@ test('keeps an expired result under its last known price refinement while its di
   };
   assert.deepEqual(filterPropertiesBySearchFilters([expired], filters), [expired]);
 });
+
+test('pet searches only include properties that explicitly accept pets and respect other filters', () => {
+  const accepts = {
+    ...property,
+    id: 'accepts',
+    category: 'pet_friendly',
+    description: 'Aceita animais',
+  };
+  const rejects = {
+    ...property,
+    id: 'rejects',
+    category: 'family_friendly',
+    description: 'Não aceita animais',
+  };
+  const unknown = {
+    ...property,
+    id: 'unknown',
+    category: 'family_friendly',
+    description: '',
+    amenities: [],
+    listingAmenities: [],
+    propertyAmenities: [],
+  };
+  const candidates = [accepts, rejects, unknown];
+  const filters = {
+    ...createDefaultSearchFilters(),
+    guests: { adults: 1, children: 0, infants: 0, pets: 1 },
+  };
+  assert.deepEqual(filterPropertiesBySearchFilters(candidates, filters), [accepts]);
+  assert.deepEqual(
+    filterPropertiesBySearchFilters(candidates, {
+      ...filters,
+      guests: { ...filters.guests, pets: 0 },
+    }),
+    candidates,
+  );
+  assert.deepEqual(
+    filterPropertiesBySearchFilters(candidates, { ...filters, minBedrooms: accepts.bedrooms + 1 }),
+    [],
+  );
+});
