@@ -32,7 +32,7 @@ import { matchesPropertyDestination } from '../utils/propertySearchFilters';
 import { apiFetch } from './apiFetch';
 import { getConfirmedPropertyQuote } from '../utils/propertyDisplayPrice';
 
-import { scheduleAccommodationSearch } from './accommodationSearchQueue';
+import { accommodationSearchKey, scheduleAccommodationSearch } from './accommodationSearchQueue';
 import type { ScheduledRequestOptions } from './requestScheduler';
 
 const API_REQUEST_TIMEOUT_MS = 20_000;
@@ -317,6 +317,9 @@ export const getCalendarExpiration = (days: StaysCalendarDay[]): number | undefi
   calendarExpirations.get(days);
 
 class CrcnBackendApiService {
+  private catalogRequest: Promise<Property[]> | null = null;
+  private catalogSnapshot: { data: Property[]; expiresAt: number } | null = null;
+  private discoveryPages = new Map<string, { data: AccommodationSearchPage; expiresAt: number }>();
   private getCachedResorts(): Array<{ id: string; name: string }> {
     try {
       const cached = readAccommodationCatalogCache();
@@ -365,7 +368,24 @@ class CrcnBackendApiService {
   }
 
   // 1. GET /api/accommodations
-  public async getAccommodations(): Promise<Property[]> {
+  public async getAccommodations(options: { reuseFresh?: boolean } = {}): Promise<Property[]> {
+    if (options.reuseFresh && this.catalogSnapshot && this.catalogSnapshot.expiresAt > Date.now()) {
+      return structuredClone(this.catalogSnapshot.data);
+    }
+    if (!this.catalogRequest) {
+      this.catalogRequest = this.fetchAccommodationCatalog()
+        .then((data) => {
+          this.catalogSnapshot = { data: structuredClone(data), expiresAt: Date.now() + 60_000 };
+          return data;
+        })
+        .finally(() => {
+          this.catalogRequest = null;
+        });
+    }
+    return structuredClone(await this.catalogRequest);
+  }
+
+  private async fetchAccommodationCatalog(): Promise<Property[]> {
     const json: unknown = await withApiRequestTimeout(async (signal) => {
       const res = await apiFetch('/api/accommodations', { signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -423,7 +443,31 @@ class CrcnBackendApiService {
     }
     return scheduleAccommodationSearch(
       { ...params, limit, skip },
-      (signal) => this.fetchAccommodationSearchPage({ ...params, limit, skip }, signal),
+      async (signal) => {
+        const key = accommodationSearchKey({ ...params, limit, skip });
+        for (const [cachedKey, entry] of this.discoveryPages) {
+          if (entry.expiresAt <= Date.now()) this.discoveryPages.delete(cachedKey);
+        }
+        const cached = params.purpose === 'discovery' ? this.discoveryPages.get(key) : undefined;
+        if (cached && cached.expiresAt > Date.now() + 2000) return structuredClone(cached.data);
+        const result = await this.fetchAccommodationSearchPage({ ...params, limit, skip }, signal);
+        signal.throwIfAborted();
+        const expiresAt = Math.min(
+          result.expiresAt ?? 0,
+          ...result.data.map((property) => property.calculatedPrice?.expiresAt ?? 0),
+        );
+        if (
+          params.purpose === 'discovery' &&
+          result.unquotedCount === 0 &&
+          expiresAt > Date.now() + 2000
+        ) {
+          this.discoveryPages.delete(key);
+          this.discoveryPages.set(key, { data: structuredClone(result), expiresAt });
+          while (this.discoveryPages.size > 32)
+            this.discoveryPages.delete(this.discoveryPages.keys().next().value!);
+        }
+        return result;
+      },
       options,
     );
   }
