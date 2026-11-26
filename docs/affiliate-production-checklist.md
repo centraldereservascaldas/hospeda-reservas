@@ -37,7 +37,11 @@ npm run test:affiliate
 - [ ] Criar projeto Supabase de teste e confirmar que não é o projeto de produção.
 - [ ] Configurar `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` somente no ambiente de teste.
 - [ ] Configurar `SUPABASE_URL`, `SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` no backend de teste.
-- [ ] Configurar `HOSPEDA_OWNER_ADMIN_EMAILS` com uma conta administrativa de teste.
+- [ ] Configurar `OWNER_ADMIN_EMAILS` com uma conta administrativa de teste.
+- [ ] Configurar `STAYS_BASE_URL`, `STAYS_CLIENT_ID` e `STAYS_CLIENT_SECRET` no backend de teste.
+- [ ] Manter `STAYS_SIMULATOR_ENABLED=false` quando a homologação usar a Stays sandbox.
+- [ ] Configurar `CIELO_DIRECT_ENVIRONMENT=sandbox` e, se o fluxo Cielo for usado, `CIELO_SANDBOX_ENABLED=true`.
+- [ ] Configurar `CIELO_SANDBOX_MERCHANT_ID` e `CIELO_SANDBOX_MERCHANT_KEY` somente no backend de teste.
 - [ ] Configurar `APP_URL` e as URLs de redirect do Supabase para o domínio de homologação.
 - [ ] Executar as migrations de afiliados no banco de teste.
 - [ ] Confirmar que `APP_KEY` do teste é diferente da produção.
