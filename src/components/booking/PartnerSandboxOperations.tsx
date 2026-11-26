@@ -10,6 +10,7 @@ interface Order {
   check_out: string;
   guests: number;
   base_cents: number;
+  supplier_payable_observed_cents: number | null;
   status: string;
   attention_reason: string | null;
   reservation_reference: string | null;
@@ -140,6 +141,13 @@ export function PartnerSandboxOperations() {
                     <p>
                       Pré-reserva: {order.reservation_reference} · aguardando pagamento ao
                       fornecedor
+                    </p>
+                    <p>
+                      Valor observado para pagar:{' '}
+                      {typeof order.supplier_payable_observed_cents === 'number'
+                        ? currency(order.supplier_payable_observed_cents)
+                        : 'não informado'}
+                      . Confirme na ImobSys.
                     </p>
                     <form
                       onSubmit={(event) => void record(event, order)}

@@ -23,7 +23,8 @@ class ImobSysPreReservationClient
             throw new RuntimeException('Resultado da pré-reserva incerto; consultar antes de repetir.', previous: $exception);
         }
         $data = $response->json();
-        if (! $response->successful() || ! is_array($data) || ($data['success'] ?? null) !== true || ! is_array($data['data'] ?? null) || ($data['data']['status'] ?? null) !== 'pre_reservation_created' || ! is_string($data['data']['id'] ?? null) || ! preg_match('/\A[1-9]\d{0,11}\z/D', $data['data']['id']) || ($data['data']['currency'] ?? null) !== 'BRL' || ($data['data']['amountCents'] ?? null) !== ($input['acceptedTotalCents'] ?? null)) {
+        $payable = data_get($data, 'data.supplierPayableObservedCents');
+        if (! $response->successful() || ! is_array($data) || ($data['success'] ?? null) !== true || ! is_array($data['data'] ?? null) || ($data['data']['status'] ?? null) !== 'pre_reservation_created' || ! is_string($data['data']['id'] ?? null) || ! preg_match('/\A[1-9]\d{0,11}\z/D', $data['data']['id']) || ($data['data']['currency'] ?? null) !== 'BRL' || ($data['data']['amountCents'] ?? null) !== ($input['acceptedTotalCents'] ?? null) || ($payable !== null && (! is_int($payable) || $payable < 1))) {
             throw new RuntimeException('Pré-reserva requer conferência.');
         }
 

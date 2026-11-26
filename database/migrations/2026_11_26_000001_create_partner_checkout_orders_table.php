@@ -26,6 +26,7 @@ return new class extends Migration
             $table->string('payment_method', 12);
             $table->unsignedTinyInteger('installments')->nullable();
             $table->string('reservation_reference', 100)->nullable();
+            $table->unsignedBigInteger('supplier_payable_observed_cents')->nullable();
             $table->unsignedBigInteger('supplier_paid_cents')->nullable();
             $table->string('supplier_payment_reference', 100)->nullable();
             $table->string('supplier_paid_by', 100)->nullable();

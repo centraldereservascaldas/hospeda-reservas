@@ -27,12 +27,13 @@ class PartnerPaidReservationServiceTest extends TestCase
 
     public function test_paid_order_creates_one_reservation_and_replay_is_safe(): void
     {
-        Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
+        Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'supplierPayableObservedCents' => 41800, 'currency' => 'BRL']], 201)]);
         $order = $this->order('payment_verified');
         app(PartnerPaidReservationService::class)->create($order->id);
         app(PartnerPaidReservationService::class)->create($order->id);
         $this->assertSame('awaiting_seller_payment', $order->fresh()->status);
         $this->assertSame('1600', $order->fresh()->reservation_reference);
+        $this->assertSame(41800, (int) $order->fresh()->supplier_payable_observed_cents);
         Http::assertSentCount(1);
     }
 

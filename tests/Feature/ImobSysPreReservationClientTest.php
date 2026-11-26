@@ -58,4 +58,11 @@ class ImobSysPreReservationClientTest extends TestCase
             Http::assertNothingSent();
         }
     }
+
+    public function test_rejects_invalid_observed_supplier_amount(): void
+    {
+        Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'supplierPayableObservedCents' => '41800', 'currency' => 'BRL']], 201)]);
+        $this->expectException(RuntimeException::class);
+        app(ImobSysPreReservationClient::class)->create(['acceptedTotalCents' => 52300], 'request-order-123456');
+    }
 }
