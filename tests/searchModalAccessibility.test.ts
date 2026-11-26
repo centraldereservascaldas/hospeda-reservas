@@ -121,11 +121,8 @@ test('search modal keeps its mobile controls touch-sized and clear of input text
     datesHeading.parentElement?.className ?? '',
     /\[@media\(max-height:400px\)\]:space-y-3/,
   );
-  assert.match(
-    getByRole('grid', { name: `Calendário de ${currentCalendarMonth}` }).parentElement?.parentElement
-      ?.className ?? '',
-    /grid-cols-1/,
-  );
+  const monthGrid = getByRole('grid', { name: `Calendário de ${currentCalendarMonth}` });
+  assert.match(monthGrid.parentElement?.parentElement?.className ?? '', /grid-cols-1/);
   const presets = [
     getByRole('button', { name: /Próximo fim de semana/ }),
     getByRole('button', { name: 'Férias de 5 noites' }),
