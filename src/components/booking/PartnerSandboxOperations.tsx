@@ -14,6 +14,7 @@ interface Order {
   status: string;
   attention_reason: string | null;
   reservation_reference: string | null;
+  supplier_operation_id: string | null;
 }
 
 const currency = (cents: number) =>
@@ -55,6 +56,7 @@ export function PartnerSandboxOperations() {
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(1);
   const [nextPage, setNextPage] = useState<number | null>(null);
+  const [supplierStatus, setSupplierStatus] = useState<Record<string, string>>({});
   const load = useCallback(
     async (requestedPage = 1) => {
       if (!token) return;
@@ -117,6 +119,60 @@ export function PartnerSandboxOperations() {
     }
   }
 
+  async function consultSupplier(order: Order) {
+    if (!token || busy) return;
+    setBusy(true);
+    try {
+      const response = await apiFetch(
+        `/api/owner/admin/partner-sandbox/orders/${encodeURIComponent(order.id)}/supplier-status`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+        },
+      );
+      const result: unknown = await response.json();
+      if (
+        !response.ok ||
+        !result ||
+        typeof result !== 'object' ||
+        !('state' in result) ||
+        typeof result.state !== 'string'
+      )
+        throw new Error();
+      const status =
+        'partnerStatus' in result && typeof result.partnerStatus === 'string'
+          ? result.partnerStatus
+          : 'unknown';
+      const ref =
+        'reservationReference' in result && typeof result.reservationReference === 'string'
+          ? result.reservationReference
+          : 'não identificada';
+      const stateLabel: Record<string, string> = {
+        starting: 'em processamento',
+        created: 'registrada',
+        unknown: 'incerta',
+        rejected: 'recusada',
+      };
+      const partnerLabel: Record<string, string> = {
+        confirmed: 'confirmada',
+        cancelled: 'cancelada',
+        unknown: 'não identificada',
+      };
+      const state = result.state;
+      setSupplierStatus((current) => ({
+        ...current,
+        [order.id]: `Operação: ${stateLabel[state] ?? 'desconhecida'}; situação no fornecedor: ${partnerLabel[status] ?? 'não identificada'}; referência: ${ref}. Confira imóvel e datas na ImobSys.`,
+      }));
+    } catch {
+      setSupplierStatus((current) => ({
+        ...current,
+        [order.id]: 'Consulta indisponível. Mantenha a conferência manual e não repita a reserva.',
+      }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <main className="mx-auto max-w-4xl p-6 text-slate-900">
       <h1 className="text-2xl font-bold">Pedidos de parceiros — teste</h1>
@@ -142,6 +198,21 @@ export function PartnerSandboxOperations() {
                   hóspedes
                 </p>
                 <p>Valor da hospedagem: {currency(order.base_cents)}</p>
+                {order.attention_reason === 'supplier_outcome_unknown' &&
+                  order.supplier_operation_id && (
+                    <div>
+                      <p>Identificador de conferência: {order.supplier_operation_id}</p>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void consultSupplier(order)}
+                        className="mt-2 rounded-xl border px-4 py-2"
+                      >
+                        Consultar operação
+                      </button>
+                      {supplierStatus[order.id] && <p role="status">{supplierStatus[order.id]}</p>}
+                    </div>
+                  )}
                 {order.status === 'awaiting_seller_payment' ? (
                   <>
                     <p>

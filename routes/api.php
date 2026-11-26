@@ -87,6 +87,7 @@ Route::middleware(['supabase.guest', 'owner.admin:reviewer'])->prefix('owner/adm
 });
 Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->group(function (): void {
     Route::get('/partner-sandbox/orders', [PartnerSandboxOperationsController::class, 'index']);
+    Route::get('/partner-sandbox/orders/{id}/supplier-status', [PartnerSandboxOperationsController::class, 'supplierStatus'])->middleware('throttle:10,1');
     Route::post('/partner-sandbox/orders/{id}/manual-payment', [PartnerSandboxOperationsController::class, 'record'])->middleware('throttle:10,1');
     Route::get('/direct-booking-orders', [OwnerAdminController::class, 'directBookingOrders']);
     Route::post('/direct-booking-webhooks/{webhookId}/retry', [OwnerAdminController::class, 'retryDirectBookingWebhook'])->middleware('throttle:10,1');

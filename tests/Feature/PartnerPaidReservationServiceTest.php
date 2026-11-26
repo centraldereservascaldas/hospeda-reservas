@@ -51,13 +51,14 @@ class PartnerPaidReservationServiceTest extends TestCase
 
     public function test_unknown_supplier_result_requires_manual_review(): void
     {
-        Http::fake(['api.example.test/*' => Http::response(['success' => false], 503)]);
+        Http::fake(['api.example.test/*' => Http::response(['success' => false], 503, ['X-Request-Id' => '123e4567-e89b-42d3-a456-426614174000'])]);
         $order = $this->order('payment_verified');
         try {
             app(PartnerPaidReservationService::class)->create($order->id);
             $this->fail('An unknown result requires review.');
         } catch (RuntimeException) {
             $this->assertSame('attention_required', $order->fresh()->status);
+            $this->assertSame('123e4567-e89b-42d3-a456-426614174000', $order->fresh()->supplier_operation_id);
             Http::assertSentCount(1);
         }
     }

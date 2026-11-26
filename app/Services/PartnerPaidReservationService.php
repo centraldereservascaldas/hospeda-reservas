@@ -42,7 +42,9 @@ class PartnerPaidReservationService
                 'guests' => (int) $claimed->guests,
                 'acceptedTotalCents' => (int) $claimed->base_cents,
                 'customer' => $claimed->encrypted_customer,
-            ], $claimed->reservation_idempotency_key);
+            ], $claimed->reservation_idempotency_key, function (string $operationId) use ($id): void {
+                PartnerCheckoutOrder::query()->whereKey($id)->whereIn('status', ['reservation_starting', 'attention_required'])->update(['supplier_operation_id' => $operationId]);
+            });
             PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'awaiting_seller_payment', 'reservation_reference' => $result['id'], 'supplier_payable_observed_cents' => $result['supplierPayableObservedCents'] ?? null]);
         } catch (Throwable $exception) {
             PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown']);
