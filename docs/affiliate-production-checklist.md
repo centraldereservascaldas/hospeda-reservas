@@ -9,6 +9,12 @@ Este checklist acompanha a homologação funcional e a preparação de publicaç
 - [x] `affiliateAttribution.test.ts` + `checkoutAttributionIntegration.test.ts`: 8 testes.
 - [x] TypeScript frontend e build Vite.
 
+Comando rápido para repetir a validação frontend do portal:
+
+```bash
+npm run test:affiliate
+```
+
 ## Funcionalidades entregues
 
 - [x] Cadastro, login e solicitação de acesso via Supabase.
