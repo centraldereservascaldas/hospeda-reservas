@@ -21,12 +21,10 @@ class ImobSysSearchFallbackTest extends TestCase
             'services.stays.search_cache_store' => 'array',
             'services.stays.content_cache_store' => 'array',
             'services.stays.search_cache_ttl' => 45,
-            'services.imobsys.base_url' => 'http://imobsys.test',
-            'services.imobsys.media_base_url' => null,
-            'services.imobsys.media_control_key' => null,
-            'services.imobsys.search_fallback_enabled' => true,
-            'services.imobsys.control_key' => str_repeat('a', 64),
-            'services.imobsys.cache_ttl' => 25,
+            'services.partner_api.base_url' => 'https://api.example.test',
+            'services.partner_api.key' => 'test-api-key',
+            'services.partner_api.search_fallback_enabled' => true,
+            'services.partner_api.cache_ttl' => 25,
         ]);
     }
 
@@ -35,30 +33,44 @@ class ImobSysSearchFallbackTest extends TestCase
         $originalEnvironment = $this->app['env'];
         $this->app['env'] = 'production';
         try {
-            config(['services.imobsys.search_fallback_enabled' => false]);
+            config(['services.partner_api.search_fallback_enabled' => false]);
             $this->getJson('/api/imobsys/offers?from=2027-01-10&to=2027-01-12&guests=1&propertyId=imobsys-crcn-1-961')->assertForbidden();
-            config(['services.imobsys.search_fallback_enabled' => true]);
+            config(['services.partner_api.search_fallback_enabled' => true]);
             $this->getJson('/api/imobsys/offers?from=2027-01-10&to=2027-01-12&guests=1')->assertUnprocessable()->assertJsonValidationErrors('propertyId');
         } finally {
             $this->app['env'] = $originalEnvironment;
         }
     }
 
+    public function test_partner_search_fails_closed_when_the_server_key_is_missing(): void
+    {
+        config(['services.partner_api.key' => '']);
+        Http::preventStrayRequests();
+
+        $this->getJson('/api/imobsys/offers?from=2027-01-10&to=2027-01-12&guests=1&propertyId=imobsys-crcn-1-961')
+            ->assertServiceUnavailable();
+
+        Http::assertNothingSent();
+    }
+
     public function test_partner_detail_passes_one_guest_without_changing_the_requested_occupancy(): void
     {
         Http::preventStrayRequests();
-        Http::fake(['http://imobsys.test/internal/offers/search*' => Http::response([
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response([
             'success' => true, 'source' => 'imobsys-live', 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 1,
             'offers' => [[
                 'id' => 'imobsys-crcn-1-961', 'condominiumName' => 'Piazza', 'unit' => '204', 'capacity' => 4,
                 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 1, 'nights' => 2,
                 'totalCents' => 52300, 'currency' => 'BRL', 'status' => 'offer_observed',
                 'availabilityConfirmed' => false, 'reservationGuaranteed' => false,
-            ]], 'pagination' => ['page' => 1, 'pageSize' => 100, 'hasMore' => false],
+            ]], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
         ])]);
         $this->getJson('/api/imobsys/offers?from=2027-01-10&to=2027-01-12&guests=1&propertyId=imobsys-crcn-1-961')
             ->assertOk()->assertJsonPath('data.0.id', 'imobsys-crcn-1-961');
-        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/internal/offers/search') && (int) $request['guests'] === 1);
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/v1/offers')
+            && (int) $request['guests'] === 1
+            && $request['propertyId'] === 'imobsys-crcn-1-961'
+            && $request->hasHeader('Authorization', 'Bearer test-api-key'));
     }
 
     public function test_resorts_include_active_unmatched_imobsys_condominiums(): void
@@ -85,13 +97,13 @@ class ImobSysSearchFallbackTest extends TestCase
         $this->postJson('/api/search', [
             'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'destination' => 'Lacqua', 'limit' => 12,
         ])->assertStatus(503)->assertJsonPath('code', 'availability_unavailable');
-        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'imobsys.test'));
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'api.example.test'));
     }
 
     public function test_individual_preview_stops_after_finding_the_requested_property(): void
     {
         Http::preventStrayRequests();
-        Http::fake(['http://imobsys.test/internal/offers/search*' => Http::response([
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response([
             'success' => true, 'source' => 'imobsys-live', 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2,
             'offers' => [[
                 'id' => 'imobsys-crcn-2-663', 'condominiumName' => 'Termas', 'unit' => '101',
@@ -99,7 +111,7 @@ class ImobSysSearchFallbackTest extends TestCase
                 'guests' => 2, 'nights' => 2, 'totalCents' => 52300, 'currency' => 'BRL',
                 'status' => 'offer_observed', 'availabilityConfirmed' => false, 'reservationGuaranteed' => false,
             ]],
-            'pagination' => ['page' => 1, 'pageSize' => 100, 'hasMore' => true],
+            'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => true],
         ])]);
 
         $this->getJson('/api/imobsys/offers?from=2027-01-10&to=2027-01-12&guests=2&propertyId=imobsys-crcn-2-663')
@@ -109,11 +121,10 @@ class ImobSysSearchFallbackTest extends TestCase
 
     public function test_uses_imobsys_when_stays_has_no_results_for_the_requested_condominium(): void
     {
-        config(['services.imobsys.host_header' => 'imobsys-api:8012']);
         Http::preventStrayRequests();
         Http::fake([
             'https://stays.test/external/v1/booking/search-listings' => Http::response([]),
-            'http://imobsys.test/internal/offers/search*' => Http::response([
+            'https://api.example.test/v1/offers*' => Http::response([
                 'success' => true,
                 'source' => 'imobsys-live',
                 'from' => '2027-01-10',
@@ -155,7 +166,7 @@ class ImobSysSearchFallbackTest extends TestCase
                     'reservationGuaranteed' => false,
                     'images' => [],
                 ]],
-                'pagination' => ['page' => 1, 'pageSize' => 100, 'totalObserved' => 2, 'hasMore' => false],
+                'pagination' => ['page' => 1, 'pageSize' => 50, 'totalObserved' => 2, 'hasMore' => false],
             ]),
         ]);
 
@@ -167,12 +178,11 @@ class ImobSysSearchFallbackTest extends TestCase
             'limit' => 12,
             'skip' => 0,
         ]);
-        Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'http://imobsys.test/internal/offers/search')
+        Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.example.test/v1/offers')
             && $request['from'] === '2027-01-10'
             && $request['to'] === '2027-01-12'
             && $request['guests'] === 2
-            && $request->hasHeader('X-Local-Control', str_repeat('a', 64))
-            && $request->hasHeader('Host', 'imobsys-api:8012'));
+            && $request->hasHeader('Authorization', 'Bearer test-api-key'));
 
         $response->assertOk()
             ->assertJsonPath('source', 'imobsys-live')
@@ -190,13 +200,13 @@ class ImobSysSearchFallbackTest extends TestCase
         ]);
         $secondResponse->assertOk()->assertJsonPath('data.0.id', 'imobsys-crcn-2-664');
         $this->assertSame($response->json('meta.expiresAt'), $secondResponse->json('meta.expiresAt'));
-        $this->assertCount(1, Http::recorded(fn (Request $request): bool => str_contains($request->url(), '/internal/offers/search')));
+        $this->assertCount(1, Http::recorded(fn (Request $request): bool => str_contains($request->url(), '/v1/offers')));
 
     }
 
     public function test_keeps_imobsys_disabled_when_the_feature_flag_is_off(): void
     {
-        config(['services.imobsys.search_fallback_enabled' => false]);
+        config(['services.partner_api.search_fallback_enabled' => false]);
         Http::preventStrayRequests();
         Http::fake(['https://stays.test/external/v1/booking/search-listings' => Http::response([])]);
 
@@ -207,7 +217,7 @@ class ImobSysSearchFallbackTest extends TestCase
             'destination' => 'Lacqua',
         ])->assertOk()->assertJsonPath('source', 'stays-live')->assertJsonCount(0, 'data');
 
-        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'imobsys.test'));
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'api.example.test'));
     }
 
     public function test_loads_only_safe_media_for_a_property_returned_by_search(): void
@@ -215,7 +225,7 @@ class ImobSysSearchFallbackTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([
             'https://stays.test/external/v1/booking/search-listings' => Http::response([]),
-            'http://imobsys.test/internal/offers/search*' => Http::response([
+            'https://api.example.test/v1/offers*' => Http::response([
                 'success' => true,
                 'source' => 'imobsys-live',
                 'from' => '2027-01-10',
@@ -237,18 +247,19 @@ class ImobSysSearchFallbackTest extends TestCase
                     'availabilityConfirmed' => false,
                     'reservationGuaranteed' => false,
                 ]],
-                'pagination' => ['page' => 1, 'pageSize' => 100, 'hasMore' => false],
+                'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
             ]),
-            'http://imobsys.test/internal/properties/imobsys-crcn-2-663/media' => Http::response([
+            'https://api.example.test/v1/properties/imobsys-crcn-2-663' => Http::response([
                 'success' => true,
-                'source' => 'imobsys-public-site',
-                'propertyId' => 'imobsys-crcn-2-663',
-                'description' => 'QUARTO: cama de casal',
-                'images' => [
-                    'https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png',
-                    'https://evil.example/fotos/tt/imoveis/086-10189/fotos/fake.png',
-                    'https://reservascrcn.com.br/fotos/crcn/condominios/086/fotos/pool.png',
-                ],
+                'data' => [[
+                    'id' => 'imobsys-crcn-2-663',
+                    'description' => 'QUARTO: cama de casal',
+                    'images' => [
+                        'https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png',
+                        'https://evil.example/fotos/tt/imoveis/086-10189/fotos/fake.png',
+                        'https://reservascrcn.com.br/fotos/crcn/condominios/086/fotos/pool.png',
+                    ],
+                ]],
             ]),
         ]);
 
@@ -267,8 +278,8 @@ class ImobSysSearchFallbackTest extends TestCase
             ->assertJsonCount(1, 'data.images')
             ->assertJsonPath('data.images.0', 'https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png');
 
-        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/internal/properties/imobsys-crcn-2-663/media')
-            && $request->hasHeader('X-Local-Control', str_repeat('a', 64)));
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/v1/properties/imobsys-crcn-2-663')
+            && $request->hasHeader('Authorization', 'Bearer test-api-key'));
     }
 
     public function test_does_not_fetch_media_for_an_imobsys_property_not_returned_by_search(): void
@@ -285,7 +296,7 @@ class ImobSysSearchFallbackTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([
             'https://stays.test/external/v1/booking/search-listings' => Http::response([]),
-            'http://imobsys.test/internal/offers/search*' => Http::response([
+            'https://api.example.test/v1/offers*' => Http::response([
                 'success' => true,
                 'source' => 'imobsys-live',
                 'from' => '2027-01-10',
@@ -306,7 +317,7 @@ class ImobSysSearchFallbackTest extends TestCase
                     'availabilityConfirmed' => false,
                     'reservationGuaranteed' => false,
                 ]],
-                'pagination' => ['page' => 1, 'pageSize' => 100, 'hasMore' => false],
+                'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
             ]),
         ]);
 
@@ -317,8 +328,8 @@ class ImobSysSearchFallbackTest extends TestCase
             'propertyId' => '6a344a029a142d820bc4fd81',
         ]);
 
-        Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'http://imobsys.test/internal/offers/search')
-            && $request->hasHeader('X-Local-Control', str_repeat('a', 64)));
+        Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.example.test/v1/offers')
+            && $request->hasHeader('Authorization', 'Bearer test-api-key'));
         $response->assertOk()
             ->assertJsonPath('source', 'imobsys-live')
             ->assertJsonPath('data.0.id', 'imobsys-crcn-2-663');
@@ -341,6 +352,6 @@ class ImobSysSearchFallbackTest extends TestCase
             ->assertJsonPath('source', 'stays-live')
             ->assertJsonCount(0, 'data');
 
-        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/internal/offers/search'));
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/v1/offers'));
     }
 }

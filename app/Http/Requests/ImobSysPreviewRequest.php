@@ -8,7 +8,7 @@ class ImobSysPreviewRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return app()->environment(['local', 'testing']) || (bool) config('services.imobsys.search_fallback_enabled');
+        return app()->environment(['local', 'testing']) || (bool) config('services.partner_api.search_fallback_enabled');
     }
 
     public function rules(): array

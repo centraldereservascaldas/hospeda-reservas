@@ -18,12 +18,12 @@ class ImobSysSearchClient
             return null;
         }
 
-        $cacheKey = 'imobsys.search.shared.v2.'.hash('sha256', json_encode([
-            config('services.imobsys.base_url'), config('services.imobsys.host_header'), $from, $to, $guests, $propertyId,
+        $cacheKey = 'imobsys.search.shared.v3.'.hash('sha256', json_encode([
+            config('services.partner_api.base_url'), $from, $to, $guests, $propertyId,
         ], JSON_THROW_ON_ERROR));
 
-        $offers = Cache::remember($cacheKey, max(1, min(60, (int) config('services.imobsys.cache_ttl', 25))), function () use ($from, $to, $guests, $propertyId): ?array {
-            $url = rtrim((string) config('services.imobsys.base_url'), '/').'/internal/offers/search';
+        $offers = Cache::remember($cacheKey, max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))), function () use ($from, $to, $guests, $propertyId): ?array {
+            $url = rtrim((string) config('services.partner_api.base_url'), '/').'/v1/offers';
 
             try {
                 $offers = [];
@@ -32,13 +32,14 @@ class ImobSysSearchClient
                 while ($hasMore && $page <= 5) {
                     $response = $this->request()
                         ->connectTimeout(2)
-                        ->timeout(max(2, min(65, (int) config('services.imobsys.timeout', 8))))
+                        ->timeout(max(2, min(75, (int) config('services.partner_api.timeout', 75))))
                         ->get($url, [
                             'from' => $from,
                             'to' => $to,
                             'guests' => $guests,
                             'page' => $page,
-                            'pageSize' => 100,
+                            'pageSize' => 50,
+                            ...($propertyId === null ? [] : ['propertyId' => $propertyId]),
                         ]);
 
                     if (! $response->successful()) {
@@ -51,12 +52,11 @@ class ImobSysSearchClient
                     if (! is_array($pageOffers) || ! array_is_list($pageOffers)
                         || ! is_array($pagination)
                         || ($payload['success'] ?? null) !== true
-                        || ($payload['source'] ?? null) !== 'imobsys-live'
                         || ($payload['from'] ?? null) !== $from
                         || ($payload['to'] ?? null) !== $to
                         || (int) ($payload['guests'] ?? 0) !== $guests
                         || (int) ($pagination['page'] ?? 0) !== $page
-                        || (int) ($pagination['pageSize'] ?? 0) !== 100
+                        || (int) ($pagination['pageSize'] ?? 0) !== 50
                         || ! is_bool($pagination['hasMore'] ?? null)) {
                         return null;
                     }
@@ -80,7 +80,7 @@ class ImobSysSearchClient
                 return null;
             }
 
-            $expiresAt = now()->addSeconds(max(1, min(60, (int) config('services.imobsys.cache_ttl', 25))))->getTimestamp();
+            $expiresAt = now()->addSeconds(max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))))->getTimestamp();
 
             return array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnExpiresAt' => $expiresAt] : $offer, $offers);
         });
@@ -123,9 +123,12 @@ class ImobSysSearchClient
 
     public function isEnabled(): bool
     {
-        return (bool) config('services.imobsys.search_fallback_enabled')
-            && filter_var((string) config('services.imobsys.base_url'), FILTER_VALIDATE_URL) !== false
-            && preg_match('/^[a-f0-9]{64}$/i', (string) config('services.imobsys.control_key')) === 1;
+        $baseUrl = (string) config('services.partner_api.base_url');
+
+        return (bool) config('services.partner_api.search_fallback_enabled')
+            && filter_var($baseUrl, FILTER_VALIDATE_URL) !== false
+            && (parse_url($baseUrl, PHP_URL_SCHEME) === 'https' || app()->environment(['local', 'testing']))
+            && trim((string) config('services.partner_api.key')) !== '';
     }
 
     public function verifiedStaysPropertyId(string $destination): ?string
@@ -223,7 +226,10 @@ class ImobSysSearchClient
         return array_map(function (array $offer) use ($from, $to, $nights): array {
             $condominium = trim((string) ($offer['condominiumName'] ?? ''));
             $unit = trim((string) ($offer['unit'] ?? ''));
-            $title = trim($condominium.($unit === '' ? '' : ' | Apto '.$unit));
+            $title = trim((string) ($offer['title'] ?? ''));
+            if ($title === '') {
+                $title = trim($condominium.($unit === '' ? '' : ' | Apto '.$unit));
+            }
 
             return [
                 'id' => $offer['id'],
@@ -236,7 +242,7 @@ class ImobSysSearchClient
                     'currency' => 'BRL',
                     'observedAt' => is_string($offer['_crcnObservedAt'] ?? null) ? $offer['_crcnObservedAt'] : now()->toIso8601String(),
                     'availabilityConfirmed' => false,
-                    'expiresAt' => ((int) ($offer['_crcnExpiresAt'] ?? now()->addSeconds(max(1, min(60, (int) config('services.imobsys.cache_ttl', 25))))->getTimestamp())) * 1000,
+                    'expiresAt' => ((int) ($offer['_crcnExpiresAt'] ?? now()->addSeconds(max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))))->getTimestamp())) * 1000,
                 ],
                 'title' => $title !== '' ? $title : trim($condominium.' '.$unit),
                 'subtitle' => $condominium,
@@ -286,22 +292,15 @@ class ImobSysSearchClient
             return null;
         }
 
-        $cacheKey = 'imobsys.content.v2.'.hash('sha256', $id);
+        $cacheKey = 'imobsys.content.v3.'.hash('sha256', $id);
 
         return Cache::remember($cacheKey, 600, function () use ($id): ?array {
-            $localMedia = app()->environment(['local', 'testing'])
-                && config('services.imobsys.media_base_url') === 'http://127.0.0.1:8012'
-                && preg_match('/^[a-f0-9]{64}$/i', (string) config('services.imobsys.media_control_key')) === 1;
-            $baseUrl = $localMedia ? config('services.imobsys.media_base_url') : config('services.imobsys.base_url');
-            $url = rtrim((string) $baseUrl, '/').'/internal/properties/'.rawurlencode($id).'/media';
+            $url = rtrim((string) config('services.partner_api.base_url'), '/').'/v1/properties/'.rawurlencode($id);
 
             try {
-                $request = $localMedia
-                    ? Http::acceptJson()->withHeader('X-Local-Control', (string) config('services.imobsys.media_control_key'))
-                    : $this->request();
-                $response = $request
+                $response = $this->request()
                     ->connectTimeout(2)
-                    ->timeout(max(2, min(10, (int) config('services.imobsys.timeout', 8))))
+                    ->timeout(max(2, min(10, (int) config('services.partner_api.timeout', 8))))
                     ->get($url);
             } catch (ConnectionException) {
                 return null;
@@ -309,17 +308,17 @@ class ImobSysSearchClient
 
             if (! $response->successful()
                 || $response->json('success') !== true
-                || $response->json('source') !== 'imobsys-public-site'
-                || $response->json('propertyId') !== $id) {
+                || ! is_array($response->json('data'))
+                || ($response->json('data.0.id') ?? null) !== $id) {
                 return null;
             }
 
-            $images = $response->json('images');
+            $images = $response->json('data.0.images');
             if (! is_array($images) || ! array_is_list($images)) {
                 return null;
             }
 
-            $description = $response->json('description');
+            $description = $response->json('data.0.description');
 
             return [
                 'images' => $this->validImages($images),
@@ -355,16 +354,7 @@ class ImobSysSearchClient
 
     private function request(): PendingRequest
     {
-        $request = Http::acceptJson()
-            ->withHeader('X-Local-Control', (string) config('services.imobsys.control_key'));
-        $hostHeader = trim((string) config('services.imobsys.host_header'));
-
-        if (app()->environment(['local', 'testing'])
-            && preg_match('/^[a-zA-Z0-9.-]+(?::[1-9][0-9]{0,4})?$/D', $hostHeader) === 1) {
-            return $request->withHeader('Host', $hostHeader);
-        }
-
-        return $request;
+        return Http::acceptJson()->withToken((string) config('services.partner_api.key'));
     }
 
     /** @return list<string> */

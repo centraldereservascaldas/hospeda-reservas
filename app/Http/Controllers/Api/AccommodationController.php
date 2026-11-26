@@ -312,7 +312,7 @@ class AccommodationController extends Controller
                     $imobSys->rememberProperties($mappedOffers);
                     $pageOffers = array_slice($mappedOffers, $skip, $limit);
                     $fetchedAt = now();
-                    $expiresAt = $fetchedAt->copy()->addSeconds(max(1, min(60, (int) config('services.imobsys.cache_ttl', 25))));
+                    $expiresAt = $fetchedAt->copy()->addSeconds(max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))));
                     foreach ($offers as $offer) {
                         if (is_int($offer['_crcnExpiresAt'] ?? null)) {
                             $expiresAt = $expiresAt->min(Carbon::createFromTimestamp($offer['_crcnExpiresAt']));
