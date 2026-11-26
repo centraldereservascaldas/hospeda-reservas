@@ -24,6 +24,7 @@ class ApproveAffiliateCommissionRequest extends FormRequest
     {
         return [
             'amountCents' => ['required', 'integer', 'min:1', 'max:9999999999'],
+            'reason' => ['required', 'string', 'min:10', 'max:500'],
         ];
     }
 }

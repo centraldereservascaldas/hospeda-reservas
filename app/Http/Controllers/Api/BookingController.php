@@ -341,7 +341,7 @@ class BookingController extends Controller
         $pixInstructions = $attempt?->safePixInstructions($order->status->value === 'pagamento_pendente');
         $cieloCheckoutUrl = $attempt?->safeCieloCheckoutUrl($order->status->value === 'pagamento_pendente');
         $confirmation = null;
-        if ($order->status->value === 'confirmado' && $order->payment_status === 'approved') {
+        if (in_array($order->status->value, ['confirmado', 'concluido'], true) && $order->payment_status === 'approved') {
             $confirmationAction = $order->confirmedReservationAction();
             $confirmation = [
                 'reservationCode' => $order->confirmedReservationCode($confirmationAction),

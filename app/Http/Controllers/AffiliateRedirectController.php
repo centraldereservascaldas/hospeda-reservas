@@ -27,7 +27,9 @@ class AffiliateRedirectController extends Controller
             'lax',
         );
 
-        return redirect()->to(url('/apartamento/'.rawurlencode($click['listingId'])), 302)
+        $canonicalBaseUrl = rtrim((string) config('app.url'), '/');
+
+        return redirect()->to($canonicalBaseUrl.'/apartamento/'.rawurlencode($click['listingId']), 302)
             ->withCookie($cookie)
             ->header('Cache-Control', 'no-store, private')
             ->header('Referrer-Policy', 'no-referrer');

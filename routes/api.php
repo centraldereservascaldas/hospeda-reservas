@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AccommodationController;
 use App\Http\Controllers\Api\AffiliateAccessController;
 use App\Http\Controllers\Api\AffiliateAdminController;
+use App\Http\Controllers\Api\AffiliateCommissionAdminController;
 use App\Http\Controllers\Api\AffiliateDashboardController;
 use App\Http\Controllers\Api\BookingController;
 use App\Http\Controllers\Api\CheckoutCancellationController;
@@ -96,9 +97,10 @@ Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->gro
     Route::get('/affiliates/approved', [AffiliateAdminController::class, 'approvedAccounts']);
     Route::post('/affiliates/{userId}/approve', [AffiliateAdminController::class, 'approve'])->whereUuid('userId')->middleware('throttle:10,1');
     Route::post('/affiliates/{userId}/rate', [AffiliateAdminController::class, 'updateRate'])->whereUuid('userId')->middleware('throttle:10,1');
-    Route::get('/affiliate-commissions', [AffiliateAdminController::class, 'commissions']);
-    Route::post('/affiliate-commissions/{id}/approve', [AffiliateAdminController::class, 'approveCommission'])->whereNumber('id')->middleware('throttle:10,1');
-    Route::post('/affiliate-commissions/{id}/mark-paid', [AffiliateAdminController::class, 'markCommissionPaid'])->whereNumber('id')->middleware('throttle:10,1');
+    Route::get('/affiliate-commissions', [AffiliateCommissionAdminController::class, 'index']);
+    Route::get('/affiliate-commissions/{id}/events', [AffiliateCommissionAdminController::class, 'events'])->whereNumber('id');
+    Route::post('/affiliate-commissions/{id}/approve', [AffiliateCommissionAdminController::class, 'approve'])->whereNumber('id')->middleware('throttle:10,1');
+    Route::post('/affiliate-commissions/{id}/mark-paid', [AffiliateCommissionAdminController::class, 'markPaid'])->whereNumber('id')->middleware('throttle:10,1');
     Route::get('/direct-booking-orders', [OwnerAdminController::class, 'directBookingOrders']);
     Route::post('/direct-booking-webhooks/{webhookId}/retry', [OwnerAdminController::class, 'retryDirectBookingWebhook'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/start-manual-cancellation', [OwnerAdminController::class, 'startManualDirectBookingCancellation'])->middleware('throttle:10,1');

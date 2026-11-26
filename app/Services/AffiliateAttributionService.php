@@ -17,16 +17,15 @@ class AffiliateAttributionService
     public function recordClick(Request $request, string $token): ?array
     {
         return DB::transaction(function () use ($request, $token): ?array {
-            $link = DB::table('affiliate_short_links as link')
-                ->join('affiliate_accounts as affiliate', 'affiliate.user_id', '=', 'link.affiliate_user_id')
-                ->where('link.token', $token)
-                ->where('link.status', 'active')
-                ->where('affiliate.status', 'approved')
-                ->select('link.id', 'link.affiliate_user_id', 'link.listing_id')
-                ->lockForUpdate()
+            $link = DB::table('affiliate_short_links')
+                ->where('token', $token)
+                ->where('status', 'active')
+                ->select('id', 'affiliate_user_id', 'listing_id')
                 ->first();
 
-            if (! $link || DB::table('affiliate_listing_exclusions')->where('listing_id', $link->listing_id)->exists()) {
+            if (! $link
+                || ! DB::table('affiliate_accounts')->where('user_id', $link->affiliate_user_id)->where('status', 'approved')->exists()
+                || DB::table('affiliate_listing_exclusions')->where('listing_id', $link->listing_id)->exists()) {
                 return null;
             }
 

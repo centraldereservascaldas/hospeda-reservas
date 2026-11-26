@@ -4,9 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Data\VerifiedGuest;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\ApproveAffiliateCommissionRequest;
 use App\Http\Requests\ApproveAffiliateRequest;
-use App\Http\Requests\MarkAffiliateCommissionPaidRequest;
 use App\Models\AffiliateAccount;
 use App\Services\StaysAccommodationCatalog;
 use App\Services\StaysSimulator;
@@ -130,75 +128,5 @@ class AffiliateAdminController extends Controller
         } while (AffiliateAccount::query()->where('nickname', $nickname)->exists());
 
         return $nickname;
-    }
-
-    public function commissions(Request $request): JsonResponse
-    {
-        $page = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:100000']])['page'] ?? 1;
-        $items = DB::table('affiliate_conversions as conversion')
-            ->join('affiliate_accounts as affiliate', 'affiliate.user_id', '=', 'conversion.affiliate_user_id')
-            ->join('direct_booking_orders as booking', 'booking.id', '=', 'conversion.direct_booking_order_id')
-            ->leftJoin('affiliate_short_links as link', 'link.id', '=', 'conversion.affiliate_short_link_id')
-            ->orderByDesc('conversion.created_at')->orderByDesc('conversion.id')
-            ->simplePaginate(50, ['conversion.id', 'affiliate.full_name', 'affiliate.nickname', 'booking.listing_id',
-                'link.token as short_link_token', 'conversion.attributed_at', 'conversion.last_clicked_at', 'booking.status as booking_status',
-                'booking.payment_status', 'booking.quote_total', 'booking.currency', 'conversion.commission_basis_points',
-                'conversion.status', 'conversion.approved_amount_cents', 'conversion.created_at'], 'page', $page);
-
-        return response()->json(['success' => true, 'commissions' => $items->items(), 'hasMore' => $items->hasMorePages()])->header('Cache-Control', 'private, no-store');
-    }
-
-    public function approveCommission(ApproveAffiliateCommissionRequest $request, int $id): JsonResponse
-    {
-        $reviewer = $request->attributes->get('verified_guest');
-        if (! $reviewer instanceof VerifiedGuest) {
-            return response()->json(['success' => false, 'code' => 'invalid_session'], 401);
-        }
-        $approved = DB::transaction(function () use ($request, $reviewer, $id): bool {
-            $conversion = DB::table('affiliate_conversions')->where('id', $id)->lockForUpdate()->first();
-            if (! $conversion || $conversion->status !== 'pending') {
-                return false;
-            }
-            $booking = DB::table('direct_booking_orders')->where('id', $conversion->direct_booking_order_id)->lockForUpdate()->first();
-            if (! $booking || ! in_array($booking->status, ['confirmado', 'concluido'], true) || $booking->payment_status !== 'approved') {
-                return false;
-            }
-            DB::table('affiliate_conversions')->where('id', $id)->update([
-                'status' => 'approved', 'approved_amount_cents' => $request->validated('amountCents'),
-                'reviewed_at' => now(), 'reviewed_by' => $reviewer->id, 'updated_at' => now(),
-            ]);
-
-            return true;
-        });
-
-        return $approved ? response()->json(['success' => true, 'status' => 'approved'])
-            : response()->json(['success' => false, 'code' => 'commission_not_eligible'], 409);
-    }
-
-    public function markCommissionPaid(MarkAffiliateCommissionPaidRequest $request, int $id): JsonResponse
-    {
-        $reviewer = $request->attributes->get('verified_guest');
-        if (! $reviewer instanceof VerifiedGuest) {
-            return response()->json(['success' => false, 'code' => 'invalid_session'], 401);
-        }
-        $marked = DB::transaction(function () use ($request, $reviewer, $id): bool {
-            $conversion = DB::table('affiliate_conversions')->where('id', $id)->lockForUpdate()->first();
-            if (! $conversion || $conversion->status !== 'approved' || ! $conversion->approved_amount_cents) {
-                return false;
-            }
-            $booking = DB::table('direct_booking_orders')->where('id', $conversion->direct_booking_order_id)->lockForUpdate()->first();
-            if (! $booking || ! in_array($booking->status, ['confirmado', 'concluido'], true) || $booking->payment_status !== 'approved') {
-                return false;
-            }
-            DB::table('affiliate_conversions')->where('id', $id)->update([
-                'status' => 'paid', 'paid_at' => now(), 'paid_by' => $reviewer->id,
-                'payment_reference' => $request->validated('paymentReference'), 'updated_at' => now(),
-            ]);
-
-            return true;
-        });
-
-        return $marked ? response()->json(['success' => true, 'status' => 'paid'])
-            : response()->json(['success' => false, 'code' => 'commission_not_payable'], 409);
     }
 }

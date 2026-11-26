@@ -3,15 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Data\VerifiedGuest;
+use App\Enums\AffiliateCommissionStatus;
 use App\Http\Controllers\Controller;
 use App\Models\AffiliateAccount;
+use App\Services\AffiliateCommissionEligibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AffiliateDashboardController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, AffiliateCommissionEligibility $eligibility): JsonResponse
     {
         $guest = $request->attributes->get('verified_guest');
         if (! $guest instanceof VerifiedGuest) {
@@ -29,10 +31,20 @@ class AffiliateDashboardController extends Controller
             ->orderByDesc('conversion.created_at')
             ->orderByDesc('conversion.id')
             ->simplePaginate(50, ['booking.listing_id', 'booking.check_in', 'booking.check_out', 'booking.status as booking_status',
-                'booking.payment_status', 'conversion.status as commission_status', 'conversion.approved_amount_cents', 'conversion.created_at'], 'page', $page);
-        $conversions = $results->getCollection()->map(function (object $row): array {
-            $needsReview = $row->commission_status === 'approved'
-                && (! in_array($row->booking_status, ['confirmado', 'concluido'], true) || $row->payment_status !== 'approved');
+                'booking.reservation_status', 'booking.payment_status', 'booking.currency', 'booking.quote_total',
+                'conversion.status as commission_status', 'conversion.approved_amount_cents', 'conversion.created_at'], 'page', $page);
+        $conversions = $results->getCollection()->map(function (object $row) use ($eligibility): array {
+            $bookingEvidence = (object) [
+                'status' => $row->booking_status,
+                'reservation_status' => $row->reservation_status,
+                'check_in' => $row->check_in,
+                'check_out' => $row->check_out,
+                'payment_status' => $row->payment_status,
+                'currency' => $row->currency,
+                'quote_total' => $row->quote_total,
+            ];
+            $needsReview = in_array($row->commission_status, [AffiliateCommissionStatus::Approved->value, AffiliateCommissionStatus::Paid->value], true)
+                && ! $eligibility->evaluate($bookingEvidence)['eligible'];
 
             return [
                 'listing_id' => $row->listing_id,

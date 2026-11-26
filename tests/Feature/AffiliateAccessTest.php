@@ -9,6 +9,7 @@ use App\Services\StaysDiscoveryCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AffiliateAccessTest extends TestCase
@@ -30,6 +31,36 @@ class AffiliateAccessTest extends TestCase
         $this->withToken('test')->getJson('/api/affiliate/links/JQ08G')->assertForbidden();
         AffiliateAccount::query()->whereKey('575c8054-6646-443c-bf62-07945019a32f')->update(['status' => 'suspended']);
         $this->withToken('test')->postJson('/api/affiliate/access')->assertForbidden();
+    }
+
+    public function test_inactive_short_link_does_not_block_creating_an_active_replacement(): void
+    {
+        $id = '575c8054-6646-443c-bf62-07945019a32f';
+        config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key']);
+        Http::fake(['*/auth/v1/user' => Http::response([
+            'id' => $id, 'email' => 'affiliate@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z',
+            'user_metadata' => ['full_name' => 'Afiliado Exemplo'],
+        ])]);
+        AffiliateAccount::query()->create([
+            'user_id' => $id, 'full_name' => 'Afiliado Exemplo', 'nickname' => 'afiliado-exemplo',
+            'status' => 'approved', 'commission_basis_points' => 500,
+        ]);
+        DB::table('affiliate_short_links')->insert([
+            'id' => (string) Str::uuid(), 'affiliate_user_id' => $id, 'token' => 'oldInactiveLink01',
+            'listing_id' => 'JQ08G', 'status' => 'inactive', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->mock(StaysAccommodationCatalog::class)->shouldReceive('get')->once()->andReturn([
+            'success' => true, 'data' => [['id' => 'JQ08G']],
+        ]);
+
+        $this->withToken('test')->getJson('/api/affiliate/links/JQ08G')->assertOk();
+
+        $this->assertDatabaseCount('affiliate_short_links', 2);
+        $this->assertDatabaseHas('affiliate_short_links', [
+            'affiliate_user_id' => $id,
+            'listing_id' => 'JQ08G',
+            'status' => 'active',
+        ]);
     }
 
     public function test_only_admin_can_approve_pending_affiliate_once(): void
@@ -171,13 +202,30 @@ class AffiliateAccessTest extends TestCase
             ->assertJsonPath('conversions.0.commission_status', 'pending')->assertDontSee('private@example.test');
         $conversionId = DB::table('affiliate_conversions')->where('affiliate_user_id', $id)->value('id');
         config(['services.hospeda.owner_admin_emails' => ['admin@example.test']]);
-        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", ['amountCents' => 5000])->assertForbidden();
+        $approval = ['amountCents' => 5000, 'reason' => 'Reserva validada pela equipe.'];
+        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", $approval)->assertForbidden();
         config(['services.hospeda.owner_admin_emails' => ['affiliate@example.test']]);
-        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", ['amountCents' => 5000])->assertStatus(409);
+        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", ['amountCents' => 5000])->assertUnprocessable();
+        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", $approval)->assertStatus(409);
         DB::table('direct_booking_orders')->where('id', '62f03c01-e16a-4acf-817e-88f54cc62201')
-            ->update(['status' => 'confirmado', 'payment_status' => 'approved']);
-        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", ['amountCents' => 5000])->assertOk();
-        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", ['amountCents' => 5000])->assertStatus(409);
+            ->update(['status' => 'confirmado', 'reservation_status' => 'booked', 'check_in' => now()->subDays(2)->toDateString(),
+                'check_out' => now()->subDay()->toDateString(), 'payment_status' => 'approved']);
+        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", $approval)->assertStatus(409);
+        $this->withToken('test')->getJson("/api/owner/admin/affiliate-commissions/{$conversionId}/events")
+            ->assertOk()->assertJsonPath('events.1.type', 'approval_blocked')
+            ->assertJsonPath('events.1.evidence.reasons.0', 'stay_not_completed');
+        DB::table('direct_booking_orders')->where('id', '62f03c01-e16a-4acf-817e-88f54cc62201')
+            ->update(['status' => 'concluido', 'check_out' => now()->toDateString()]);
+        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", $approval)->assertStatus(409);
+        $this->withToken('test')->getJson("/api/owner/admin/affiliate-commissions/{$conversionId}/events")
+            ->assertJsonPath('events.2.evidence.reasons.0', 'checkout_not_elapsed');
+        DB::table('direct_booking_orders')->where('id', '62f03c01-e16a-4acf-817e-88f54cc62201')
+            ->update(['check_out' => now()->subDay()->toDateString()]);
+        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", $approval)->assertOk();
+        $this->withToken('test')->getJson("/api/owner/admin/affiliate-commissions/{$conversionId}/events")
+            ->assertJsonPath('events.3.type', 'approved')
+            ->assertJsonPath('events.3.evidence.reason', 'Reserva validada pela equipe.');
+        $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", $approval)->assertStatus(409);
         $this->withToken('test')->getJson('/api/affiliate/dashboard')->assertJsonPath('conversions.0.approved_amount_cents', 5000);
         DB::table('direct_booking_orders')->where('id', '62f03c01-e16a-4acf-817e-88f54cc62201')
             ->update(['status' => 'reembolsado', 'payment_status' => 'refunded']);
@@ -187,7 +235,8 @@ class AffiliateAccessTest extends TestCase
         $this->travel(2)->minutes();
         $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/mark-paid", ['paymentReference' => 'pix-123'])->assertStatus(409);
         DB::table('direct_booking_orders')->where('id', '62f03c01-e16a-4acf-817e-88f54cc62201')
-            ->update(['status' => 'confirmado', 'payment_status' => 'approved']);
+            ->update(['status' => 'concluido', 'reservation_status' => 'booked', 'check_in' => now()->subDays(2)->toDateString(),
+                'check_out' => now()->subDay()->toDateString(), 'payment_status' => 'approved']);
         $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/mark-paid", [])->assertUnprocessable();
         $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/mark-paid", ['paymentReference' => 'pix-123'])->assertOk();
         $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/mark-paid", ['paymentReference' => 'pix-123'])->assertStatus(409);

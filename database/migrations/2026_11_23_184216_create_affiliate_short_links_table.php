@@ -18,8 +18,7 @@ return new class extends Migration
             $table->string('listing_id', 100);
             $table->string('status', 20)->default('active');
             $table->timestamps();
-            $table->unique(['affiliate_user_id', 'listing_id']);
-            $table->index(['affiliate_user_id', 'listing_id', 'status']);
+            $table->unique(['affiliate_user_id', 'listing_id', 'status']);
         });
     }
 

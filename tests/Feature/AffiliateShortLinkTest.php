@@ -43,7 +43,7 @@ class AffiliateShortLinkTest extends TestCase
         $this->assertSame($shortUrl, $this->getJson('/api/affiliate/links/JQ08G')->json('shortUrl'));
 
         $redirect = (new AffiliateRedirectController)->__invoke(request(), $token, app(AffiliateAttributionService::class));
-        $this->assertSame('http://localhost/apartamento/JQ08G', $redirect->getTargetUrl());
+        $this->assertSame(config('app.url').'/apartamento/JQ08G', $redirect->getTargetUrl());
         $this->assertSame('no-store, private', $redirect->headers->get('Cache-Control'));
         $this->assertSame('no-referrer', $redirect->headers->get('Referrer-Policy'));
         $cookie = $redirect->headers->getCookies()[0];
@@ -55,6 +55,35 @@ class AffiliateShortLinkTest extends TestCase
         $attribution = DB::table('affiliate_attributions')->where('affiliate_user_id', $affiliateId)->first();
         $this->assertNotNull($attribution);
         $this->assertSame(now()->addDays(7)->toDateTimeString(), $attribution->expires_at);
+    }
+
+    public function test_public_affiliate_urls_ignore_untrusted_host_headers(): void
+    {
+        config(['app.url' => 'https://centraldereservascaldas.com']);
+        $affiliateId = (string) Str::uuid();
+        $this->createAffiliate($affiliateId);
+        $this->actingAsVerifiedAffiliate($affiliateId);
+        $this->mock(StaysAccommodationCatalog::class)->shouldReceive('get')->once()->andReturn([
+            'success' => true,
+            'data' => [['id' => 'JQ08G']],
+        ]);
+        $this->mock(StaysDiscoveryCatalog::class)->shouldReceive('listing')->andReturn([
+            'id' => 'JQ08G', 'slug' => 'imovel', 'name' => 'Imóvel', 'city' => 'Caldas Novas',
+            'description' => 'Descrição', 'images' => [], 'indexable' => true,
+        ]);
+
+        $shortUrl = $this->getJson('/api/affiliate/links/JQ08G', ['Host' => 'attacker.example'])
+            ->assertOk()->json('shortUrl');
+
+        $this->assertStringStartsWith('https://centraldereservascaldas.com/a/', $shortUrl);
+        $token = (string) DB::table('affiliate_short_links')->where('affiliate_user_id', $affiliateId)->value('token');
+        $redirect = (new AffiliateRedirectController)->__invoke(
+            Request::create('http://attacker.example/a/'.$token),
+            $token,
+            app(AffiliateAttributionService::class),
+        );
+
+        $this->assertSame('https://centraldereservascaldas.com/apartamento/JQ08G', $redirect->getTargetUrl());
     }
 
     public function test_last_valid_click_replaces_the_affiliate_and_restarts_seven_day_window(): void

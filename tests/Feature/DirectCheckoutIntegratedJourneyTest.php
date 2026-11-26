@@ -185,7 +185,13 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             ->assertJsonPath('commissions.0.nickname', 'afiliado-exemplo')
             ->assertJsonPath('commissions.0.short_link_token', 'journeyTest01')
             ->assertJsonPath('commissions.0.last_clicked_at', now()->toDateTimeString());
-        $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/approve', ['amountCents' => 15000])->assertOk();
+        $approval = ['amountCents' => 15000, 'reason' => 'Hospedagem conferida após checkout.'];
+        $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/approve', $approval)->assertStatus(409);
+        DB::table('direct_booking_orders')->where('id', $order->id)->update([
+            'status' => 'concluido', 'reservation_status' => 'booked', 'check_in' => now()->subDays(2)->toDateString(),
+            'check_out' => now()->subDay()->toDateString(),
+        ]);
+        $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/approve', $approval)->assertOk();
         $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'affiliate_user_id' => $affiliateId, 'status' => 'approved', 'approved_amount_cents' => 15000]);
         $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/mark-paid', ['paymentReference' => 'manual-test'])->assertOk();
         $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'status' => 'paid', 'payment_reference' => 'manual-test']);
@@ -201,7 +207,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
 
         $this->getJson('/api/checkout/'.$reference, ['X-Checkout-Resume-Token' => $resumeToken])
             ->assertOk()
-            ->assertJsonPath('order.status', 'confirmado')
+            ->assertJsonPath('order.status', 'concluido')
             ->assertJsonPath('order.reservationConfirmed', true)
             ->assertJsonPath('confirmation.reservationCode', 'reservation-journey-1')
             ->assertJsonPath('payment.attempt.status', 'approved');

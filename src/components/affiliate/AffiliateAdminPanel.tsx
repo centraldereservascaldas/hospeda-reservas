@@ -25,6 +25,15 @@ type Commission = {
   quote_total: string;
   commission_basis_points: number | null;
 };
+type CommissionEvent = {
+  id: number;
+  actorUserId: string;
+  type: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  evidence: { reasons?: string[]; reason?: string; payment_reference?: string };
+  createdAt: string;
+};
 
 export function AffiliateAdminPanel({ token }: { token: string }) {
   const [authorized, setAuthorized] = useState(false);
@@ -34,6 +43,7 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
   const [listings, setListings] = useState<Listing[]>([]);
   const [listingsUnavailable, setListingsUnavailable] = useState(false);
   const [commissions, setCommissions] = useState<Commission[]>([]);
+  const [commissionEvents, setCommissionEvents] = useState<Record<number, CommissionEvent[]>>({});
   const [values, setValues] = useState<Record<string, string>>({});
   const [message, setMessage] = useState('');
   const [pendingPage, setPendingPage] = useState(1);
@@ -104,6 +114,22 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
       await refresh();
     } catch {
       setMessage('Não foi possível registrar a aprovação.');
+    }
+  }
+
+  async function loadCommissionEvents(commissionId: number) {
+    try {
+      const response = await apiFetch(`/api/owner/admin/affiliate-commissions/${commissionId}/events`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error();
+      const payload = await response.json();
+      setCommissionEvents((currentEvents) => ({
+        ...currentEvents,
+        [commissionId]: Array.isArray(payload.events) ? payload.events : [],
+      }));
+    } catch {
+      setMessage('Não foi possível carregar o histórico da comissão.');
     }
   }
   if (!authorized) return message ? <p role="status">{message}</p> : null;
@@ -310,6 +336,21 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                 Valor da reserva: R$ {item.quote_total} · Percentual registrado:{' '}
                 {Number(item.commission_basis_points ?? 0) / 100}%
               </p>
+              <button className="affiliate-secondary" type="button" onClick={() => void loadCommissionEvents(item.id)}>
+                Ver histórico de auditoria
+              </button>
+              {commissionEvents[item.id] && (
+                <ul aria-label={`Histórico da comissão ${item.id}`}>
+                  {commissionEvents[item.id].map((event) => (
+                    <li key={event.id}>
+                      {event.createdAt} · {event.type} · {event.fromStatus || 'inicial'} → {event.toStatus || 'sem alteração'}
+                      {event.evidence.reason ? ` · Motivo: ${event.evidence.reason}` : ''}
+                      {event.evidence.reasons?.length ? ` · Bloqueios: ${event.evidence.reasons.join(', ')}` : ''}
+                      {event.evidence.payment_reference ? ` · Ref.: ${event.evidence.payment_reference}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {item.status === 'pending' && (
                 <>
                   <label>
@@ -323,20 +364,33 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                       onChange={(e) => setValues({ ...values, [`c${item.id}`]: e.target.value })}
                     />
                   </label>
+                  <label>
+                    Motivo da aprovação{' '}
+                    <textarea
+                      className="border p-1"
+                      minLength={10}
+                      maxLength={500}
+                      value={values[`r${item.id}`] || ''}
+                      onChange={(e) => setValues({ ...values, [`r${item.id}`]: e.target.value })}
+                    />
+                  </label>
                   <button className="affiliate-secondary"
                     type="button"
                     onClick={() => {
                       const number = Number(values[`c${item.id}`]);
+                      const reason = (values[`r${item.id}`] || '').trim();
                       if (
                         !Number.isFinite(number) ||
                         number <= 0 ||
-                        Math.round(number * 100) > 9999999999
+                        Math.round(number * 100) > 9999999999 ||
+                        reason.length < 10
                       ) {
-                        setMessage('Informe um valor válido.');
+                        setMessage('Informe um valor e um motivo de pelo menos 10 caracteres.');
                         return;
                       }
                       void submit(`/api/owner/admin/affiliate-commissions/${item.id}/approve`, {
                         amountCents: Math.round(number * 100),
+                        reason,
                       });
                     }}
                   >

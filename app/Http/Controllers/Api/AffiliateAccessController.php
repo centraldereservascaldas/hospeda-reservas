@@ -128,7 +128,7 @@ class AffiliateAccessController extends Controller
         return response()->json([
             'success' => true,
             'nickname' => $account->nickname,
-            'shortUrl' => url('/a/'.$link->token),
+            'shortUrl' => rtrim((string) config('app.url'), '/').'/a/'.$link->token,
         ])->header('Cache-Control', 'private, no-store');
     }
 }
