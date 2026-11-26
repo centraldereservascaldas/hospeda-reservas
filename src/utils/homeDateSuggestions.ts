@@ -35,20 +35,30 @@ const nextFriday = (date: Date) => {
   return addDays(date, daysUntilFriday);
 };
 
+const dailyRandom = (date: Date) => {
+  const seed = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+  let state = [...seed].reduce((value, char) => (value * 31 + char.charCodeAt(0)) >>> 0, 7);
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0x1_0000_0000;
+  };
+};
+
 export function getHomeDateSuggestions(
   now = new Date(),
-  random: () => number = Math.random,
+  random?: () => number,
 ): HomeDateSuggestion[] {
+  const choose = random ?? dailyRandom(now);
   const earliest = addDays(dateAtNoon(now), 2);
   const firstFriday = nextFriday(earliest);
   const weekendPool = Array.from({ length: 8 }, (_, index) => addDays(firstFriday, index * 7));
   const firstWeekendIndex = Math.min(
     weekendPool.length - 1,
-    Math.floor(random() * weekendPool.length),
+    Math.floor(choose() * weekendPool.length),
   );
   let secondWeekendIndex = Math.min(
     weekendPool.length - 1,
-    Math.floor(random() * weekendPool.length),
+    Math.floor(choose() * weekendPool.length),
   );
   if (secondWeekendIndex === firstWeekendIndex) {
     secondWeekendIndex = (secondWeekendIndex + 3) % weekendPool.length;
@@ -64,7 +74,7 @@ export function getHomeDateSuggestions(
       kind: 'weekend',
     }));
 
-  const seasonal = getSurpriseDateCandidates(now, random)
+  const seasonal = getSurpriseDateCandidates(now, choose)
     .filter(
       (candidate, index, all) =>
         all.findIndex((item) => item.kind === candidate.kind) === index &&
@@ -97,8 +107,9 @@ export function getHomeDateSuggestions(
 
 export function getHomeDiscoveryCollections(
   now = new Date(),
-  random: () => number = Math.random,
+  random?: () => number,
 ): HomeDiscoveryCollection[] {
+  const choose = random ?? dailyRandom(now);
   const earliest = addDays(dateAtNoon(now), 2);
   const firstFriday = nextFriday(earliest);
   const petWeekends = Array.from({ length: 5 }, (_, index) => {
@@ -115,7 +126,7 @@ export function getHomeDiscoveryCollections(
     };
   });
 
-  const seasonal = getSurpriseDateCandidates(now, random);
+  const seasonal = getSurpriseDateCandidates(now, choose);
   const event = seasonal.find((candidate) => candidate.kind === 'event');
   const eventSuggestions = event
     ? Array.from({ length: 5 }, (_, index) => ({
