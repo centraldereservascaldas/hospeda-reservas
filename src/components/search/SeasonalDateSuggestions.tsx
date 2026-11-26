@@ -193,7 +193,24 @@ export function SeasonalDateSuggestions({
   useEffect(() => {
     pruneQuoteCache();
   }, []);
-  const [collections] = useState(() => getHomeDiscoveryCollections());
+  const [collections, setCollections] = useState(() => getHomeDiscoveryCollections());
+  useEffect(() => {
+    let day = new Date().toDateString();
+    const refresh = () => {
+      const nextDay = new Date().toDateString();
+      if (nextDay === day) return;
+      day = nextDay;
+      setCollections(getHomeDiscoveryCollections());
+    };
+    const timer = window.setInterval(refresh, 60_000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, []);
   const suggestions = useMemo(
     () => collections.flatMap((collection) => collection.suggestions),
     [collections],
@@ -216,7 +233,7 @@ export function SeasonalDateSuggestions({
   const requestsRef = useRef(
     new Map<string, { controller: AbortController; ids: string[]; guests: number }>(),
   );
-  const catalogCacheRef = useRef({ guests: 0, expiresAt: 0 });
+  const catalogCacheRef = useRef({ guests: 0, expiresAt: 0, period: '' });
   const metadataLoadedRef = useRef(false);
   const catalogPeriod = collections[0]?.suggestions[0];
   const [quotes, setQuotes] = useState<Record<string, SuggestionQuote>>(() =>
@@ -339,12 +356,10 @@ export function SeasonalDateSuggestions({
                   propertyLocation:
                     featured.property.complexName || featured.property.location.city,
                 }
-                : {
-                    status:
-                      result.unquotedCount > 0 || result.pagination.hasMore
-                        ? 'error'
-                        : 'unavailable',
-                  };
+              : {
+                  status:
+                    result.unquotedCount > 0 || result.pagination.hasMore ? 'error' : 'unavailable',
+                };
             quote.expiresAt = Math.min(result.expiresAt ?? Infinity, Date.now() + QUOTE_TTL_MS);
             quote.guests = guestCount;
             writeCachedQuote(item.id, item, guestCount, quote);
@@ -383,22 +398,19 @@ export function SeasonalDateSuggestions({
     const nextExpiration = Math.min(...expirations);
     const delay = nextExpiration - Date.now();
     if (delay > 0) {
-      const timer = window.setTimeout(
-        () => {
-          if (typeof document !== 'undefined' && document.hidden) return;
-          setQuotes((current) =>
-            Object.fromEntries(
-              Object.entries(current).map(([id, quote]) => [
-                id,
-                quote.expiresAt && quote.expiresAt <= Date.now()
-                  ? { status: 'error', guests: quote.guests }
-                  : quote,
-              ]),
-            ),
-          );
-        },
-        delay,
-      );
+      const timer = window.setTimeout(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        setQuotes((current) =>
+          Object.fromEntries(
+            Object.entries(current).map(([id, quote]) => [
+              id,
+              quote.expiresAt && quote.expiresAt <= Date.now()
+                ? { status: 'error', guests: quote.guests }
+                : quote,
+            ]),
+          ),
+        );
+      }, delay);
       return () => window.clearTimeout(timer);
     }
   }, [quotes]);
@@ -407,6 +419,7 @@ export function SeasonalDateSuggestions({
     if (!catalogPeriod || !catalogVisible) return;
     if (
       catalogCacheRef.current.guests === guestCount &&
+      catalogCacheRef.current.period === `${catalogPeriod.checkIn}|${catalogPeriod.checkOut}` &&
       catalogCacheRef.current.expiresAt > Date.now()
     )
       return;
@@ -442,6 +455,7 @@ export function SeasonalDateSuggestions({
         setCatalogQuotes(next);
         catalogCacheRef.current = {
           guests: guestCount,
+          period: `${catalogPeriod.checkIn}|${catalogPeriod.checkOut}`,
           expiresAt: Math.min(result.expiresAt ?? Infinity, Date.now() + QUOTE_TTL_MS),
         };
         setCatalogExpiresAt(catalogCacheRef.current.expiresAt);
@@ -498,7 +512,7 @@ export function SeasonalDateSuggestions({
       all.findIndex(
         (candidate) =>
           candidate.id === property.id ||
-          (candidate.staysPropertyId && candidate.staysPropertyId === property.staysPropertyId),
+          (candidate.staysListingId && candidate.staysListingId === property.staysListingId),
       ) === index,
   );
   const catalogCollections = [
@@ -546,6 +560,16 @@ export function SeasonalDateSuggestions({
     .map((collection) => ({
       ...collection,
       properties: catalogSourceProperties
+        .filter(
+          (property) =>
+            catalogQuoteGuests === guestCount &&
+            catalogExpiresAt !== null &&
+            catalogExpiresAt > Date.now() &&
+            Boolean(
+              catalogQuotes[property.id] ||
+              (property.staysListingId && catalogQuotes[property.staysListingId]),
+            ),
+        )
         .filter((property) => matchesPropertyCategory(property, collection.categoryId))
         .slice(0, 5),
     }))
@@ -589,13 +613,13 @@ export function SeasonalDateSuggestions({
               price: NonNullable<ReturnType<typeof confirmedQuote>>;
             } => Boolean(item.price),
           )
-          .filter(({ property: candidate }) =>
-            !suggestion.petFriendlyOnly ||
-            matchesPropertyCategory(candidate, 'pet_friendly'),
+          .filter(
+            ({ property: candidate }) =>
+              !suggestion.petFriendlyOnly || matchesPropertyCategory(candidate, 'pet_friendly'),
           )
           .sort((first, second) => first.price.totalAmount - second.price.totalAmount);
-        property = confirmed[(suggestion.propertyIndex ?? 0) % Math.max(confirmed.length, 1)]
-          ?.property;
+        property =
+          confirmed[(suggestion.propertyIndex ?? 0) % Math.max(confirmed.length, 1)]?.property;
       } catch {
         property = undefined;
       }
@@ -633,7 +657,9 @@ export function SeasonalDateSuggestions({
 
               return confirmedPetFriendlyQuote || awaitingPetConfirmation;
             })
-          : collection.suggestions;
+          : collection.suggestions.filter(
+              (suggestion) => quotes[suggestion.id]?.status !== 'unavailable',
+            );
         const petLookupPending = collection.suggestions.some((suggestion) => {
           const quote = quotes[suggestion.id];
           return !quote || quote.status === 'idle' || quote.status === 'loading';
@@ -643,158 +669,168 @@ export function SeasonalDateSuggestions({
         );
 
         return (
-        <section key={collection.id} aria-labelledby={`${collection.id}-title`}>
-          <div className="mb-4 flex items-end justify-between gap-4">
-            <div>
-              <p className="mb-1 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-orange-700 sm:text-xs">
-                <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
-                {collection.eyebrow}
-              </p>
-              <h2
-                id={`${collection.id}-title`}
-                className="text-xl font-extrabold tracking-tight text-neutral-950 sm:text-2xl"
-              >
-                {collection.title}
-              </h2>
-              <p className="mt-1 text-xs leading-5 text-neutral-600 sm:text-sm">
-                {collection.description}
-              </p>
-            </div>
-          </div>
-
-          {petSuggestions.length > 0 && (
-          <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-5">
-            {petSuggestions.map((suggestion, suggestionIndex) => {
-              const quote =
-                quotes[suggestion.id]?.guests === guestCount
-                  ? quotes[suggestion.id]!
-                  : { status: 'idle' as const };
-              const nights = getNights(suggestion);
-              const selectedGuests = collection.includePet
-                ? {
-                    adults: guests?.adults ?? guestCount,
-                    children: guests?.children ?? 0,
-                    infants: guests?.infants ?? 0,
-                    pets: Math.max(1, guests?.pets ?? 0),
-                  }
-                : guests;
-              const petStatus = collection.includePet
-                ? quote.status === 'ready'
-                  ? 'Aceita pet'
-                  : quote.status === 'error'
-                    ? 'Tente novamente'
-                    : 'Confirmando pets'
-                : suggestion.eyebrow;
-              const imageBadge =
-                collection.id === 'holidays'
-                  ? suggestion.label.replace(/^Feriado:\s*/i, '')
-                  : petStatus;
-              const displayTitle =
-                quote.status === 'ready'
-                  ? quote.propertyTitle
-                  : collection.id === 'holidays'
-                    ? 'Apartamento para o feriado'
-                    : suggestion.label;
-              return (
-                <button
-                  key={suggestion.id}
-                  data-discovery-query={suggestion.id}
-                  type="button"
-                  onClick={() => void openDateSuggestion(suggestion, quote, selectedGuests)}
-                  aria-label={`${suggestion.label}, ${formatPeriod(suggestion)}${quote.status === 'ready' && quote.total ? `, a partir de ${formatCurrency(quote.total, currency)}` : ', consultar disponibilidade'}`}
-                  className="group w-[72vw] max-w-[17rem] shrink-0 snap-start rounded-2xl text-left transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700 sm:w-auto sm:max-w-none"
+          <section key={collection.id} aria-labelledby={`${collection.id}-title`}>
+            <div className="mb-4 flex items-end justify-between gap-4">
+              <div>
+                <p className="mb-1 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-orange-700 sm:text-xs">
+                  <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />
+                  {collection.eyebrow}
+                </p>
+                <h2
+                  id={`${collection.id}-title`}
+                  className="text-xl font-extrabold tracking-tight text-neutral-950 sm:text-2xl"
                 >
-                  <span className="relative block aspect-[4/3] overflow-hidden rounded-2xl border border-white/90 bg-neutral-100 shadow-[0_10px_28px_-18px_rgba(15,23,42,0.7)]">
-                    {quote.propertyImage ? (
-                      <img
-                        {...getPropertyCardImageSources(
-                          quote.propertyImage,
-                          COLLECTION_IMAGE_SIZES,
-                        )}
-                        decoding="async"
-                        alt={quote.status === 'ready' ? quote.propertyTitle : suggestion.label}
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                        loading={collectionIndex === 0 && suggestionIndex === 0 ? 'eager' : 'lazy'}
-                        fetchPriority={
-                          collectionIndex === 0 && suggestionIndex === 0 ? 'high' : 'auto'
-                        }
-                      />
-                    ) : (
-                      <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-50 via-white to-sky-100 text-neutral-500">
-                        {quote.status === 'loading' ? (
-                          <LoaderCircle aria-hidden="true" className="h-6 w-6 animate-spin" />
-                        ) : (
-                          <CalendarDays aria-hidden="true" className="h-7 w-7" />
-                        )}
-                      </span>
-                    )}
-                    <span className="absolute left-3 top-3 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-orange-700 shadow-sm backdrop-blur-md">
-                      {imageBadge}
-                    </span>
-                    <span className="absolute bottom-3 left-3 rounded-full border border-white/80 bg-neutral-950/72 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-md">
-                      {formatPeriod(suggestion)}
-                    </span>
-                  </span>
+                  {collection.title}
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-neutral-600 sm:text-sm">
+                  {collection.description}
+                </p>
+              </div>
+            </div>
 
-                  <span className="mt-3 flex items-start justify-between gap-2 px-0.5">
-                    <span className="min-w-0">
-                      <span className="line-clamp-1 text-sm font-extrabold text-neutral-950">
-                        {displayTitle}
-                      </span>
-                      {collection.id === 'holidays' ? (
-                        <span className="mt-0.5 line-clamp-2 text-xs font-medium text-neutral-600">
-                          {quote.propertyDescription ||
-                            'Consulte esta opção de hospedagem para as datas do feriado.'}
-                        </span>
-                      ) : (
-                        <span className="mt-0.5 line-clamp-1 text-xs font-medium text-neutral-600">
-                          {quote.status === 'ready' ? quote.propertyLocation : 'Sugestão de viagem'} ·{' '}
-                          {nights} {nights === 1 ? 'noite' : 'noites'} · {guestCount}{' '}
-                          {guestCount === 1 ? 'hóspede' : 'hóspedes'}
-                        </span>
-                      )}
-                      <span className="mt-1.5 block h-10 text-xs leading-5">
-                        {quote.status === 'loading' ? (
-                          <span className="inline-flex items-center gap-1.5 font-semibold text-neutral-500">
-                            <LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
-                            Consultando preço…
-                          </span>
-                        ) : quote.status === 'ready' && quote.total ? (
-                          <span className="line-clamp-2 text-neutral-700">
-                            <strong className="text-sm leading-5 text-neutral-950">
-                              {formatCurrency(quote.total, currency)}
-                            </strong>{' '}
-                            total
-                          </span>
+            {petSuggestions.length > 0 && (
+              <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 lg:grid-cols-5">
+                {petSuggestions.map((suggestion, suggestionIndex) => {
+                  const quote =
+                    quotes[suggestion.id]?.guests === guestCount
+                      ? quotes[suggestion.id]!
+                      : { status: 'idle' as const };
+                  const nights = getNights(suggestion);
+                  const selectedGuests = collection.includePet
+                    ? {
+                        adults: guests?.adults ?? guestCount,
+                        children: guests?.children ?? 0,
+                        infants: guests?.infants ?? 0,
+                        pets: Math.max(1, guests?.pets ?? 0),
+                      }
+                    : guests;
+                  const petStatus = collection.includePet
+                    ? quote.status === 'ready'
+                      ? 'Aceita pet'
+                      : quote.status === 'error'
+                        ? 'Tente novamente'
+                        : 'Confirmando pets'
+                    : suggestion.eyebrow;
+                  const imageBadge =
+                    collection.id === 'holidays'
+                      ? suggestion.label.replace(/^Feriado:\s*/i, '')
+                      : petStatus;
+                  const displayTitle =
+                    quote.status === 'ready'
+                      ? quote.propertyTitle
+                      : collection.id === 'holidays'
+                        ? 'Apartamento para o feriado'
+                        : suggestion.label;
+                  return (
+                    <button
+                      key={suggestion.id}
+                      data-discovery-query={suggestion.id}
+                      type="button"
+                      onClick={() => void openDateSuggestion(suggestion, quote, selectedGuests)}
+                      aria-label={`${suggestion.label}, ${formatPeriod(suggestion)}${quote.status === 'ready' && quote.total ? `, a partir de ${formatCurrency(quote.total, currency)}` : ', consultar disponibilidade'}`}
+                      className="group w-[72vw] max-w-[17rem] shrink-0 snap-start rounded-2xl text-left transition hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700 sm:w-auto sm:max-w-none"
+                    >
+                      <span className="relative block aspect-[4/3] overflow-hidden rounded-2xl border border-white/90 bg-neutral-100 shadow-[0_10px_28px_-18px_rgba(15,23,42,0.7)]">
+                        {quote.propertyImage ? (
+                          <img
+                            {...getPropertyCardImageSources(
+                              quote.propertyImage,
+                              COLLECTION_IMAGE_SIZES,
+                            )}
+                            decoding="async"
+                            alt={quote.status === 'ready' ? quote.propertyTitle : suggestion.label}
+                            className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                            loading={
+                              collectionIndex === 0 && suggestionIndex === 0 ? 'eager' : 'lazy'
+                            }
+                            fetchPriority={
+                              collectionIndex === 0 && suggestionIndex === 0 ? 'high' : 'auto'
+                            }
+                          />
                         ) : (
-                          <span className="line-clamp-2 font-bold text-neutral-700">
-                            {quote.status === 'error'
-                              ? 'Consulta indisponível. Tente buscar.'
-                              : 'Explore opções para estas datas'}
+                          <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-50 via-white to-sky-100 text-neutral-500">
+                            {quote.status === 'loading' ? (
+                              <LoaderCircle aria-hidden="true" className="h-6 w-6 animate-spin" />
+                            ) : (
+                              <CalendarDays aria-hidden="true" className="h-7 w-7" />
+                            )}
                           </span>
                         )}
+                        <span className="absolute left-3 top-3 rounded-full border border-white/80 bg-white/90 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-orange-700 shadow-sm backdrop-blur-md">
+                          {imageBadge}
+                        </span>
+                        <span className="absolute bottom-3 left-3 rounded-full border border-white/80 bg-neutral-950/72 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-md">
+                          {formatPeriod(suggestion)}
+                        </span>
                       </span>
-                    </span>
-                    <ArrowRight
-                      aria-hidden="true"
-                      className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 transition-transform group-hover:translate-x-0.5"
-                    />
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          )}
-          {collection.includePet && petSuggestions.length === 0 && (
-            <p role="status" className="rounded-xl border border-orange-100 bg-white/60 px-4 py-3 text-sm text-neutral-600">
-              {petLookupPending
-                ? 'Buscando hospedagens com aceitação de pets confirmada…'
-                : petLookupFailed
-                  ? 'Não foi possível confirmar hospedagens que aceitam pets agora.'
-                  : 'Não encontramos hospedagens com aceitação de pets confirmada para estas datas.'}
-            </p>
-          )}
-        </section>
+
+                      <span className="mt-3 flex items-start justify-between gap-2 px-0.5">
+                        <span className="min-w-0">
+                          <span className="line-clamp-1 text-sm font-extrabold text-neutral-950">
+                            {displayTitle}
+                          </span>
+                          {collection.id === 'holidays' ? (
+                            <span className="mt-0.5 line-clamp-2 text-xs font-medium text-neutral-600">
+                              {quote.propertyDescription ||
+                                'Consulte esta opção de hospedagem para as datas do feriado.'}
+                            </span>
+                          ) : (
+                            <span className="mt-0.5 line-clamp-1 text-xs font-medium text-neutral-600">
+                              {quote.status === 'ready'
+                                ? quote.propertyLocation
+                                : 'Sugestão de viagem'}{' '}
+                              · {nights} {nights === 1 ? 'noite' : 'noites'} · {guestCount}{' '}
+                              {guestCount === 1 ? 'hóspede' : 'hóspedes'}
+                            </span>
+                          )}
+                          <span className="mt-1.5 block h-10 text-xs leading-5">
+                            {quote.status === 'loading' ? (
+                              <span className="inline-flex items-center gap-1.5 font-semibold text-neutral-500">
+                                <LoaderCircle
+                                  aria-hidden="true"
+                                  className="h-3.5 w-3.5 animate-spin"
+                                />
+                                Consultando preço…
+                              </span>
+                            ) : quote.status === 'ready' && quote.total ? (
+                              <span className="line-clamp-2 text-neutral-700">
+                                <strong className="text-sm leading-5 text-neutral-950">
+                                  {formatCurrency(quote.total, currency)}
+                                </strong>{' '}
+                                total
+                              </span>
+                            ) : (
+                              <span className="line-clamp-2 font-bold text-neutral-700">
+                                {quote.status === 'error'
+                                  ? 'Consulta indisponível. Tente buscar.'
+                                  : 'Explore opções para estas datas'}
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="mt-0.5 h-4 w-4 shrink-0 text-orange-700 transition-transform group-hover:translate-x-0.5"
+                        />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {collection.includePet && petSuggestions.length === 0 && (
+              <p
+                role="status"
+                className="rounded-xl border border-orange-100 bg-white/60 px-4 py-3 text-sm text-neutral-600"
+              >
+                {petLookupPending
+                  ? 'Buscando hospedagens com aceitação de pets confirmada…'
+                  : petLookupFailed
+                    ? 'Não foi possível confirmar hospedagens que aceitam pets agora.'
+                    : 'Não encontramos hospedagens com aceitação de pets confirmada para estas datas.'}
+              </p>
+            )}
+          </section>
         );
       })}
 

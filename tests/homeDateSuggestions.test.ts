@@ -38,9 +38,32 @@ test('home discovery creates pet and holiday collections when no future event is
     ['pets', 'holidays'],
   );
   assert.equal(collections.find((collection) => collection.id === 'pets')?.suggestions.length, 5);
-  assert.equal(collections.some((collection) => collection.id === 'caldas-country'), false);
+  assert.equal(
+    collections.some((collection) => collection.id === 'caldas-country'),
+    false,
+  );
   assert.equal(
     collections.find((collection) => collection.id === 'holidays')?.suggestions.length,
     5,
   );
+});
+
+test('home collections never suggest past dates across holidays and year changes', () => {
+  for (const now of [
+    new Date(2026, 10, 26),
+    new Date(2026, 11, 31),
+    new Date(2027, 0, 1),
+    new Date(2027, 10, 21),
+  ]) {
+    const earliest = new Date(now);
+    earliest.setDate(earliest.getDate() + 2);
+    const minimum = `${earliest.getFullYear()}-${String(earliest.getMonth() + 1).padStart(2, '0')}-${String(earliest.getDate()).padStart(2, '0')}`;
+    for (const suggestion of [
+      ...getHomeDateSuggestions(now),
+      ...getHomeDiscoveryCollections(now).flatMap((collection) => collection.suggestions),
+    ]) {
+      assert.ok(suggestion.checkIn >= minimum);
+      assert.ok(suggestion.checkOut > suggestion.checkIn);
+    }
+  }
 });
