@@ -649,7 +649,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 ### Onda 1 · Jornada bloqueada e integridade da busca
 
-- [x] Corrigir F01: os dias disponíveis entram na ordem de Tab e setas movem o foco entre datas; validação de virada de mês adicionada. Código no commit `55bf827`. Revisão em 26/11/2026: teste direcionado e navegador local passaram. Leitores de tela e datas inválidas permanecem fora desta validação.
+- [ ] F01 implementado no desktop: dias disponíveis entram na ordem de Tab e setas movem o foco entre datas, incluindo virada de mês. Código inicial no commit `55bf827`; complemento de foco no commit `5771e0c`. Testes e navegador desktop passaram. Validação móvel, seleção por Enter e fechamento por Escape no calendário permanecem pendentes.
 - [ ] Corrigir foco e isolamento do fundo na tela de recuperação de checkout (F21).
 - [ ] Reproduzir F05 com bebês, crianças e pets; alinhar composição, URL e parâmetros de busca.
 - [ ] Alinhar os limites de pets da interface, URLs e validação de reserva após definir a regra de negócio (F28).
@@ -669,6 +669,8 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 **Pacote F55 · foco nos painéis compartilhados da busca.** A reprodução local a 1200 × 885 confirmou que Enter abria os painéis, mas deixava o foco nos acionadores. A causa estava no seletor do calendário, que encontrava primeiro a célula `div` em vez do botão de data; além disso, a tentativa de foco ocorria antes de o portal ser montado. O foco inicial agora acontece após a montagem visível do portal e seleciona um controle interativo: busca do condomínio, botão de data ou contador de adultos. Escape devolve foco ao segmento. Implementação/teste no commit `ff1172f`.
 
 **Validação F55:** teste direcionado percorreu os três painéis, Escape e a transição condomínio → datas. No navegador local, abrir cada painel por Enter colocou foco em seu primeiro controle; Escape retornou ao acionador; escolher “Todos os condomínios” abriu o calendário e focou 26/11/2026. A interface indicava ambiente de simulação; nenhuma reserva ou consulta de disponibilidade foi enviada. Leitor de tela não testado; a validação responsiva móvel permanece na matriz da onda 5.
+
+**Complemento F01 · comportamento de foco e execução dos testes.** O foco agora permanece na aba selecionada quando a pessoa ativa outra etapa; isso mantém o padrão de navegação do tablist. A data só recebe foco programático após uma seta ser pressionada dentro do calendário, no próximo frame, e o foco acompanha a data alvo depois da renderização. Em navegador local desktop, a aba “Datas” permaneceu focada após clique; ArrowRight no tablist moveu o foco para “Hóspedes”; ArrowRight dentro do calendário moveu o foco de 26 para 27/11/2026. O teste mantém um ponto de tabulação por mês e percorre dias e meses. O stub de `getResorts` foi movido para `beforeEach` para impedir que testes seguintes iniciem chamadas ao endpoint relativo. Evidência: `searchModalAccessibility.test.ts` (7/7), suíte completa do frontend em Node 24 (638/638), lint/TypeScript, build frontend/blog e navegador local. O catálogo estava em simulação; não houve busca de disponibilidade, reserva ou pagamento. Ficam pendentes a sequência móvel, seleção por Enter e Escape no calendário e leitores de tela.
 
 ### Onda 2 · Painéis, camadas e interação responsiva
 
