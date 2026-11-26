@@ -296,4 +296,3 @@ test('clearing search dates and guests requests the general catalogue again', ()
     },
   ]);
 });
-
