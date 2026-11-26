@@ -166,6 +166,7 @@ export function PartnerSandboxCheckout() {
   async function confirmPayment() {
     if (!reference || busy || paymentCents === null) return;
     setBusy(true);
+    let paymentRequested = false;
     try {
       let paymentToken: string | undefined;
       if (method === 'card') {
@@ -237,11 +238,18 @@ export function PartnerSandboxCheckout() {
           cvv.value = '';
         }
       }
+      paymentRequested = true;
       const payment = await partnerSandboxCheckoutApi.startPayment(reference, paymentToken);
       setPix(typeof payment.pix === 'string' ? payment.pix : '');
       setOrderStatus('payment_pending');
       setMessage('Pagamento de teste iniciado. Consulte a situação abaixo.');
     } catch {
+      if (!paymentRequested) {
+        const cvv = cardRef.current?.querySelector<HTMLInputElement>('.bp-sop-cardcvv');
+        if (cvv) cvv.value = '';
+        setMessage('Não foi possível validar o cartão de teste. Nenhum pagamento foi iniciado.');
+        return;
+      }
       try {
         const result = await partnerSandboxCheckoutApi.status(reference);
         setOrderStatus(typeof result.status === 'string' ? result.status : '');

@@ -144,6 +144,38 @@ test('reconciles a pending payment and displays a confirmed card rejection', asy
   assert.equal(screen.queryByRole('button', { name: 'Confirmar pagamento de teste' }), null);
 });
 
+test('tokenization failure explains that no payment was started', async () => {
+  sessionStorage.setItem(originalKey, 'E'.repeat(40));
+  partnerSandboxCheckoutApi.status = async () => ({
+    status: 'quoted',
+    method: 'card',
+    paymentCents: 60000,
+    installments: 6,
+  });
+  partnerSandboxCheckoutApi.cardToken = async () => {
+    throw new Error('offline');
+  };
+  let paymentCalls = 0;
+  partnerSandboxCheckoutApi.startPayment = async () => {
+    paymentCalls++;
+    return {};
+  };
+  render(React.createElement(PartnerSandboxCheckout));
+  await waitFor(() => assert.ok(screen.getByLabelText('Número do cartão de teste')));
+  fireEvent.change(screen.getByLabelText('Número do cartão de teste'), {
+    target: { value: '4111111111111111' },
+  });
+  fireEvent.change(screen.getByLabelText('Validade'), { target: { value: '1230' } });
+  fireEvent.change(screen.getByLabelText('Código de segurança'), { target: { value: '123' } });
+  fireEvent.change(screen.getByLabelText('Nome no cartão'), { target: { value: 'Pessoa Teste' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar pagamento de teste' }));
+  await waitFor(() =>
+    assert.match(screen.getByRole('status').textContent || '', /Nenhum pagamento foi iniciado/),
+  );
+  assert.equal(paymentCalls, 0);
+  assert.equal((screen.getByLabelText('Código de segurança') as HTMLInputElement).value, '');
+});
+
 test('a different property or stay never resumes a previous order', async () => {
   sessionStorage.setItem(originalKey, 'B'.repeat(40));
   dom.window.history.replaceState(
