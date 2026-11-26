@@ -61,4 +61,18 @@ class PartnerPaymentReconciliationServiceTest extends TestCase
         $this->assertFalse(app(PartnerPaymentReconciliationService::class)->reconcile($order->id));
         $this->assertSame('payment_rejected', $order->fresh()->status);
     }
+
+    public function test_late_gateway_result_cannot_overwrite_another_attention_decision(): void
+    {
+        config(['services.cielo.direct_environment' => 'sandbox']);
+        $id = '11111111-1111-4111-8111-111111111111';
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('W', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown', 'payment_id' => $id, 'merchant_order_id' => 'ORDERRACE', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-race', 'encrypted_customer' => ['fullName' => 'Teste']]);
+        $this->mock(CieloEcommerceClient::class)->shouldReceive('findPaymentById')->once()->andReturnUsing(function () use ($order, $id) {
+            $order->update(['attention_reason' => 'payment_mismatch']);
+            return ['MerchantOrderId' => 'ORDERRACE', 'Payment' => ['PaymentId' => $id, 'Status' => 3, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']];
+        });
+        $this->assertFalse(app(PartnerPaymentReconciliationService::class)->reconcile($order->id));
+        $this->assertSame('attention_required', $order->fresh()->status);
+        $this->assertSame('payment_mismatch', $order->fresh()->attention_reason);
+    }
 }

@@ -200,6 +200,9 @@ export function PartnerSandboxOperations() {
                 <p>Valor da hospedagem: {currency(order.base_cents)}</p>
                 {order.attention_reason === 'supplier_outcome_unknown' && (
                   <div>
+                    {order.reservation_reference && (
+                      <p>Referência recebida para conferência: {order.reservation_reference}</p>
+                    )}
                     {order.supplier_operation_id && (
                       <p>Identificador de conferência: {order.supplier_operation_id}</p>
                     )}
