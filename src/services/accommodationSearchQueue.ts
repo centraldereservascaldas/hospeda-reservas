@@ -30,14 +30,10 @@ function observeEnvironment(): void {
   update();
 }
 
-export function scheduleAccommodationSearch<T>(
-  params: SearchAccommodationsParams,
-  request: (signal: AbortSignal) => Promise<T>,
-  options: ScheduledRequestOptions,
-): Promise<T> {
-  observeEnvironment();
-  const key = JSON.stringify([
+export function accommodationSearchKey(params: SearchAccommodationsParams): string {
+  return JSON.stringify([
     'accommodation-search',
+    params.purpose || '',
     params.from || '',
     params.to || '',
     params.guests ?? 1,
@@ -47,5 +43,13 @@ export function scheduleAccommodationSearch<T>(
     params.limit ?? 12,
     params.skip ?? 0,
   ]);
-  return scheduler.schedule(key, request, options);
+}
+
+export function scheduleAccommodationSearch<T>(
+  params: SearchAccommodationsParams,
+  request: (signal: AbortSignal) => Promise<T>,
+  options: ScheduledRequestOptions,
+): Promise<T> {
+  observeEnvironment();
+  return scheduler.schedule(accommodationSearchKey(params), request, options);
 }

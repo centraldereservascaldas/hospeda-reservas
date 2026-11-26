@@ -8,7 +8,7 @@ import {
 test('home suggestions combine real weekends with seasonal dates without duplicates', () => {
   const suggestions = getHomeDateSuggestions(new Date(2026, 9, 29, 12), () => 0.25);
 
-  assert.equal(suggestions.length, 5);
+  assert.equal(suggestions.length, 4);
   assert.equal(suggestions.filter((suggestion) => suggestion.kind === 'weekend').length, 2);
   assert.equal(
     new Set(suggestions.map((suggestion) => `${suggestion.checkIn}|${suggestion.checkOut}`)).size,
@@ -30,20 +30,48 @@ test('weekend suggestions always run from Friday to Sunday', () => {
   }
 });
 
-test('home discovery creates pets, event and holiday collections with five cards', () => {
+test('home discovery creates pet and holiday collections when no future event is confirmed', () => {
   const collections = getHomeDiscoveryCollections(new Date(2026, 9, 29, 12), () => 0.25);
 
   assert.deepEqual(
     collections.map((collection) => collection.id),
-    ['pets', 'caldas-country', 'holidays'],
+    ['pets', 'holidays'],
   );
   assert.equal(collections.find((collection) => collection.id === 'pets')?.suggestions.length, 5);
   assert.equal(
-    collections.find((collection) => collection.id === 'caldas-country')?.suggestions.length,
-    5,
+    collections.some((collection) => collection.id === 'caldas-country'),
+    false,
   );
   assert.equal(
     collections.find((collection) => collection.id === 'holidays')?.suggestions.length,
     5,
   );
+});
+
+test('home collections never suggest past dates across holidays and year changes', () => {
+  for (const now of [
+    new Date(2026, 10, 26),
+    new Date(2026, 11, 31),
+    new Date(2027, 0, 1),
+    new Date(2027, 10, 21),
+  ]) {
+    const earliest = new Date(now);
+    earliest.setDate(earliest.getDate() + 2);
+    const minimum = `${earliest.getFullYear()}-${String(earliest.getMonth() + 1).padStart(2, '0')}-${String(earliest.getDate()).padStart(2, '0')}`;
+    for (const suggestion of [
+      ...getHomeDateSuggestions(now),
+      ...getHomeDiscoveryCollections(now).flatMap((collection) => collection.suggestions),
+    ]) {
+      assert.ok(suggestion.checkIn >= minimum);
+      assert.ok(suggestion.checkOut > suggestion.checkIn);
+    }
+  }
+});
+
+test('default seasonal dates remain stable across rerenders during the same day', () => {
+  const now = new Date(2026, 10, 26, 9);
+  const first = getHomeDiscoveryCollections(now);
+  const second = getHomeDiscoveryCollections(new Date(2026, 10, 26, 21));
+
+  assert.deepEqual(second, first);
 });
