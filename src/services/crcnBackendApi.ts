@@ -27,7 +27,7 @@ import type {
   DirectBookingOrderListItem,
   DirectBookingOrderSummary,
 } from './checkoutApi';
-import { isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
+import { isImobSysPhotoUrl, isSafeMediaUrl, sanitizePropertyMedia } from '../utils/propertyMedia';
 import { matchesPropertyDestination } from '../utils/propertySearchFilters';
 import { apiFetch } from './apiFetch';
 import { getConfirmedPropertyQuote } from '../utils/propertyDisplayPrice';
@@ -43,12 +43,13 @@ export class ReservationCancellationSupportRequiredError extends Error {}
 async function withApiRequestTimeout<T>(
   request: (signal: AbortSignal) => Promise<T>,
   externalSignal?: AbortSignal,
+  timeoutMs = API_REQUEST_TIMEOUT_MS,
 ): Promise<T> {
   const controller = new AbortController();
   const abort = () => controller.abort(externalSignal?.reason);
   if (externalSignal?.aborted) abort();
   else externalSignal?.addEventListener('abort', abort, { once: true });
-  const timeoutId = globalThis.setTimeout(() => controller.abort(), API_REQUEST_TIMEOUT_MS);
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     controller.signal.throwIfAborted();
@@ -405,6 +406,69 @@ class CrcnBackendApiService {
     }
   }
 
+  public async getImobSysPropertyImages(
+    id: string,
+    externalSignal?: AbortSignal,
+  ): Promise<string[] | null> {
+    if (!/^imobsys-crcn-[1-9]\d{0,8}-[1-9]\d{0,11}$/.test(id)) return null;
+
+    try {
+      const json: unknown = await withApiRequestTimeout(async (signal) => {
+        const response = await apiFetch(`/api/accommodations/${encodeURIComponent(id)}/media`, {
+          signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }, externalSignal);
+
+      if (
+        !isRecord(json) ||
+        json.success !== true ||
+        json.source !== 'imobsys-live' ||
+        !isRecord(json.data) ||
+        json.data.propertyId !== id ||
+        !Array.isArray(json.data.images)
+      ) {
+        return null;
+      }
+
+      return json.data.images.filter(
+        (image): image is string => typeof image === 'string' && isImobSysPhotoUrl(image),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  public async getImobSysPropertyDescription(
+    id: string,
+    externalSignal?: AbortSignal,
+  ): Promise<string | null> {
+    if (!/^imobsys-crcn-[1-9]\d{0,8}-[1-9]\d{0,11}$/.test(id)) return null;
+    try {
+      const json: unknown = await withApiRequestTimeout(async (signal) => {
+        const response = await apiFetch(`/api/accommodations/${encodeURIComponent(id)}/media`, {
+          signal,
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }, externalSignal);
+      if (
+        !isRecord(json) ||
+        json.success !== true ||
+        json.source !== 'imobsys-live' ||
+        !isRecord(json.data) ||
+        json.data.propertyId !== id ||
+        typeof json.data.description !== 'string' ||
+        json.data.description.length > 10000
+      )
+        return null;
+      return json.data.description.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Fetch one raw page without filling gaps or requesting subsequent pages. */
   public async searchAccommodationsPage(
     params: SearchAccommodationsParams,
@@ -434,20 +498,26 @@ class CrcnBackendApiService {
     retryExpiredSnapshot = true,
   ): Promise<AccommodationSearchPage> {
     const { limit, skip } = params;
-    const startedAt = performance.now();
-    const { json, serverTime } = await withApiRequestTimeout(async (signal) => {
-      const res = await apiFetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...params, limit, skip }),
-        signal,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return {
-        json: (await res.json()) as unknown,
-        serverTime: Date.parse(res.headers.get('Date') || ''),
-      };
-    }, requestSignal);
+    const { json, serverTime, bodyReadDuration } = await withApiRequestTimeout(
+      async (signal) => {
+        const res = await apiFetch('/api/search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...params, limit, skip }),
+          signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const receivedAt = performance.now();
+        const json: unknown = await res.json();
+        return {
+          json,
+          serverTime: Date.parse(res.headers.get('Date') || ''),
+          bodyReadDuration: Math.max(0, performance.now() - receivedAt),
+        };
+      },
+      requestSignal,
+      120_000,
+    );
     if (
       !isRecord(json) ||
       !isFiniteNumber(json.total) ||
@@ -458,7 +528,9 @@ class CrcnBackendApiService {
       !json.data.every(isProperty) ||
       (params.from &&
         params.to &&
-        ((json.source !== 'stays-live' && json.source !== 'stays-simulated') ||
+        ((json.source !== 'stays-live' &&
+          json.source !== 'stays-simulated' &&
+          json.source !== 'imobsys-live') ||
           json.from !== params.from ||
           json.to !== params.to ||
           json.guests !== (params.guests ?? 1)))
@@ -506,11 +578,10 @@ class CrcnBackendApiService {
         throw new Error('A cotação da pesquisa expirou. Tente novamente.');
       }
       if (Number.isFinite(serverTime)) {
-        // Convert remaining server validity to the device clock, allowing for
-        // HTTP Date precision and the entire round trip without extending it.
+        // HTTP Date is generated with the response, after the upstream search.
         const remaining = Math.min(
           expiresAt - fetchedAt,
-          expiresAt - serverTime - 1000 - Math.max(0, performance.now() - startedAt),
+          expiresAt - serverTime - 1000 - bodyReadDuration,
         );
         expiresAt = Date.now() + remaining;
       }
@@ -549,7 +620,19 @@ class CrcnBackendApiService {
     for (const item of json.data) {
       const property = sanitizePropertyMedia(item);
       const quote = getConfirmedPropertyQuote(property);
-      if (requestedNights !== null && (!quote || quote.nights !== requestedNights)) {
+      const imobsysOffer = property.imobsysOffer;
+      const hasMatchingImobsysOffer =
+        property.dataSource === 'imobsys-live' &&
+        imobsysOffer !== undefined &&
+        imobsysOffer?.from === params.from &&
+        imobsysOffer.to === params.to &&
+        imobsysOffer.nights === requestedNights &&
+        imobsysOffer.expiresAt > Date.now();
+      if (
+        requestedNights !== null &&
+        (!quote || quote.nights !== requestedNights) &&
+        !hasMatchingImobsysOffer
+      ) {
         unquotedCount += 1;
         continue;
       }

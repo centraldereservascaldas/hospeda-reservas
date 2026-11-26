@@ -215,7 +215,8 @@ export function getAccommodationIdFromPath(pathname: string): string | null {
   const reservationId = pathname.match(/^\/reservar\/([a-zA-Z0-9_-]+)(?:\/|$)/)?.[1];
   if (reservationId) return reservationId;
 
-  return pathname.match(/\/(?:apartamento|apartment)\/([a-zA-Z0-9_-]+)(?:\/|$)/)?.[1] ?? null;
+  const id = pathname.match(/\/(?:apartamento|apartment)\/([a-zA-Z0-9_-]+)(?:\/|$)/)?.[1];
+  return id?.replace(/^parceiro-crcn-(\d+)-(\d+)$/, 'imobsys-crcn-$1-$2') ?? null;
 }
 
 export function serializeSearchFilters(filters: SearchFilters): string {

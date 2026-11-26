@@ -208,7 +208,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         normalizedDestination.includes(normalizedQuery)
       );
     })
-    .slice(0, 8);
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
 
   const handleApply = () => {
     const hasPartialDateRange = Boolean(checkIn) !== Boolean(checkOut);

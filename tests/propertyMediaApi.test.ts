@@ -19,6 +19,32 @@ Object.assign(globalThis, {
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 const { staysApi } = await import('../src/services/staysApi.ts');
 
+test('accepts partner descriptions only for the requested identity', async () => {
+  const originalFetch = globalThis.fetch;
+  const id = 'imobsys-crcn-1-961';
+  let returnedId = id;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        success: true,
+        source: 'imobsys-live',
+        data: {
+          propertyId: returnedId,
+          images: [],
+          description: 'QUARTO: cama de casal',
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  try {
+    assert.equal(await crcnBackendApi.getImobSysPropertyDescription(id), 'QUARTO: cama de casal');
+    returnedId = 'imobsys-crcn-1-1038';
+    assert.equal(await crcnBackendApi.getImobSysPropertyDescription(id), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('sanitizes media from the Laravel catalog, detail, and search responses', async () => {
   const originalFetch = globalThis.fetch;
   const unsafeListing = {

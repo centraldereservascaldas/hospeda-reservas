@@ -377,7 +377,23 @@ export const isProperty = (value: unknown): value is Property => {
     (value.dataSource === undefined ||
       value.dataSource === 'stays-live' ||
       value.dataSource === 'stays-simulated' ||
-      value.dataSource === 'local-catalog') &&
+      value.dataSource === 'local-catalog' ||
+      value.dataSource === 'imobsys-live') &&
+    (value.imobsysOffer === undefined ||
+      (isRecord(value.imobsysOffer) &&
+        isIsoDate(value.imobsysOffer.from) &&
+        isIsoDate(value.imobsysOffer.to) &&
+        value.imobsysOffer.to > value.imobsysOffer.from &&
+        isFiniteNumber(value.imobsysOffer.nights) &&
+        Number.isInteger(value.imobsysOffer.nights) &&
+        value.imobsysOffer.nights > 0 &&
+        isFiniteNumber(value.imobsysOffer.totalAmount) &&
+        value.imobsysOffer.totalAmount > 0 &&
+        value.imobsysOffer.currency === 'BRL' &&
+        typeof value.imobsysOffer.observedAt === 'string' &&
+        value.imobsysOffer.availabilityConfirmed === false &&
+        isFiniteNumber(value.imobsysOffer.expiresAt) &&
+        value.imobsysOffer.expiresAt > 0)) &&
     isStringArray(value.images) &&
     isNonNegativeNumber(value.bedrooms) &&
     isNonNegativeNumber(value.beds) &&

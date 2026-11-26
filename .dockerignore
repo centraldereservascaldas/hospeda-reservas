@@ -8,6 +8,8 @@ vendor
 tests
 docs
 storage/logs/*
+storage/app/private/**
+integrations/imobsys/data/**
 storage/framework/cache/*
 storage/framework/sessions/*
 storage/framework/views/*

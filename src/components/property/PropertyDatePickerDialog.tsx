@@ -41,6 +41,7 @@ interface PropertyDatePickerDialogProps {
   onApply?: () => void;
   onExplainDate?: (message: string) => void;
   onClose: () => void;
+  selectionOnly?: boolean;
 }
 
 export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> = ({
@@ -69,6 +70,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
   onApply,
   onExplainDate,
   onClose,
+  selectionOnly = false,
 }) => {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dayButtonRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -108,6 +110,11 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
   const calendarByDate = new Map(calendarDays.map((day) => [day.date, day]));
   const displayedMonthPrefix = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-`;
   const isSelectableDate = (dateValue: string) => {
+    if (selectionOnly)
+      return (
+        dateValue >= todayIso &&
+        (activeDateField === 'checkIn' || Boolean(checkIn && dateValue > checkIn))
+      );
     const day = calendarByDate.get(dateValue);
     if (dateValue < todayIso || !calendarAvailable || isLoadingCalendar || !day) return false;
     return activeDateField === 'checkIn'
@@ -365,14 +372,16 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                             ? getCalendarDayRestriction(calendarDay)
                             : null;
                           const isPast = dateValue < todayIso;
-                          const isAvailableCheckIn = Boolean(
-                            calendarDay && isCalendarArrivalAvailable(calendarDay),
-                          );
-                          const isAvailableCheckOut = Boolean(
-                            checkIn &&
-                            dateValue > checkIn &&
-                            isCalendarRangeAvailable(calendarDays, checkIn, dateValue),
-                          );
+                          const isAvailableCheckIn = selectionOnly
+                            ? !isPast
+                            : Boolean(calendarDay && isCalendarArrivalAvailable(calendarDay));
+                          const isAvailableCheckOut = selectionOnly
+                            ? Boolean(!isPast && checkIn && dateValue > checkIn)
+                            : Boolean(
+                                checkIn &&
+                                dateValue > checkIn &&
+                                isCalendarRangeAvailable(calendarDays, checkIn, dateValue),
+                              );
                           const isUnavailableForArrival = Boolean(
                             calendarDay && !isCalendarArrivalAvailable(calendarDay),
                           );
@@ -392,11 +401,13 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                             !isAvailableForActiveField &&
                             !isSelectedForAnotherField,
                           );
-                          const selectedRangeIsAvailable = Boolean(
-                            checkIn &&
-                            checkOut &&
-                            isCalendarRangeAvailable(calendarDays, checkIn, checkOut),
-                          );
+                          const selectedRangeIsAvailable = selectionOnly
+                            ? Boolean(checkIn && checkOut && checkOut > checkIn)
+                            : Boolean(
+                                checkIn &&
+                                checkOut &&
+                                isCalendarRangeAvailable(calendarDays, checkIn, checkOut),
+                              );
                           const isInRange = Boolean(
                             selectedRangeIsAvailable &&
                             checkIn &&
@@ -404,33 +415,37 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                             dateValue > checkIn &&
                             dateValue < checkOut,
                           );
-                          const isDisabled =
-                            isPast ||
-                            isLoadingCalendar ||
-                            !calendarAvailable ||
-                            !calendarDay ||
-                            !isAvailableForActiveField;
-                          const availabilityLabel = isPast
-                            ? 'data passada'
-                            : isLoadingCalendar
-                              ? 'disponibilidade sendo atualizada'
-                              : !calendarAvailable || !calendarDay
-                                ? 'disponibilidade não confirmada'
-                                : dayRestriction
-                                  ? `${dayRestriction}${isAvailableCheckOut && activeDateField === 'checkOut' ? '; checkout permitido' : ''}`
-                                  : isSelectedForAnotherField
-                                    ? `selecionada como ${activeDateField === 'checkIn' ? 'check-out' : 'check-in'}`
-                                    : isUnavailableForArrival &&
-                                        isSelectedCheckOut &&
-                                        isAvailableCheckOut
-                                      ? 'indisponível para check-in; checkout permitido'
-                                      : isInRange
-                                        ? 'noite incluída no período selecionado'
-                                        : isBlocked
-                                          ? `indisponível para esta seleção; ${activeDateField === 'checkOut' ? getCalendarRangeMessage(validateCalendarRange(calendarDays, checkIn, dateValue)) : calendarDay?.closedToArrival ? 'entrada não permitida' : 'noite indisponível'}`
-                                          : isUnavailableForArrival
-                                            ? 'indisponível para check-in'
-                                            : 'disponível';
+                          const isDisabled = selectionOnly
+                            ? !isSelectableDate(dateValue)
+                            : isPast ||
+                              isLoadingCalendar ||
+                              !calendarAvailable ||
+                              !calendarDay ||
+                              !isAvailableForActiveField;
+                          const availabilityLabel =
+                            selectionOnly && !isPast
+                              ? 'disponibilidade não confirmada'
+                              : isPast
+                                ? 'data passada'
+                                : isLoadingCalendar
+                                  ? 'disponibilidade sendo atualizada'
+                                  : !calendarAvailable || !calendarDay
+                                    ? 'disponibilidade não confirmada'
+                                    : dayRestriction
+                                      ? `${dayRestriction}${isAvailableCheckOut && activeDateField === 'checkOut' ? '; checkout permitido' : ''}`
+                                      : isSelectedForAnotherField
+                                        ? `selecionada como ${activeDateField === 'checkIn' ? 'check-out' : 'check-in'}`
+                                        : isUnavailableForArrival &&
+                                            isSelectedCheckOut &&
+                                            isAvailableCheckOut
+                                          ? 'indisponível para check-in; checkout permitido'
+                                          : isInRange
+                                            ? 'noite incluída no período selecionado'
+                                            : isBlocked
+                                              ? `indisponível para esta seleção; ${activeDateField === 'checkOut' ? getCalendarRangeMessage(validateCalendarRange(calendarDays, checkIn, dateValue)) : calendarDay?.closedToArrival ? 'entrada não permitida' : 'noite indisponível'}`
+                                              : isUnavailableForArrival
+                                                ? 'indisponível para check-in'
+                                                : 'disponível';
                           const shouldShowUnavailableMark =
                             !dayRestriction &&
                             ((isBlocked && !isInRange) ||
@@ -442,14 +457,19 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                             dateValue >= touchRangePreview.checkIn &&
                             dateValue <= touchRangePreview.checkOut,
                           );
-                          const isTouchPreviewValid = Boolean(
-                            touchRangePreview &&
-                            isCalendarRangeAvailable(
-                              calendarDays,
-                              touchRangePreview.checkIn,
-                              touchRangePreview.checkOut,
-                            ),
-                          );
+                          const isTouchPreviewValid = selectionOnly
+                            ? Boolean(
+                                touchRangePreview &&
+                                touchRangePreview.checkOut > touchRangePreview.checkIn,
+                              )
+                            : Boolean(
+                                touchRangePreview &&
+                                isCalendarRangeAvailable(
+                                  calendarDays,
+                                  touchRangePreview.checkIn,
+                                  touchRangePreview.checkOut,
+                                ),
+                              );
                           return (
                             <div
                               key={dateValue}
@@ -530,11 +550,7 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
                                   blocked: isBlocked,
                                   selected: isSelected,
                                   inRange: isInRange,
-                                  disabled:
-                                    isPast ||
-                                    isLoadingCalendar ||
-                                    !calendarDay ||
-                                    !isAvailableForActiveField,
+                                  disabled: isDisabled,
                                 }}
                                 title={availabilityLabel}
                               >
@@ -557,7 +573,11 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
             })}
           </div>
           <div className="mt-4 space-y-3 border-t border-neutral-100 px-3 pt-3 sm:px-0">
-            {isLoadingCalendar || isRefreshingCalendar ? (
+            {selectionOnly ? (
+              <p className="text-center text-caption text-neutral-600" role="status">
+                Selecione as datas para consultar. A disponibilidade ainda não está confirmada.
+              </p>
+            ) : isLoadingCalendar || isRefreshingCalendar ? (
               <p className="text-center text-caption text-neutral-500" role="status">
                 {isRefreshingCalendar
                   ? 'Atualizando disponibilidade. Sua seleção foi preservada.'
@@ -636,9 +656,11 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
               </>
             )}
             <p className="text-center text-caption text-neutral-500">
-              {activeDateField === 'checkIn'
-                ? 'Toque ou clique na entrada e depois na saída. No teclado, use setas, Home, End e Page Up/Down.'
-                : 'Escolha um check-out que mantenha toda a estadia disponível. Use as setas para navegar.'}
+              {selectionOnly
+                ? 'Escolha a entrada e a saída para consultar a oferta.'
+                : activeDateField === 'checkIn'
+                  ? 'Toque ou clique na entrada e depois na saída. No teclado, use setas, Home, End e Page Up/Down.'
+                  : 'Escolha um check-out que mantenha toda a estadia disponível. Use as setas para navegar.'}
             </p>
           </div>
         </div>
@@ -648,7 +670,11 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
           aria-live="polite"
         >
           {interactionMessage ||
-            (checkIn && checkOut && isCalendarRangeAvailable(calendarDays, checkIn, checkOut)
+            (checkIn &&
+            checkOut &&
+            (selectionOnly
+              ? checkOut > checkIn
+              : isCalendarRangeAvailable(calendarDays, checkIn, checkOut))
               ? `${formatDateLabel(checkIn)} — ${formatDateLabel(checkOut)} · ${selectedNights} ${selectedNights === 1 ? 'noite' : 'noites'}`
               : activeDateField === 'checkIn'
                 ? 'Escolha a entrada'
@@ -673,9 +699,11 @@ export const PropertyDatePickerDialog: React.FC<PropertyDatePickerDialogProps> =
             type="button"
             onClick={onApply}
             disabled={
-              !calendarAvailable ||
-              isLoadingCalendar ||
-              !isCalendarRangeAvailable(calendarDays, checkIn, checkOut)
+              selectionOnly
+                ? !checkIn || !checkOut || checkOut <= checkIn
+                : !calendarAvailable ||
+                  isLoadingCalendar ||
+                  !isCalendarRangeAvailable(calendarDays, checkIn, checkOut)
             }
             className="min-h-11 rounded-xl bg-orange-600 px-4 font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-40"
           >

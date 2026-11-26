@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CieloWebhookController;
 use App\Http\Controllers\Api\ExistingReservationCheckoutController;
 use App\Http\Controllers\Api\ExistingReservationContractController;
 use App\Http\Controllers\Api\GuestReservationController;
+use App\Http\Controllers\Api\ImobSysPreviewController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OwnerAccessController;
 use App\Http\Controllers\Api\OwnerAdminController;
@@ -37,7 +38,10 @@ Route::get('/ready', function () {
 });
 
 Route::get('/resorts', [AccommodationController::class, 'resorts']);
+Route::get('/imobsys/offers', [ImobSysPreviewController::class, 'index'])->middleware('throttle:30,1');
 Route::get('/accommodations', [AccommodationController::class, 'index']);
+Route::get('/accommodations/{id}/media', [AccommodationController::class, 'media'])
+    ->middleware('throttle:30,1');
 Route::get('/accommodations/{id}', [AccommodationController::class, 'show']);
 Route::post('/search', [AccommodationController::class, 'search']);
 Route::get('/accommodations/{id}/calendar', [AccommodationController::class, 'calendar']);

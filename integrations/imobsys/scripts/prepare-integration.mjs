@@ -1,0 +1,11 @@
+import {readFile,writeFile,rename} from 'node:fs/promises';
+import {buildIntegrationBundle} from '../src/integration-bundle.mjs';
+const load=async name=>{try{return JSON.parse(await readFile(new URL(`../data/${name}.json`,import.meta.url),'utf8'));}catch(e){if(e.code==='ENOENT')return {};throw e;}};
+const inputs={};for(const [key,file] of Object.entries({catalog:'catalog',partner:'partner-catalog',curated:'authenticated-availability',rolling:'rolling-availability',media:'media'}))inputs[key]=await load(file);
+const properties=new Map((inputs.partner.properties||[]).map(p=>[p.id,p]));
+for(const source of [inputs.curated,inputs.rolling])for(const period of source.periods||[])for(const offer of period.offers||[])properties.set(offer.id,{...properties.get(offer.id),...offer,title:`${offer.condominium} | ${offer.unit}`,source:'authenticated-network-search'});
+inputs.partner={updatedAt:new Date().toISOString(),catalogueComplete:false,properties:[...properties.values()]};
+await writeFile(new URL('../data/partner-catalog.next.json',import.meta.url),JSON.stringify(inputs.partner,null,2));await rename(new URL('../data/partner-catalog.next.json',import.meta.url),new URL('../data/partner-catalog.json',import.meta.url));
+const bundle=buildIntegrationBundle(inputs);
+const temp=new URL('../data/integration-candidates.next.json',import.meta.url);await writeFile(temp,JSON.stringify(bundle,null,2));await rename(temp,new URL('../data/integration-candidates.json',import.meta.url));
+console.log(JSON.stringify(bundle.coverage));
