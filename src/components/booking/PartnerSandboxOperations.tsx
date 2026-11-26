@@ -10,6 +10,9 @@ interface Order {
   check_out: string;
   guests: number;
   base_cents: number;
+  payment_cents: number;
+  payment_method: 'pix' | 'card';
+  installments: number | null;
   supplier_payable_observed_cents: number | null;
   status: string;
   attention_reason: string | null;
@@ -235,6 +238,12 @@ export function PartnerSandboxOperations() {
                   hóspedes
                 </p>
                 <p>Valor da hospedagem: {currency(order.base_cents)}</p>
+                <p>
+                  Valor previsto do hóspede: {currency(order.payment_cents)} ·{' '}
+                  {order.payment_method === 'pix'
+                    ? 'Pix'
+                    : `cartão${order.installments ? ` em ${order.installments}x` : ''}`}
+                </p>
                 {order.attention_reason === 'supplier_outcome_unknown' && (
                   <div>
                     {order.reservation_reference && (

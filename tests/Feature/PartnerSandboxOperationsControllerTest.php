@@ -99,6 +99,7 @@ class PartnerSandboxOperationsControllerTest extends TestCase
 
         $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders')
             ->assertOk()->assertJsonPath('orders.0.reservation_reference', '1600')
+            ->assertJsonPath('orders.0.payment_method', 'pix')->assertJsonPath('orders.0.payment_cents', 52300)
             ->assertJsonMissingPath('orders.0.encrypted_customer');
         $url = '/api/owner/admin/partner-sandbox/orders/'.$order->id.'/manual-payment';
         $this->withToken('admin-token')->postJson($url, ['amountCents' => 52300, 'reference' => 'TEST-1'])
