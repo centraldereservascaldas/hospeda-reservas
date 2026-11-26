@@ -29,7 +29,11 @@ const originalGetResorts = crcnBackendApi.getResorts;
 const isoDateAtOffset = (days: number): string => {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 };
 
 const currentCalendarMonth = new Date().toLocaleDateString('pt-BR', {
