@@ -207,7 +207,7 @@ export function MainContentRouter({
     <main
       ref={catalogFocusRef}
       tabIndex={-1}
-      className="flex-1 bg-[#faf9f7] pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-12"
+      className="flex-1 bg-[#faf9f7] pb-[calc(8rem_+_env(safe-area-inset-bottom,0px))] sm:pb-12"
     >
       {!selectedProperty && propertyRouteStatus === 'loading' && (
         <div
@@ -267,10 +267,9 @@ export function MainContentRouter({
             availabilitySearchState === 'idle' &&
             !filters.checkIn &&
             !filters.checkOut &&
-            (catalogStatus === 'loading' || filteredProperties.length > 0) &&
+            filteredProperties.length > 0 &&
             !filteredProperties.some((property) => property.simulatedData) && (
               <SeasonalDateSuggestions
-                currency={currency}
                 guests={filters.guests}
                 guestCount={searchGuestCount}
                 fallbackProperties={filteredProperties}

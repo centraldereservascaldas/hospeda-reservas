@@ -96,7 +96,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
           <div
             role="group"
             aria-label="Categorias de hospedagem"
-            className="no-scrollbar order-2 flex min-w-0 flex-1 items-center gap-3 overflow-x-auto py-1 sm:order-1 sm:gap-5"
+            className="no-scrollbar relative order-2 flex min-w-0 flex-1 snap-x snap-proximity items-center gap-3 overflow-x-auto py-1 pr-5 scroll-px-3 after:pointer-events-none after:absolute after:right-0 after:top-0 after:h-full after:w-7 after:bg-gradient-to-l after:from-white after:to-transparent sm:order-1 sm:gap-5 sm:pr-0 sm:after:hidden"
           >
             {availableCategories.map((cat) => {
               const isSelected = selectedCategory === cat.id;
@@ -106,7 +106,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
                   onClick={() => onSelectCategory(cat.id)}
                   aria-label={cat.label}
                   aria-pressed={isSelected}
-                  className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${
+                  className={`inline-flex min-h-11 shrink-0 snap-start items-center gap-2 rounded-full border px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${
                     isSelected
                       ? 'border-neutral-900 bg-white text-neutral-950'
                       : 'border-transparent text-neutral-500 hover:border-neutral-200 hover:bg-white hover:text-neutral-900'
