@@ -52,11 +52,22 @@ class PartnerPaymentStartService
             }
             DB::transaction(function () use ($id, $paymentId, $qr): void {
                 $locked = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
+                if ($locked->status === 'attention_required' && $locked->attention_reason === 'payment_outcome_unknown' && $locked->payment_id === null) {
+                    // A late response can arrive after the stale-request watchdog.
+                    // Keep the ID for independent reconciliation; never return the
+                    // unverified Pix code to the customer from this state.
+                    $locked->update(['payment_id' => $paymentId]);
+                    return;
+                }
                 if ($locked->status !== 'payment_starting') {
                     throw new RuntimeException('Pedido requer conferência.');
                 }
                 $locked->update(['status' => 'payment_pending', 'payment_id' => $paymentId, 'payment_qr_code' => $qr]);
             });
+
+            if (PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'attention_required')->exists()) {
+                throw new RuntimeException('Pagamento requer conferência.');
+            }
 
             return $result;
         } catch (Throwable $exception) {

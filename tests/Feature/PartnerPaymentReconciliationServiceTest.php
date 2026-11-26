@@ -41,6 +41,17 @@ class PartnerPaymentReconciliationServiceTest extends TestCase
         $this->assertFalse($service->reconcile($order->id));
     }
 
+    public function test_late_payment_id_is_verified_against_cielo_before_advancing(): void
+    {
+        config(['services.cielo.direct_environment' => 'sandbox']);
+        $id = '11111111-1111-4111-8111-111111111111';
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('K', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown', 'payment_id' => $id, 'merchant_order_id' => 'ORDERL', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-late', 'encrypted_customer' => ['fullName' => 'Teste']]);
+        $this->mock(CieloEcommerceClient::class)->shouldReceive('findPaymentById')->once()->andReturn(['MerchantOrderId' => 'ORDERL', 'Payment' => ['PaymentId' => $id, 'Status' => 2, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']]);
+        $this->assertTrue(app(PartnerPaymentReconciliationService::class)->reconcile($order->id));
+        $this->assertSame('payment_verified', $order->fresh()->status);
+        $this->assertNull($order->fresh()->attention_reason);
+    }
+
     public function test_declined_payment_is_not_marked_as_paid(): void
     {
         config(['services.cielo.direct_environment' => 'sandbox']);

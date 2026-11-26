@@ -38,7 +38,7 @@ class RecoverPartnerCheckouts extends Command
         PartnerCheckoutOrder::query()->where(function ($query): void {
             $query->whereIn('status', ['payment_pending', 'payment_verified'])
                 ->orWhere(function ($query): void {
-                    $query->where('status', 'attention_required')->where('attention_reason', 'payment_outcome_unknown')->whereNull('payment_id');
+                    $query->where('status', 'attention_required')->where('attention_reason', 'payment_outcome_unknown');
                 });
         })->orderByRaw('CASE WHEN recovery_requested_at IS NULL THEN 0 ELSE 1 END')
             ->orderBy('recovery_requested_at')->orderBy('id')->limit($limit)->get(['id'])->each(function (PartnerCheckoutOrder $order) use (&$count): void {

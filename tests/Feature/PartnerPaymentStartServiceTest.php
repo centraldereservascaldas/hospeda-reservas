@@ -41,6 +41,25 @@ class PartnerPaymentStartServiceTest extends TestCase
         }
     }
 
+    public function test_late_gateway_response_retains_id_but_never_exposes_pix_or_retries(): void
+    {
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true]);
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('L', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'quoted', 'merchant_order_id' => 'ORDERL', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-late', 'encrypted_customer' => ['fullName' => 'Teste', 'cpf' => '12345678901', 'phone' => '64999999999']]);
+        $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->once()->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
+        $this->mock(CieloEcommerceClient::class)->shouldReceive('createPixPayment')->once()->andReturnUsing(function () use ($order) {
+            $order->update(['status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown']);
+            return ['Payment' => ['PaymentId' => '11111111-1111-4111-8111-111111111111', 'QrCodeString' => 'PIX-TESTE']];
+        });
+        try {
+            app(PartnerPaymentStartService::class)->start($order->id);
+            $this->fail('A late response must be reconciled independently.');
+        } catch (RuntimeException) {
+            $this->assertSame('attention_required', $order->fresh()->status);
+            $this->assertSame('11111111-1111-4111-8111-111111111111', $order->fresh()->payment_id);
+            $this->assertNull($order->fresh()->payment_qr_code);
+        }
+    }
+
     public function test_gateway_failure_requires_review_and_cannot_be_retried(): void
     {
         config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true]);

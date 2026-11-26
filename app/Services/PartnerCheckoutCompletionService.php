@@ -20,7 +20,7 @@ class PartnerCheckoutCompletionService
             $this->recovery->recover($id);
             $order->refresh();
         }
-        if ($order->status === 'payment_pending') {
+        if ($order->status === 'payment_pending' || ($order->status === 'attention_required' && $order->attention_reason === 'payment_outcome_unknown' && $order->payment_id !== null)) {
             $this->payments->reconcile($id);
             $order->refresh();
         }
