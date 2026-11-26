@@ -209,9 +209,8 @@ class ImobSysSearchFallbackTest extends TestCase
     public function test_appends_imobsys_offers_after_stays_properties_in_the_same_search_list(): void
     {
         Http::preventStrayRequests();
-        Http::fake(['http://imobsys.test/internal/offers/search*' => Http::response([
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response([
             'success' => true,
-            'source' => 'imobsys-live',
             'from' => '2027-01-10',
             'to' => '2027-01-12',
             'guests' => 2,
@@ -231,7 +230,7 @@ class ImobSysSearchFallbackTest extends TestCase
                 'availabilityConfirmed' => false,
                 'reservationGuaranteed' => false,
             ]],
-            'pagination' => ['page' => 1, 'pageSize' => 100, 'hasMore' => false],
+            'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
         ])]);
 
         $staysProperty = [
@@ -271,9 +270,8 @@ class ImobSysSearchFallbackTest extends TestCase
     public function test_appends_imobsys_after_the_last_stays_page_when_all_condominiums_are_searched(): void
     {
         Http::preventStrayRequests();
-        Http::fake(['http://imobsys.test/internal/offers/search*' => Http::response([
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response([
             'success' => true,
-            'source' => 'imobsys-live',
             'from' => '2027-01-10',
             'to' => '2027-01-12',
             'guests' => 2,
@@ -293,7 +291,7 @@ class ImobSysSearchFallbackTest extends TestCase
                 'availabilityConfirmed' => false,
                 'reservationGuaranteed' => false,
             ]],
-            'pagination' => ['page' => 1, 'pageSize' => 100, 'hasMore' => false],
+            'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
         ])]);
 
         $this->mock(StaysAccommodationMapper::class)
@@ -350,14 +348,14 @@ class ImobSysSearchFallbackTest extends TestCase
 
     public function test_ignores_cached_mixed_pagination_when_imobsys_is_disabled(): void
     {
-        config(['services.imobsys.search_fallback_enabled' => false]);
+        config(['services.partner_api.search_fallback_enabled' => false]);
         Http::preventStrayRequests();
         Http::fake([]);
 
         $from = '2027-01-10';
         $to = '2027-01-12';
         $searchKey = 'imobsys.mixed-search.v1.'.hash('sha256', json_encode([
-            'http://imobsys.test', $from, $to, 2, '', null, [],
+            'https://api.example.test', $from, $to, 2, '', null, [],
         ], JSON_THROW_ON_ERROR));
         Cache::put($searchKey, 0, now()->addMinutes(10));
 

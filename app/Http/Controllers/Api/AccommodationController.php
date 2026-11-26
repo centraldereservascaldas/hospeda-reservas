@@ -235,7 +235,7 @@ class AccommodationController extends Controller
             $scanPriority = $canUseImobSys
                 && ($destination !== '' || $verifiedPropertyId !== null);
             $combinedSearchKey = 'imobsys.mixed-search.v1.'.hash('sha256', json_encode([
-                config('services.imobsys.base_url'), $from, $to, $guests, $destination,
+                config('services.partner_api.base_url'), $from, $to, $guests, $destination,
                 $input['propertyId'] ?? null, $input['cities'] ?? [],
             ], JSON_THROW_ON_ERROR));
             $knownStaysTotal = $canUseImobSys && ! $scanPriority ? Cache::get($combinedSearchKey) : null;
@@ -258,7 +258,7 @@ class AccommodationController extends Controller
                 'items' => [], 'unquotedCount' => 0, 'receivedCount' => 0,
                 'meta' => [
                     'fetchedAt' => now()->toIso8601String(),
-                    'expiresAt' => now()->addSeconds(max(1, min(60, (int) config('services.imobsys.cache_ttl', 25))))->toIso8601String(),
+                    'expiresAt' => now()->addSeconds(max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))))->toIso8601String(),
                 ],
             ] : $availabilityService->search($searchInput);
             if ($resolved === null) {
