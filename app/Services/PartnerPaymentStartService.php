@@ -18,10 +18,13 @@ class PartnerPaymentStartService
         if (! app()->environment(['local', 'testing']) || $this->configuration->environment() !== 'sandbox' || ! config('services.partner_checkout_sandbox.enabled')) {
             throw new RuntimeException('Pagamento de testes indisponível.');
         }
-        $order = DB::transaction(function () use ($id): PartnerCheckoutOrder {
+        $order = DB::transaction(function () use ($id, $paymentToken): PartnerCheckoutOrder {
             $locked = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
             if ($locked->status !== 'quoted') {
                 throw new RuntimeException('Pedido já iniciado ou precisa de conferência.');
+            }
+            if ($locked->payment_method === 'card' && (! is_string($paymentToken) || ! preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/iD', $paymentToken))) {
+                throw new RuntimeException('Token de cartão inválido.');
             }
             $locked->update(['status' => 'payment_starting']);
 

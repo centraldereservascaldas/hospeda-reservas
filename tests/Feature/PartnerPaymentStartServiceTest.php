@@ -83,4 +83,20 @@ class PartnerPaymentStartServiceTest extends TestCase
             }
         }
     }
+
+    public function test_invalid_card_token_is_rejected_before_changing_order_or_contacting_gateway(): void
+    {
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true]);
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('J', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 56000, 'currency' => 'BRL', 'status' => 'quoted', 'merchant_order_id' => 'ORDER5', 'payment_method' => 'card', 'installments' => 1, 'reservation_idempotency_key' => 'partner-order-123460', 'encrypted_customer' => ['fullName' => 'Teste']]);
+        $this->mock(ImobSysSearchClient::class)->shouldNotReceive('offers');
+        $this->mock(CieloEcommerceClient::class)->shouldNotReceive('createCardPayment');
+        foreach ([null, 'invalid'] as $token) {
+            try {
+                app(PartnerPaymentStartService::class)->start($order->id, $token);
+                $this->fail('An invalid token must not start payment.');
+            } catch (RuntimeException) {
+                $this->assertSame('quoted', $order->fresh()->status);
+            }
+        }
+    }
 }
