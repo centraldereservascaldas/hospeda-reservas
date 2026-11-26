@@ -25,6 +25,7 @@ const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
 beforeEach(() => {
   mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 3, 12) });
+  crcnBackendApi.getResorts = async () => [];
 });
 
 afterEach(() => {
@@ -49,7 +50,7 @@ test('mobile search heading uses readable compact copy while desktop keeps the l
   assert.match(desktopHeading.className, /hidden sm:inline/);
 });
 
-test('date picker announces full dates and restores focus on Escape and selection', async () => {
+test('date picker announces full dates, restores focus on Escape, and advances to guests after selection', async () => {
   const originalGetResorts = crcnBackendApi.getResorts;
   crcnBackendApi.getResorts = async () => [];
   try {
@@ -103,7 +104,11 @@ test('date picker announces full dates and restores focus on Escape and selectio
     fireEvent.click(getByRole('button', { name: /16 de novembro de 2026/ }));
     assert.equal(queryByRole('dialog', { name: /Calendário de entrada/ }), null);
     assert.match(checkIn.getAttribute('aria-label') ?? '', /12 de nov\. - 16 de nov\./);
-    assert.equal(document.activeElement, checkIn);
+    const guestsDialog = getByRole('dialog', { name: 'Selecionar hóspedes' });
+    await waitFor(() => {
+      assert.ok(guestsDialog.contains(document.activeElement));
+      assert.equal(document.activeElement?.getAttribute('aria-label'), 'Diminuir adultos');
+    });
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
   }
