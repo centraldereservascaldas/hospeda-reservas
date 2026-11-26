@@ -16,7 +16,7 @@ class PartnerPaidReservationServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'server-secret', 'services.partner_api.reservations_enabled' => true]);
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'server-secret', 'services.partner_api.reservations_enabled' => true]);
         Http::preventStrayRequests();
     }
 
@@ -58,6 +58,26 @@ class PartnerPaidReservationServiceTest extends TestCase
         } catch (RuntimeException) {
             $this->assertSame('attention_required', $order->fresh()->status);
             Http::assertSentCount(1);
+        }
+    }
+
+    public function test_production_or_disabled_checkout_never_calls_supplier(): void
+    {
+        Http::fake();
+        $order = $this->order('payment_verified');
+        foreach (['production', 'disabled'] as $mode) {
+            $originalEnvironment = $this->app['env'];
+            if ($mode === 'production') $this->app['env'] = 'production';
+            if ($mode === 'disabled') config(['services.partner_checkout_sandbox.enabled' => false]);
+            try {
+                app(PartnerPaidReservationService::class)->create($order->id);
+                $this->fail('Supplier reservation must remain disabled.');
+            } catch (RuntimeException) {
+                $this->assertSame('payment_verified', $order->fresh()->status);
+                Http::assertNothingSent();
+            } finally {
+                $this->app['env'] = $originalEnvironment;
+            }
         }
     }
 }

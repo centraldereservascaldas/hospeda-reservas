@@ -14,6 +14,10 @@ class PartnerPaidReservationService
     /** The calling payment handler must independently verify and persist the captured payment. */
     public function create(string $id): void
     {
+        if (! app()->environment(['local', 'testing']) || config('services.cielo.direct_environment') !== 'sandbox' || ! config('services.partner_checkout_sandbox.enabled')) {
+            throw new RuntimeException('Pré-reserva experimental disponível apenas em sandbox.');
+        }
+
         $claimed = DB::transaction(function () use ($id): ?PartnerCheckoutOrder {
             $order = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
             if ($order->status === 'awaiting_seller_payment') {
