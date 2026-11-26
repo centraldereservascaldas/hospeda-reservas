@@ -151,6 +151,49 @@ test('calendar selects a check-in to check-out range in the shared search panel'
   }
 });
 
+test('shared search panels move focus into condominium, date, and guest controls', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  crcnBackendApi.getResorts = async () => [];
+
+  try {
+    const { getByRole, getByLabelText } = render(
+      React.createElement(StaysSearchWidget, {
+        onSearchInApp: () => {},
+      }),
+    );
+
+    const destinationTrigger = getByRole('button', { name: /Todos os condomínios/ });
+    fireEvent.click(destinationTrigger);
+    const resortInput = getByLabelText('Buscar condomínio');
+    await waitFor(() => assert.equal(document.activeElement, resortInput));
+
+    fireEvent.click(getByRole('option', { name: 'Todos os condomínios' }));
+    const dateDialog = getByRole('dialog', { name: /Calendário de entrada/ });
+    await waitFor(() => assert.ok(dateDialog.contains(document.activeElement)));
+    assert.equal(
+      document.activeElement?.hasAttribute('data-calendar-day'),
+      true,
+      'moving from condominium selection to dates should focus an available date',
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      assert.equal(document.activeElement, getByRole('button', { name: /Quando/ })),
+    );
+
+    const guestTrigger = getByRole('button', { name: /Quem:/ });
+    fireEvent.click(guestTrigger);
+    const guestDialog = getByRole('dialog', { name: 'Selecionar hóspedes' });
+    const increaseAdults = getByRole('button', { name: 'Aumentar adultos' });
+    await waitFor(() => {
+      assert.equal(document.activeElement, increaseAdults);
+      assert.ok(guestDialog.contains(document.activeElement));
+    });
+  } finally {
+    crcnBackendApi.getResorts = originalGetResorts;
+  }
+});
+
 test('preserves an unsubmitted date edit when an unrelated active filter changes', async () => {
   const originalGetResorts = crcnBackendApi.getResorts;
   crcnBackendApi.getResorts = async () => [];
