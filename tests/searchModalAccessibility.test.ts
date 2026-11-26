@@ -20,7 +20,7 @@ Object.assign(globalThis, {
 });
 
 const React = (await import('react')).default;
-const { render, fireEvent, cleanup, within } = await import('@testing-library/react');
+const { render, fireEvent, cleanup, waitFor, within } = await import('@testing-library/react');
 const { SearchModal } = await import('../src/components/search/SearchModal.tsx');
 const { createDefaultSearchFilters } = await import('../src/utils/searchUrlState.ts');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
@@ -89,6 +89,68 @@ test('search mode tabs expose selection and support arrow, Home, and End keys', 
   fireEvent.keyDown(tabs[0]!, { key: 'ArrowLeft' });
   assert.equal(document.activeElement, tabs[3]);
   assert.equal(tabs[3]?.getAttribute('aria-selected'), 'true');
+});
+
+test('date calendar enters the Tab order and moves focus by day with arrow keys', async () => {
+  const { getByRole } = render(
+    React.createElement(SearchModal, {
+      isOpen: true,
+      onClose: () => {},
+      filters: createDefaultSearchFilters(),
+      onApplyFilters: () => {},
+      onResetFilters: () => {},
+      onSearchInApp: () => {},
+    }),
+  );
+
+  fireEvent.click(getByRole('tab', { name: 'Datas' }));
+
+  const firstFocusableDate = document.querySelector<HTMLButtonElement>(
+    'button[data-calendar-day]:not(:disabled)[tabindex="0"]',
+  );
+  assert.ok(firstFocusableDate, 'an available calendar date should be reachable by Tab');
+  await waitFor(() => assert.equal(document.activeElement, firstFocusableDate));
+
+  const currentDate = firstFocusableDate.dataset.calendarDay!;
+  const nextDate = new Date(`${currentDate}T12:00:00`);
+  nextDate.setDate(nextDate.getDate() + 1);
+  const nextDateIso = [
+    nextDate.getFullYear(),
+    String(nextDate.getMonth() + 1).padStart(2, '0'),
+    String(nextDate.getDate()).padStart(2, '0'),
+  ].join('-');
+
+  fireEvent.keyDown(firstFocusableDate, { key: 'ArrowRight' });
+  await waitFor(() =>
+    assert.equal(document.activeElement?.getAttribute('data-calendar-day'), nextDateIso),
+  );
+  assert.equal(
+    document.querySelectorAll('button[data-calendar-day]:not(:disabled)[tabindex="0"]').length,
+    2,
+    'each visible month should expose one available roving date',
+  );
+
+  const secondMonth = document.querySelectorAll<HTMLElement>('[role="tabpanel"] section')[1];
+  const visibleNextMonthDates = Array.from(
+    secondMonth?.querySelectorAll<HTMLButtonElement>('button[data-calendar-day]:not(:disabled)') ??
+      [],
+  );
+  const lastDate = visibleNextMonthDates[visibleNextMonthDates.length - 1];
+  assert.ok(lastDate, 'the next visible month should include an available date');
+  const lastDateValue = lastDate.dataset.calendarDay!;
+  const nextMonthDate = new Date(`${lastDateValue}T12:00:00`);
+  nextMonthDate.setDate(nextMonthDate.getDate() + 1);
+  const nextMonthDateIso = [
+    nextMonthDate.getFullYear(),
+    String(nextMonthDate.getMonth() + 1).padStart(2, '0'),
+    String(nextMonthDate.getDate()).padStart(2, '0'),
+  ].join('-');
+
+  lastDate.focus();
+  fireEvent.keyDown(lastDate, { key: 'ArrowRight' });
+  await waitFor(() =>
+    assert.equal(document.activeElement?.getAttribute('data-calendar-day'), nextMonthDateIso),
+  );
 });
 
 test('search modal keeps its mobile controls touch-sized and clear of input text', () => {
