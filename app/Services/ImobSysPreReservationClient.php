@@ -12,7 +12,7 @@ class ImobSysPreReservationClient
     public function create(array $input, string $idempotencyKey): array
     {
         $base = (string) config('services.partner_api.base_url');
-        $key = (string) config('services.partner_api.key');
+        $key = (string) config('services.partner_api.reservation_key');
         if (! config('services.partner_api.reservations_enabled') || ! preg_match('/\A[A-Za-z0-9._~-]{16,128}\z/D', $idempotencyKey) || trim($key) === '' || ! filter_var($base, FILTER_VALIDATE_URL) || parse_url($base, PHP_URL_SCHEME) !== 'https' || parse_url($base, PHP_URL_USER) !== null || parse_url($base, PHP_URL_QUERY) !== null || parse_url($base, PHP_URL_FRAGMENT) !== null) {
             throw new RuntimeException('Pré-reserva do parceiro indisponível.');
         }

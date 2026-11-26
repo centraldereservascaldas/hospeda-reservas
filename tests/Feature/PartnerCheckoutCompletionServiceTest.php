@@ -17,7 +17,7 @@ class PartnerCheckoutCompletionServiceTest extends TestCase
 
     public function test_captured_payment_creates_exactly_one_partner_reservation(): void
     {
-        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'server-secret', 'services.partner_api.reservations_enabled' => true]);
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.reservation_key' => 'reservation-secret', 'services.partner_api.reservations_enabled' => true]);
         Http::preventStrayRequests();
         Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
         $paymentId = '11111111-1111-4111-8111-111111111111';
@@ -79,7 +79,7 @@ class PartnerCheckoutCompletionServiceTest extends TestCase
 
     public function test_uncertain_gateway_result_is_recovered_before_reserving(): void
     {
-        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'server-secret', 'services.partner_api.reservations_enabled' => true]);
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.reservation_key' => 'reservation-secret', 'services.partner_api.reservations_enabled' => true]);
         Http::preventStrayRequests();
         Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
         $paymentId = '11111111-1111-4111-8111-111111111111';

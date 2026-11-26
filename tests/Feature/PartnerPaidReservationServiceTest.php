@@ -16,7 +16,7 @@ class PartnerPaidReservationServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'server-secret', 'services.partner_api.reservations_enabled' => true]);
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.reservation_key' => 'reservation-secret', 'services.partner_api.reservations_enabled' => true]);
         Http::preventStrayRequests();
     }
 

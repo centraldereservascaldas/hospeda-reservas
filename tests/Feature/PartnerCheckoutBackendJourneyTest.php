@@ -20,7 +20,7 @@ class PartnerCheckoutBackendJourneyTest extends TestCase
 
     public function test_pix_quote_payment_and_partner_reservation_are_connected(): void
     {
-        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'server-secret', 'services.partner_api.reservations_enabled' => true]);
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.reservation_key' => 'reservation-secret', 'services.partner_api.reservations_enabled' => true]);
         Http::preventStrayRequests();
         Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
         $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->twice()->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
@@ -37,7 +37,7 @@ class PartnerCheckoutBackendJourneyTest extends TestCase
 
     public function test_card_payment_preserves_installments_and_supplier_base(): void
     {
-        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'server-secret', 'services.partner_api.reservations_enabled' => true]);
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.reservation_key' => 'reservation-secret', 'services.partner_api.reservations_enabled' => true]);
         Http::preventStrayRequests();
         Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1601', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
         $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->twice()->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
@@ -56,7 +56,7 @@ class PartnerCheckoutBackendJourneyTest extends TestCase
 
     public function test_paid_order_with_unknown_supplier_response_requires_review_without_another_charge_or_reservation(): void
     {
-        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'server-secret', 'services.partner_api.reservations_enabled' => true]);
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.reservation_key' => 'reservation-secret', 'services.partner_api.reservations_enabled' => true]);
         Http::preventStrayRequests();
         Http::fake(['api.example.test/*' => Http::response(['success' => false], 503)]);
         $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->twice()->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);

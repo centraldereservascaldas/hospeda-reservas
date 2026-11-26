@@ -61,6 +61,7 @@ return [
     'partner_api' => [
         'base_url' => env('PARTNER_API_BASE_URL'),
         'key' => env('PARTNER_API_KEY'),
+        'reservation_key' => env('PARTNER_RESERVATION_API_KEY'),
         'search_fallback_enabled' => (bool) env('PARTNER_SEARCH_FALLBACK_ENABLED', false),
         'reservations_enabled' => (bool) env('PARTNER_RESERVATIONS_ENABLED', false),
         'timeout' => (int) env('PARTNER_API_TIMEOUT', 75),
