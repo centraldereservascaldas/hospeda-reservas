@@ -19,6 +19,7 @@ return new class extends Migration
             $table->unsignedBigInteger('payment_cents');
             $table->string('currency', 3)->default('BRL');
             $table->string('status', 40)->index();
+            $table->string('attention_reason', 50)->nullable();
             $table->string('payment_id', 100)->nullable()->unique();
             $table->text('payment_qr_code')->nullable();
             $table->string('merchant_order_id', 36)->unique();

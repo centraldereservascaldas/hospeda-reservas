@@ -57,7 +57,7 @@ class PartnerPaymentStartService
 
             return $result;
         } catch (Throwable $exception) {
-            PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'payment_starting')->update(['status' => $gatewayStarted ? 'attention_required' : 'quote_unavailable']);
+            PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'payment_starting')->update(['status' => $gatewayStarted ? 'attention_required' : 'quote_unavailable', 'attention_reason' => $gatewayStarted ? 'payment_outcome_unknown' : null]);
             throw $exception;
         }
     }

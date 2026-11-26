@@ -11,11 +11,27 @@ interface Order {
   guests: number;
   base_cents: number;
   status: string;
+  attention_reason: string | null;
   reservation_reference: string | null;
 }
 
 const currency = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+function attentionMessage(order: Order): string {
+  if (order.status === 'reservation_starting')
+    return 'Pagamento confirmado; pré-reserva em processamento. Confira o fornecedor antes de repetir.';
+  switch (order.attention_reason) {
+    case 'payment_outcome_unknown':
+      return 'Resultado do pagamento ainda não confirmado. Consulte a Cielo antes de qualquer nova cobrança.';
+    case 'payment_mismatch':
+      return 'Dados do pagamento divergem do pedido. Confira a Cielo antes de continuar.';
+    case 'supplier_outcome_unknown':
+      return 'Pagamento confirmado; pré-reserva sem resultado confirmado. Confira a ImobSys e trate o pagamento com a equipe antes de repetir.';
+    default:
+      return 'Resultado pendente de análise. Confira o pagamento e a reserva antes de continuar.';
+  }
+}
 
 /** Internal sandbox only; the server independently enforces admin authorization. */
 export function PartnerSandboxOperations() {
@@ -147,11 +163,7 @@ export function PartnerSandboxOperations() {
                   </>
                 ) : (
                   <p className="font-semibold text-amber-800">
-                    Precisa de conferência:{' '}
-                    {order.status === 'reservation_starting'
-                      ? 'pré-reserva em processamento'
-                      : 'resultado pendente de análise'}
-                    .
+                    Precisa de conferência: {attentionMessage(order)}
                   </p>
                 )}
               </article>

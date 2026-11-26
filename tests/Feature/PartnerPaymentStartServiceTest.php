@@ -53,6 +53,7 @@ class PartnerPaymentStartServiceTest extends TestCase
             $this->fail('The gateway failure must not appear successful.');
         } catch (RuntimeException) {
             $this->assertSame('attention_required', $order->fresh()->status);
+            $this->assertSame('payment_outcome_unknown', $order->fresh()->attention_reason);
         }
         $this->expectException(RuntimeException::class);
         $service->start($order->id);

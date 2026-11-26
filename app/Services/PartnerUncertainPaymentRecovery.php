@@ -34,7 +34,7 @@ class PartnerUncertainPaymentRecovery
                 return false;
             }
             $qr = $locked->payment_method === 'pix' && is_string($payment['QrCodeString'] ?? null) ? $payment['QrCodeString'] : null;
-            $locked->update(['status' => 'payment_pending', 'payment_id' => $paymentId, 'payment_qr_code' => $qr]);
+            $locked->update(['status' => 'payment_pending', 'attention_reason' => null, 'payment_id' => $paymentId, 'payment_qr_code' => $qr]);
 
             return true;
         });

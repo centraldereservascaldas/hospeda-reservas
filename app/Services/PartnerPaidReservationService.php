@@ -45,7 +45,7 @@ class PartnerPaidReservationService
             ], $claimed->reservation_idempotency_key);
             PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'awaiting_seller_payment', 'reservation_reference' => $result['id']]);
         } catch (Throwable $exception) {
-            PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'attention_required']);
+            PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown']);
             throw $exception;
         }
     }

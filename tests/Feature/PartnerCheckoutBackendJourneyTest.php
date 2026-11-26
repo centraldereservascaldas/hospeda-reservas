@@ -71,6 +71,7 @@ class PartnerCheckoutBackendJourneyTest extends TestCase
             $this->fail('A resposta incerta deve exigir revisão.');
         } catch (RuntimeException) {
             $this->assertSame('attention_required', $order->fresh()->status);
+            $this->assertSame('supplier_outcome_unknown', $order->fresh()->attention_reason);
         }
         $this->assertSame('attention_required', app(PartnerCheckoutCompletionService::class)->complete($order->id));
         $this->assertNull($order->fresh()->reservation_reference);

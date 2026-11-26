@@ -26,7 +26,7 @@ class PartnerPaymentReconciliationService
         if (($result['MerchantOrderId'] ?? null) !== $order->merchant_order_id || ($payment['PaymentId'] ?? null) !== $order->payment_id || ($payment['Amount'] ?? null) !== (int) $order->payment_cents || ($payment['Currency'] ?? null) !== 'BRL' || ($payment['Type'] ?? null) !== ($order->payment_method === 'pix' ? 'Pix' : 'CreditCard') || ($order->payment_method === 'card' && ($payment['Installments'] ?? null) !== (int) $order->installments)) {
             // A payment may already be captured: expose the discrepancy to operations,
             // and never issue a replacement charge or create a supplier reservation.
-            PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'payment_pending')->where('payment_id', $order->payment_id)->update(['status' => 'attention_required', 'payment_qr_code' => null]);
+            PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'payment_pending')->where('payment_id', $order->payment_id)->update(['status' => 'attention_required', 'attention_reason' => 'payment_mismatch', 'payment_qr_code' => null]);
 
             return false;
         }

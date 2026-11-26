@@ -35,6 +35,7 @@ class PartnerPaymentReconciliationServiceTest extends TestCase
         $service = app(PartnerPaymentReconciliationService::class);
         $this->assertFalse($service->reconcile($order->id));
         $this->assertSame('attention_required', $order->fresh()->status);
+        $this->assertSame('payment_mismatch', $order->fresh()->attention_reason);
         $this->assertNull($order->fresh()->payment_qr_code);
         $this->assertNull($order->fresh()->reservation_reference);
         $this->assertFalse($service->reconcile($order->id));
