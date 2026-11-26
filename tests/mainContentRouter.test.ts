@@ -379,7 +379,7 @@ test('continuation errors retain the catalog and offer a dedicated retry', () =>
   assert.equal(loads, 1);
 });
 
-test('home mounts discovery structure during catalog loading and preserves it when data arrives', () => {
+test('home waits for the live catalog before showing discovery cards and preserves them afterward', () => {
   const { container, rerender } = render(
     React.createElement(
       MainContentRouter,
@@ -391,13 +391,13 @@ test('home mounts discovery structure during catalog loading and preserves it wh
     ),
   );
   const collections = container.querySelector('[aria-label="Coleções de hospedagens"]');
-  assert.ok(
-    collections,
-    'the dated collections must reserve their position before the catalog arrives',
-  );
+  assert.equal(collections, null, 'discovery cards must wait for real catalog properties');
   assert.ok(container.querySelector('[aria-busy="true"]'));
   rerender(React.createElement(MainContentRouter, createRouterProps()));
-  assert.equal(container.querySelector('[aria-label="Coleções de hospedagens"]'), collections);
+  const loadedCollections = container.querySelector('[aria-label="Coleções de hospedagens"]');
+  assert.ok(loadedCollections);
+  rerender(React.createElement(MainContentRouter, createRouterProps()));
+  assert.equal(container.querySelector('[aria-label="Coleções de hospedagens"]'), loadedCollections);
   rerender(React.createElement(MainContentRouter, createRouterProps({ filteredProperties: [] })));
   assert.equal(container.querySelector('[aria-label="Coleções de hospedagens"]'), null);
 });
