@@ -148,7 +148,7 @@ test('shows date suggestions with real quoted totals and applies the selected pe
   );
 
   assert.ok(screen.getByRole('heading', { name: 'Hospedagens para viajar com seu pet' }));
-  assert.ok(screen.getByRole('heading', { name: 'Caldas Country Festival' }));
+  assert.equal(screen.queryByRole('heading', { name: 'Caldas Country Festival' }), null);
   assert.ok(screen.getByRole('heading', { name: 'Datas comemorativas e feriados' }));
   await waitFor(() => assert.ok(screen.getAllByText('R$ 1.200,00').length > 0));
   assert.ok(screen.getAllByRole('img').length > 0);
@@ -218,13 +218,8 @@ test('does not use a neighbouring apartment quote for another unit of the same c
       onSelect: () => {},
     }),
   );
-  await waitFor(() =>
-    assert.ok(screen.getAllByRole('button', { name: /Apartamento B/ }).length > 0),
-  );
-  for (const button of screen.getAllByRole('button', { name: /Apartamento B/ })) {
-    assert.doesNotMatch(button.textContent || '', /R\$/);
-    assert.match(button.getAttribute('aria-label') || '', /sugestão de hospedagem/);
-  }
+  await waitFor(() => assert.ok(screen.getAllByText('R$ 500,00').length > 0));
+  assert.equal(screen.queryByRole('button', { name: /Apartamento B/ }), null);
 });
 
 test('hides quotes from a previous occupancy while the new search is pending', async () => {
@@ -414,14 +409,9 @@ test('queries only visible dates, groups equal dates and defers the thematic cat
   act(() => VisibilityObserver.show('pet-weekend-1', true));
   await waitFor(() => assert.equal(calls.length, 1));
   assert.equal(calls[0]!.limit, 8);
-  act(() => VisibilityObserver.show('caldas-country-1', true));
-  await waitFor(() => assert.equal(calls.length, 2));
-  act(() => VisibilityObserver.show('caldas-country-2', true));
-  await act(async () => Promise.resolve());
-  assert.equal(calls.length, 2);
   assert.ok(calls.every((params) => params.from));
   act(() => VisibilityObserver.show('catalog', true));
-  await waitFor(() => assert.equal(calls.length, 4));
+  await waitFor(() => assert.equal(calls.length, 3));
   assert.equal(calls.filter((params) => !params.from).length, 1);
   assert.equal(calls.filter((params) => params.limit === 20).length, 2);
 });
@@ -605,4 +595,36 @@ test('does not restore a promotional quote whose expiry exceeds the local validi
   );
   assert.doesNotMatch(document.body.textContent || '', /Invalid cached property/);
   assert.equal(window.sessionStorage.getItem(key), null);
+});
+
+test('removes unavailable seasonal offers and never exposes fallback apartments as available', async () => {
+  mockSearch(async () => ({ total: 0, data: [] }));
+  render(
+    createSeasonalDateSuggestionsElement({
+      ...discoveryProps,
+      fallbackProperties: STAYS_NET_APARTMENTS.slice(0, 3),
+    }),
+  );
+  await waitFor(() => assert.equal(screen.queryAllByRole('button').length, 0));
+  assert.equal(screen.queryByText(/Sugestão de hospedagem · consulte as datas/), null);
+});
+
+test('refreshes suggested periods when an open page returns on a later day', async () => {
+  const calls: SearchAccommodationsParams[] = [];
+  mockSearch(async (params) => {
+    calls.push(params);
+    return quoteResult();
+  });
+  render(createSeasonalDateSuggestionsElement(discoveryProps));
+  await waitFor(() => assert.ok(calls.some((params) => params.from)));
+  calls.length = 0;
+  await act(async () => {
+    mock.timers.setTime(Date.UTC(2026, 10, 26, 12));
+    window.dispatchEvent(new dom.window.Event('focus'));
+  });
+  await waitFor(() => assert.ok(calls.some((params) => params.from)));
+  for (const params of calls.filter((params) => params.from)) {
+    assert.ok(params.from! >= '2026-11-28');
+    assert.ok(params.to! > params.from!);
+  }
 });

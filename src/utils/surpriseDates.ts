@@ -106,12 +106,7 @@ export function getSurpriseDateCandidates(
     add(dateAtNoon(year, 0, 12), 4, 'Alta temporada de verão', 'high-season', 3);
     add(dateAtNoon(year, 6, 12), 4, 'Férias de julho', 'high-season', 3);
     add(dateAtNoon(year, 11, 27), 4, 'Natal e Réveillon', 'high-season', 4);
-  }
 
-  // The festival's 2026 dates are published by its official website; future editions
-  // are added only after their dates are announced.
-  if (today.getFullYear() <= 2026) {
-    add(dateAtNoon(2026, 10, 20), 3, 'Caldas Country Festival (21 e 22/11)', 'event', 7);
   }
 
   const unique = new Map<string, SurpriseDateOption>();
