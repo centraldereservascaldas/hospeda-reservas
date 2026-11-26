@@ -74,27 +74,40 @@ export function PartnerSandboxCheckout() {
     setBusy(true);
     setMessage('');
     try {
-      const order = await partnerSandboxCheckoutApi.create({
-        propertyId: String(data.get('propertyId')),
-        from: String(data.get('from')),
-        to: String(data.get('to')),
-        guests: Number(data.get('guests')),
-        acceptedBaseCents: Number(data.get('baseCents')),
-        method,
-        ...(method === 'card' ? { installments: Number(data.get('installments')) } : {}),
-        customer: {
-          fullName: String(data.get('fullName')),
-          cpf: String(data.get('cpf')),
-          phone: String(data.get('phone')),
+      const submissionKey =
+        sessionStorage.getItem(`${storageKey}:submission`) ?? crypto.randomUUID();
+      sessionStorage.setItem(`${storageKey}:submission`, submissionKey);
+      const order = await partnerSandboxCheckoutApi.create(
+        {
+          propertyId: String(data.get('propertyId')),
+          from: String(data.get('from')),
+          to: String(data.get('to')),
+          guests: Number(data.get('guests')),
+          acceptedBaseCents: Number(data.get('baseCents')),
+          method,
+          ...(method === 'card' ? { installments: Number(data.get('installments')) } : {}),
+          customer: {
+            fullName: String(data.get('fullName')),
+            cpf: String(data.get('cpf')),
+            phone: String(data.get('phone')),
+          },
         },
-      });
+        submissionKey,
+      );
       if (typeof order.reference !== 'string') throw new Error('Pedido precisa de conferência.');
       sessionStorage.setItem(storageKey, order.reference);
       setReference(order.reference);
-      setOrderStatus('quoted');
+      setOrderStatus(typeof order.status === 'string' ? order.status : '');
       setInstallments(method === 'card' ? Number(data.get('installments')) : null);
       setPaymentCents(typeof order.paymentCents === 'number' ? order.paymentCents : null);
-      setMessage('Confira o valor de teste antes de iniciar o pagamento.');
+      if (order.status === 'quoted') {
+        setMessage('Confira o valor de teste antes de iniciar o pagamento.');
+      } else {
+        const current = await partnerSandboxCheckoutApi.status(order.reference);
+        setOrderStatus(typeof current.status === 'string' ? current.status : '');
+        setPix(typeof current.pix === 'string' ? current.pix : '');
+        setMessage(statusMessage(current.status));
+      }
     } catch {
       const savedReference = sessionStorage.getItem(storageKey);
       if (savedReference) {
@@ -279,6 +292,7 @@ export function PartnerSandboxCheckout() {
                 type="button"
                 onClick={() => {
                   sessionStorage.removeItem(storageKey);
+                  sessionStorage.removeItem(`${storageKey}:submission`);
                   window.location.assign('/');
                 }}
                 className="rounded-xl border border-neutral-300 p-3 font-bold"

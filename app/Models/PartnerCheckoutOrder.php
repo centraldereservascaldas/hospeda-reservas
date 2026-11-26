@@ -11,7 +11,7 @@ class PartnerCheckoutOrder extends Model
 
     protected $guarded = ['id'];
 
-    protected $hidden = ['encrypted_customer', 'reservation_idempotency_key', 'public_reference', 'payment_qr_code'];
+    protected $hidden = ['encrypted_customer', 'reservation_idempotency_key', 'submission_key_hash', 'submission_fingerprint', 'public_reference', 'payment_qr_code'];
 
     protected function casts(): array
     {

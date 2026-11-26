@@ -122,3 +122,24 @@ test('a new quoted price for the same stay does not silently start a second orde
   await waitFor(() => assert.equal(resumed, 'B'.repeat(40)));
   assert.equal(screen.queryByRole('button', { name: 'Conferir valor' }), null);
 });
+
+test('a lost creation response is retried with the same submission key', async () => {
+  const keys: string[] = [];
+  partnerSandboxCheckoutApi.create = async (_input, key) => {
+    keys.push(key);
+    if (keys.length === 1) throw new Error('response lost');
+    return { reference: 'C'.repeat(40), paymentCents: 52300, status: 'quoted' };
+  };
+  render(React.createElement(PartnerSandboxCheckout));
+  fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Pessoa Teste' } });
+  fireEvent.change(screen.getByLabelText('CPF'), { target: { value: '12345678901' } });
+  fireEvent.change(screen.getByLabelText('Telefone'), { target: { value: '64999999999' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Conferir valor' }));
+  await waitFor(() =>
+    assert.match(screen.getByRole('status').textContent || '', /Não foi possível criar/),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Conferir valor' }));
+  await waitFor(() => assert.equal(keys.length, 2));
+  assert.equal(keys[0], keys[1]);
+  await waitFor(() => assert.ok(screen.getByText(/Valor total do pagamento de teste/)));
+});

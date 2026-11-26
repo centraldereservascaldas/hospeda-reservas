@@ -40,8 +40,12 @@ function path(reference: string): string {
 }
 
 export const partnerSandboxCheckoutApi = {
-  create: (input: PartnerSandboxOrderInput) =>
-    request('/api/partner-sandbox/checkout', { method: 'POST', body: JSON.stringify(input) }),
+  create: (input: PartnerSandboxOrderInput, idempotencyKey: string) =>
+    request('/api/partner-sandbox/checkout', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: JSON.stringify(input),
+    }),
   startPayment: (reference: string, paymentToken?: string) =>
     request(`${path(reference)}/payment`, {
       method: 'POST',

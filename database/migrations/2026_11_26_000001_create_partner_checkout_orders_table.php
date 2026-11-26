@@ -11,6 +11,8 @@ return new class extends Migration
         Schema::create('partner_checkout_orders', function (Blueprint $table): void {
             $table->uuid('id')->primary();
             $table->string('public_reference', 64)->unique();
+            $table->string('submission_key_hash', 64)->nullable()->unique();
+            $table->string('submission_fingerprint', 64)->nullable();
             $table->string('supplier_property_id', 100);
             $table->date('check_in');
             $table->date('check_out');

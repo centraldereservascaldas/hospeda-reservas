@@ -25,7 +25,7 @@ class PartnerCheckoutBackendJourneyTest extends TestCase
         Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1600', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
         $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->twice()->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
         $paymentId = '11111111-1111-4111-8111-111111111111';
-        $order = app(PartnerCheckoutOrderFactory::class)->create(['propertyId' => 'imobsys-crcn-2-663', 'from' => now()->addDays(90)->toDateString(), 'to' => now()->addDays(92)->toDateString(), 'guests' => 2, 'method' => 'pix', 'acceptedBaseCents' => 52300, 'customer' => ['fullName' => 'Pessoa Teste', 'cpf' => '12345678901', 'phone' => '64999999999']]);
+        $order = app(PartnerCheckoutOrderFactory::class)->create(['propertyId' => 'imobsys-crcn-2-663', 'from' => now()->addDays(90)->toDateString(), 'to' => now()->addDays(92)->toDateString(), 'guests' => 2, 'method' => 'pix', 'acceptedBaseCents' => 52300, 'customer' => ['fullName' => 'Pessoa Teste', 'cpf' => '12345678901', 'phone' => '64999999999']], '11111111-1111-4111-8111-111111111111');
         $cielo = $this->mock(CieloEcommerceClient::class);
         $cielo->shouldReceive('createPixPayment')->once()->andReturn(['Payment' => ['PaymentId' => $paymentId, 'QrCodeString' => 'PIX-TESTE']]);
         $cielo->shouldReceive('findPaymentById')->once()->andReturn(['MerchantOrderId' => $order->merchant_order_id, 'Payment' => ['PaymentId' => $paymentId, 'Status' => 2, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']]);
@@ -42,7 +42,7 @@ class PartnerCheckoutBackendJourneyTest extends TestCase
         Http::fake(['api.example.test/*' => Http::response(['success' => true, 'data' => ['id' => '1601', 'status' => 'pre_reservation_created', 'amountCents' => 52300, 'currency' => 'BRL']], 201)]);
         $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->twice()->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
         $paymentId = '11111111-1111-4111-8111-111111111111';
-        $order = app(PartnerCheckoutOrderFactory::class)->create(['propertyId' => 'imobsys-crcn-2-663', 'from' => now()->addDays(90)->toDateString(), 'to' => now()->addDays(92)->toDateString(), 'guests' => 2, 'method' => 'card', 'installments' => 6, 'acceptedBaseCents' => 52300, 'customer' => ['fullName' => 'Pessoa Teste', 'cpf' => '12345678901', 'phone' => '64999999999']]);
+        $order = app(PartnerCheckoutOrderFactory::class)->create(['propertyId' => 'imobsys-crcn-2-663', 'from' => now()->addDays(90)->toDateString(), 'to' => now()->addDays(92)->toDateString(), 'guests' => 2, 'method' => 'card', 'installments' => 6, 'acceptedBaseCents' => 52300, 'customer' => ['fullName' => 'Pessoa Teste', 'cpf' => '12345678901', 'phone' => '64999999999']], '11111111-1111-4111-8111-111111111111');
         $total = app(CieloCardPricing::class)->calculate('523.00', 6)['totalCents'];
         $this->assertSame($total, (int) $order->payment_cents);
         $cielo = $this->mock(CieloEcommerceClient::class);
@@ -61,7 +61,7 @@ class PartnerCheckoutBackendJourneyTest extends TestCase
         Http::fake(['api.example.test/*' => Http::response(['success' => false], 503)]);
         $this->mock(ImobSysSearchClient::class)->shouldReceive('offers')->twice()->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
         $paymentId = '11111111-1111-4111-8111-111111111111';
-        $order = app(PartnerCheckoutOrderFactory::class)->create(['propertyId' => 'imobsys-crcn-2-663', 'from' => now()->addDays(90)->toDateString(), 'to' => now()->addDays(92)->toDateString(), 'guests' => 2, 'method' => 'pix', 'acceptedBaseCents' => 52300, 'customer' => ['fullName' => 'Pessoa Teste', 'cpf' => '12345678901', 'phone' => '64999999999']]);
+        $order = app(PartnerCheckoutOrderFactory::class)->create(['propertyId' => 'imobsys-crcn-2-663', 'from' => now()->addDays(90)->toDateString(), 'to' => now()->addDays(92)->toDateString(), 'guests' => 2, 'method' => 'pix', 'acceptedBaseCents' => 52300, 'customer' => ['fullName' => 'Pessoa Teste', 'cpf' => '12345678901', 'phone' => '64999999999']], '11111111-1111-4111-8111-111111111111');
         $cielo = $this->mock(CieloEcommerceClient::class);
         $cielo->shouldReceive('createPixPayment')->once()->andReturn(['Payment' => ['PaymentId' => $paymentId, 'QrCodeString' => 'PIX-TESTE']]);
         $cielo->shouldReceive('findPaymentById')->once()->andReturn(['MerchantOrderId' => $order->merchant_order_id, 'Payment' => ['PaymentId' => $paymentId, 'Status' => 2, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']]);

@@ -23,7 +23,7 @@ class PartnerSandboxCheckoutController extends Controller
         abort_unless($this->available(), 404);
         $input = $request->validate(['propertyId' => ['required', 'string', 'max:100'], 'from' => ['required', 'date_format:Y-m-d'], 'to' => ['required', 'date_format:Y-m-d', 'after:from'], 'guests' => ['required', 'integer', 'min:2', 'max:10'], 'method' => ['required', 'in:pix,card'], 'installments' => ['nullable', 'integer', 'min:1', 'max:6'], 'acceptedBaseCents' => ['required', 'integer', 'min:1'], 'customer.fullName' => ['required', 'string', 'max:150'], 'customer.cpf' => ['required', 'digits:11'], 'customer.phone' => ['required', 'digits_between:10,13']]);
         try {
-            $order = $factory->create($input);
+            $order = $factory->create($input, (string) $request->header('Idempotency-Key'));
         } catch (Throwable) {
             return response()->json(['success' => false, 'message' => 'Não foi possível confirmar a cotação.'], 409);
         }
