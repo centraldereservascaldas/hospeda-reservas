@@ -19,6 +19,12 @@ interface Order {
 const currency = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+function stayDate(value: string): string {
+  const iso = value.slice(0, 10);
+  const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return parts ? `${parts[3]}/${parts[2]}/${parts[1]}` : iso;
+}
+
 function attentionMessage(order: Order): string {
   if (order.status === 'reservation_starting')
     return 'Pagamento confirmado; pré-reserva em processamento. Confira o fornecedor antes de repetir.';
@@ -132,7 +138,7 @@ export function PartnerSandboxOperations() {
               <article key={order.id} className="rounded-2xl border bg-white p-5 shadow-sm">
                 <h2 className="font-bold">Imóvel {order.supplier_property_id}</h2>
                 <p>
-                  {order.check_in.slice(0, 10)} até {order.check_out.slice(0, 10)} · {order.guests}{' '}
+                  {stayDate(order.check_in)} até {stayDate(order.check_out)} · {order.guests}{' '}
                   hóspedes
                 </p>
                 <p>Valor da hospedagem: {currency(order.base_cents)}</p>
