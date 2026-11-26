@@ -198,21 +198,22 @@ export function PartnerSandboxOperations() {
                   hóspedes
                 </p>
                 <p>Valor da hospedagem: {currency(order.base_cents)}</p>
-                {order.attention_reason === 'supplier_outcome_unknown' &&
-                  order.supplier_operation_id && (
-                    <div>
+                {order.attention_reason === 'supplier_outcome_unknown' && (
+                  <div>
+                    {order.supplier_operation_id && (
                       <p>Identificador de conferência: {order.supplier_operation_id}</p>
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void consultSupplier(order)}
-                        className="mt-2 rounded-xl border px-4 py-2"
-                      >
-                        Consultar operação
-                      </button>
-                      {supplierStatus[order.id] && <p role="status">{supplierStatus[order.id]}</p>}
-                    </div>
-                  )}
+                    )}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void consultSupplier(order)}
+                      className="mt-2 rounded-xl border px-4 py-2"
+                    >
+                      Consultar operação
+                    </button>
+                    {supplierStatus[order.id] && <p role="status">{supplierStatus[order.id]}</p>}
+                  </div>
+                )}
                 {order.status === 'awaiting_seller_payment' ? (
                   <>
                     <p>

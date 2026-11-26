@@ -12,14 +12,30 @@ class ImobSysPreReservationClient
     /** Read-only lookup: unknown or unavailable must never trigger another mutation. */
     public function lookup(string $operationId): array
     {
+        return $this->lookupOperation($operationId, null);
+    }
+
+    public function lookupByKey(string $idempotencyKey): array
+    {
+        if (! preg_match('/\A[A-Za-z0-9._~-]{16,128}\z/D', $idempotencyKey)) {
+            throw new RuntimeException('Identificador inválido.');
+        }
+        return $this->lookupOperation('by-key', $idempotencyKey);
+    }
+
+    private function lookupOperation(string $operationId, ?string $idempotencyKey): array
+    {
         $base = (string) config('services.partner_api.base_url');
         $key = (string) config('services.partner_api.reservation_key');
-        if (! config('services.partner_api.reservations_enabled') || ! preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/iD', $operationId) || trim($key) === '' || ! filter_var($base, FILTER_VALIDATE_URL) || parse_url($base, PHP_URL_SCHEME) !== 'https' || parse_url($base, PHP_URL_USER) !== null || parse_url($base, PHP_URL_QUERY) !== null || parse_url($base, PHP_URL_FRAGMENT) !== null) {
+        if (! config('services.partner_api.reservations_enabled') || ($operationId !== 'by-key' && ! preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/iD', $operationId)) || trim($key) === '' || ! filter_var($base, FILTER_VALIDATE_URL) || parse_url($base, PHP_URL_SCHEME) !== 'https' || parse_url($base, PHP_URL_USER) !== null || parse_url($base, PHP_URL_QUERY) !== null || parse_url($base, PHP_URL_FRAGMENT) !== null) {
             throw new RuntimeException('Consulta do parceiro indisponível.');
         }
-        $response = Http::acceptJson()->withToken($key)->withoutRedirecting()->connectTimeout(3)->timeout(35)->get(rtrim($base, '/').'/v1/pre-reservations/'.$operationId);
+        $request = Http::acceptJson()->withToken($key)->withoutRedirecting()->connectTimeout(3)->timeout(35);
+        if ($idempotencyKey !== null) $request = $request->withHeaders(['Idempotency-Key' => $idempotencyKey]);
+        $response = $request->get(rtrim($base, '/').'/v1/pre-reservations/'.$operationId);
         $data = $response->json();
-        if (! $response->successful() || ! is_array($data) || ($data['success'] ?? null) !== true || data_get($data, 'data.operationId') !== $operationId || ! in_array(data_get($data, 'data.state'), ['starting', 'created', 'unknown', 'rejected'], true)) {
+        $returnedId = data_get($data, 'data.operationId');
+        if (! $response->successful() || ! is_array($data) || ($data['success'] ?? null) !== true || ! is_string($returnedId) || ! preg_match('/\A[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/iD', $returnedId) || ($operationId !== 'by-key' && $returnedId !== $operationId) || ! in_array(data_get($data, 'data.state'), ['starting', 'created', 'unknown', 'rejected'], true)) {
             throw new RuntimeException('Consulta da pré-reserva indisponível.');
         }
         return $data['data'];

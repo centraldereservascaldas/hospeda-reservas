@@ -17,11 +17,11 @@ class PartnerSandboxOperationsController extends Controller
     {
         abort_unless(app()->environment(['local', 'testing']) && config('services.partner_checkout_sandbox.enabled'), 404);
         $order = PartnerCheckoutOrder::query()->findOrFail($id);
-        if ($order->status !== 'attention_required' || $order->attention_reason !== 'supplier_outcome_unknown' || ! $order->supplier_operation_id) {
+        if ($order->status !== 'attention_required' || $order->attention_reason !== 'supplier_outcome_unknown') {
             return response()->json(['success' => false], 409)->header('Cache-Control', 'no-store, private');
         }
         try {
-            $result = $supplier->lookup($order->supplier_operation_id);
+            $result = $order->supplier_operation_id ? $supplier->lookup($order->supplier_operation_id) : $supplier->lookupByKey($order->reservation_idempotency_key);
             if (($result['propertyId'] ?? null) !== $order->supplier_property_id || ($result['from'] ?? null) !== $order->check_in->format('Y-m-d') || ($result['to'] ?? null) !== $order->check_out->format('Y-m-d') || ($result['guests'] ?? null) !== (int) $order->guests) {
                 throw new \RuntimeException('Dados da operação divergentes.');
             }

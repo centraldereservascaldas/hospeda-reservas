@@ -32,6 +32,9 @@ class PartnerSandboxOperationsControllerTest extends TestCase
         $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders/'.$order->id.'/supplier-status')->assertOk()->assertJsonPath('state', 'unknown')->assertJsonPath('reservationReference', '1600')->assertHeader('Cache-Control', 'no-store, private');
         $this->assertSame('attention_required', $order->fresh()->status);
         Http::assertSent(fn ($request): bool => $request->method() === 'GET' && str_contains($request->url(), '/v1/pre-reservations/'));
+        $order->update(['supplier_operation_id' => null]);
+        $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders/'.$order->id.'/supplier-status')->assertOk()->assertJsonPath('state', 'unknown');
+        Http::assertSent(fn ($request): bool => $request->method() === 'GET' && str_ends_with($request->url(), '/v1/pre-reservations/by-key') && $request->hasHeader('Idempotency-Key', 'partner-order-123456'));
     }
 
     public function test_read_only_review_rejects_an_operation_with_a_different_amount(): void
