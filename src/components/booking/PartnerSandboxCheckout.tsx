@@ -35,7 +35,7 @@ function statusMessage(status: unknown): string {
   }
 }
 
-/** Internal development screen; card input is a sandbox token, never card data. */
+/** Internal development screen; card data goes directly to the Cielo sandbox SDK. */
 export function PartnerSandboxCheckout() {
   const params = new URLSearchParams(window.location.search);
   // Keep orders tied to the exact selected stay; never resume a different property or period.
@@ -74,6 +74,38 @@ export function PartnerSandboxCheckout() {
       active = false;
     };
   }, []);
+  useEffect(() => {
+    if (
+      !reference ||
+      !['payment_pending', 'payment_verified', 'reservation_starting'].includes(orderStatus)
+    )
+      return;
+    let active = true;
+    let timer: number | undefined;
+    let attempts = 0;
+    const poll = async () => {
+      try {
+        if (orderStatus !== 'reservation_starting')
+          await partnerSandboxCheckoutApi.reconcile(reference);
+        const result = await partnerSandboxCheckoutApi.status(reference);
+        if (!active) return;
+        setOrderStatus(typeof result.status === 'string' ? result.status : '');
+        setPix(typeof result.pix === 'string' ? result.pix : '');
+        setMessage(statusMessage(result.status));
+      } catch {
+        if (active)
+          setMessage(
+            'Não foi possível atualizar. Consulte novamente antes de repetir o pagamento.',
+          );
+      }
+      if (active && ++attempts < 60) timer = window.setTimeout(() => void poll(), 10000);
+    };
+    void poll();
+    return () => {
+      active = false;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [orderStatus, reference]);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);

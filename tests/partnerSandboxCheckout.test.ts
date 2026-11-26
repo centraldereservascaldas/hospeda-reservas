@@ -120,6 +120,30 @@ test('card data goes to the Cielo SDK and only its token is sent to the backend'
   assert.equal(cvvInput.value, '');
 });
 
+test('reconciles a pending payment and displays a confirmed card rejection', async () => {
+  sessionStorage.setItem(originalKey, 'D'.repeat(40));
+  let queries = 0;
+  let reconciliations = 0;
+  partnerSandboxCheckoutApi.reconcile = async () => {
+    reconciliations++;
+    return { success: true };
+  };
+  partnerSandboxCheckoutApi.status = async () => {
+    queries++;
+    return {
+      status: queries === 1 ? 'payment_pending' : 'payment_rejected',
+      method: 'card',
+      paymentCents: 60000,
+    };
+  };
+  render(React.createElement(PartnerSandboxCheckout));
+  await waitFor(() =>
+    assert.match(screen.getByRole('status').textContent || '', /Pagamento de teste recusado/),
+  );
+  assert.equal(reconciliations, 1);
+  assert.equal(screen.queryByRole('button', { name: 'Confirmar pagamento de teste' }), null);
+});
+
 test('a different property or stay never resumes a previous order', async () => {
   sessionStorage.setItem(originalKey, 'B'.repeat(40));
   dom.window.history.replaceState(
