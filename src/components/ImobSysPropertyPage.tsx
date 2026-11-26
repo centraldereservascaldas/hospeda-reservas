@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Property } from '../types';
 import { apiFetch } from '../services/apiFetch';
 import { isProperty, isRecord } from '../utils/apiValidation';
@@ -38,9 +38,11 @@ export default function ImobSysPropertyPage() {
   const [message, setMessage] = useState('');
   const [context, setContext] = useState({ from, to, guests });
   const [searchState, setSearchState] = useState({ loading: false, message: '' });
+  const searchGeneration = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
+    const generation = ++searchGeneration.current;
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(from) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(to) ||
@@ -56,7 +58,7 @@ export default function ImobSysPropertyPage() {
     const query = new URLSearchParams({ from, to, guests: String(guests), propertyId: id });
     void fetchOffers(query.toString())
       .then((body) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || generation !== searchGeneration.current) return;
         if (!isRecord(body) || !Array.isArray(body.data))
           throw new Error('Não foi possível consultar o imóvel do parceiro agora.');
         const found = body.data.find((item: unknown) => isProperty(item) && item.id === id);
@@ -65,13 +67,16 @@ export default function ImobSysPropertyPage() {
         setProperty(found);
       })
       .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || generation !== searchGeneration.current) return;
         setMessage(
           error instanceof Error ? error.message : 'Não foi possível consultar este imóvel.',
         );
         setStatus('error');
       });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      searchGeneration.current += 1;
+    };
   }, [id, from, to, guests]);
 
   async function searchProperty(
@@ -79,6 +84,7 @@ export default function ImobSysPropertyPage() {
     nextTo: string,
     nextGuests: number,
   ): Promise<void> {
+    const generation = ++searchGeneration.current;
     if (nextTo <= nextFrom) {
       setSearchState({ loading: false, message: 'A saída precisa ser depois da entrada.' });
       return;
@@ -92,6 +98,7 @@ export default function ImobSysPropertyPage() {
         propertyId: id,
       });
       const body = await fetchOffers(query.toString());
+      if (generation !== searchGeneration.current) return;
       if (!isRecord(body) || !Array.isArray(body.data))
         throw new Error('Não foi possível consultar o imóvel do parceiro agora.');
       const found = body.data.find((item: unknown) => isProperty(item) && item.id === id);
@@ -112,6 +119,7 @@ export default function ImobSysPropertyPage() {
       window.history.replaceState(window.history.state, '', url);
       setSearchState({ loading: false, message: '' });
     } catch {
+      if (generation !== searchGeneration.current) return;
       setSearchState({
         loading: false,
         message: 'Não foi possível consultar a oferta agora. Tente novamente.',
