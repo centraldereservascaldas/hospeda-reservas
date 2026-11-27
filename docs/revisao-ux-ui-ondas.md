@@ -423,9 +423,11 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 
 **Confirmado em produção em 26/11/2026:** ao abrir diretamente `/checkout` com o imóvel LI23J, datas de 1 a 3/12/2026 e dois adultos, o botão “Voltar para acomodação” deixou a URL no checkout e, após breve carregamento, o diálogo de checkout reapareceu. Nenhuma reserva ou pagamento foi iniciado.
 
-**Causa provável no código local:** `src/App.tsx:236–245` só volta no histórico quando existe o marcador de entrada do modal e, nos demais casos, apenas limpa os dados da reserva. A rota permanece `/checkout`, o que faz `src/hooks/useCheckoutDraftRecovery.ts:20–26` iniciar novamente a recuperação. A confirmação do código implantado e das demais variantes de histórico depende de comparação com o artefato de produção.
+**Causa confirmada no código local desta base:** o fechamento só voltava no histórico quando existia o marcador de entrada do modal; nos demais casos apenas limpava os dados da reserva. A rota permanecia `/checkout`, o que fazia `src/hooks/useCheckoutDraftRecovery.ts:20–26` iniciar novamente a recuperação. A confirmação do código implantado em produção e das demais variantes de histórico ainda depende de comparação com o artefato publicado.
 
 **Ação:** definir destino explícito para a acomodação quando não existir entrada anterior apropriada, preservando imóvel, datas e hóspedes. **Verificação:** abrir link direto em nova aba, usar botão e Escape, testar entrada pela acomodação, voltar e avançar no histórico, recarregar e conferir que não há reabertura involuntária nem perda do contexto.
+
+**Implementação em revisão:** ao fechar checkout vindo da acomodação, o fluxo mantém o histórico anterior. Quando o checkout foi aberto diretamente, a entrada atual é substituída pela rota canônica do imóvel e pelos parâmetros validados de datas, hóspedes, moeda e atribuição disponíveis; a navegação interna recebe `popstate` para atualizar detalhe e filtros sem recarregar o checkout. Testes de hook cobrem os dois caminhos, a preservação de todos os hóspedes e da moeda da URL, e a remoção do ID de rascunho. Testes de navegador e ciclo voltar/avançar ainda pendentes: o backend local não está rodando e a interface não consegue revalidar uma cotação para abrir o checkout, então a ação visual não foi exercitada. PR #85, base `codex/ux-search-flow`.
 
 ### F38 · P2 · Resposta de ação iniciada em outra sessão pode deixar a conta atual carregando
 
@@ -622,7 +624,7 @@ Em 26/11/2026, a conferência de rastreabilidade encontrou referências diretas 
 | --- | --- | --- |
 | F01 · Calendário da busca | Reproduzido por teclado em produção. | Tornar dias navegáveis e testar seleção, meses e foco. |
 | F21 · Foco na recuperação | Reproduzido por teclado em produção. | Isolar o fundo e posicionar foco nas ações, coordenando com F23. |
-| F37 · Retorno do checkout direto | Reproduzido em produção. | Definir retorno ao imóvel com viagem preservada e testar histórico. |
+| F37 · Retorno do checkout direto | Reproduzido em produção; teste automatizado cobre destino direto e preservação do fluxo modal. | Navegador e ciclo voltar/avançar pendentes; implementação em revisão no PR #85. |
 | F39 · Acompanhamento Pix | Reproduzido em teste local com consulta simulada. | Comunicar falha e recuperar consulta sem induzir novo pagamento. |
 | F41 · Tela vazia e 504 | Observados pontualmente em produção; causa desconhecida e resposta posterior bem-sucedida. | Investigar artefato, cache, deploy e origem antes de escolher a correção. |
 | F47 · Preferências e foco | Reproduzido em primeira visita isolada no checkout e no imóvel, e na reabertura sobre checkout. | Coordenar foco da camada de medição e validar teclado, retorno e tecnologia assistiva. |
@@ -693,7 +695,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Revisar mudança de parcela depois do aceite, condições, erros de campos, loading, falha, recuperação e retorno ao imóvel com dados fictícios.
 - [ ] Validar o contrato de aceite após mudança do valor parcelado (F15).
 - [ ] Alinhar mensagem e destino no retorno de checkout não recuperável, preservando o contexto quando possível (F20).
-- [ ] Corrigir retorno do checkout aberto diretamente e testar botão, Escape e histórico sem reabrir o diálogo (F37).
+- [ ] Corrigir retorno do checkout aberto diretamente e testar botão, Escape e histórico sem reabrir o diálogo (F37). Testes de hook cobrem URL/contexto para acesso direto e preservação do histórico da navegação modal; navegador e voltar/avançar pendentes. PR #85.
 - [ ] Corrigir sobreposição do indicador de seleção no método de pagamento em largura estreita (F46).
 - [ ] Sinalizar e recuperar interrupções no acompanhamento de pagamento pendente, sem induzir pagamento duplicado (F39).
 - [ ] Preservar o destino do pedido na passagem para autenticação e conferir alternativas seguras de recuperação entre dispositivos (F40).

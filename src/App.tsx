@@ -233,18 +233,6 @@ function MarketplaceApp() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const handleCloseCheckout = () => {
-    const state: unknown = window.history.state;
-    const hasCheckoutModalEntry =
-      state !== null &&
-      typeof state === 'object' &&
-      CHECKOUT_MODAL_HISTORY_ENTRY in state &&
-      (state as Record<string, unknown>)[CHECKOUT_MODAL_HISTORY_ENTRY] === true;
-
-    if (hasCheckoutModalEntry) window.history.back();
-    setBookingPayload(null);
-  };
-
   // Search & Filter State
   const [filters, setFilters] = useState<SearchFilters>(() => {
     const initialFilters = parseSearchFilters(window.location.search);
@@ -436,6 +424,7 @@ function MarketplaceApp() {
   const {
     handleAddNewProperty,
     handleStartBooking,
+    handleCloseBooking,
     handleAssistantApplyFilters,
     handleSelectPropertyFromSofia,
   } = useAppOverlayActions({
@@ -446,6 +435,8 @@ function MarketplaceApp() {
     setBookingPayload,
     onSelectProperty: handleSelectProperty,
   });
+
+  const handleCloseCheckout = () => handleCloseBooking(bookingPayloadRef.current);
 
   const handleOpenSuggestedProperty = (
     property: Property,
