@@ -240,6 +240,132 @@ class ImobSysSearchClient
         return $name !== '' ? $name : null;
     }
 
+    public function catalogCondominiumId(string $id): ?string
+    {
+        $path = base_path('integrations/imobsys/condominium-crosswalk.json');
+        $contents = is_file($path) ? file_get_contents($path) : false;
+        if (! is_string($contents)) {
+            return null;
+        }
+        try {
+            $crosswalk = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return null;
+        }
+        $ids = [];
+        foreach (($crosswalk['verified'] ?? []) as $mapping) {
+            if (! is_array($mapping) || ($mapping['imobsysStatus'] ?? null) !== 'active'
+                || ! str_starts_with((string) ($mapping['matchStatus'] ?? ''), 'verified_')) {
+                continue;
+            }
+            $partnerId = is_string($mapping['imobsysProviderId'] ?? null) && ctype_digit($mapping['imobsysProviderId'])
+                ? 'imobsys-condo-'.$mapping['imobsysProviderId'] : null;
+            $catalogId = $mapping['imobsysCondominiumId'] ?? null;
+            if ((($mapping['staysPropertyId'] ?? null) === $id || $partnerId === $id)
+                && is_string($catalogId) && preg_match('/^imobsys-crcn-condo-[1-9]\d*$/', $catalogId)) {
+                $ids[$catalogId] = true;
+            }
+        }
+
+        return count($ids) === 1 ? (string) array_key_first($ids) : null;
+    }
+
+    public function catalogCondominiumName(string $id): ?string
+    {
+        if (! preg_match('/^imobsys-condo-([1-9]\d*)$/', $id, $match)) {
+            return $this->verifiedCondominiumName($id);
+        }
+        $path = base_path('integrations/imobsys/condominium-crosswalk.json');
+        $contents = is_file($path) ? file_get_contents($path) : false;
+        if (! is_string($contents)) {
+            return null;
+        }
+        try {
+            $crosswalk = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
+        } catch (JsonException) {
+            return null;
+        }
+        $names = [];
+        foreach (($crosswalk['verified'] ?? []) as $mapping) {
+            if (is_array($mapping) && ($mapping['imobsysProviderId'] ?? null) === $match[1]
+                && ($mapping['imobsysStatus'] ?? null) === 'active'
+                && str_starts_with((string) ($mapping['matchStatus'] ?? ''), 'verified_')
+                && is_string($mapping['imobsysName'] ?? null) && trim($mapping['imobsysName']) !== '') {
+                $names[trim($mapping['imobsysName'])] = true;
+            }
+        }
+
+        return count($names) === 1 ? (string) array_key_first($names) : null;
+    }
+
+    /** @return list<array<string, mixed>>|null */
+    public function catalogForCondominium(string $name, int $guests, ?string $condominiumId = null): ?array
+    {
+        $normalized = $this->normalize($name);
+        if (! $this->isEnabled() || $normalized === '' || $guests < 1) {
+            return null;
+        }
+
+        $items = [];
+        $revision = null;
+        try {
+            for ($page = 1; $page <= 5; $page++) {
+                $response = $this->request()->connectTimeout(2)->timeout(10)
+                    ->get(rtrim((string) config('services.partner_api.base_url'), '/').'/v1/properties', ['page' => $page, 'pageSize' => 50]);
+                $payload = $response->json();
+                $pagination = is_array($payload) ? ($payload['pagination'] ?? null) : null;
+                if (! $response->successful() || ($payload['success'] ?? null) !== true
+                    || ! is_array($payload['data'] ?? null) || ! array_is_list($payload['data'])
+                    || ! is_array($pagination) || ($pagination['page'] ?? null) !== $page
+                    || ($pagination['pageSize'] ?? null) !== 50 || ! is_bool($pagination['hasMore'] ?? null)
+                    || ! is_int($payload['publicationRevision'] ?? null)
+                    || ($revision !== null && $revision !== $payload['publicationRevision'])) {
+                    return null;
+                }
+                $revision = $payload['publicationRevision'];
+                foreach ($payload['data'] as $item) {
+                    if (! is_array($item) || ! is_string($item['id'] ?? null)
+                        || preg_match('/^imobsys-crcn-[1-9]\d{0,8}-[1-9]\d{0,11}$/', $item['id']) !== 1
+                        || ! is_string($item['title'] ?? null) || trim($item['title']) === ''
+                        || ! is_int($item['capacity'] ?? null) || $item['capacity'] < $guests
+                        || ($condominiumId !== null && ($item['condominiumId'] ?? null) !== $condominiumId)
+                        || ! is_string($item['condominiumName'] ?? null)
+                        || $this->normalize($item['condominiumName']) !== $normalized) {
+                        continue;
+                    }
+                    $items[] = $item;
+                }
+                if (! $pagination['hasMore']) {
+                    return $items;
+                }
+            }
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        return null;
+    }
+
+    /** @param list<array<string, mixed>> $items
+     * @return list<array<string, mixed>>
+     */
+    public function mapCatalogProperties(array $items): array
+    {
+        return array_map(fn (array $item): array => [
+            'id' => $item['id'], 'dataSource' => 'imobsys-live',
+            'title' => trim($item['title']), 'subtitle' => $item['condominiumName'], 'complexName' => $item['condominiumName'],
+            'description' => is_string($item['description'] ?? null) ? trim(strip_tags($item['description'])) : '',
+            'category' => 'accommodation', 'propertyType' => 'entire_place',
+            'location' => ['city' => '', 'state' => '', 'country' => '', 'neighborhood' => $item['condominiumName'], 'address' => '', 'lat' => 0, 'lng' => 0],
+            'pricePerNight' => 0, 'cleaningFee' => 0, 'serviceFeeRate' => 0,
+            'rating' => 0, 'reviewCount' => 0, 'isSuperhost' => false, 'isGuestFavorite' => false, 'instantBook' => false,
+            'images' => $this->validImages($item['images'] ?? null), 'bedrooms' => 0, 'beds' => 0, 'bathrooms' => 0,
+            'maxGuests' => $item['capacity'], 'amenities' => [], 'highlights' => [], 'sleepingArrangements' => [], 'rules' => [],
+            'host' => ['name' => '', 'avatar' => '', 'joinedYear' => 0, 'isSuperhost' => false, 'responseTime' => '', 'responseRate' => '', 'bio' => ''],
+            'reviews' => [],
+        ], $items);
+    }
+
     /** @param list<array<string, mixed>> $offers
      * @return list<array<string, mixed>>
      */
