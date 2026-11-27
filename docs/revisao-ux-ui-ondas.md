@@ -105,6 +105,12 @@ Há valores de camada distintos no código, como `z-50` no checkout e detalhe, `
 
 **Ação:** definir ciclo de vida dos painéis quando a origem fica invisível, a pesquisa é enviada, a rota muda ou outro diálogo abre. **Verificação:** rolar em ambas as direções, pesquisar e abrir imóvel com cada painel aberto; conferir foco e Escape.
 
+**Reprodução adicional em navegador local, 27/11/2026, 1280 × 800:** com o painel “Quem” aberto, rolar até o fim do conteúdo muda o cabeçalho para a busca compacta. O ancestral do formulário expandido recebe `aria-hidden="true"` e `inert`, mas o segmento mantém `getBoundingClientRect()` em `[81, 145]`, dentro da janela. O painel permanece sobre o rodapé e o foco cai no `body` quando a origem fica inerte.
+
+**Causa confirmada no código:** a detecção existente considerava apenas a posição geométrica do segmento e escutava eventos de rolagem; não reagia à mudança de visibilidade semântica que o cabeçalho aplica ao expandir/recolher a busca. A proposta é fechar o portal quando o segmento ou um ancestral fica inerte/oculto e devolver o foco ao acionador compacto visível quando o foco estava dentro do painel.
+
+**Implementação em revisão:** `StaysSearchWidget` agora observa mudanças `aria-hidden`/`inert` no cabeçalho, fecha o painel quando a origem deixa de estar disponível e, se o foco estava dentro do portal, move-o para “Iniciar busca”. O teste de regressão cobre o estado inerte; a cobertura de rolagem fora da janela e envio válido continua ativa. No navegador local, após a correção, em 1280 × 800 o painel fechou ao rolar até o rodapé e o foco foi para o acionador compacto visível. O catálogo estava indisponível e o estado de erro forneceu a página longa suficiente para acionar a compactação do cabeçalho. Abrir um imóvel a partir de cada painel não foi revalidado; F02 permanece parcial até essa verificação.
+
 ### F03 · P2 · Datas não avançam para hóspedes
 
 **Observado no navegador local:** “Todos os condomínios” abre o calendário. Ao selecionar 1–3 de dezembro, o calendário fecha e “Quem” permanece fechado. Em `StaysSearchWidget.tsx:1681`, concluir o intervalo fecha o calendário e devolve o foco a “Quando”.
@@ -708,7 +714,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 ### Onda 2 · Painéis, camadas e interação responsiva
 
-- [ ] F02 parcial: painéis fecham após envio ou quando a origem deixa a janela; testes direcionados passaram. Validar detalhe e saída real da origem em página longa/catálogo disponível antes de concluir.
+- [ ] F02 parcial: painéis fecham após envio, quando a origem sai da janela e quando o cabeçalho oculta a busca expandida; teste e navegador local em 1280 × 800 confirmam fechamento e retorno do foco a “Iniciar busca”. Validar abertura do detalhe com cada painel ativo e estados em ambas as direções antes de concluir.
 - [x] Corrigir transição datas → hóspedes no desktop (F03), preservando datas e foco; em mobile, manter o calendário fechado sem abrir hóspedes automaticamente. Testes direcionados e navegador local passaram.
 - [x] Corrigir F55: foco e retorno por teclado verificados nos painéis desktop e mobile. Em 390 × 844, Enter abriu “Onde” e levou foco ao campo; Enter em “Todos os condomínios” levou a uma data disponível; “Quando” e “Quem” focaram data e contador de adultos. Teste direcionado cobre as três etapas e não submete a busca. Leitor de tela não testado.
 - [x] F06: painel de hóspedes rola verticalmente e contém a rolagem do fundo. Texto expandido validado em 1024 × 400 e com roda real em 640 × 300; leitura ficou dentro do diálogo e `window.scrollY` permaneceu em zero. Zoom, largura de 320 px, toque e leitor de tela pendentes. PR #93.

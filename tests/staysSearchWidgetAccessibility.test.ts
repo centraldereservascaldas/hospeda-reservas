@@ -19,7 +19,7 @@ Object.assign(globalThis, {
 });
 
 const React = (await import('react')).default;
-const { render, fireEvent, cleanup, waitFor, within } = await import('@testing-library/react');
+const { act, render, fireEvent, cleanup, waitFor, within } = await import('@testing-library/react');
 const { StaysSearchWidget } = await import('../src/components/search/StaysSearchWidget.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
@@ -334,6 +334,43 @@ test('closes a shared search panel when its segment scrolls out of view', async 
     fireEvent.scroll(window);
 
     await waitFor(() => assert.equal(queryByRole('dialog', { name: 'Selecionar hóspedes' }), null));
+  } finally {
+    crcnBackendApi.getResorts = originalGetResorts;
+  }
+});
+
+test('closes a shared search panel when the compact header hides its source', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  crcnBackendApi.getResorts = async () => [];
+  const compactSearch = document.createElement('div');
+  compactSearch.dataset.compactSearch = 'true';
+  const compactSearchTrigger = document.createElement('button');
+  compactSearchTrigger.setAttribute('aria-label', 'Iniciar busca');
+  compactSearch.append(compactSearchTrigger);
+  document.body.append(compactSearch);
+
+  try {
+    const { getByRole, queryByRole } = render(
+      React.createElement(StaysSearchWidget, {
+        onSearchInApp: () => {},
+      }),
+    );
+    const guestSegment = document.querySelector<HTMLElement>('[data-search-segment="guests"]');
+    const searchForm = document.getElementById('widgetStaysSearchForm');
+    assert.ok(guestSegment);
+    assert.ok(searchForm);
+
+    fireEvent.click(getByRole('button', { name: /Quem:/ }));
+    assert.ok(getByRole('dialog', { name: 'Selecionar hóspedes' }));
+
+    await act(async () => {
+      searchForm.setAttribute('aria-hidden', 'true');
+      searchForm.setAttribute('inert', '');
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    assert.equal(queryByRole('dialog', { name: 'Selecionar hóspedes' }), null);
+    assert.equal(document.activeElement, compactSearchTrigger);
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
   }
