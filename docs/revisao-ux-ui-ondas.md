@@ -723,7 +723,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [x] F10: calendário acompanha o breakpoint via evento de `resize`; seleção parcial 640→639 preserva datas, fecha o diálogo e devolve foco ao controle móvel visível. Teste automatizado, navegador local e PR #94. Catálogo simulado, busca não submetida.
 - [ ] Delimitar portais ao diálogo correto e revisar modais aninhados (F07).
 - [x] F17: em 640–839 px, o CTA reduz para ícone com nome acessível e o texto de hóspedes fica em uma linha, truncado com reticências quando longo. Navegador local passou em 640, 768 e 840 px, sem overflow horizontal. Zoom e rótulos longos pendentes. PR #93.
-- [x] F56: botão da Sofia sobrepunha “Tentar novamente” em viewport baixo; reproduzido e corrigido na prévia local. A interseção caiu a zero em 640 × 400, 641 × 400 e 743 × 500, inclusive hover em 740 × 400; teste de nome acessível, foco visível, lint/TypeScript, build e diff check passaram. Branch `codex/ux-f56-short-height-actions`; PR a registrar após abertura. Zoom, leitor de tela e dispositivo físico pendentes.
+- [x] F56: botão da Sofia sobrepunha “Tentar novamente” em viewport baixo; reproduzido e corrigido na prévia local. A interseção caiu a zero em 640 × 400, 641 × 400 e 743 × 500, inclusive hover em 740 × 400; teste de nome acessível, foco visível, lint/TypeScript, build e diff check passaram. Branch `codex/ux-f56-short-height-actions`, implementação `5a89312`, [PR #96](https://github.com/centraldereservascaldas/hospeda-reservas/pull/96), base `codex/ux-f46-checkout-narrow`. Zoom, leitor de tela e dispositivo físico pendentes.
 
 ### Onda 3 · Imóvel e checkout
 
