@@ -144,7 +144,10 @@ test('saved accommodations use the full catalog when search results are narrowed
     initialProps: options,
   });
 
-  assert.deepEqual(result.current.savedPropertiesList.map(({ id }) => id), [savedProperty.id]);
+  assert.deepEqual(
+    result.current.savedPropertiesList.map(({ id }) => id),
+    [savedProperty.id],
+  );
   assert.equal(result.current.missingSavedPropertyCount, 0);
   assert.equal(result.current.savedPropertiesStatus, 'ready');
 
