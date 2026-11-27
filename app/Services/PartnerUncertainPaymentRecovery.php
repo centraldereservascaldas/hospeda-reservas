@@ -33,7 +33,7 @@ class PartnerUncertainPaymentRecovery
             if ($locked->status !== 'attention_required' || $locked->attention_reason !== 'payment_outcome_unknown' || $locked->payment_id !== null || $locked->merchant_order_id !== $order->merchant_order_id || $locked->payment_cents !== $order->payment_cents) {
                 return false;
             }
-            $qr = $locked->payment_method === 'pix' && is_string($payment['QrCodeString'] ?? null) ? $payment['QrCodeString'] : null;
+            $qr = $locked->payment_method === 'pix' && ($payment['Status'] ?? null) === 12 && $locked->hasCurrentPixWindow() && is_string($payment['QrCodeString'] ?? null) ? $payment['QrCodeString'] : null;
             $locked->update(['status' => 'payment_pending', 'attention_reason' => null, 'payment_id' => $paymentId, 'payment_qr_code' => $qr]);
 
             return true;

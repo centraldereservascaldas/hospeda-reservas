@@ -28,6 +28,9 @@ class PartnerSandboxCheckoutControllerTest extends TestCase
         $response = $this->getJson('/api/partner-sandbox/checkout/'.str_repeat('A', 40))->assertOk()->assertJsonPath('status', 'payment_pending')->assertJsonPath('pix', 'PIX-TESTE')->assertHeader('Cache-Control', 'no-store, private');
         $this->assertStringNotContainsString('12345678901', $response->getContent());
         $this->assertStringNotContainsString('PAY1', $response->getContent());
+        $this->travel(31)->minutes();
+        $this->getJson('/api/partner-sandbox/checkout/'.str_repeat('A', 40))->assertOk()->assertJsonPath('pix', null);
+        $this->travelBack();
         Queue::fake();
         $this->postJson('/api/partner-sandbox/checkout/'.str_repeat('A', 40).'/reconcile')->assertAccepted();
         Queue::assertPushed(CompletePartnerCheckout::class, fn (CompletePartnerCheckout $job): bool => $job->orderId === $order->id);

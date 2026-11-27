@@ -44,7 +44,7 @@ class PartnerSandboxCheckoutController extends Controller
             return response()->json(['success' => false, 'message' => 'Pagamento precisa de conferência.'], 409);
         }
 
-        return response()->json(['success' => true, 'status' => 'payment_pending', 'pix' => $order->payment_method === 'pix' ? data_get($result, 'Payment.QrCodeString') : null]);
+        return response()->json(['success' => true, 'status' => 'payment_pending', 'pix' => $order->payment_method === 'pix' && $order->hasCurrentPixWindow() ? data_get($result, 'Payment.QrCodeString') : null])->header('Cache-Control', 'no-store');
     }
 
     public function cardToken(string $reference, CieloSilentOrderPostClient $sop): JsonResponse
@@ -69,7 +69,7 @@ class PartnerSandboxCheckoutController extends Controller
         abort_unless((bool) preg_match('/\A[A-Za-z0-9]{40}\z/D', $reference), 404);
         $order = PartnerCheckoutOrder::query()->where('public_reference', $reference)->firstOrFail();
 
-        return response()->json(['success' => true, 'status' => $order->status, 'propertyId' => $order->supplier_property_id, 'from' => $order->check_in->format('Y-m-d'), 'to' => $order->check_out->format('Y-m-d'), 'guests' => (int) $order->guests, 'baseCents' => (int) $order->base_cents, 'paymentCents' => (int) $order->payment_cents, 'method' => $order->payment_method, 'installments' => $order->installments, 'pix' => $order->status === 'payment_pending' && $order->payment_method === 'pix' ? $order->payment_qr_code : null])->header('Cache-Control', 'no-store');
+        return response()->json(['success' => true, 'status' => $order->status, 'propertyId' => $order->supplier_property_id, 'from' => $order->check_in->format('Y-m-d'), 'to' => $order->check_out->format('Y-m-d'), 'guests' => (int) $order->guests, 'baseCents' => (int) $order->base_cents, 'paymentCents' => (int) $order->payment_cents, 'method' => $order->payment_method, 'installments' => $order->installments, 'pix' => $order->status === 'payment_pending' && $order->payment_method === 'pix' && $order->hasCurrentPixWindow() ? $order->payment_qr_code : null])->header('Cache-Control', 'no-store');
     }
 
     public function reconcile(string $reference): JsonResponse

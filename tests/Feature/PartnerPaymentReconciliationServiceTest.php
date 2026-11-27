@@ -62,6 +62,18 @@ class PartnerPaymentReconciliationServiceTest extends TestCase
         $this->assertSame('payment_rejected', $order->fresh()->status);
     }
 
+    public function test_refunded_pix_is_not_marked_as_paid(): void
+    {
+        config(['services.cielo.direct_environment' => 'sandbox']);
+        $id = '11111111-1111-4111-8111-111111111111';
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('T', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'payment_pending', 'payment_id' => $id, 'payment_qr_code' => 'test-qr', 'merchant_order_id' => 'REFUND', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-refund', 'encrypted_customer' => ['fullName' => 'Teste']]);
+        $this->mock(CieloEcommerceClient::class)->shouldReceive('findPaymentById')->once()->andReturn(['MerchantOrderId' => 'REFUND', 'Payment' => ['PaymentId' => $id, 'Status' => 11, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']]);
+        $this->assertFalse(app(PartnerPaymentReconciliationService::class)->reconcile($order->id));
+        $this->assertSame('payment_cancelled', $order->fresh()->status);
+        $this->assertNull($order->fresh()->payment_qr_code);
+        $this->assertNull($order->fresh()->reservation_reference);
+    }
+
     public function test_late_gateway_result_cannot_overwrite_another_attention_decision(): void
     {
         config(['services.cielo.direct_environment' => 'sandbox']);
@@ -69,6 +81,7 @@ class PartnerPaymentReconciliationServiceTest extends TestCase
         $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('W', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown', 'payment_id' => $id, 'merchant_order_id' => 'ORDERRACE', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-race', 'encrypted_customer' => ['fullName' => 'Teste']]);
         $this->mock(CieloEcommerceClient::class)->shouldReceive('findPaymentById')->once()->andReturnUsing(function () use ($order, $id) {
             $order->update(['attention_reason' => 'payment_mismatch']);
+
             return ['MerchantOrderId' => 'ORDERRACE', 'Payment' => ['PaymentId' => $id, 'Status' => 3, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']];
         });
         $this->assertFalse(app(PartnerPaymentReconciliationService::class)->reconcile($order->id));

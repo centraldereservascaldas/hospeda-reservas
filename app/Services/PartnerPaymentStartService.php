@@ -36,6 +36,9 @@ class PartnerPaymentStartService
             if (! is_array($offers) || count($offers) !== 1 || ($offers[0]['totalCents'] ?? null) !== (int) $order->base_cents || ($offers[0]['availabilityConfirmed'] ?? null) !== true || ($offers[0]['_crcnGuestCountVerified'] ?? null) !== true || ($offers[0]['additionalChargesKnown'] ?? null) !== true || ! is_int($offers[0]['_crcnExpiresAt'] ?? null) || $offers[0]['_crcnExpiresAt'] <= now()->timestamp) {
                 throw new RuntimeException('Cotação mudou ou não pôde ser confirmada.');
             }
+            if ($order->payment_method === 'pix' && ! $order->hasCurrentPixWindow()) {
+                throw new RuntimeException('Pedido expirado; faça uma nova cotação.');
+            }
             $customer = $order->encrypted_customer;
             $amount = number_format(((int) $order->payment_cents) / 100, 2, '.', '');
             $gatewayStarted = true;
@@ -47,7 +50,7 @@ class PartnerPaymentStartService
                 throw new RuntimeException('Pagamento requer conferência.');
             }
             $qr = $order->payment_method === 'pix' ? data_get($result, 'Payment.QrCodeString') : null;
-            if ($order->payment_method === 'pix' && (! is_string($qr) || $qr === '')) {
+            if ($order->payment_method === 'pix' && ((! is_string($qr) || $qr === '') || data_get($result, 'Payment.Status') !== 12)) {
                 throw new RuntimeException('Código Pix requer conferência.');
             }
             DB::transaction(function () use ($id, $paymentId, $qr): void {
@@ -57,6 +60,7 @@ class PartnerPaymentStartService
                     // Keep the ID for independent reconciliation; never return the
                     // unverified Pix code to the customer from this state.
                     $locked->update(['payment_id' => $paymentId]);
+
                     return;
                 }
                 if ($locked->status !== 'payment_starting') {

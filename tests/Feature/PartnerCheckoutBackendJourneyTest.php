@@ -2,13 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\PartnerCheckoutOrder;
 use App\Services\ImobSysSearchClient;
 use App\Services\PartnerCheckoutCompletionService;
 use App\Services\PartnerCheckoutOrderFactory;
 use App\Services\PartnerPaymentStartService;
 use App\Services\Payments\CieloCardPricing;
 use App\Services\Payments\CieloEcommerceClient;
-use App\Models\PartnerCheckoutOrder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -27,7 +27,7 @@ class PartnerCheckoutBackendJourneyTest extends TestCase
         $paymentId = '11111111-1111-4111-8111-111111111111';
         $order = app(PartnerCheckoutOrderFactory::class)->create(['propertyId' => 'imobsys-crcn-2-663', 'from' => now()->addDays(90)->toDateString(), 'to' => now()->addDays(92)->toDateString(), 'guests' => 2, 'method' => 'pix', 'acceptedBaseCents' => 52300, 'customer' => ['fullName' => 'Pessoa Teste', 'cpf' => '52998224725', 'phone' => '64999999999']], '11111111-1111-4111-8111-111111111111');
         $cielo = $this->mock(CieloEcommerceClient::class);
-        $cielo->shouldReceive('createPixPayment')->once()->andReturn(['Payment' => ['PaymentId' => $paymentId, 'QrCodeString' => 'PIX-TESTE']]);
+        $cielo->shouldReceive('createPixPayment')->once()->andReturn(['Payment' => ['PaymentId' => $paymentId, 'Status' => 12, 'QrCodeString' => 'PIX-TESTE']]);
         $cielo->shouldReceive('findPaymentById')->once()->andReturn(['MerchantOrderId' => $order->merchant_order_id, 'Payment' => ['PaymentId' => $paymentId, 'Status' => 2, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']]);
         app(PartnerPaymentStartService::class)->start($order->id);
         $this->assertSame('awaiting_seller_payment', app(PartnerCheckoutCompletionService::class)->complete($order->id));
@@ -63,7 +63,7 @@ class PartnerCheckoutBackendJourneyTest extends TestCase
         $paymentId = '11111111-1111-4111-8111-111111111111';
         $order = app(PartnerCheckoutOrderFactory::class)->create(['propertyId' => 'imobsys-crcn-2-663', 'from' => now()->addDays(90)->toDateString(), 'to' => now()->addDays(92)->toDateString(), 'guests' => 2, 'method' => 'pix', 'acceptedBaseCents' => 52300, 'customer' => ['fullName' => 'Pessoa Teste', 'cpf' => '52998224725', 'phone' => '64999999999']], '11111111-1111-4111-8111-111111111111');
         $cielo = $this->mock(CieloEcommerceClient::class);
-        $cielo->shouldReceive('createPixPayment')->once()->andReturn(['Payment' => ['PaymentId' => $paymentId, 'QrCodeString' => 'PIX-TESTE']]);
+        $cielo->shouldReceive('createPixPayment')->once()->andReturn(['Payment' => ['PaymentId' => $paymentId, 'Status' => 12, 'QrCodeString' => 'PIX-TESTE']]);
         $cielo->shouldReceive('findPaymentById')->once()->andReturn(['MerchantOrderId' => $order->merchant_order_id, 'Payment' => ['PaymentId' => $paymentId, 'Status' => 2, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix']]);
         app(PartnerPaymentStartService::class)->start($order->id);
         try {

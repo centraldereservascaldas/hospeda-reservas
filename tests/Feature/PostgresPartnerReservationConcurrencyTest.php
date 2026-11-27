@@ -48,7 +48,7 @@ if ($argv[2] === 'payment') {
     $mock = Mockery::mock(App\Services\Payments\CieloEcommerceClient::class);
     $mock->shouldReceive('createPixPayment')->andReturnUsing(function () {
         fwrite(STDOUT, "external-called\n"); fflush(STDOUT); fgets(STDIN);
-        return ['Payment' => ['PaymentId' => '11111111-1111-4111-8111-111111111111', 'QrCodeString' => 'TESTE']];
+        return ['Payment' => ['PaymentId' => '11111111-1111-4111-8111-111111111111', 'Status' => 12, 'QrCodeString' => 'TESTE']];
     });
     $app->instance(App\Services\Payments\CieloEcommerceClient::class, $mock);
 } else {
@@ -78,28 +78,49 @@ PHP;
             $this->assertSame("ready\n", fgets($pa[1]));
             $this->assertTrue($this->hasOutput($pb[1], 15));
             $this->assertSame("ready\n", fgets($pb[1]));
-            fwrite($pa[0], "go\n"); fflush($pa[0]);
+            fwrite($pa[0], "go\n");
+            fflush($pa[0]);
             $this->assertTrue($this->hasOutput($pa[1], 15));
             $this->assertSame("external-called\n", fgets($pa[1]));
-            fwrite($pb[0], "go\n"); fflush($pb[0]);
+            fwrite($pb[0], "go\n");
+            fflush($pb[0]);
             $this->assertTrue($this->hasOutput($pb[1], 15));
             $this->assertSame("not-claimed\n", fgets($pb[1]));
-            fwrite($pa[0], "release\n"); fflush($pa[0]);
+            fwrite($pa[0], "release\n");
+            fflush($pa[0]);
             $this->assertTrue($this->hasOutput($pa[1], 15));
             $this->assertSame("done\n", fgets($pa[1]));
             $this->assertSame($mode === 'payment' ? 'payment_pending' : 'awaiting_seller_payment', $order->fresh()->status);
-            if ($mode === 'payment') $this->assertSame('11111111-1111-4111-8111-111111111111', $order->fresh()->payment_id);
-            else $this->assertSame('1600', $order->fresh()->reservation_reference);
+            if ($mode === 'payment') {
+                $this->assertSame('11111111-1111-4111-8111-111111111111', $order->fresh()->payment_id);
+            } else {
+                $this->assertSame('1600', $order->fresh()->reservation_reference);
+            }
         } finally {
-            foreach ([$pa, $pb] as $pipes) foreach ($pipes as $pipe) if (is_resource($pipe)) fclose($pipe);
-            foreach ([$a, $b] as $process) if (is_resource($process)) { if (proc_get_status($process)['running']) proc_terminate($process, 9); proc_close($process); }
+            foreach ([$pa, $pb] as $pipes) {
+                foreach ($pipes as $pipe) {
+                    if (is_resource($pipe)) {
+                        fclose($pipe);
+                    }
+                }
+            }
+            foreach ([$a, $b] as $process) {
+                if (is_resource($process)) {
+                    if (proc_get_status($process)['running']) {
+                        proc_terminate($process, 9);
+                    } proc_close($process);
+                }
+            }
             $order->delete();
         }
     }
 
     private function hasOutput($stream, int $seconds): bool
     {
-        $read = [$stream]; $write = null; $except = null;
+        $read = [$stream];
+        $write = null;
+        $except = null;
+
         return stream_select($read, $write, $except, $seconds) > 0;
     }
 }

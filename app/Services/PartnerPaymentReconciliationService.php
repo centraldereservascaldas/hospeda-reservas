@@ -33,7 +33,7 @@ class PartnerPaymentReconciliationService
         }
 
         $gatewayStatus = $payment['Status'] ?? null;
-        if (in_array($gatewayStatus, [3, 10, 13], true)) {
+        if (in_array($gatewayStatus, [3, 10, 11, 13], true)) {
             PartnerCheckoutOrder::query()->whereKey($id)->where('status', $order->status)->where('attention_reason', $order->attention_reason)->where('payment_id', $order->payment_id)->update(['status' => $gatewayStatus === 3 ? 'payment_rejected' : 'payment_cancelled', 'attention_reason' => null, 'payment_qr_code' => null]);
 
             return false;

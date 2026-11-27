@@ -17,4 +17,11 @@ class PartnerCheckoutOrder extends Model
     {
         return ['encrypted_customer' => 'encrypted:array', 'payment_qr_code' => 'encrypted', 'check_in' => 'date', 'check_out' => 'date'];
     }
+
+    public function hasCurrentPixWindow(): bool
+    {
+        return $this->created_at !== null
+            && $this->created_at->lessThanOrEqualTo(now())
+            && $this->created_at->copy()->addSeconds(1800)->isFuture();
+    }
 }
