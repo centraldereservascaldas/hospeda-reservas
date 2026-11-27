@@ -1,7 +1,7 @@
 import type { Property } from '../types';
 
 export type PropertyDisplayPrice =
-  | { kind: 'quote'; amount: number; detail: string; dailyRate?: number }
+  | { kind: 'quote'; amount: number; detail: string; dailyRate?: number; expired?: boolean }
   | { kind: 'reference'; amount: number; detail: string; note: string }
   | { kind: 'unavailable'; message: string }
   | { kind: 'pending'; message: string }
@@ -53,6 +53,7 @@ export function getPropertyDisplayPrice(
       detail: showTotalWithTaxes
         ? `Total da estadia • ${quoteToDisplay.nights} ${quoteToDisplay.nights === 1 ? 'noite' : 'noites'}`
         : '/ noite',
+      ...(quote ? {} : { expired: true }),
       ...(showTotalWithTaxes ? { dailyRate: quoteToDisplay.dailyRate } : {}),
     };
   }

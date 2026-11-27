@@ -127,6 +127,10 @@ Há valores de camada distintos no código, como `z-50` no checkout e detalhe, `
 
 **Impacto provável:** o visitante pode comparar preços sem saber que a consulta perdeu validade. **Ação:** distinguir preço anterior de preço confirmado e oferecer atualização, sem apagar resultados desnecessariamente. **Verificação:** expirar cotação com relógio controlado, verificar aviso e recuperação em cada resultado e no detalhe.
 
+**Implementação em revisão no PR #104 (commit `69a1743`, base `codex/ux-search-flow`):** a cotação vencida continua visível como referência, com o aviso “Cotação expirada. Atualize para confirmar preço e disponibilidade.” nos cartões e detalhes do mapa. O estado global `stale` também informa que uma ou mais cotações podem estar desatualizadas e oferece atualização manual. A busca não dispara consultas extras automaticamente. O checkout continua revalidando a cotação, e o valor e a hierarquia das parcelas foram preservados.
+
+**Validação:** 31 testes direcionados, lint/TypeScript, build e `git diff --check` passaram. No preview local, usei uma única resposta de busca simulada com uma cotação vencida: status, preço, parcelamento e ação foram conferidos em 1280 × 800 e 375 × 812; em 320 × 400 o aviso e o botão de 44 px ficaram dentro da tela, sem overflow horizontal. A API Laravel local estava indisponível e seus endpoints de catálogo, resorts e páginas legais responderam 500; não foi chamada a Stays. Leitor de tela não testado. Nenhuma reserva ou pagamento foi criado. PR #104 aguarda revisão e depende dos PRs #82 e #83; não está em produção.
+
 ### F05 · P2 · Total de hóspedes pode crescer no modo Surpreenda-me
 
 **Observado no navegador local e evidência de código:** pesquisei com 1 adulto e 1 bebê. Em “Surpreenda-me”, a interface inicialmente mostrava “2 Pessoas + 1 bebê”; selecionei “3 Pessoas” e busquei. O resultado apresentou “3 adultos, 1 bebê”, total de 4 hóspedes e URL com `adults=3&infants=1`. Em `StaysSearchWidget.tsx:1135`, se o total selecionado difere do anterior, o novo total vira quantidade de adultos e os bebês anteriores são mantidos. `countOccupancyGuests` soma bebês. O widget nessa variante é usado em `SearchModal.tsx:658`.
@@ -665,8 +669,8 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [x] Separar recuperação do checkout da página de catálogo; focar o título e manter a navegação nas ações (F21). Teste automatizado e navegador local em 1440 × 900 e 375 × 812; leitor de tela não testado. PR #84.
 - [ ] Reproduzir F05 com bebês, crianças e pets; alinhar composição, URL e parâmetros de busca.
 - [ ] Alinhar os limites de pets da interface, URLs e validação de reserva após definir a regra de negócio (F28).
-- [x] Identificar e comunicar preço expirado (F04), com atualização e estados de falha. Implementação em PR #104, aguardando revisão; checks passaram. A API local estava indisponível e a interface foi validada com resposta simulada; sem validação produtiva.
-- [x] Definir e testar preço desconhecido no filtro de faixa e sua comunicação na lista (F50). Implementação em PR #105, aguardando revisão; testes, lint e build locais passaram; ver evidência e limites na seção F50.
+- [x] Identificar e comunicar preço expirado (F04), com atualização e estados de falha. PR #104: 31 testes direcionados, lint/build e preview responsivo passaram; checks remotos passaram. A interface usou resposta simulada e a API Laravel local estava indisponível; sem validação Stays ao vivo, leitor de tela ou produção. Aguarda revisão.
+- [x] Definir e testar preço desconhecido no filtro de faixa e sua comunicação na lista (F50). PR #105: 18 testes direcionados, lint/build e preview responsivo passaram; checks remotos passaram. A interface usou resposta simulada; sem validação Stays ao vivo ou em produção. Aguarda revisão.
 - [ ] Apresentar o ano de datas sazonais quando necessário (F16) e verificar expiração real antes de remover sugestões.
 - [ ] Tratar carregamento, falha repetida e recuperação no cartão de sugestão para pets (F18).
 - [ ] Revalidar sugestões ao retornar à aba após a expiração e encerrar corretamente consultas concluídas (F19).
