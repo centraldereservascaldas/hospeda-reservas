@@ -276,7 +276,7 @@ test('a rejected new-reservation card payment navigates to the tracking page and
   assert.equal(submissions, 1);
 });
 
-test('Pix stays on the checkout, has no surcharge and waits for authoritative confirmation', async () => {
+test('reports Pix status lookup failure and allows a safe manual retry without another payment', async () => {
   const calls: string[] = [];
   const pixAttempt = {
     status: 'pending' as const,
@@ -368,6 +368,12 @@ test('Pix stays on the checkout, has no surcharge and waits for authoritative co
 
   await waitFor(() => assert.ok(view.getByText('Pix gerado · aguardando pagamento')));
   assert.ok(view.getByLabelText('Código Pix copia e cola'));
+  await waitFor(() =>
+    assert.ok(view.getByRole('heading', { name: 'Não foi possível atualizar o Pix' })),
+  );
+  assert.ok(view.getByText(/consulta automática foi interrompida/i));
+  assert.ok(view.getByText(/última resposta informava pagamento pendente/i));
+  assert.ok(view.getByText(/antes de iniciar outro pagamento/i));
   fireEvent.click(view.getByRole('button', { name: 'Atualizar situação' }));
   await waitFor(() => assert.equal(resumeCalls, 2));
   assert.deepEqual(calls, ['reservation', 'pix']);

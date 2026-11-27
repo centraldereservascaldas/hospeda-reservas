@@ -21,7 +21,8 @@ Object.assign(globalThis, {
 
 const { act, cleanup, renderHook } = await import('@testing-library/react');
 const { useState } = await import('react');
-const { useAppOverlayActions } = await import('../src/hooks/useAppOverlayActions.ts');
+const { CHECKOUT_MODAL_HISTORY_ENTRY, useAppOverlayActions } =
+  await import('../src/hooks/useAppOverlayActions.ts');
 
 afterEach(cleanup);
 
@@ -174,6 +175,98 @@ test('closes property detail before handing the booking payload to checkout stat
       guests: payload.guests,
     },
   );
+});
+
+test('returns a direct checkout to its accommodation with the full trip context', () => {
+  const hook = renderOverlayActions();
+  const property = hook.result.current.secondProperty;
+  const payload: AppOverlayBookingPayload = {
+    property,
+    checkIn: '2027-03-01',
+    checkOut: '2027-03-03',
+    guests: { adults: 2, children: 1, infants: 1, pets: 1 },
+    nights: 2,
+    totalAmount: 200,
+    cleaningFee: 0,
+    serviceFee: 0,
+    discount: 0,
+    quote: {
+      success: true,
+      listingId: property.id,
+      staysListingId: property.staysListingId,
+      nights: 2,
+      dailyRate: 100,
+      baseTotal: 200,
+      cleaningFee: 0,
+      serviceFee: 0,
+      discount: 0,
+      total: 200,
+      currency: 'BRL',
+      source: 'stays-live',
+      breakdown: {
+        dailyRateText: 'R$ 100 x 2 noites',
+        cleaningFeeText: 'Sem taxa de limpeza',
+        serviceFeeText: 'Sem taxa de serviço',
+        totalText: 'R$ 200',
+      },
+    },
+  };
+  window.history.replaceState(
+    { __crcnCheckoutDraftId: 'stale-draft-id', unrelated: 'preserved' },
+    '',
+    '/checkout?accommodation=old&checkin=2027-01-01&checkout=2027-01-03&currency=EUR&utm_source=direct',
+  );
+  let popStateUrl = '';
+  const handlePopState = () => {
+    popStateUrl = `${window.location.pathname}${window.location.search}`;
+  };
+  window.addEventListener('popstate', handlePopState);
+
+  act(() => hook.result.current.handleCloseBooking(payload));
+
+  const url = new URL(window.location.href);
+  assert.equal(
+    url.pathname,
+    `/apartamento/${encodeURIComponent(property.staysListingId || property.id)}`,
+  );
+  assert.equal(url.searchParams.get('accommodation'), property.staysListingId || property.id);
+  assert.equal(url.searchParams.get('checkin'), payload.checkIn);
+  assert.equal(url.searchParams.get('checkout'), payload.checkOut);
+  assert.equal(url.searchParams.get('adults'), '2');
+  assert.equal(url.searchParams.get('children'), '1');
+  assert.equal(url.searchParams.get('infants'), '1');
+  assert.equal(url.searchParams.get('pets'), '1');
+  assert.equal(url.searchParams.get('currency'), 'EUR');
+  assert.equal(url.searchParams.get('utm_source'), 'direct');
+  assert.equal(window.history.state.__crcnCheckoutDraftId, undefined);
+  assert.equal(window.history.state.unrelated, 'preserved');
+  assert.equal(popStateUrl, `${url.pathname}${url.search}`);
+  assert.equal(hook.result.current.bookingPayload, null);
+  window.removeEventListener('popstate', handlePopState);
+});
+
+test('uses browser history when closing a checkout opened from a property', () => {
+  const hook = renderOverlayActions();
+  const originalBack = window.history.back;
+  let backCalls = 0;
+  window.history.back = () => {
+    backCalls += 1;
+  };
+  window.history.replaceState(
+    { [CHECKOUT_MODAL_HISTORY_ENTRY]: true },
+    '',
+    '/checkout?accommodation=property&checkin=2027-03-01&checkout=2027-03-03',
+  );
+
+  try {
+    act(() => hook.result.current.handleCloseBooking(null));
+
+    assert.equal(backCalls, 1);
+    assert.equal(window.location.pathname, '/checkout');
+    assert.equal(hook.result.current.bookingPayload, null);
+  } finally {
+    window.history.back = originalBack;
+  }
 });
 
 test('prepends a new listing using a functional catalog update', () => {

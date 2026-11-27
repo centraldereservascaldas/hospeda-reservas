@@ -918,6 +918,14 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   const fieldId = useId().replace(/:/g, '');
   const [activeDatePicker, setActiveDatePicker] = useState<'checkIn' | 'checkOut' | null>(null);
   const [activeDropdown, setActiveDropdown] = useState<'resort' | 'guests' | null>(null);
+  const activeSharedPanel =
+    activeDropdown === 'resort'
+      ? 'where'
+      : activeDropdown === 'guests'
+        ? 'guests'
+        : activeDatePicker
+          ? 'when'
+          : null;
   const guestTriggerRef = useRef<HTMLButtonElement>(null);
   const [sharedPanelPosition, setSharedPanelPosition] = useState({
     left: 8,
@@ -999,15 +1007,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
 
   useEffect(() => {
     if (!isHero) return;
-    const activePanel =
-      activeDropdown === 'resort'
-        ? 'where'
-        : activeDropdown === 'guests'
-          ? 'guests'
-          : activeDatePicker
-            ? 'when'
-            : null;
-    if (!activePanel) {
+    if (!activeSharedPanel) {
       const timer = window.setTimeout(() => setSharedPanelVisible(false), 240);
       return () => window.clearTimeout(timer);
     }
@@ -1015,20 +1015,27 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     const updatePosition = () => {
       const form = document.getElementById('widgetStaysSearchForm');
       const target = form?.querySelector<HTMLElement>(
-        `[data-search-segment="${activePanel === 'where' ? 'where' : activePanel === 'when' ? 'when' : 'guests'}"]`,
+        `[data-search-segment="${activeSharedPanel}"]`,
       );
       if (!target) return;
       const rect = target.getBoundingClientRect();
+      if (rect.height > 0 && (rect.bottom <= 0 || rect.top >= window.innerHeight)) {
+        setActiveDropdown(null);
+        setActiveDatePicker(null);
+        setSharedPanelVisible(false);
+        return;
+      }
       const gutter = window.innerWidth <= 639 ? 12 : 16;
       const width = Math.min(
-        activePanel === 'when' ? 850 : activePanel === 'where' ? 400 : 620,
+        activeSharedPanel === 'when' ? 850 : activeSharedPanel === 'where' ? 400 : 620,
         window.innerWidth - gutter * 2,
       );
       const height = Math.min(
-        activePanel === 'when' ? 540 : activePanel === 'where' ? 360 : 430,
+        activeSharedPanel === 'when' ? 540 : activeSharedPanel === 'where' ? 360 : 430,
         window.innerHeight - 24,
       );
-      const centeredLeft = activePanel === 'when' ? (window.innerWidth - width) / 2 : rect.left;
+      const centeredLeft =
+        activeSharedPanel === 'when' ? (window.innerWidth - width) / 2 : rect.left;
       const left = Math.max(gutter, Math.min(centeredLeft, window.innerWidth - width - gutter));
       const top = Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - height - 8));
       setSharedPanelPosition({ left, top, width, height });
@@ -1036,18 +1043,6 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     const frame = window.requestAnimationFrame(updatePosition);
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
-    const focusFrame = window.requestAnimationFrame(() => {
-      if (activePanel === 'where')
-        sharedPanelRef.current
-          ?.querySelector<HTMLInputElement>('input[aria-label="Buscar condomínio"]')
-          ?.focus();
-      if (activePanel === 'guests')
-        sharedPanelRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
-      if (activePanel === 'when')
-        sharedPanelRef.current
-          ?.querySelector<HTMLButtonElement>('[data-calendar-day]:not(:disabled)')
-          ?.focus();
-    });
     const handleOutsideClick = (event: PointerEvent) => {
       const target = event.target as Node;
       if (
@@ -1063,9 +1058,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
         setActiveDropdown(null);
         setActiveDatePicker(null);
         document
-          .querySelector<HTMLButtonElement>(
-            `[data-search-segment="${activePanel === 'where' ? 'where' : activePanel === 'when' ? 'when' : 'guests'}"] button`,
-          )
+          .querySelector<HTMLButtonElement>(`[data-search-segment="${activeSharedPanel}"] button`)
           ?.focus();
       }
     };
@@ -1105,14 +1098,30 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     document.addEventListener('keydown', handlePanelKeyDown);
     return () => {
       window.cancelAnimationFrame(frame);
-      window.cancelAnimationFrame(focusFrame);
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
       document.removeEventListener('pointerdown', handleOutsideClick);
       document.removeEventListener('keydown', handleEscape);
       document.removeEventListener('keydown', handlePanelKeyDown);
     };
-  }, [activeDropdown, activeDatePicker, isHero]);
+  }, [activeDropdown, activeDatePicker, activeSharedPanel, isHero]);
+
+  useEffect(() => {
+    if (!isHero || !sharedPanelVisible || !activeSharedPanel) return;
+
+    const firstControl =
+      activeSharedPanel === 'where'
+        ? sharedPanelRef.current?.querySelector<HTMLInputElement>(
+            'input[aria-label="Buscar condomínio"]',
+          )
+        : activeSharedPanel === 'guests'
+          ? sharedPanelRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+          : sharedPanelRef.current?.querySelector<HTMLButtonElement>(
+              'button[data-calendar-day]:not(:disabled)',
+            );
+
+    firstControl?.focus();
+  }, [activeSharedPanel, isHero, sharedPanelVisible]);
 
   // Form submission handler
   const handleSubmit = (e: React.FormEvent) => {
@@ -1132,6 +1141,9 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       return;
     }
     setSearchValidationMessage('');
+    setActiveDropdown(null);
+    setActiveDatePicker(null);
+    setSharedPanelVisible(false);
     const personCount = isHero ? countOccupancyGuests(guestCounts) : parseInt(persons, 10) || 2;
     const currentGuests = currentFilters?.guests;
     const guests = isHero
@@ -1683,9 +1695,13 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     setCheckIn(newCheckIn);
                     setCheckOut(newCheckOut);
                     setActiveDatePicker(null);
-                    document
-                      .querySelector<HTMLButtonElement>('[data-search-segment="when"] button')
-                      ?.focus();
+                    if (window.innerWidth > 639) {
+                      setActiveDropdown('guests');
+                    } else {
+                      document
+                        .querySelector<HTMLButtonElement>('[data-search-segment="when"] button')
+                        ?.focus();
+                    }
                   }}
                 />
               )}
