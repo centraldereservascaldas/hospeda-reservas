@@ -1,13 +1,13 @@
 # Revisão de UX/UI e plano de correção por ondas
 
-Estado: revisão e plano concluídos dentro do acesso disponível, com limitações registradas abaixo. Referência examinada: `main` no commit `7e5d1f2`. Este documento é um plano de revisão e correção; nenhuma alteração de produto está autorizada por ele.
+Estado: revisão inicial referenciada em `main` no commit `7e5d1f2`, com evidências e execução atualizadas por PRs posteriores. As limitações de cada validação estão registradas junto ao achado. Este documento é o checklist de revisão e correção; a autorização para implementar vem da Goal ativa, não deste registro inicial.
 
 ## Leitura rápida
 
 | Tema | O que a revisão encontrou | Onde conferir |
 | --- | --- | --- |
 | Teclado e camadas | Dias do calendário da busca não entram no Tab; os painéis da barra não recebem foco na abertura direta; a recuperação e as preferências têm conflito de foco. | F01, F21, F47, F55 |
-| Busca e layout | A seleção de datas não avança para hóspedes no desktop; painéis permanecem abertos ao rolar; há colisões e cortes em dimensões específicas. | F02, F03, F06, F17 |
+| Busca, layout e movimento | A seleção de datas não avança para hóspedes no desktop; painéis permanecem abertos ao rolar; há colisões e cortes em dimensões específicas. A fluidez da animação da busca em computadores limitados é um risco ainda não medido. | F02, F03, F06, F17, F58 |
 | Dados da viagem | Uma rota de condomínio perde datas e hóspedes; há inconsistências na contagem e em filtros com preço desconhecido. | F05, F28, F29, F49, F50 |
 | Checkout | Retorno por link direto reabre a tela; o carregamento depende do catálogo; respostas de erro e acompanhamento Pix precisam de comunicação mais clara. | F23, F24, F27, F37, F39 |
 | Visual e informação | Indicador de cartão encobre texto em 320 px; descrição e camas podem vir incompletas ou confusas; taxa local precisa de confirmação. | F22, F45, F46 |
@@ -22,7 +22,7 @@ O destaque da parcela é intencional e não integra os achados. As prioridades P
 | --- | --- | --- |
 | Observado na interface de produção | F01, F03, F17, F37, F46, F47 e F49 | Reproduzir o estado descrito na versão que será alterada e transformar a sequência em critério de regressão. |
 | Reproduzido com respostas ou dados simulados | F14, F24, F27, F38 e F39 | Preservar a simulação e conferir o contrato real da integração antes de generalizar. |
-| Comportamento ou risco identificado no código | F52, F53 e F54 | Reproduzir com dados fictícios e confirmar condições de entrada antes de estimar frequência ou impacto. |
+| Comportamento ou risco identificado no código | F52, F53, F54 e F58 | Reproduzir com dados fictícios e confirmar condições de entrada antes de estimar frequência ou impacto. Para F58, perfilar antes de atribuir causa à animação. |
 | Dependência ou causa ainda não comprovada | Origem da falha F41, dados de camas em F45 e publicação da política em F51 | Investigar a fonte autoritativa; não assumir causa, corrigir às cegas ou criar informação ausente. |
 
 Esses grupos são exemplos, não uma classificação exaustiva. Uma mesma questão pode ter mais de uma evidência. A prioridade expressa impacto potencial na tarefa; não representa frequência medida. Cada achado detalha contexto, limites, ação sugerida e teste futuro.
@@ -611,6 +611,18 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 
 **Evidência de código e hipótese:** `StaysSearchWidget.tsx:1000–1045` tenta focar o primeiro botão habilitado em um `requestAnimationFrame`, enquanto a visibilidade do portal é estabelecida pelo mesmo efeito. Uma corrida de montagem é uma possibilidade, não uma causa comprovada; a versão implantada também não foi identificada. **Impacto:** a pessoa que abre a escolha por teclado não recebe acesso imediato aos contadores e pode seguir pela página enquanto o painel permanece visível. **Ação:** associar foco ao painel efetivamente montado e definir comportamento coerente de Tab, Shift+Tab e saída, sem exigir que um painel não modal prenda o foco. **Verificação:** abertura por Enter e Espaço, primeira abertura e reabertura, retorno de datas e troca de painéis, Tab e Shift+Tab, Escape, rolagem e alturas reduzidas em desktop, além de teste com tecnologia assistiva.
 
+### F58 · P2 · Fluidez da animação da busca em computadores limitados ainda não foi medida
+
+**Relato:** foi informado que a animação da barra de busca não aparece ou não flui em alguns computadores, incluindo máquinas Windows e versões mais fracas do Chrome. Não foram identificados modelos, versões de navegador ou passos exatos; o comportamento não foi reproduzido em hardware limitado.
+
+**Evidência de código:** ao compactar a busca durante a rolagem, `Header.tsx` usa `document.startViewTransition` somente quando a API existe, os dois estados da barra estão montados e movimento reduzido não foi solicitado. Sem suporte, durante outra transição ou após exceção, a mudança de estado segue sem a View Transition. O CSS da busca compacta ainda define uma transição de `opacity` e `transform`, com duração de 400 ms e variante `motion-reduce:transition-none`. A View Transition nomeada `shared-search-bar` limita a captura ao elemento da barra; a classe `search-header-only-transition` remove o conteúdo da exploração dessa captura. Isso indica um fallback funcional de estado em navegadores sem a API, mas não demonstra fluidez em hardware lento.
+
+**Risco condicional no código adjacente:** o painel compartilhado da busca anima `left`, `top`, `width` e `height` por 360 ms e declara `will-change` permanente para essas propriedades (`src/index.css`, `.search-shared-panel`). O mesmo painel usa `backdrop-blur-2xl` em `StaysSearchWidget.tsx`. Animar geometria pode exigir layout e pintura; blur pode aumentar o custo de rasterização. São candidatos a medição, não causas confirmadas da falha relatada. A pílula de seleção do formulário principal usa `transform` e opacidade, portanto pertence a um caminho diferente.
+
+**Interpretação e limite:** uma transição ausente pode ser o fallback esperado em navegador incompatível; isso não explica, por si só, uma animação engasgada. Não há gravação de Performance, taxa de quadros, teste com CPU/GPU limitados nem computador antigo disponível nesta revisão. A orientação técnica consultada recomenda medir layout, pintura e composição; propriedades geométricas tendem a custar mais que `transform`/`opacity`, e `will-change` permanente pode consumir recursos ([Chrome for Developers: View Transition API](https://developer.chrome.com/docs/web-platform/view-transitions), [web.dev: animações e performance](https://web.dev/articles/animations-and-performance), [web.dev: guia de animações de alto desempenho](https://web.dev/articles/animations-guide)).
+
+**Próximo passo:** gravar o mesmo percurso em Chrome atual com CPU limitada e em pelo menos um computador representativo do relato, comparando: barra expandida → compacta por rolagem; abrir/trocar/fechar condomínio, datas e hóspedes; e painel em estado normal e com movimento reduzido. Registrar versão do navegador, sistema, viewport, frames perdidos, tarefas longas e atividades de Layout/Paint/Raster/Composite. Só então comparar, uma variável por vez, a View Transition, transições geométricas do painel, `will-change` e blur. Não introduzir detecção por sistema operacional nem remover animações antes de identificar o gargalo. A API, o estado final, os controles, o foco e a preferência de movimento devem continuar funcionais no fallback.
+
 ## Cruzamento com o PR #81
 
 Em 26/11/2026, o PR [#81](https://github.com/centraldereservascaldas/hospeda-reservas/pull/81) estava aberto, com destino `main` e head `d3b906c10607766d43154556a66b2c91e1c94c50`. Sua base `77d6597ab459ad4132148e790df3f84d07b387ff` já inclui o PR #80 e é posterior ao código `7e5d1f2` desta revisão. A análise abaixo refere-se a essa versão específica, não comprova implantação ou correção em produção.
@@ -630,13 +642,13 @@ No checkout isolado desse head, `npx tsx --test tests/seasonalDateSuggestions.te
 
 As caixas abaixo são trabalho futuro. Uma onda só avança para implementação com escopo e validação definidos; itens ainda classificados como risco exigem reprodução antes de assumir defeito.
 
-Em 26/11/2026, a conferência de rastreabilidade encontrou referências diretas aos 54 achados atuais nas caixas das ondas. F08 foi retirado dos achados por decisão de produto; a numeração foi preservada para não mudar as demais referências. A presença de um identificador no checklist não comprova que a correção ou sua validação tenham sido executadas.
+Em 26/11/2026, a conferência de rastreabilidade encontrou referências diretas aos 54 achados originais (F01–F55, excluindo F08) nas caixas das ondas. F08 foi retirado dos achados por decisão de produto; a numeração foi preservada. F56 e F57 estão em PRs empilhados #96 e #97, ainda abertos nesta atualização; F58 registra o relato recente sobre movimento da busca como risco condicional, sem reprodução ou medição. A presença de um identificador no checklist não comprova que a correção ou sua validação tenham sido executadas.
 
 ### Primeira triagem dos itens P1
 
 | Item | Evidência | Próximo passo de correção |
 | --- | --- | --- |
-| F01 · Calendário da busca | Reproduzido por teclado em produção. | Tornar dias navegáveis e testar seleção, meses e foco. |
+| F01 · Calendário da busca | Corrigido no PR #82 e incluído no release #106. Revalidado em produção a 1366 × 941 e no preview local a 375 × 812 com Tab, setas, Enter, Escape, travessia de mês, datas passadas desabilitadas e retorno do foco. | Código, teste automatizado e caminho visual verificados; leitor de tela e dispositivo físico não testados. |
 | F21 · Foco na recuperação | Reproduzido por teclado em produção; implementação e regressão local conferidas em desktop e mobile. | PR #84 integrado à branch-base; leitor de tela não testado. |
 | F37 · Retorno do checkout direto | Reproduzido em produção; teste automatizado cobre destino direto e preservação do fluxo modal. | PR #85 em revisão; navegador e ciclo voltar/avançar pendentes. |
 | F39 · Acompanhamento Pix | Reproduzido em teste local com consulta simulada; mensagem e retry seguro verificados por regressão automatizada. | PR #86 integrado à branch-base; retomada automática e leitor de tela não testados. |
@@ -665,12 +677,12 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 ### Onda 1 · Jornada bloqueada e integridade da busca
 
-- [ ] F01 implementado no desktop: dias disponíveis entram na ordem de Tab e setas movem o foco entre datas, incluindo virada de mês. Código inicial no commit `55bf827`; complemento de foco no commit `5771e0c`. Testes e navegador desktop passaram. Validação móvel, seleção por Enter e fechamento por Escape no calendário permanecem pendentes.
+- [x] F01: dias disponíveis entram na ordem de Tab e setas movem o foco entre datas, inclusive virada de mês; Enter seleciona datas e datas passadas não ficam focáveis. PR #82 (`a6db248`) incluído no release #106 (`b51e87e`). Regressão automatizada passou; produção a 1366 × 941 e preview local a 375 × 812 verificados com Tab, setas, seleção por Enter, Escape e retorno do foco ao acionador. Sem leitor de tela ou dispositivo físico.
 - [x] Separar recuperação do checkout da página de catálogo; focar o título e manter a navegação nas ações (F21). Teste automatizado e navegador local em 1440 × 900 e 375 × 812; leitor de tela não testado. PR #84.
 - [ ] Reproduzir F05 com bebês, crianças e pets; alinhar composição, URL e parâmetros de busca.
 - [ ] Alinhar os limites de pets da interface, URLs e validação de reserva após definir a regra de negócio (F28).
-- [x] Identificar e comunicar preço expirado (F04), com atualização e estados de falha. PR fonte #104: 31 testes direcionados, lint/build e preview responsivo passaram; checks remotos passaram. A interface usou resposta simulada e a API Laravel local estava indisponível; sem validação Stays ao vivo, leitor de tela ou produção. Incluído no PR consolidado de release para `main`; checks integrados ainda pendentes.
-- [x] Definir e testar preço desconhecido no filtro de faixa e sua comunicação na lista (F50). PR fonte #105: 18 testes direcionados, lint/build e preview responsivo passaram; checks remotos passaram. A interface usou resposta simulada; sem validação Stays ao vivo ou em produção. Incluído no PR consolidado de release para `main`; checks integrados ainda pendentes.
+- [x] F04: preço expirado é identificado e oferece atualização com estados de falha. PR fonte #104 incorporado ao release #106 (`b51e87e`), integrado e publicado em 27/11/2026; testes direcionados, lint, build, preview responsivo e checks do release passaram. Preview usou resposta simulada. Health/readiness de produção passaram após deploy; não foi feita nova jornada com cotação Stays ao vivo, leitor de tela ou dispositivo físico. PR fonte #104 ainda está aberto e duplicado pelo release consolidado.
+- [x] F50: filtro de faixa exclui preço desconhecido e informa a situação na lista. PR fonte #105 incorporado ao release #106 (`b51e87e`), integrado e publicado em 27/11/2026; testes direcionados, lint, build, preview responsivo e checks do release passaram. Preview usou resposta simulada. Health/readiness de produção passaram após deploy; não foi feita nova busca Stays ao vivo para validar dados reais. PR fonte #105 ainda está aberto e duplicado pelo release consolidado.
 - [ ] Apresentar o ano de datas sazonais quando necessário (F16) e verificar expiração real antes de remover sugestões.
 - [ ] Tratar carregamento, falha repetida e recuperação no cartão de sugestão para pets (F18).
 - [ ] Revalidar sugestões ao retornar à aba após a expiração e encerrar corretamente consultas concluídas (F19).
@@ -703,6 +715,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Delimitar portais ao diálogo correto e revisar modais aninhados (F07).
 - [ ] Corrigir a colisão do segmento de hóspedes com “Buscar” em 640 px (F17) e verificar controles adjacentes.
 - [ ] Inspecionar os botões relatados sobrepostos com captura e reprodução por largura, altura, zoom e conteúdo longo; registrar local e causa antes de corrigir.
+- [ ] Investigar F58 com gravação de performance em CPU limitada e computador representativo; comparar View Transition, transições geométricas, `will-change` e blur antes de propor alterações. Sem reprodução ou métricas, manter como risco condicional.
 
 ### Onda 3 · Imóvel e checkout
 
