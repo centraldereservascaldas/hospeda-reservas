@@ -259,6 +259,8 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 
 **Impacto:** quem começa pelo teclado encontra um controle invisível em vez das ações de recuperação. **Ação:** escolher semântica compatível com a tela bloqueante, mover foco para a recuperação e impedir interação com o fundo enquanto estiver ativa; devolver foco ou navegar para um destino coerente. **Verificação:** percorrer Tab/Shift+Tab no carregamento e no erro, testar Escape e retorno, e confirmar isolamento do fundo com leitor de tela.
 
+**Implementação em revisão:** a recuperação agora é uma página própria enquanto o checkout é revalidado, sem renderizar catálogo, busca, cartões ou rodapé atrás dela. O título recebe foco inicial, e a mensagem de progresso/erro é anunciada como `status`. No erro, o primeiro Tab vai para “Tentar novamente”; o próximo controle é “Voltar”. Teste local da rota direta em 1440 × 900 e 375 × 812: foco inicial no título, conteúdo de catálogo ausente e sem rolagem horizontal/vertical excedente. Testes automatizados verificam a página, foco, ações e estado de carregamento. Leitor de tela não testado; Escape não se aplica porque esta tela é uma rota, não um diálogo. PR #84, base `codex/ux-search-flow`.
+
 ### F22 · P2 · Taxa local e formas de pagamento divergentes na descrição
 
 **Observado em produção:** a descrição do imóvel LI23J mencionava pulseira de R$ 10 por pessoa e apresentava formas de pagamento distintas em trechos diferentes: um incluía Pix, outro informava apenas cartão. O resumo do checkout mostrava R$ 231,00 sem linha separada para pulseira. Não foi confirmado se a taxa já estava incluída ou seria paga separadamente.
@@ -445,6 +447,8 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 
 **Ação:** comunicar indisponibilidade e última atualização confiável, oferecer nova consulta e avaliar retomada automática com limites e tratamento de credenciais, sem sugerir repetição do pagamento. **Verificação:** simular Pix pendente seguido de erro temporário, resposta não pronta, recuperação e confirmação; conferir anúncio acessível, ausência de duplicação de pagamento e consistência com a página de detalhes.
 
+**Implementação em revisão:** quando a consulta de pedido falha depois de um Pix pendente, a mensagem passa a dizer que a consulta automática foi interrompida, informa o último status recebido e direciona para atualização manual ou detalhes antes de iniciar outro pagamento. O QR/código existente e a ação “Atualizar situação” permanecem; o retry não inicia outro pagamento. O teste existente agora verifica a mensagem e confirma pelas chamadas simuladas que pedido e pagamento continuam únicos. Recuperação e confirmação permanecem exercitadas por respostas simuladas, sem transação real. PR #86, base `codex/ux-search-flow`.
+
 **Comparação com a retomada:** `CheckoutResumePage.tsx:335–377` também encerra o ciclo periódico quando `resumeCheckout` retorna estado diferente de `ready`. Para `unavailable`, porém, `:667–683` troca o conteúdo por um alerta explícito e oferece “Tentar novamente”; a tentativa é manual. `checkoutApi.ts:796–831` transforma falhas de rede e respostas inválidas em `unavailable`. Assim, a recuperação comunicada difere entre as duas telas, mas nenhuma das duas garante retomada automática após falha. Essa comparação é leitura de código e não verifica o comportamento do provedor em produção.
 
 ### F40 · P2 · Acesso ao pedido em outro navegador perde o contexto ao encaminhar para login
@@ -526,6 +530,8 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 **Detalhe do imóvel:** em outra primeira visita isolada, a 375 × 667, abri diretamente LI23J com datas e hóspedes. O painel de medição estava visível sobre o diálogo do imóvel, e 50 pressões de Tab também não alcançaram sua região. Nenhuma escolha foi salva. A evidência amplia o conflito à combinação observada de imóvel e preferências, sem generalizar para todos os diálogos.
 
 **Causa compatível no código local:** `MeasurementPreferences.tsx:52–64` tenta focar o título fora do checkout, enquanto `useDialogFocus.ts:94–96` redireciona foco externo ao diálogo ativo. O painel de medição não é identificado como portal pertencente a esse diálogo. Não se comprova por essa leitura a versão do código implantado. **Ação:** coordenar a camada ativa e seu foco com o checkout, preservando escolhas e retorno ao elemento adequado. **Verificação:** primeira visita e reabertura sobre checkout e outros diálogos, Tab/Shift+Tab, ativação das três opções planejadas, retorno de foco, rolagem e tecnologia assistiva; verificar que não haja consentimento implícito ou alteração de escolhas ao fechar.
+
+**Implementação em revisão:** o painel fixo agora é marcado como portal de foco, então o gerenciamento existente de checkout e detalhe o reconhece dentro da camada ativa; o painel de preferências embutido em páginas legais fica fora desse contrato. Testes verificam a marcação condicional e a navegação por teclado do mecanismo de portais já usado pelos diálogos. Não foi adicionada persistência nem mudança nas escolhas. Testes combinados de navegador, Escape/fechamento e leitor de tela ainda pendentes. PR #87, base `codex/ux-search-flow`.
 
 ### F48 · P2 · Detalhes do condomínio não oferecem caminho direto às acomodações
 
@@ -623,11 +629,11 @@ Em 26/11/2026, a conferência de rastreabilidade encontrou referências diretas 
 | Item | Evidência | Próximo passo de correção |
 | --- | --- | --- |
 | F01 · Calendário da busca | Reproduzido por teclado em produção. | Tornar dias navegáveis e testar seleção, meses e foco. |
-| F21 · Foco na recuperação | Reproduzido por teclado em produção. | Isolar o fundo e posicionar foco nas ações, coordenando com F23. |
-| F37 · Retorno do checkout direto | Reproduzido em produção; teste automatizado cobre destino direto e preservação do fluxo modal. | Navegador e ciclo voltar/avançar pendentes; implementação em revisão no PR #85. |
-| F39 · Acompanhamento Pix | Reproduzido em teste local com consulta simulada. | Comunicar falha e recuperar consulta sem induzir novo pagamento. |
+| F21 · Foco na recuperação | Reproduzido por teclado em produção; implementação e regressão local conferidas em desktop e mobile. | PR #84 integrado à branch-base; leitor de tela não testado. |
+| F37 · Retorno do checkout direto | Reproduzido em produção; teste automatizado cobre destino direto e preservação do fluxo modal. | PR #85 em revisão; navegador e ciclo voltar/avançar pendentes. |
+| F39 · Acompanhamento Pix | Reproduzido em teste local com consulta simulada; mensagem e retry seguro verificados por regressão automatizada. | PR #86 integrado à branch-base; retomada automática e leitor de tela não testados. |
 | F41 · Tela vazia e 504 | Observados pontualmente em produção; causa desconhecida e resposta posterior bem-sucedida. | Investigar artefato, cache, deploy e origem antes de escolher a correção. |
-| F47 · Preferências e foco | Reproduzido em primeira visita isolada no checkout e no imóvel, e na reabertura sobre checkout. | Coordenar foco da camada de medição e validar teclado, retorno e tecnologia assistiva. |
+| F47 · Preferências e foco | Reproduzido em primeira visita isolada no checkout e no imóvel, e na reabertura sobre checkout; marcação de portal e contrato de navegação por teclado verificados em testes. | Em revisão no PR #87; fluxo combinado e leitor de tela pendentes. |
 | F51 · Política de privacidade | Rota e API responderam 404 na amostra em produção. | Identificar documento correto e publicar destino acessível antes de vinculá-lo no painel. |
 | F55 · Foco nos painéis da busca | Abertura por Enter e percurso de 100 Tabs não alcançaram os controles dos três painéis nas amostras em produção. | Garantir foco inicial e navegação coerente, testando abertura, troca e saída de cada painel. |
 
@@ -652,7 +658,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 ### Onda 1 · Jornada bloqueada e integridade da busca
 
 - [ ] F01 implementado no desktop: dias disponíveis entram na ordem de Tab e setas movem o foco entre datas, incluindo virada de mês. Código inicial no commit `55bf827`; complemento de foco no commit `5771e0c`. Testes e navegador desktop passaram. Validação móvel, seleção por Enter e fechamento por Escape no calendário permanecem pendentes.
-- [ ] Corrigir foco e isolamento do fundo na tela de recuperação de checkout (F21).
+- [x] Separar recuperação do checkout da página de catálogo; focar o título e manter a navegação nas ações (F21). Teste automatizado e navegador local em 1440 × 900 e 375 × 812; leitor de tela não testado. PR #84.
 - [ ] Reproduzir F05 com bebês, crianças e pets; alinhar composição, URL e parâmetros de busca.
 - [ ] Alinhar os limites de pets da interface, URLs e validação de reserva após definir a regra de negócio (F28).
 - [ ] Identificar e comunicar preço expirado (F04), com atualização e estados de falha.
@@ -697,7 +703,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Alinhar mensagem e destino no retorno de checkout não recuperável, preservando o contexto quando possível (F20).
 - [ ] Corrigir retorno do checkout aberto diretamente e testar botão, Escape e histórico sem reabrir o diálogo (F37). Testes de hook cobrem URL/contexto para acesso direto e preservação do histórico da navegação modal; navegador e voltar/avançar pendentes. PR #85.
 - [ ] Corrigir sobreposição do indicador de seleção no método de pagamento em largura estreita (F46).
-- [ ] Sinalizar e recuperar interrupções no acompanhamento de pagamento pendente, sem induzir pagamento duplicado (F39).
+- [ ] Sinalizar quando o acompanhamento Pix automático for interrompido, informar o último status e oferecer consulta manual sem iniciar outro pagamento (F39). Teste simulado confirma falha, retry e chamada única de pagamento. PR #86; leitor de tela não testado.
 - [ ] Preservar o destino do pedido na passagem para autenticação e conferir alternativas seguras de recuperação entre dispositivos (F40).
 - [ ] Investigar falhas de asset e respostas 5xx observadas na rota de acompanhamento e validar publicação, cache e recuperação (F41).
 - [ ] Esclarecer taxa local e formas de pagamento nas regras e no checkout (F22).
@@ -711,7 +717,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Preservar explicações de erros 422 e associar validações aos campos ou à etapa de correção (F30).
 - [ ] Redesenhar preferências de medição com recusa, personalização, aceite direto, link de privacidade e reabertura, validando responsividade, foco e escolhas (F31).
 - [ ] Identificar e disponibilizar a política de privacidade correta antes de incluí-la no painel (F51).
-- [ ] Corrigir o conflito de foco entre preferências, checkout e detalhe do imóvel; testar primeira visita e reabertura (F47).
+- [ ] Marcar as preferências fixas como portal de foco do diálogo ativo, sem aplicar isso ao texto embutido nas páginas legais (F47). Testes do contrato de portal e da marcação condicional passaram; fluxo combinado no navegador, Escape/fechamento e leitor de tela pendentes. PR #87.
 - [ ] Auditar destinos e eventos por categoria de consentimento e definir métricas de interação sem coletar dados indevidos (F32).
 - [ ] Alinhar evento de busca entre barra e modal, distinguindo envio, limpeza e restauração sem duplicidade (F42).
 - [ ] Definir e validar métricas distintas de clique, carregamento e retomada do checkout (F43).
