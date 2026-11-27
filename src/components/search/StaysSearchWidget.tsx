@@ -1027,7 +1027,17 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       );
       if (!target) return;
       const rect = target.getBoundingClientRect();
-      if (rect.height > 0 && (rect.bottom <= 0 || rect.top >= window.innerHeight)) {
+      const hiddenSource = target.closest('[aria-hidden="true"], [inert]');
+      if (
+        hiddenSource ||
+        (rect.height > 0 && (rect.bottom <= 0 || rect.top >= window.innerHeight))
+      ) {
+        if (hiddenSource && sharedPanelRef.current?.contains(document.activeElement)) {
+          const compactSearchTrigger = document.querySelector<HTMLButtonElement>(
+            '[data-compact-search="true"] button[aria-label="Iniciar busca"]',
+          );
+          if (compactSearchTrigger) focusWithoutScrolling(compactSearchTrigger);
+        }
         setActiveDropdown(null);
         setActiveDatePicker(null);
         setSharedPanelVisible(false);
@@ -1104,6 +1114,14 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     document.addEventListener('pointerdown', handleOutsideClick);
     document.addEventListener('keydown', handleEscape);
     document.addEventListener('keydown', handlePanelKeyDown);
+    const visibilityRoot =
+      document.getElementById('widgetStaysSearchForm')?.closest('header') ?? document.body;
+    const visibilityObserver = new window.MutationObserver(updatePosition);
+    visibilityObserver.observe(visibilityRoot, {
+      attributes: true,
+      attributeFilter: ['aria-hidden', 'inert'],
+      subtree: true,
+    });
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', updatePosition);
@@ -1111,6 +1129,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       document.removeEventListener('pointerdown', handleOutsideClick);
       document.removeEventListener('keydown', handleEscape);
       document.removeEventListener('keydown', handlePanelKeyDown);
+      visibilityObserver.disconnect();
     };
   }, [activeDropdown, activeDatePicker, activeSharedPanel, isHero]);
 
