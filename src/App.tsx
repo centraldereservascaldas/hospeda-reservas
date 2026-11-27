@@ -85,6 +85,12 @@ const PaymentConfirmationPreview = lazy(() =>
   ),
 );
 
+const DirectCheckoutPage = lazy(() =>
+  import('./components/booking/DirectCheckoutPage').then(({ DirectCheckoutPage }) => ({
+    default: DirectCheckoutPage,
+  })),
+);
+
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
 function CheckoutResumeEntry({ reference }: { reference: string }) {
@@ -206,8 +212,6 @@ function MarketplaceApp() {
   bookingPayloadRef.current = bookingPayload;
   const [checkoutNavigation, setCheckoutNavigation] = useState(0);
   const checkoutRecovery = useCheckoutDraftRecovery(
-    properties,
-    catalogLoading,
     bookingPayload,
     setBookingPayload,
     checkoutNavigation,
@@ -785,6 +789,27 @@ export default function App() {
     !(checkoutPreviewAllowed && normalizedPathname === '/checkout-preview/cielo')
   ) {
     return <NotFoundPage />;
+  }
+
+  if (isNewCheckoutPath(normalizedPathname)) {
+    return (
+      <>
+        <Suspense
+          fallback={
+            <main
+              className="flex min-h-screen items-center justify-center bg-white px-6 py-12 text-neutral-900"
+              role="status"
+              aria-live="polite"
+            >
+              Preparando checkout…
+            </main>
+          }
+        >
+          <DirectCheckoutPage />
+        </Suspense>
+        <MeasurementPreferences />
+      </>
+    );
   }
 
   return (

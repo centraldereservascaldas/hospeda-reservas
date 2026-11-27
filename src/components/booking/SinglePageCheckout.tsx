@@ -53,6 +53,7 @@ type SinglePageCheckoutProps = Pick<
   'bookingData' | 'guestPrefill' | 'onClose'
 > & {
   previewOnly?: boolean;
+  isStandalonePage?: boolean;
 };
 const fieldClass =
   'mt-1.5 min-h-12 w-full rounded-xl border border-neutral-400/70 bg-white px-3 text-base text-neutral-950 outline-none focus-visible:border-orange-700 focus-visible:ring-2 focus-visible:ring-orange-700/20 disabled:bg-neutral-100';
@@ -65,11 +66,15 @@ export function SinglePageCheckout({
   guestPrefill,
   onClose,
   previewOnly = false,
+  isStandalonePage = false,
 }: SinglePageCheckoutProps) {
   const [guest, setGuest] = useState(
     () => readCheckoutContact() ?? guestPrefill ?? { fullName: '', email: '', phone: '' },
   );
-  const updateGuest = (next: typeof guest) => {
+  const guestTouchedRef = useRef(new Set<keyof typeof guest>());
+  const updateGuest = (field: keyof typeof guest, value: string) => {
+    const next = { ...guest, [field]: value };
+    guestTouchedRef.current.add(field);
     setGuest(next);
     if (!previewOnly && !preparedRef.current) saveCheckoutContact(next);
   };
@@ -95,6 +100,28 @@ export function SinglePageCheckout({
   const [statusUnavailable, setStatusUnavailable] = useState(false);
   const [statusRetry, setStatusRetry] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    setGuest((current) => ({
+      fullName:
+        guestTouchedRef.current.has('fullName') || current.fullName
+          ? current.fullName
+          : guestPrefill?.fullName || '',
+      email:
+        guestTouchedRef.current.has('email') || current.email
+          ? current.email
+          : guestPrefill?.email || '',
+      phone:
+        guestTouchedRef.current.has('phone') || current.phone
+          ? current.phone
+          : guestPrefill?.phone || '',
+    }));
+  }, [guestPrefill?.email, guestPrefill?.fullName, guestPrefill?.phone]);
+
+  useEffect(() => {
+    if (isStandalonePage) headingRef.current?.focus();
+  }, [isStandalonePage]);
 
   useEffect(() => {
     if (!bookingData) return;
@@ -422,7 +449,15 @@ export function SinglePageCheckout({
             <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-orange-800 sm:text-xs">
               Central de Reservas · Caldas Novas
             </p>
-            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+            <h1
+              ref={headingRef}
+              tabIndex={isStandalonePage ? -1 : undefined}
+              className={`text-2xl font-extrabold tracking-tight sm:text-3xl ${
+                isStandalonePage
+                  ? 'focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-orange-700'
+                  : ''
+              }`}
+            >
               {attemptFinished ? 'Sua reserva' : 'Confirme e pague'}
             </h1>
             <p className="mt-2 max-w-lg text-sm leading-6 text-neutral-600">
@@ -622,9 +657,7 @@ export function SinglePageCheckout({
                         name="guestName"
                         autoComplete="name"
                         value={guest.fullName}
-                        onChange={(event) =>
-                          updateGuest({ ...guest, fullName: event.target.value })
-                        }
+                        onChange={(event) => updateGuest('fullName', event.target.value)}
                         className={fieldClass}
                       />
                     </label>
@@ -636,7 +669,7 @@ export function SinglePageCheckout({
                         type="email"
                         autoComplete="email"
                         value={guest.email}
-                        onChange={(event) => updateGuest({ ...guest, email: event.target.value })}
+                        onChange={(event) => updateGuest('email', event.target.value)}
                         className={fieldClass}
                       />
                     </label>
@@ -649,10 +682,7 @@ export function SinglePageCheckout({
                         autoComplete="tel"
                         value={formatBrazilianPhone(guest.phone)}
                         onChange={(event) =>
-                          updateGuest({
-                            ...guest,
-                            phone: event.target.value.replace(/\D/g, '').slice(0, 11),
-                          })
+                          updateGuest('phone', event.target.value.replace(/\D/g, '').slice(0, 11))
                         }
                         className={fieldClass}
                       />

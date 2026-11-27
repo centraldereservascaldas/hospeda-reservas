@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import type { Property } from '../types';
 import type { AppOverlayBookingPayload } from '../types/booking';
 import { crcnBackendApi, getCalendarExpiration } from '../services/crcnBackendApi';
 import { countOccupancyGuests } from '../utils/guestCounts';
@@ -7,15 +6,16 @@ import { isConfirmedPropertyQuote } from '../utils/propertyPricing';
 import { validateCalendarRange } from '../utils/staysAvailability';
 import { isNewCheckoutPath, readCheckoutDraft } from '../utils/checkoutDraft';
 import { checkoutStayFromSearch } from '../utils/checkoutUrl';
+import { readAccommodationCatalogCache } from '../utils/accommodationCatalogCache';
 
 export function useCheckoutDraftRecovery(
-  properties: Property[],
-  catalogLoading: boolean,
   bookingPayload: AppOverlayBookingPayload | null,
   setBookingPayload: (payload: AppOverlayBookingPayload | null) => void,
   navigation: number,
 ) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>(() =>
+    isNewCheckoutPath(window.location.pathname) && !bookingPayload ? 'loading' : 'idle',
+  );
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     if (!isNewCheckoutPath(window.location.pathname) || bookingPayload) {
@@ -36,13 +36,10 @@ export function useCheckoutDraftRecovery(
       setStatus('error');
       return;
     }
-    if (catalogLoading) {
-      setStatus('loading');
-      return;
-    }
     let active = true;
     setStatus('loading');
     void (async () => {
+      const properties = readAccommodationCatalogCache();
       const property =
         properties.find((item) => item.id === draft.propertyId) ??
         (await crcnBackendApi.getAccommodationById(draft.propertyId));
@@ -96,6 +93,12 @@ export function useCheckoutDraftRecovery(
     return () => {
       active = false;
     };
-  }, [properties, catalogLoading, bookingPayload, setBookingPayload, navigation, retry]);
-  return { status, retry: () => setRetry((value) => value + 1) };
+  }, [bookingPayload, setBookingPayload, navigation, retry]);
+  return {
+    status,
+    retry: () => {
+      setStatus('loading');
+      setRetry((value) => value + 1);
+    },
+  };
 }

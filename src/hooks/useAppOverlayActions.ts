@@ -10,7 +10,7 @@ import {
   saveCheckoutDraft,
 } from '../utils/checkoutDraft';
 import { checkoutUrlWithStay } from '../utils/checkoutUrl';
-import { accommodationPagePath } from '../utils/accommodationPageUrl';
+import { getCheckoutAccommodationReturnUrl } from '../utils/checkoutReturn';
 
 export const CHECKOUT_MODAL_HISTORY_ENTRY = '__crcnCheckoutModalEntry';
 
@@ -99,23 +99,12 @@ export function useAppOverlayActions({
       } else if (payload) {
         const nextState: Record<string, unknown> =
           state && typeof state === 'object' ? { ...state } : {};
-        const currencyFromUrl = new URLSearchParams(window.location.search).get('currency');
-        const returnCurrency =
-          currencyFromUrl === 'USD' || currencyFromUrl === 'EUR' || currencyFromUrl === 'BRL'
-            ? currencyFromUrl
-            : currency;
         delete nextState[CHECKOUT_MODAL_HISTORY_ENTRY];
         delete nextState[CHECKOUT_DRAFT_HISTORY_KEY];
-        const accommodationUrl = checkoutUrlWithStay(
-          accommodationPagePath(payload.property),
-          {
-            listingId: payload.property.staysListingId || payload.property.id,
-            from: payload.checkIn,
-            to: payload.checkOut,
-            guests: payload.guests,
-          },
+        const accommodationUrl = getCheckoutAccommodationReturnUrl(
+          payload,
+          currency,
           window.location.search,
-          returnCurrency,
         );
 
         window.history.replaceState(nextState, '', accommodationUrl);

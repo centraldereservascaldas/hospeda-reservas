@@ -6,7 +6,8 @@ export const NEW_CHECKOUT_PATH = '/checkout';
 export const LEGACY_NEW_CHECKOUT_PATH = '/checkout/nova';
 
 export function isNewCheckoutPath(path: string): boolean {
-  return path === NEW_CHECKOUT_PATH || path === LEGACY_NEW_CHECKOUT_PATH;
+  const normalizedPath = path.replace(/\/+$/, '') || '/';
+  return normalizedPath === NEW_CHECKOUT_PATH || normalizedPath === LEGACY_NEW_CHECKOUT_PATH;
 }
 export type CheckoutDraft = Pick<AppOverlayBookingPayload, 'checkIn' | 'checkOut' | 'guests'> & {
   propertyId: string;
