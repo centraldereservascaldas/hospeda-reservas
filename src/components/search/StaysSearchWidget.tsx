@@ -906,7 +906,9 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     currentFilters?.dateFlexibility ?? 0,
   );
   const [persons, setPersons] = useState<string>(
-    currentFilters?.guests ? String(countOccupancyGuests(currentFilters.guests)) : '2',
+    currentFilters?.guests
+      ? String(currentFilters.guests.adults + currentFilters.guests.children)
+      : '2',
   );
   const [guestCounts, setGuestCounts] = useState<GuestCounts>(
     currentFilters?.guests ?? { adults: 1, children: 0, infants: 0, pets: 0 },
@@ -953,6 +955,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     children: syncedChildren ?? 0,
     infants: syncedInfants ?? 0,
   });
+  const syncedPersonsCount = (syncedAdults ?? 1) + (syncedChildren ?? 0);
   const syncedDestination = currentFilters?.destination;
   const syncedDestinationPropertyId = currentFilters?.destinationPropertyId || '';
 
@@ -963,7 +966,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     setCheckOut(syncedCheckOut);
     setDateFlexibility(syncedFlexibility);
     if (hasSyncedGuests && syncedGuestCount >= 1 && syncedGuestCount <= 17) {
-      setPersons(String(syncedGuestCount));
+      setPersons(String(syncedPersonsCount));
       setGuestCounts({
         adults: syncedAdults ?? 1,
         children: syncedChildren ?? 0,
@@ -984,6 +987,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     syncedAdults,
     syncedChildren,
     syncedGuestCount,
+    syncedPersonsCount,
     syncedInfants,
     syncedPets,
     syncedDestination,
@@ -1144,30 +1148,17 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     setActiveDropdown(null);
     setActiveDatePicker(null);
     setSharedPanelVisible(false);
-    const personCount = isHero ? countOccupancyGuests(guestCounts) : parseInt(persons, 10) || 2;
-    const currentGuests = currentFilters?.guests;
-    const guests = isHero
-      ? guestCounts
-      : currentGuests
-        ? personCount === countOccupancyGuests(currentGuests)
-          ? currentGuests
-          : {
-              adults: personCount,
-              children: 0,
-              infants: currentGuests.infants,
-              pets: currentGuests.pets,
-            }
-        : undefined;
+    const guests = selectedSearchGuests;
     emitFunnelEvent({
       event: 'search',
       has_dates: !surpriseMe && Boolean(checkIn && checkOut),
-      guests: guests ? countOccupancyGuests(guests) : personCount,
+      guests: selectedSearchGuestCount,
     });
     onSearchInApp({
       checkIn,
       checkOut,
       dateFlexibility,
-      persons: guests ? countOccupancyGuests(guests) : personCount,
+      persons: selectedSearchGuestCount,
       guests,
       destination: surpriseMe ? '' : selectedResort,
       propertyId: surpriseMe || selectedResortId.startsWith('imobsys-condo-') ? '' : selectedResortId,
@@ -1191,6 +1182,23 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   ];
   const selectedGuestOption = guestOptions.find((option) => option.value === persons);
   const selectedOccupancyCount = countOccupancyGuests(guestCounts);
+  const selectedPersonCount = isHero ? selectedOccupancyCount : parseInt(persons, 10) || 2;
+  const currentSearchGuests = currentFilters?.guests;
+  const selectedSearchGuests = isHero
+    ? guestCounts
+    : currentSearchGuests
+      ? selectedPersonCount === currentSearchGuests.adults + currentSearchGuests.children
+        ? currentSearchGuests
+        : {
+            adults: selectedPersonCount,
+            children: 0,
+            infants: currentSearchGuests.infants,
+            pets: currentSearchGuests.pets,
+          }
+      : undefined;
+  const selectedSearchGuestCount = selectedSearchGuests
+    ? countOccupancyGuests(selectedSearchGuests)
+    : selectedPersonCount;
   const selectedGuestLabel = isHero
     ? [
         `${selectedOccupancyCount} ${selectedOccupancyCount === 1 ? 'hóspede' : 'hóspedes'}`,
@@ -1286,25 +1294,25 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
           <input name="checkOut" value={checkOut} type="hidden" />
           <input name="checkin" value={checkIn} type="hidden" />
           <input name="checkout" value={checkOut} type="hidden" />
-          <input name="persons" value={isHero ? selectedOccupancyCount : persons} type="hidden" />
+          <input name="persons" value={selectedSearchGuestCount} type="hidden" />
           <input
             name="adults"
-            value={isHero ? guestCounts.adults : (currentFilters?.guests.adults ?? persons)}
+            value={selectedSearchGuests?.adults ?? selectedPersonCount}
             type="hidden"
           />
           <input
             name="children"
-            value={isHero ? guestCounts.children : (currentFilters?.guests.children ?? 0)}
+            value={selectedSearchGuests?.children ?? 0}
             type="hidden"
           />
           <input
             name="infants"
-            value={isHero ? guestCounts.infants : (currentFilters?.guests.infants ?? 0)}
+            value={selectedSearchGuests?.infants ?? 0}
             type="hidden"
           />
           <input
             name="pets"
-            value={isHero ? guestCounts.pets : (currentFilters?.guests.pets ?? 0)}
+            value={selectedSearchGuests?.pets ?? 0}
             type="hidden"
           />
           {selectedResort && <input name="q" value={selectedResort} type="hidden" />}
@@ -1679,7 +1687,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                   counts={guestCounts}
                   onChange={(nextCounts) => {
                     setGuestCounts(nextCounts);
-                    setPersons(String(countOccupancyGuests(nextCounts)));
+                    setPersons(String(nextCounts.adults + nextCounts.children));
                   }}
                 />
               )}
