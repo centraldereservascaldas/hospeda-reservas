@@ -45,6 +45,14 @@ class StaysSimulatorApiTest extends TestCase
             ->assertJsonPath('data.simulatedData', true);
     }
 
+    public function test_simulated_resorts_are_derived_from_simulated_accommodations(): void
+    {
+        $this->getJson('/api/resorts')
+            ->assertOk()
+            ->assertJsonPath('source', 'stays-simulated')
+            ->assertJsonCount(3, 'data');
+    }
+
     public function test_simulated_search_and_quote_use_date_specific_availability_and_rates(): void
     {
         $this->postJson('/api/search', [

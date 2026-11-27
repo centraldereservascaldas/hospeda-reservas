@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Heart, Star } from 'lucide-react';
+import { Building2, Check, ChevronLeft, ChevronRight, Heart, Star } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
@@ -9,6 +9,7 @@ import {
 } from '../../utils/propertyDisplayPrice';
 import { getPropertyCardImageSources, CATALOG_IMAGE_SIZES } from '../../utils/propertyImageSources';
 import { accommodationPagePath } from '../../utils/accommodationPageUrl';
+import { loadImobSysCardImages } from '../../services/imobSysCardMedia';
 
 interface PropertyCardProps {
   property: Property;
@@ -38,21 +39,63 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
   eagerImage = prioritizeImage,
 }) => {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [partnerImages, setPartnerImages] = useState<string[] | null>(null);
+  const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressPhotoClickUntilRef = useRef(0);
   const photoCarouselRef = useRef<HTMLDivElement>(null);
   const cardId = useId().replace(/:/g, '');
   const priceDescriptionId = `property-price-${cardId}`;
   const availabilityDescriptionId = `property-availability-${cardId}`;
-  const galleryKey = property.images.join('|');
+  const images = (property.images.length ? property.images : (partnerImages ?? [])).filter(
+    (image) => !failedImages.has(image),
+  );
+  const galleryKey = images.join('|');
+
+  useEffect(() => {
+    setPartnerImages(null);
+    setFailedImages(new Set());
+    if (property.dataSource !== 'imobsys-live' || property.images.length > 0) return;
+    let cancelled = false;
+    const load = () => {
+      void loadImobSysCardImages(property.id)
+        .then((result) => {
+          if (!cancelled) setPartnerImages(result);
+        })
+        .catch(() => {
+          if (!cancelled) setPartnerImages([]);
+        });
+    };
+    const target = photoCarouselRef.current;
+    if (!target || typeof IntersectionObserver === 'undefined') {
+      load();
+      return () => {
+        cancelled = true;
+      };
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          observer.disconnect();
+          load();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+    observer.observe(target);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [property.id, property.dataSource, property.images.length]);
 
   useEffect(() => {
     setCurrentImageIndex(0);
   }, [property.id, galleryKey]);
 
-  const imageCount = property.images.length;
+  const imageCount = images.length;
   const displayTitle = getPublicPropertyTitle(property.title);
-  const currentImage = property.images[currentImageIndex] || property.images[0] || '';
+  const currentImage = images[currentImageIndex] || images[0] || '';
   const goToImage = (index: number) => setCurrentImageIndex(index);
 
   const nextImage = (e: React.MouseEvent) => {
@@ -109,7 +152,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
       return;
     }
 
-    onSelectProperty(property);
+    onSelectProperty(images.length ? { ...property, images } : property);
   };
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
@@ -152,14 +195,26 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
         >
           {/* Images */}
-          <img
-            {...getPropertyCardImageSources(currentImage, CATALOG_IMAGE_SIZES)}
-            decoding="async"
-            alt=""
-            className="h-full w-full object-cover object-center transition-transform duration-500 ease-out group-hover:scale-[1.025]"
-            loading={eagerImage ? 'eager' : 'lazy'}
-            fetchPriority={prioritizeImage ? 'high' : 'auto'}
-          />
+          {currentImage ? (
+            <img
+              {...getPropertyCardImageSources(currentImage, CATALOG_IMAGE_SIZES)}
+              decoding="async"
+              alt=""
+              className="h-full w-full object-cover object-center transition-transform duration-500 ease-out group-hover:scale-[1.025]"
+              loading={eagerImage ? 'eager' : 'lazy'}
+              fetchPriority={prioritizeImage ? 'high' : 'auto'}
+              onError={() => setFailedImages((previous) => new Set(previous).add(currentImage))}
+            />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-orange-50 via-white to-sky-50 text-neutral-500">
+              <Building2 aria-hidden="true" className="h-8 w-8 text-orange-500" />
+              <span className="text-xs font-semibold">
+                {property.dataSource === 'imobsys-live' && partnerImages === null
+                  ? 'Carregando fotos…'
+                  : 'Fotos não disponíveis'}
+              </span>
+            </div>
+          )}
 
           {/* Favorite Heart Button */}
           <button
@@ -184,7 +239,9 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
 
           {/* Host badge */}
           <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-3.75rem)] pointer-events-none">
-            {property.staysSynced && property.isSuperhost ? (
+            {property.dataSource !== 'imobsys-live' &&
+            property.staysSynced &&
+            property.isSuperhost ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full liquid-glass text-caption font-bold text-neutral-900 shadow-sm border border-white/90 truncate">
                 <span className="truncate">Anfitrião destaque</span>
               </span>
@@ -192,7 +249,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           </div>
 
           {/* Carousel Arrow Buttons */}
-          {property.images.length > 1 && (
+          {images.length > 1 && (
             <div className="opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
               {currentImageIndex > 0 && (
                 <button
@@ -220,7 +277,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           {/* Carousel Dots */}
           {imageCount > 1 && (
             <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-10">
-              {property.images.map((_, idx) => (
+              {images.map((_, idx) => (
                 <button
                   key={idx}
                   type="button"

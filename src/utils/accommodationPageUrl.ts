@@ -1,7 +1,9 @@
 import type { Property } from '../types';
 
 export function accommodationPagePath(property: Property): string {
-  const id = property.staysListingId || property.id;
+  const id = property.dataSource === 'imobsys-live'
+    ? property.id.replace(/^imobsys-crcn-/, 'parceiro-crcn-')
+    : property.staysListingId || property.id;
   const prefix = `/apartamento/${encodeURIComponent(id)}`;
   const candidate = property.publicPagePath || '';
   if (

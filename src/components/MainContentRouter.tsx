@@ -159,6 +159,13 @@ export function MainContentRouter({
   onExploreMore,
 }: MainContentRouterProps) {
   const [mapListExpanded, setMapListExpanded] = React.useState(false);
+  const [visibleCatalogCount, setVisibleCatalogCount] = React.useState(12);
+  const catalogFilterKey = JSON.stringify(filters);
+  React.useEffect(() => setVisibleCatalogCount(12), [catalogFilterKey]);
+  const useLocalCatalogPagination = !searchPagination?.active && availabilitySearchState === 'idle';
+  const visibleGridProperties = useLocalCatalogPagination
+    ? filteredProperties.slice(0, visibleCatalogCount)
+    : filteredProperties;
   const isCompletedSearch =
     availabilitySearchState === 'success' || availabilitySearchState === 'partial';
   const hasPreservedSearchResults =
@@ -318,7 +325,7 @@ export function MainContentRouter({
                   <PropertyCatalogGrid
                     prioritizeFirstImage
                     status={visibleCatalogStatus}
-                    properties={filteredProperties}
+                    properties={visibleGridProperties}
                     currency={currency}
                     savedPropertyIds={savedPropertyIds}
                     showTotalWithTaxes={showTotalWithTaxes}
@@ -407,6 +414,12 @@ export function MainContentRouter({
               ))}
             {searchPagination?.active && onLoadMoreSearchResults && (
               <SearchPagination state={searchPagination} onLoadMore={onLoadMoreSearchResults} />
+            )}
+            {useLocalCatalogPagination && !isCondominiumView && viewMode === 'grid' && filteredProperties.length > 12 && (
+              <SearchPagination
+                state={{ active: true, hasMore: visibleCatalogCount < filteredProperties.length, isLoading: false, error: false, loadedCount: visibleGridProperties.length }}
+                onLoadMore={() => setVisibleCatalogCount((count) => count + 12)}
+              />
             )}
           </div>
         </div>

@@ -26,3 +26,14 @@ test('trims excess spaces without changing the original title value', () => {
 test('leaves titles without removable prefixes or abbreviations readable', () => {
   assert.equal(getPublicPropertyTitle('Casa da Madeira'), 'Casa da Madeira');
 });
+
+test('removes padding from numeric apartment numbers but preserves alphanumeric units', () => {
+  assert.equal(
+    getPublicPropertyTitle('PIAZZA DIROMA | Apto 00204'),
+    'PIAZZA DIROMA | Apartamento 204',
+  );
+  assert.equal(
+    getPublicPropertyTitle('AGUAS DA FONTE | Apto B0205'),
+    'AGUAS DA FONTE | Apartamento B0205',
+  );
+});

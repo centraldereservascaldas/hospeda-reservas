@@ -10,6 +10,21 @@ import { createDefaultSearchFilters } from '../src/utils/searchUrlState.ts';
 const sourceProperty = STAYS_NET_APARTMENTS[0]!;
 const property = { ...sourceProperty, staysPropertyId: 'resort-4' };
 
+test('keeps server-matched condominium aliases in dated search results', () => {
+  const filters = {
+    ...createDefaultSearchFilters(),
+    destination: 'Boulevard Suite Hotel',
+    checkIn: '2027-01-10',
+    checkOut: '2027-01-12',
+  };
+  const matched = { ...property, title: 'Boulevard Súite - Apto 529' };
+  assert.deepEqual(filterPropertiesBySearchFilters([matched], filters), [matched]);
+  assert.deepEqual(
+    filterPropertiesBySearchFilters([matched], { ...filters, checkIn: '', checkOut: '' }),
+    [],
+  );
+});
+
 test('combines catalog filters and rejects properties that miss any selected criterion', () => {
   const filters = {
     ...createDefaultSearchFilters(),
@@ -176,6 +191,24 @@ test('uses confirmed nightly quotes for price filters on dated searches', () => 
     }),
     [unquotedProperty],
   );
+});
+
+test('uses the condominium name for ImobSys candidates when no Stays ID mapping exists', () => {
+  const imobsysProperty = {
+    ...property,
+    id: 'imobsys-crcn-2-663',
+    dataSource: 'imobsys-live' as const,
+    staysPropertyId: undefined,
+    title: 'Lacqua | Apto 101',
+    location: { ...property.location, neighborhood: 'Lacqua', lat: 0, lng: 0 },
+  };
+  const filters = {
+    ...createDefaultSearchFilters(),
+    destination: 'Lacqua',
+    destinationPropertyId: 'stays-condominium-id',
+  };
+
+  assert.deepEqual(filterPropertiesBySearchFilters([imobsysProperty], filters), [imobsysProperty]);
 });
 
 test('keeps an expired result under its last known price refinement while its display requires renewal', () => {

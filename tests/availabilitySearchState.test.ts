@@ -72,7 +72,7 @@ test('uses a general search error when the failed search has no date range', () 
   assert.match(screen.getByRole('alert').textContent || '', /Não conseguimos concluir a busca/);
 });
 
-test('announces a successful empty date search as a status update', () => {
+test('does not call an empty dated search confirmed unavailability', () => {
   render(
     React.createElement(AvailabilitySearchState, {
       state: 'success',
@@ -86,12 +86,11 @@ test('announces a successful empty date search as a status update', () => {
 
   const status = screen.getByRole('status');
   assert.equal(status.getAttribute('aria-live'), 'polite');
-  assert.ok(
-    screen.getByRole('heading', { name: 'Nenhuma acomodação disponível para esse período' }),
-  );
+  assert.ok(screen.getByRole('heading', { name: 'Nenhuma oferta encontrada para esse período' }));
+  assert.match(status.textContent || '', /ausência de resultados não confirma indisponibilidade/i);
 });
 
-test('explains when confirmed availability is hidden only by the selected filters', () => {
+test('explains when search results are hidden by filters without claiming availability confirmation', () => {
   const { container } = render(
     React.createElement(AvailabilitySearchState, {
       state: 'success',
@@ -105,6 +104,7 @@ test('explains when confirmed availability is hidden only by the selected filter
 
   assert.ok(screen.getByRole('heading', { name: 'Nenhum imóvel corresponde a esses filtros' }));
   assert.match(screen.getByRole('status').textContent || '', /Remova alguns filtros/);
+  assert.doesNotMatch(screen.getByRole('status').textContent || '', /disponibilidade foi confirmada/i);
   assert.match(container.querySelector('[role="status"]')?.className || '', /max-\[400px\]:py-0/);
   assert.match(
     container.querySelector('[role="status"]')?.className || '',
@@ -114,6 +114,25 @@ test('explains when confirmed availability is hidden only by the selected filter
     container.querySelector('[role="status"] svg')?.getAttribute('class') || '',
     /\[@media\(max-height:400px\)\]:h-5/,
   );
+});
+
+test('announces dated search results without claiming unconfirmed availability', () => {
+  render(
+    React.createElement(AvailabilitySearchState, {
+      state: 'success',
+      checkIn: '2027-05-01',
+      checkOut: '2027-05-04',
+      resultCount: 1,
+      hasResults: true,
+      hasAvailableResults: true,
+      onRetry: () => {},
+    }),
+  );
+
+  const status = screen.getByRole('status');
+  assert.match(status.textContent || '', /1 acomodação/);
+  assert.match(status.textContent || '', /disponibilidade precisa ser confirmada antes da reserva/i);
+  assert.doesNotMatch(status.textContent || '', /disponibilidade confirmada/i);
 });
 
 test('retry control invokes the last availability search callback', () => {

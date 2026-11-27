@@ -41,6 +41,26 @@ export function getPropertyDisplayPrice(
   hasSearchDates: boolean,
   showTotalWithTaxes: boolean,
 ): PropertyDisplayPrice {
+  const imobsysOffer = property.imobsysOffer;
+  if (hasSearchDates && imobsysOffer && imobsysOffer.expiresAt > Date.now()) {
+    return {
+      kind: 'quote',
+      amount: showTotalWithTaxes
+        ? imobsysOffer.totalAmount
+        : imobsysOffer.totalAmount / imobsysOffer.nights,
+      detail: showTotalWithTaxes
+        ? `Total anunciado no Pix • ${imobsysOffer.nights} ${imobsysOffer.nights === 1 ? 'noite' : 'noites'}`
+        : 'Média do total Pix por noite',
+      ...(!showTotalWithTaxes
+        ? { dailyRate: imobsysOffer.totalAmount / imobsysOffer.nights }
+        : {}),
+    };
+  }
+
+  if (hasSearchDates && imobsysOffer) {
+    return { kind: 'pending', message: 'Oferta expirada; pesquise novamente para atualizar' };
+  }
+
   const quote = getConfirmedPropertyQuote(property);
   const storedQuote = getStoredPropertyQuote(property);
   const quoteToDisplay = quote ?? storedQuote;

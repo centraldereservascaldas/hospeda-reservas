@@ -39,6 +39,25 @@ const commonProps = {
   onRetryCatalog: () => {},
 };
 
+test('tries the next property photo when an image fails', () => {
+  const property = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    images: ['https://crcn.stays.net/image/broken', 'https://crcn.stays.net/image/working'],
+  };
+  const { container } = render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      properties: [property],
+      status: 'ready',
+    }),
+  );
+  const image = container.querySelector('article img');
+  assert.ok(image);
+  assert.match(image.getAttribute('src') ?? '', /broken/);
+  fireEvent.error(image);
+  assert.match(container.querySelector('article img')?.getAttribute('src') ?? '', /working/);
+});
+
 test('announces catalog loading and errors using status and alert roles', () => {
   const { rerender } = render(
     React.createElement(PropertyCatalogGrid, { ...commonProps, status: 'loading' }),
@@ -90,6 +109,42 @@ test('renders a catalog grid for matching accommodations', () => {
   );
 
   assert.ok(screen.getByRole('button', { name: 'Ver detalhes de Lacqua DiRoma IV' }));
+});
+
+test('keeps Stays properties first and places ImobSys offers under Mais opções in the same grid', () => {
+  const staysProperty = STAYS_NET_APARTMENTS[0]!;
+  const imobsysProperty = {
+    ...staysProperty,
+    id: 'imobsys-crcn-2-663',
+    title: 'Lacqua | Apto 101',
+    dataSource: 'imobsys-live' as const,
+    images: ['https://reservascrcn.com.br/fotos/apt101.png'],
+    imobsysOffer: {
+      from: '2027-01-10',
+      to: '2027-01-12',
+      nights: 2,
+      totalAmount: 523,
+      currency: 'BRL' as const,
+      observedAt: '2026-11-20T12:00:00Z',
+      availabilityConfirmed: false as const,
+      expiresAt: Date.now() + 20_000,
+    },
+  };
+
+  const { container } = render(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      properties: [imobsysProperty, staysProperty],
+    }),
+  );
+
+  const cards = Array.from(container.querySelectorAll('article'));
+  assert.equal(cards.length, 2);
+  assert.match(cards[0]?.textContent ?? '', /Lacqua DiRoma IV/);
+  assert.match(cards[1]?.textContent ?? '', /Lacqua \| Apartamento 101/);
+  assert.ok(screen.getByRole('heading', { name: 'Mais opções' }));
+  assert.equal(screen.queryByText('Imóvel de parceiro'), null);
 });
 
 test('prioritizes only the opening catalog row and keeps the remaining covers lazy', () => {

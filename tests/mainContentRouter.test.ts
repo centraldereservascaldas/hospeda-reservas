@@ -96,6 +96,19 @@ test('explore route renders the property catalog and delegates selection', () =>
   assert.deepEqual(selectedProperties, [STAYS_NET_APARTMENTS[0]!.id]);
 });
 
+test('initial catalog reveals properties incrementally', () => {
+  const properties = Array.from({ length: 25 }, (_, index) => ({
+    ...STAYS_NET_APARTMENTS[0]!, id: `listing-${index}`, title: `Apartamento ${index}`,
+    simulatedData: true, dataSource: 'stays-simulated' as const,
+  }));
+  const view = render(React.createElement(MainContentRouter, createRouterProps({ filteredProperties: properties })));
+  assert.ok(view.getByRole('button', { name: 'Ver detalhes de Apartamento 11' }));
+  assert.equal(view.queryByRole('button', { name: 'Ver detalhes de Apartamento 12' }), null);
+  fireEvent.click(view.getByRole('button', { name: 'Carregar mais' }));
+  assert.ok(view.getByRole('button', { name: 'Ver detalhes de Apartamento 12' }));
+  assert.equal(view.queryByRole('button', { name: 'Ver detalhes de Apartamento 24' }), null);
+});
+
 test('explore content leaves search and assistant actions to the shared header', () => {
   const { getByRole, queryByRole } = render(
     React.createElement(MainContentRouter, {
@@ -477,4 +490,37 @@ test('pagination keeps keyboard focus while loading and ignores repeated activat
   );
   fireEvent.click(button);
   assert.equal(loads, 1);
+});
+
+test('pagination loads the next page when its sentinel enters view and stops automatic retries on error', async () => {
+  const { SearchPagination } = await import('../src/components/search/SearchPagination.tsx');
+  const original = globalThis.IntersectionObserver;
+  type ObserverCallback = ConstructorParameters<typeof globalThis.IntersectionObserver>[0];
+  let notify: ObserverCallback | undefined;
+  let loads = 0;
+  class Observer {
+    constructor(callback: ObserverCallback) { notify = callback; }
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+    takeRecords() { return []; }
+    readonly root = null;
+    readonly rootMargin = '';
+    readonly thresholds = [];
+  }
+  globalThis.IntersectionObserver = Observer as unknown as typeof globalThis.IntersectionObserver;
+  const state = { active: true, hasMore: true, isLoading: false, error: false, loadedCount: 12 };
+  try {
+    const view = render(React.createElement(SearchPagination, { state, onLoadMore: () => { loads++; } }));
+    const entry = { isIntersecting: true } as Parameters<ObserverCallback>[0][number];
+    notify?.([entry], {} as Parameters<ObserverCallback>[1]);
+    notify?.([entry], {} as Parameters<ObserverCallback>[1]);
+    assert.equal(loads, 1);
+    view.rerender(React.createElement(SearchPagination, { state: { ...state, error: true }, onLoadMore: () => { loads++; } }));
+    fireEvent.click(view.getByRole('button', { name: 'Tentar carregar mais' }));
+    assert.equal(loads, 2);
+  } finally {
+    globalThis.IntersectionObserver = original;
+    cleanup();
+  }
 });

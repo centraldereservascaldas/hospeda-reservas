@@ -1170,7 +1170,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       persons: guests ? countOccupancyGuests(guests) : personCount,
       guests,
       destination: surpriseMe ? '' : selectedResort,
-      propertyId: surpriseMe ? '' : selectedResortId,
+      propertyId: surpriseMe || selectedResortId.startsWith('imobsys-condo-') ? '' : selectedResortId,
       surpriseMe,
     });
   };

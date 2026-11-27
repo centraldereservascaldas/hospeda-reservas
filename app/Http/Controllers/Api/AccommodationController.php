@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SearchAccommodationsRequest;
 use App\Http\Resources\AccommodationSearchResource;
+use App\Services\ImobSysSearchClient;
 use App\Services\StaysAccommodationCatalog;
 use App\Services\StaysAccommodationMapper;
 use App\Services\StaysCalendarService;
@@ -14,15 +15,28 @@ use App\Services\StaysExternalApiClient;
 use App\Services\StaysOfferWarmup;
 use App\Services\StaysSearchAvailabilityService;
 use App\Services\StaysSimulator;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class AccommodationController extends Controller
 {
     public function __construct(private readonly StaysExternalApiClient $stays, private readonly StaysAccommodationMapper $mapper, private readonly StaysAccommodationCatalog $accommodationCatalog, private readonly StaysContentReadCache $contentReads) {}
 
-    public function resorts(): JsonResponse
+    public function resorts(StaysSimulator $simulator, ImobSysSearchClient $imobSys): JsonResponse
     {
+        if ($simulator->enabled()) {
+            $resorts = collect($simulator->catalog())->map(fn (array $item): array => [
+                'id' => (string) ($item['complexName'] ?? $item['id'] ?? ''),
+                'name' => trim((string) ($item['complexName'] ?? $item['title'] ?? '')),
+            ])->filter(fn (array $item): bool => $item['id'] !== '' && $item['name'] !== '')
+                ->unique('id')->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();
+
+            return response()->json(['success' => true, 'source' => 'stays-simulated', 'total' => $resorts->count(), 'data' => $resorts]);
+        }
+
         try {
             $properties = $this->contentReads->get('/content/properties', ['status' => 'active', 'limit' => 100, 'skip' => 0]);
         } catch (StaysContentRateLimited) {
@@ -37,6 +51,36 @@ class AccommodationController extends Controller
             'name' => $this->mapper->localized($item['_mstitle'] ?? null) ?: ($item['internalName'] ?? ''),
         ])->filter(fn (array $item): bool => $item['id'] !== '' && trim($item['name']) !== '')
             ->unique('id')->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();
+
+        if ($imobSys->isEnabled()) {
+            $crosswalk = json_decode((string) @file_get_contents(base_path('integrations/imobsys/condominium-crosswalk.json')), true);
+            $normalize = static fn (string $name): string => mb_strtolower(Str::ascii(trim((string) preg_replace('/^CRCN\s*[-–]\s*/iu', '', $name))));
+            $existingNames = $resorts->map(fn (array $item): string => $normalize($item['name']))->all();
+            $existingIds = $resorts->pluck('id')->all();
+            foreach ($crosswalk['verified'] ?? [] as $item) {
+                if (($item['imobsysStatus'] ?? null) !== 'active'
+                    || ! str_starts_with((string) ($item['matchStatus'] ?? ''), 'verified_')
+                    || in_array($item['staysPropertyId'] ?? null, $existingIds, true)
+                    || ! is_string($item['imobsysName'] ?? null) || ! is_string($item['imobsysProviderId'] ?? null)
+                    || trim($item['imobsysName']) === '' || ! ctype_digit($item['imobsysProviderId'])
+                    || in_array($normalize($item['imobsysName']), $existingNames, true)) {
+                    continue;
+                }
+                $resorts->push(['id' => 'imobsys-condo-'.$item['imobsysProviderId'], 'name' => $item['imobsysName']]);
+                $existingNames[] = $normalize($item['imobsysName']);
+            }
+            foreach ($crosswalk['unmatched'] ?? [] as $item) {
+                if (($item['source'] ?? null) !== 'imobsys' || ($item['providerStatus'] ?? null) !== 'active'
+                    || ! is_string($item['name'] ?? null) || ! is_string($item['providerId'] ?? null)
+                    || trim($item['name']) === '' || ! ctype_digit($item['providerId'])
+                    || in_array($normalize($item['name']), $existingNames, true)) {
+                    continue;
+                }
+                $resorts->push(['id' => 'imobsys-condo-'.$item['providerId'], 'name' => $item['name']]);
+                $existingNames[] = $normalize($item['name']);
+            }
+            $resorts = $resorts->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();
+        }
 
         return response()->json(['success' => true, 'source' => 'stays-live', 'total' => $resorts->count(), 'data' => $resorts]);
     }
@@ -72,8 +116,34 @@ class AccommodationController extends Controller
         return response()->json($catalog);
     }
 
-    public function show(string $id, StaysSimulator $simulator): JsonResponse
+    public function media(string $id, ImobSysSearchClient $imobSys): JsonResponse
     {
+        if ($imobSys->cachedProperty($id) === null) {
+            return response()->json(['success' => false, 'message' => 'Pesquise novamente este imóvel para carregar as fotos.'], 404);
+        }
+
+        $content = $imobSys->propertyContent($id);
+        if ($content === null) {
+            return response()->json(['success' => false, 'message' => 'Não foi possível carregar as fotos deste imóvel agora.'], 503);
+        }
+
+        return response()->json([
+            'success' => true,
+            'source' => 'imobsys-live',
+            'data' => ['propertyId' => $id, 'images' => $content['images'], 'description' => $content['description']],
+        ]);
+    }
+
+    public function show(string $id, StaysSimulator $simulator, ImobSysSearchClient $imobSys): JsonResponse
+    {
+        if (str_starts_with($id, 'imobsys-crcn-')) {
+            $property = $imobSys->cachedProperty($id);
+
+            return $property
+                ? response()->json(['success' => true, 'data' => $property, 'source' => 'imobsys-live'])
+                : response()->json(['success' => false, 'message' => 'A oferta ImobSys precisa ser pesquisada novamente.'], 404);
+        }
+
         if ($simulator->enabled()) {
             $property = $simulator->find($id);
 
@@ -114,7 +184,7 @@ class AccommodationController extends Controller
         return response()->json(['success' => true, 'data' => $existing]);
     }
 
-    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchAvailabilityService $availabilityService, StaysOfferWarmup $warmup): JsonResponse
+    public function search(SearchAccommodationsRequest $request, StaysSimulator $simulator, StaysSearchAvailabilityService $availabilityService, StaysOfferWarmup $warmup, ImobSysSearchClient $imobSys): JsonResponse
     {
         $input = $request->validated();
         $from = $input['from'] ?? null;
@@ -159,34 +229,176 @@ class AccommodationController extends Controller
             return response()->json(['success' => true, 'total' => $total, 'from' => $from, 'to' => $to, 'guests' => $guests, 'data' => $data, 'source' => 'stays-simulated']);
         }
         if ($from && $to) {
-            $resolved = $availabilityService->search($input);
+            $destination = trim((string) ($input['destination'] ?? ''));
+            $verifiedPropertyId = ! empty($input['propertyId']) ? (string) $input['propertyId'] : $imobSys->verifiedStaysPropertyId($destination);
+            $canUseImobSys = $imobSys->isEnabled() && ($input['purpose'] ?? 'search') !== 'discovery';
+            $scanPriority = $canUseImobSys
+                && ($destination !== '' || $verifiedPropertyId !== null);
+            $combinedSearchKey = 'imobsys.mixed-search.v1.'.hash('sha256', json_encode([
+                config('services.partner_api.base_url'), $from, $to, $guests, $destination,
+                $input['propertyId'] ?? null, $input['cities'] ?? [],
+            ], JSON_THROW_ON_ERROR));
+            $knownStaysTotal = $canUseImobSys && ! $scanPriority ? Cache::get($combinedSearchKey) : null;
+            $searchInput = $input;
+            if ($verifiedPropertyId !== null) {
+                $searchInput['propertyId'] = $verifiedPropertyId;
+            }
+            if ($scanPriority) {
+                $searchInput['limit'] = 100;
+                $searchInput['skip'] = 0;
+            } elseif (is_int($knownStaysTotal) && $skip >= $knownStaysTotal) {
+                $searchInput['limit'] = $limit;
+                $searchInput['skip'] = $knownStaysTotal;
+            } else {
+                $searchInput['limit'] = $limit;
+                $searchInput['skip'] = $skip;
+            }
+            $partnerOnlyPage = $canUseImobSys && ! $scanPriority && is_int($knownStaysTotal) && $skip >= $knownStaysTotal;
+            $resolved = $partnerOnlyPage ? [
+                'items' => [], 'unquotedCount' => 0, 'receivedCount' => 0,
+                'meta' => [
+                    'fetchedAt' => now()->toIso8601String(),
+                    'expiresAt' => now()->addSeconds(max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))))->toIso8601String(),
+                ],
+            ] : $availabilityService->search($searchInput);
             if ($resolved === null) {
                 return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Não foi possível confirmar a disponibilidade agora. Tente novamente.'], 503);
             }
 
-            if ($resolved['unquotedCount'] === 0) {
-                $warmup->remember($input);
+            $catalog = $partnerOnlyPage ? [] : $this->catalog();
+            $allItems = $resolved['items'];
+            $allUnquoted = $resolved['unquotedCount'];
+            $meta = $resolved['meta'];
+            if ($scanPriority) {
+                $received = $resolved['receivedCount'];
+                $pages = 1;
+                while ($received === 100 && $pages < 5) {
+                    $searchInput['skip'] = $pages * 100;
+                    $next = $availabilityService->search($searchInput);
+                    if ($next === null) {
+                        return response()->json(['success' => false, 'code' => 'availability_unavailable', 'message' => 'Não foi possível consultar todas as opções da Stays. Tente novamente.'], 503);
+                    }
+                    $allItems = [...$allItems, ...$next['items']];
+                    $allUnquoted += $next['unquotedCount'];
+                    $received = $next['receivedCount'];
+                    $pages++;
+                    if (strtotime($next['meta']['expiresAt']) < strtotime($meta['expiresAt'])) {
+                        $meta = $next['meta'];
+                    }
+                }
+                if ($received === 100) {
+                    return response()->json(['success' => false, 'code' => 'availability_incomplete', 'message' => 'A consulta da Stays não pôde ser concluída. Tente refinar a busca.'], 503);
+                }
             }
-            $catalog = $this->catalog();
             $mapped = array_map(function (array $listing) use ($catalog): array {
                 $property = $this->mapper->map($listing, $catalog);
                 $property['calculatedPrice'] = $listing['calculatedPrice'];
                 $property['pricePerNight'] = $listing['calculatedPrice']['dailyRate'];
 
                 return $property;
-            }, $resolved['items']);
+            }, $allItems);
+            if ($destination !== '' && $verifiedPropertyId === null) {
+                $normalizedDestination = mb_strtolower(Str::ascii($destination));
+                $mapped = array_values(array_filter($mapped, static function (array $property) use ($normalizedDestination): bool {
+                    $haystack = mb_strtolower(Str::ascii(implode(' ', array_filter([
+                        $property['title'] ?? null,
+                        $property['subtitle'] ?? null,
+                        $property['description'] ?? null,
+                        $property['complexName'] ?? null,
+                        $property['location']['city'] ?? null,
+                        $property['location']['neighborhood'] ?? null,
+                    ], 'is_string'))));
+
+                    return str_contains($haystack, $normalizedDestination);
+                }));
+            }
+
+            $verifiedImobsysDestination = $verifiedPropertyId !== null
+                ? $imobSys->verifiedCondominiumName($verifiedPropertyId)
+                : null;
+            $canAppendPartnerOffers = $canUseImobSys
+                && $allUnquoted === 0
+                && (empty($input['propertyId']) || $verifiedImobsysDestination !== null);
+            $staysPageEnded = $canUseImobSys && ! $scanPriority && $resolved['receivedCount'] < $limit;
+            if ($staysPageEnded && ! $partnerOnlyPage) {
+                $knownStaysTotal = $skip + $resolved['receivedCount'];
+                Cache::put($combinedSearchKey, $knownStaysTotal, now()->addMinutes(10));
+            }
+            $partnerUnavailable = false;
+            if ($canAppendPartnerOffers && ($scanPriority || $partnerOnlyPage || $staysPageEnded)) {
+                $imobsysDestination = $verifiedImobsysDestination ?? $destination;
+
+                $offers = $imobSys->offers($from, $to, $guests, $imobsysDestination);
+                $partnerUnavailable = $offers === null;
+                if ($offers === null && ($scanPriority ? count($mapped) <= $skip : $mapped === [])) {
+                    return response()->json(['success' => false, 'code' => 'partner_unavailable', 'message' => 'Não foi possível consultar as opções do parceiro agora. Tente novamente.'], 503);
+                }
+                if ($offers !== null) {
+                    $mappedOffers = $imobSys->mapOffers($offers, $from, $to);
+                    $imobSys->rememberProperties($mappedOffers);
+                    $staysCount = $scanPriority ? count($mapped) : (int) ($knownStaysTotal ?? $skip);
+                    $partnerOffset = $scanPriority ? 0 : max(0, $skip + $resolved['receivedCount'] - $staysCount);
+                    $partnerSlots = $scanPriority ? count($mappedOffers) : max(0, $limit - $resolved['receivedCount']);
+                    $pageOffers = array_slice($mappedOffers, $partnerOffset, $partnerSlots);
+                    $fetchedAt = now();
+                    $expiresAt = $fetchedAt->copy()->addSeconds(max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))));
+                    foreach ($offers as $offer) {
+                        if (is_int($offer['_crcnExpiresAt'] ?? null)) {
+                            $expiresAt = $expiresAt->min(Carbon::createFromTimestamp($offer['_crcnExpiresAt']));
+                        }
+                    }
+
+                    $combined = $scanPriority
+                        ? [...$mapped, ...$mappedOffers]
+                        : [...$mapped, ...$pageOffers];
+                    $pageItems = $scanPriority ? array_slice($combined, $skip, $limit) : $combined;
+                    $receivedCount = $scanPriority
+                        ? count($pageItems)
+                        : $resolved['receivedCount'] + count($pageOffers);
+                    $hasMore = $scanPriority
+                        ? count($combined) > $skip + $limit
+                        : ($partnerOnlyPage || $staysPageEnded)
+                            && $partnerOffset + count($pageOffers) < count($mappedOffers);
+                    $responseMeta = $meta;
+                    if ($offers !== [] && strtotime($expiresAt->toIso8601String()) < strtotime($meta['expiresAt'])) {
+                        $responseMeta['expiresAt'] = $expiresAt->toIso8601String();
+                    }
+
+                    return (new AccommodationSearchResource([
+                        'source' => $mapped === [] && $pageItems !== [] ? 'imobsys-live' : 'stays-live',
+                        'data' => $pageItems,
+                        'from' => $from,
+                        'to' => $to,
+                        'guests' => $guests,
+                        'unquotedCount' => $allUnquoted,
+                        'meta' => $responseMeta,
+                        'pagination' => [
+                            'receivedCount' => $receivedCount,
+                            'nextSkip' => $skip + $receivedCount,
+                            'hasMore' => $hasMore,
+                        ],
+                    ]))->response();
+                }
+            }
+
+            if ($allUnquoted === 0) {
+                $warmup->remember($input);
+            }
+
+            $pageItems = $scanPriority ? array_slice($mapped, $skip, $limit) : $mapped;
+            $receivedCount = $scanPriority ? count($pageItems) : $resolved['receivedCount'];
 
             return (new AccommodationSearchResource([
-                'data' => $mapped,
+                'data' => $pageItems,
                 'from' => $from,
                 'to' => $to,
                 'guests' => $guests,
-                'meta' => $resolved['meta'],
-                'unquotedCount' => $resolved['unquotedCount'],
+                'meta' => $meta,
+                'unquotedCount' => $allUnquoted,
                 'pagination' => [
-                    'receivedCount' => $resolved['receivedCount'],
-                    'nextSkip' => $skip + $resolved['receivedCount'],
-                    'hasMore' => $resolved['receivedCount'] === $limit,
+                    'receivedCount' => $receivedCount,
+                    'nextSkip' => $skip + $receivedCount,
+                    'hasMore' => $scanPriority ? count($mapped) > $skip + $limit || $partnerUnavailable : $resolved['receivedCount'] === $limit || $partnerUnavailable,
                 ],
             ]))->response();
         }

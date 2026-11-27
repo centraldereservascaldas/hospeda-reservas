@@ -103,7 +103,10 @@ export function usePropertyAvailability({
   const latestCalendarContextKeyRef = useRef('');
   const extensionTargetRef = useRef<{ contextKey: string; targetDate: string } | null>(null);
   const [calendarContextKey, setCalendarContextKey] = useState('');
-  const listingId = property ? property.staysListingId || property.id : '';
+  const listingId =
+    property && property.dataSource !== 'imobsys-live'
+      ? property.staysListingId || property.id
+      : '';
   calendarSnapshotRef.current = {
     contextKey: calendarContextKey,
     days: calendarDays,

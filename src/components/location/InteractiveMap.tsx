@@ -50,7 +50,8 @@ const isValidCoordinate = (property: Property) => {
     lat >= -90 &&
     lat <= 90 &&
     lng >= -180 &&
-    lng <= 180
+    lng <= 180 &&
+    (Math.abs(lat) > 0.01 || Math.abs(lng) > 0.01)
   );
 };
 

@@ -70,6 +70,7 @@ COPY docker/supervisord.conf /etc/supervisor/conf.d/hospeda.conf
 
 RUN mkdir -p \
         database \
+        storage/app/private \
         storage/framework/cache/data \
         storage/framework/sessions \
         storage/framework/views \

@@ -21,6 +21,17 @@ export interface Review {
 
 export interface Property {
   id: string;
+  dataSource?: 'stays-live' | 'stays-simulated' | 'local-catalog' | 'imobsys-live';
+  imobsysOffer?: {
+    from: string;
+    to: string;
+    nights: number;
+    totalAmount: number;
+    currency: string;
+    observedAt: string;
+    availabilityConfirmed: false;
+    expiresAt: number;
+  };
   staysPropertyId?: string;
   publicPagePath?: string;
   complexName?: string;
@@ -92,7 +103,6 @@ export interface Property {
   staysSynced?: boolean;
   reviewsSynced?: boolean;
   simulatedData?: boolean;
-  dataSource?: 'stays-live' | 'stays-simulated' | 'local-catalog';
   calculatedPrice?: {
     /** Absolute validity deadline of the confirmed search quote. */
     expiresAt?: number;
