@@ -7,7 +7,7 @@ Estado: revisão e plano concluídos dentro do acesso disponível, com limitaç�
 | Tema | O que a revisão encontrou | Onde conferir |
 | --- | --- | --- |
 | Teclado e camadas | Dias do calendário da busca não entram no Tab; os painéis da barra não recebem foco na abertura direta; a recuperação e as preferências têm conflito de foco. | F01, F21, F47, F55 |
-| Busca e layout | A seleção de datas não avança para hóspedes no desktop; painéis permanecem abertos ao rolar; há colisões e cortes em dimensões específicas. | F02, F03, F06, F17 |
+| Busca e layout | A seleção de datas não avança para hóspedes no desktop; painéis permanecem abertos ao rolar; há colisões e cortes em dimensões específicas. | F02, F03, F06, F17, F56 |
 | Dados da viagem | Uma rota de condomínio perde datas e hóspedes; há inconsistências na contagem e em filtros com preço desconhecido. | F05, F28, F29, F49, F50 |
 | Checkout | Retorno por link direto reabre a tela; o carregamento depende do catálogo; respostas de erro e acompanhamento Pix precisam de comunicação mais clara. | F23, F24, F27, F37, F39 |
 | Visual e informação | Indicador de cartão encobre texto em 320 px; descrição e camas podem vir incompletas ou confusas; taxa local precisa de confirmação. | F22, F45, F46 |
@@ -613,6 +613,20 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 
 **Evidência de código e hipótese:** `StaysSearchWidget.tsx:1000–1045` tenta focar o primeiro botão habilitado em um `requestAnimationFrame`, enquanto a visibilidade do portal é estabelecida pelo mesmo efeito. Uma corrida de montagem é uma possibilidade, não uma causa comprovada; a versão implantada também não foi identificada. **Impacto:** a pessoa que abre a escolha por teclado não recebe acesso imediato aos contadores e pode seguir pela página enquanto o painel permanece visível. **Ação:** associar foco ao painel efetivamente montado e definir comportamento coerente de Tab, Shift+Tab e saída, sem exigir que um painel não modal prenda o foco. **Verificação:** abertura por Enter e Espaço, primeira abertura e reabertura, retorno de datas e troca de painéis, Tab e Shift+Tab, Escape, rolagem e alturas reduzidas em desktop, além de teste com tecnologia assistiva.
 
+### F56 · P2 · Atalho flutuante da Sofia cobre a ação de recuperação em viewport baixo
+
+**Observado no navegador local em 27/11/2026:** na página de busca em estado de erro do catálogo, a 640 × 400 e 641 × 400 CSS px, o botão flutuante da Sofia cobre parte do botão “Tentar novamente”. Em 640 × 400, as caixas se intersectam em cerca de 1.939 px², e `elementFromPoint` no centro da interseção retorna a Sofia, bloqueando o clique nessa parte da ação de recuperação. A 640 × 480 a interseção cai para cerca de 176 px²; em 768 × 400 e 1024 × 400 não há interseção. A 639 × 400, o gatilho é ocultado no estado de exploração e não colide.
+
+**Hover e limite de largura:** ao passar o ponteiro sobre a pílula, sua escala também cria interseção de aproximadamente 6,2 px em 728 × 400, 4,2 px em 732 × 400, 2,2 px em 736 × 400 e 0,2 px em 740 × 400; não há interseção em 744 × 400. Isso indica que usar somente o limite observado sem hover deixaria a borda das ações em contato durante a ampliação.
+
+**Contexto e limites:** a prévia local estava no estado de erro porque o backend da API não estava iniciado; essa situação permite avaliar o layout de recuperação, mas não valida busca nem catálogo ao vivo. Nenhuma pesquisa, reserva ou pagamento foi enviado. A matriz de medição foi pontual e não cobriu zoom de navegador ou conteúdo localizado.
+
+**Evidência de código:** `SofiaAssistantTrigger.tsx` fixa o gatilho completo no canto inferior direito a partir do breakpoint `sm`, enquanto a ação de erro em `AvailabilitySearchState.tsx` fica centralizada. A compactação existente limita-se ao mobile curto ou a um estado específico sem resultados; por isso a versão desktop de 640 px permanece como pílula larga. **Interpretação:** no intervalo estreito de 640–743 px e altura até 500 px, o gatilho persistente compete com uma ação de recuperação principal. **Proposta:** compactar o atalho para ícone até 44 × 44 px nessa faixa, manter o nome acessível e preservar a ação de recuperação sem deslocá-la.
+
+**Verificação:** testar o estado de erro com dados simulados a 640 × 400, 641 × 400, 743 × 500 e 744 × 400, confirmar ausência de interseção e que o clique no retry atinge o próprio botão; verificar o hover a 740 × 400 e 744 × 400, o nome acessível do atalho compacto e a apresentação normal a 768 × 400 e 640 × 700. Zoom real e leitor de tela permanecem pendentes.
+
+**Implementação e validação local:** até 743 × 500, o gatilho agora ocupa 44 × 44 px e mantém o texto completo no nome acessível; foi acrescentado contorno laranja visível no foco por teclado. No navegador local, a 640 × 400, 641 × 400 e 743 × 500, a interseção com “Tentar novamente” foi zero e o centro da ação continuou atingindo o retry; com hover em 740 × 400 e 744 × 400 também não houve colisão. A 744 × 400, 768 × 400 e 640 × 700 o gatilho permaneceu na apresentação normal quando não era necessária compactação. O snapshot de acessibilidade manteve o nome “Sofia • Assistente virtual Tire dúvidas sobre hospedagens”, e a regra de foco calculou contorno sólido de 2 px em laranja. `sofiaAssistantTrigger.test.ts` passou 5/5; ESLint/TypeScript, build frontend/blog (4/4), Prettier nos arquivos alterados e `git diff --check` passaram. O build mantém o aviso de fonte não resolvida em tempo de build e chunk inicial acima de 500 kB. A API local não estava ativa; o estado de erro foi exercitado sem submeter busca. Zoom de navegador, leitor de tela e dispositivo físico não testados.
+
 ## Cruzamento com o PR #81
 
 Em 26/11/2026, o PR [#81](https://github.com/centraldereservascaldas/hospeda-reservas/pull/81) estava aberto, com destino `main` e head `d3b906c10607766d43154556a66b2c91e1c94c50`. Sua base `77d6597ab459ad4132148e790df3f84d07b387ff` já inclui o PR #80 e é posterior ao código `7e5d1f2` desta revisão. A análise abaixo refere-se a essa versão específica, não comprova implantação ou correção em produção.
@@ -709,7 +723,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [x] F10: calendário acompanha o breakpoint via evento de `resize`; seleção parcial 640→639 preserva datas, fecha o diálogo e devolve foco ao controle móvel visível. Teste automatizado, navegador local e PR #94. Catálogo simulado, busca não submetida.
 - [ ] Delimitar portais ao diálogo correto e revisar modais aninhados (F07).
 - [x] F17: em 640–839 px, o CTA reduz para ícone com nome acessível e o texto de hóspedes fica em uma linha, truncado com reticências quando longo. Navegador local passou em 640, 768 e 840 px, sem overflow horizontal. Zoom e rótulos longos pendentes. PR #93.
-- [ ] Inspecionar os botões relatados sobrepostos com captura e reprodução por largura, altura, zoom e conteúdo longo; registrar local e causa antes de corrigir.
+- [x] F56: botão da Sofia sobrepunha “Tentar novamente” em viewport baixo; reproduzido e corrigido na prévia local. A interseção caiu a zero em 640 × 400, 641 × 400 e 743 × 500, inclusive hover em 740 × 400; teste de nome acessível, foco visível, lint/TypeScript, build e diff check passaram. Branch `codex/ux-f56-short-height-actions`, implementação `5a89312`, [PR #96](https://github.com/centraldereservascaldas/hospeda-reservas/pull/96), base `codex/ux-f46-checkout-narrow`. Zoom, leitor de tela e dispositivo físico pendentes.
 
 ### Onda 3 · Imóvel e checkout
 
