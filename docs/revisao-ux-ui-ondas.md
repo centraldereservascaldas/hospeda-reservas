@@ -181,7 +181,9 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 
 **Confirmado em produção em 26/11/2026, na sessão isolada de teste:** após gravar uma lista de favoritos vazia e recarregar a página, o armazenamento passou a conter dois IDs. O estado anterior da sessão foi restaurado em seguida. O teste verifica a persistência do estado, não a apresentação dos dois imóveis em todas as consultas.
 
-**Impacto provável:** a lista deixa de refletir a escolha explícita e o estado vazio não persiste. **Ação:** distinguir ausência de dados, armazenamento inválido e lista vazia válida; verificar se existe migração necessária para IDs antigos. **Verificação:** remover todos, recarregar e confirmar lista vazia; iniciar em armazenamento limpo e testar dados inválidos. Não foi alterado o armazenamento do usuário para reproduzir.
+**Impacto provável:** a lista deixa de refletir a escolha explícita e o estado vazio não persiste. **Correção local:** `readSavedPropertyIds` agora trata armazenamento ausente, inválido e `[]` como lista vazia, elimina IDs de demonstração e remove duplicatas. Testes cobrem armazenamento limpo/inválido, toggle, persistência e recriação do hook.
+
+**Limite de migração:** versões anteriores podiam gravar `JQ08G` e `stays-lacqua-204` como favoritos padrão. O formato não registra se esses IDs vieram do padrão ou de uma ação explícita; a mudança preserva IDs já gravados para não apagar escolhas silenciosamente. Portanto, a regressão deixa de ocorrer para dados ausentes/vazios, mas a limpeza dos valores legados permanece pendente de decisão de produto.
 
 ### F12 · P2 · Favoritos dependem do resultado atual
 
@@ -189,7 +191,9 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 
 **Confirmado em produção em 26/11/2026, sessão isolada a 320 × 700:** salvei o imóvel LG02J, que acomoda cinco pessoas, e abri uma busca de dez adultos sem resultados; a tela de favoritos informou que a lista estava vazia, embora o ID ainda constasse no armazenamento. O estado anterior da sessão foi restaurado depois do teste. Não foi usada conta autenticada.
 
-**Ação:** obter os imóveis salvos independentemente da página atual, com estados de carregamento, indisponível e erro. **Verificação:** salvar dois imóveis, buscar um intervalo que retorne somente um, abrir favoritos, recarregar e conferir ambos sem repetir consultas desnecessárias. Reprodução visual ainda pendente.
+**Correção local:** `useExploreCatalogViewModel` resolve IDs usando o catálogo completo existente mais os resultados atuais da busca, com prioridade para o objeto mais atual da busca. O estado da consulta do catálogo completo é separado do estado da pesquisa. Favoritos disponíveis permanecem visíveis em carregamento/falha; há tentativa de recuperação, e IDs sem correspondência só são marcados indisponíveis após carga completa bem-sucedida. A remoção desses IDs é explícita, sem apagá-los automaticamente.
+
+**Verificação:** testes direcionados cobrem resultado salvo fora da pesquisa, falha com e sem cache, retry e IDs ausentes. Na interface local isolada a 320 px, a lista vazia não teve overflow; salvar um imóvel mostrou o cartão, remover o último e recarregar manteve a lista vazia. O app estava em simulação e `/api/resorts` respondeu 503; não foi validado um catálogo Stays ao vivo nem a matriz visual completa. Implementação e testes estão no [PR #119](https://github.com/centraldereservascaldas/hospeda-reservas/pull/119), aguardando revisão.
 
 ### F13 · P2 · Cadastro perde a explicação de erro local
 
@@ -748,7 +752,9 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 ### Onda 5 · Regressão e áreas complementares
 
-- [ ] Corrigir persistência e recuperação de favoritos sem depender da pesquisa atual (F11 e F12), com estados vazios e falhas distintos.
+- [x] F11: impedir favoritos padrão para armazenamento ausente/vazio e manter `[]` após recarregar. Testes de hook e verificação local a 320 px passaram.
+- [ ] Decidir o tratamento dos IDs padrão já gravados em versões anteriores. O armazenamento não distingue seed de escolha explícita; nenhum valor legado é apagado automaticamente.
+- [x] F12: resolver favoritos pelo catálogo completo, independente da pesquisa atual; cobrir estados de carregamento, cache desatualizado, falha/retry e IDs ausentes. 37 testes direcionados, lint/TypeScript e build passaram; navegador local isolado a 320 px validou o estado vazio e um cartão salvo. API local em simulação, sem validação do catálogo Stays ao vivo. PR #119 aguarda revisão.
 - [ ] Preservar mensagens de validação local no cadastro e associá-las aos campos (F13).
 - [ ] Impedir que respostas antigas do painel do proprietário substituam o período mais recente (F14).
 - [ ] Neutralizar interpretação de fórmulas em campos textuais da exportação financeira e validar planilhas suportadas (F52).
@@ -761,6 +767,18 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Revisar filtros, estados vazios/erro, favoritos, login, diretório de condomínios, conta e proprietário conforme acesso autorizado, registrando estados não disponíveis.
 - [ ] Executar verificações proporcionais por mudança e comparar com o checklist de `docs/frontend-quality-plan.md`; registrar resultado e limitações por onda.
 
+### Execução da Goal · 27/11/2026 · Pacote F11/F12
+
+**Observação:** a lista de IDs de favoritos vazia era convertida em dois IDs padrão; a tela de favoritos também filtrava apenas a coleção visível da busca. `useAccommodationCatalog` já carrega e mantém separadamente o catálogo completo, então não foi necessária uma nova chamada de catálogo.
+
+**Interpretação:** o primeiro comportamento inventa escolhas em visitas novas e desfaz a lista vazia após recarga. O segundo oculta favoritos que não estão na página de resultados atual. Falhas do catálogo completo não podem ser inferidas do estado da pesquisa porque pesquisas podem atualizar a lista visível depois de um erro.
+
+**Mudança:** armazenamento ausente/inválido/vazio inicia vazio; IDs válidos são mantidos, deduplicados e IDs de demonstração são filtrados. A tela resolve favoritos pelo catálogo completo e pelos resultados atuais, mantém cartões em cache durante erro, permite tentar novamente e só mostra IDs indisponíveis após resposta completa sem falha. Nenhuma exclusão é automática. Implementação: commit `f661ac3`.
+
+**Validação:** 37 testes direcionados passaram (`savedPropertyIds`, hook, catálogo, view model e `MainContentRouter`); `npm run lint` passou com um warning preexistente em `PropertyDetailModal.tsx:229`; `npm run build` passou, com os avisos existentes de fonte não resolvida e bundle acima de 500 kB; `git diff --check` passou. Em navegador local isolado, a 320 px, foram conferidos estado vazio, cartão salvo, remoção do último favorito e persistência vazia após recarga; não houve overflow horizontal. Não houve reserva nem pagamento.
+
+**Limites:** o ambiente local estava em simulação e `/api/resorts` respondeu 503; a validação visual não usou catálogo Stays real nem cobriu toda a matriz de tamanhos/teclado/leitor de tela. IDs padrão já persistidos não têm proveniência; a mudança os preserva e deixa sua migração como decisão de produto. O PR #119 permanece aguardando revisão; sem merge ou deploy.
+
 ## Limites e pendências da investigação
 
 | Área | Evidência já obtida | Ainda não comprovado |
@@ -769,7 +787,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 | Busca móvel | Em 320 × 700 no simulador e na produção: seleção de todos os condomínios, datas de 1 a 3/12/2026, ajuste para dois adultos e busca com resultados e parâmetros correspondentes. Na produção, a abertura de LI23J e o avanço até o checkout preservaram os parâmetros da viagem. | Outras combinações e falhas, teclado e leitores de tela em aparelhos físicos. |
 | Imóvel | Abertura e informações em produção, inclusive F29 em link direto, inspeção local e análise de disponibilidade, cotação e hóspedes. Em produção a 320 × 700, a galeria abriu, avançou da primeira para a segunda foto e Escape retornou foco ao controle de abertura. F27 foi reproduzido na interface com HTTP 503 interceptado localmente e nova tentativa bem-sucedida. Após busca simulada, o detalhe preservou datas e hóspedes e desativou reserva de dados simulados. | Outras falhas de preço, caminhos adicionais de F29, galeria e regras em outros estados e dispositivos. |
 | Checkout | Pix, cartão e parcelas até antes de inserir dados ou aceitar condições em produção; prévia local e recuperação de erro local. Em 320 × 700 na produção, acesso direto exibiu resumo e campos, e a troca para Pix atualizou o total de R$ 245,72 para R$ 231,00 na cotação consultada; o botão permaneceu desabilitado sem dados e aceite. Em 1024 × 400, capturas do topo, das condições e aceite e da região inferior do cartão não mostraram sobreposição; uma inspeção geométrica dos botões, inputs e selects no diálogo não encontrou interseções nem overflow horizontal. Não foram preenchidos campos nem marcadas condições; outros estados não foram cobertos. Foram confirmados o retorno que reabre o checkout (F37) e o caminho sem credenciais com referência fictícia (F40). Cenários específicos de cópia, expiração e falha de consulta Pix foram reproduzidos com respostas simuladas (F35, F36 e F39). | Criação de pedido e processamento real, outros estados de expiração e cópia, rejeição, recuperação autenticada entre dispositivos e matriz responsiva. |
-| Conta, favoritos e proprietário | Análise de código e cenários F11–F14 e F38. Em produção, o menu desconectado abriu o cadastro e Escape retornou foco a “Minha Conta”; F11 e F12 foram reproduzidos em sessão isolada. F13 foi submetido com dados fictícios e requisições de escrita bloqueadas; F38 foi reproduzido com APIs simuladas. | Cadastro real, outras validações submetidas, jornadas autenticadas, permissões e estados com dados reais; cenários restantes de F38. |
+| Conta, favoritos e proprietário | Análise de código e cenários F11–F14 e F38. Em produção, o menu desconectado abriu o cadastro e Escape retornou foco a “Minha Conta”; F11 e F12 foram reproduzidos em sessão isolada. A correção F11/F12 foi testada em 37 casos direcionados e visualmente a 320 px em navegador local isolado. F13 foi submetido com dados fictícios e requisições de escrita bloqueadas; F38 foi reproduzido com APIs simuladas. | Decisão sobre valores de favoritos padrão já persistidos; catálogo real e reflow além de 320 px; cadastro real, outras validações submetidas, jornadas autenticadas, permissões e estados com dados reais; cenários restantes de F38. |
 | Componentes e tokens | Inventário inicial, relações do grafo e leitura direta de componentes. | Medição de contraste, análise completa de movimento reduzido e validação com usuários. |
 
 Em produção a 640 × 400 CSS px, a página inicial não apresentou overflow horizontal na medição do documento (640 px de conteúdo e viewport). Ao abrir hóspedes, o painel ocupou aproximadamente 608 × 376 px a partir de (16, 16), com os controles de adultos, crianças, bebês e pets presentes no texto. Essa medição não verifica se todos os controles são alcançáveis, se o texto está cortado dentro de elementos filhos ou se há colisões no painel. Em nova amostra na mesma dimensão, os nove controles do painel estavam dentro do viewport e seus pontos centrais correspondiam aos próprios controles na inspeção geométrica; os quatro botões de redução estavam desabilitados nos valores mínimos. Aumentar adultos atualizou o botão para “Quem: 2 hóspedes”; Escape fechou o painel e devolveu o foco a esse botão. Isso não verifica outros tamanhos, todo o percurso por teclado ou leitores de tela. O teste usou redimensionamento do viewport, não zoom de navegador; a verificação real com zoom de 200% continua pendente. A sessão foi fechada ao final.
