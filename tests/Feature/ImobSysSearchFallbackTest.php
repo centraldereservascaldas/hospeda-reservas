@@ -107,6 +107,17 @@ class ImobSysSearchFallbackTest extends TestCase
         $this->assertNull(app(ImobSysSearchClient::class)->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663'));
     }
 
+    public function test_search_rejects_offer_without_valid_observation_timestamp(): void
+    {
+        Http::preventStrayRequests();
+        $offer = ['id' => 'imobsys-crcn-2-663', 'capacity' => 5, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'nights' => 2, 'totalCents' => 52300, 'currency' => 'BRL', 'status' => 'offer_observed', 'availabilityConfirmed' => false, 'reservationGuaranteed' => false];
+        $body = ['success' => true, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'expiresAt' => now()->addSeconds(20)->toIso8601String(), 'offers' => [$offer], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false]];
+        Http::fakeSequence()->push($body)->push([...$body, 'observedAt' => now()->addMinute()->toIso8601String()])->push([...$body, 'observedAt' => now()->addSeconds(3)->toIso8601String(), 'expiresAt' => now()->addSecond()->toIso8601String()]);
+        $client = app(ImobSysSearchClient::class);
+        for ($i = 0; $i < 3; $i++) $this->assertNull($client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663'));
+        Http::assertSentCount(3);
+    }
+
     public function test_production_partner_detail_requires_feature_flag_and_specific_property(): void
     {
         $originalEnvironment = $this->app['env'];
@@ -150,6 +161,7 @@ class ImobSysSearchFallbackTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
+                'observedAt' => now()->toIso8601String(),
                 'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true, 'source' => 'imobsys-live', 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 1,
             'offers' => [[
@@ -198,6 +210,7 @@ class ImobSysSearchFallbackTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
+                'observedAt' => now()->toIso8601String(),
                 'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true, 'source' => 'imobsys-live', 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2,
             'offers' => [[
@@ -490,6 +503,7 @@ class ImobSysSearchFallbackTest extends TestCase
         Http::fake([
             'https://stays.test/external/v1/booking/search-listings' => Http::response([]),
             'https://api.example.test/v1/offers*' => Http::response([
+                'observedAt' => now()->toIso8601String(),
                 'expiresAt' => now()->addSeconds(20)->toIso8601String(),
                 'success' => true,
                 'source' => 'imobsys-live',
@@ -562,6 +576,7 @@ class ImobSysSearchFallbackTest extends TestCase
         Http::fake([
             'https://stays.test/external/v1/booking/search-listings' => Http::response([]),
             'https://api.example.test/v1/offers*' => Http::response([
+                'observedAt' => now()->toIso8601String(),
                 'expiresAt' => now()->addSeconds(20)->toIso8601String(),
                 'success' => true,
                 'source' => 'imobsys-live',

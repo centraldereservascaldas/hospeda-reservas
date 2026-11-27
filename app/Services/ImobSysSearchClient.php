@@ -62,6 +62,9 @@ class ImobSysSearchClient
                     }
 
                     $observedAt = $payload['observedAt'] ?? null;
+                    if ($pageOffers !== [] && (! is_string($observedAt) || strtotime($observedAt) === false || strtotime($observedAt) > now()->addSeconds(5)->timestamp)) {
+                        return null;
+                    }
                     if ($fresh && (! is_string($observedAt) || strtotime($observedAt) === false || strtotime($observedAt) < now()->subSeconds(30)->timestamp || strtotime($observedAt) > now()->addSeconds(5)->timestamp)) {
                         return null;
                     }
@@ -70,6 +73,9 @@ class ImobSysSearchClient
                         return null;
                     }
                     if (($supplierExpiresAt !== null || $pageOffers !== []) && (! is_string($supplierExpiresAt) || strtotime($supplierExpiresAt) === false || strtotime($supplierExpiresAt) <= now()->timestamp)) {
+                        return null;
+                    }
+                    if ($pageOffers !== [] && strtotime($supplierExpiresAt) <= strtotime($observedAt)) {
                         return null;
                     }
                     if (! is_string($observedAt) || strtotime($observedAt) === false) {
