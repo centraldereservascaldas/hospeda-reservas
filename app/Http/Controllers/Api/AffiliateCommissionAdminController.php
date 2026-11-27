@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\ApproveAffiliateCommissionRequest;
 use App\Http\Requests\MarkAffiliateCommissionPaidRequest;
 use App\Services\AffiliateCommissionAuditRecorder;
+use App\Services\AffiliateCommissionCalculator;
 use App\Services\AffiliateCommissionEligibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,7 @@ use Illuminate\Support\Facades\DB;
 
 class AffiliateCommissionAdminController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, AffiliateCommissionCalculator $calculator): JsonResponse
     {
         $page = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:100000']])['page'] ?? 1;
         $items = DB::table('affiliate_conversions as conversion')
@@ -28,6 +29,15 @@ class AffiliateCommissionAdminController extends Controller
                 'booking.check_in', 'booking.check_out', 'booking.reservation_status', 'booking.payment_status', 'booking.quote_total',
                 'booking.currency', 'conversion.commission_basis_points', 'conversion.status', 'conversion.approved_amount_cents',
                 'conversion.created_at'], 'page', $page);
+        $items->getCollection()->transform(function (object $item) use ($calculator): object {
+            $item->calculated_amount_cents = $calculator->calculateCents(
+                (string) $item->quote_total,
+                (string) $item->currency,
+                $item->commission_basis_points === null ? null : (int) $item->commission_basis_points,
+            );
+
+            return $item;
+        });
 
         return response()->json(['success' => true, 'commissions' => $items->items(), 'hasMore' => $items->hasMorePages()])
             ->header('Cache-Control', 'private, no-store');
@@ -60,6 +70,7 @@ class AffiliateCommissionAdminController extends Controller
         ApproveAffiliateCommissionRequest $request,
         int $id,
         AffiliateCommissionEligibility $eligibility,
+        AffiliateCommissionCalculator $calculator,
         AffiliateCommissionAuditRecorder $audit,
     ): JsonResponse {
         $reviewer = $request->attributes->get('verified_guest');
@@ -67,24 +78,32 @@ class AffiliateCommissionAdminController extends Controller
             return response()->json(['success' => false, 'code' => 'invalid_session'], 401);
         }
 
-        $approved = DB::transaction(function () use ($request, $reviewer, $id, $eligibility, $audit): bool {
+        $approved = DB::transaction(function () use ($request, $reviewer, $id, $eligibility, $calculator, $audit): bool {
             $conversion = DB::table('affiliate_conversions')->where('id', $id)->lockForUpdate()->first();
             if (! $conversion) {
                 return false;
             }
             $booking = DB::table('direct_booking_orders')->where('id', $conversion->direct_booking_order_id)->lockForUpdate()->first();
             $decision = $eligibility->evaluate($booking);
-            $eligible = $conversion->status === AffiliateCommissionStatus::Pending->value && $decision['eligible'];
+            $amountCents = $booking === null ? null : $calculator->calculateCents(
+                (string) $booking->quote_total,
+                (string) $booking->currency,
+                $conversion->commission_basis_points === null ? null : (int) $conversion->commission_basis_points,
+            );
+            $eligible = $conversion->status === AffiliateCommissionStatus::Pending->value
+                && $decision['eligible'] && $amountCents !== null;
             $audit->record($id, $reviewer->id, $eligible ? 'approved' : 'approval_blocked', $conversion->status,
                 $eligible ? AffiliateCommissionStatus::Approved->value : $conversion->status, [
-                    'reasons' => $eligible ? [] : [...$decision['reasons'], ...($conversion->status === AffiliateCommissionStatus::Pending->value ? [] : ['commission_not_pending'])],
+                    'reasons' => $eligible ? [] : [...$decision['reasons'], ...($amountCents === null ? ['commission_amount_unavailable'] : []), ...($conversion->status === AffiliateCommissionStatus::Pending->value ? [] : ['commission_not_pending'])],
                     'conversion' => [
                         'affiliate_user_id' => $conversion->affiliate_user_id,
                         'booking_order_id' => $conversion->direct_booking_order_id,
                         'commission_basis_points' => $conversion->commission_basis_points,
                     ],
                     'booking' => $decision['evidence'],
-                    'requested_amount_cents' => $eligible ? $request->validated('amountCents') : null,
+                    'calculated_amount_cents' => $eligible ? $amountCents : null,
+                    'commission_basis_points' => $conversion->commission_basis_points ?? AffiliateCommissionCalculator::DEFAULT_BASIS_POINTS,
+                    'calculation_version' => AffiliateCommissionCalculator::VERSION,
                     'reason' => $request->validated('reason'),
                 ]);
 
@@ -94,7 +113,7 @@ class AffiliateCommissionAdminController extends Controller
 
             DB::table('affiliate_conversions')->where('id', $id)->update([
                 'status' => AffiliateCommissionStatus::Approved->value,
-                'approved_amount_cents' => $request->validated('amountCents'),
+                'approved_amount_cents' => $amountCents,
                 'reviewed_at' => now(),
                 'reviewed_by' => $reviewer->id,
                 'updated_at' => now(),

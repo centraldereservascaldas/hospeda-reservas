@@ -184,6 +184,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
         $this->withToken('test')->getJson('/api/owner/admin/affiliate-commissions')->assertOk()
             ->assertJsonPath('commissions.0.nickname', 'afiliado-exemplo')
             ->assertJsonPath('commissions.0.short_link_token', 'journeyTest01')
+            ->assertJsonPath('commissions.0.calculated_amount_cents', 15005)
             ->assertJsonPath('commissions.0.last_clicked_at', now()->toDateTimeString());
         $approval = ['amountCents' => 15000, 'reason' => 'Hospedagem conferida após checkout.'];
         $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/approve', $approval)->assertStatus(409);
@@ -192,7 +193,7 @@ class DirectCheckoutIntegratedJourneyTest extends TestCase
             'check_out' => now()->subDay()->toDateString(),
         ]);
         $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/approve', $approval)->assertOk();
-        $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'affiliate_user_id' => $affiliateId, 'status' => 'approved', 'approved_amount_cents' => 15000]);
+        $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'affiliate_user_id' => $affiliateId, 'status' => 'approved', 'approved_amount_cents' => 15005]);
         $this->withToken('test')->postJson('/api/owner/admin/affiliate-commissions/'.$conversion->id.'/mark-paid', ['paymentReference' => 'manual-test'])->assertOk();
         $this->assertDatabaseHas('affiliate_conversions', ['id' => $conversion->id, 'status' => 'paid', 'payment_reference' => 'manual-test']);
 

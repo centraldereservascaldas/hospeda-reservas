@@ -18,7 +18,7 @@ Este checklist detalha segurança, performance, integridade e banco de dados. Pa
 
 ## Bloqueadores antes de produção
 
-- [ ] **P1 · Regra monetária da comissão.** O painel ainda envia `amountCents` escolhido pelo operador. Definir base de cálculo, moeda, arredondamento, tratamento de descontos/reembolsos, versão da regra e validação server-side. Não autorizar repasse enquanto o valor puder ser definido livremente sem reconciliação com contrato e reserva.
+- [ ] **P1 · Homologar a regra monetária da comissão.** A aprovação calcula no servidor sobre `quote_total` BRL usando os basis points congelados na conversão (padrão 3,5%) e registra versão, taxa e valor no evento de auditoria; o valor enviado pelo cliente não é usado. Confirmar o mapeamento do campo da Stays e regras para descontos, cancelamento e reembolso antes de liberar repasses em produção.
 - [ ] **P1 · Evidência confiável de estadia concluída.** A documentação pública da API Stays descreve estados de reserva, mas não estabelece por si só uma confirmação de checkout do hóspede. Consultar a integração e a conta Stays em uso. Até existir sinal confiável, a aprovação deve depender de conferência humana registrada com referência verificável.
 - [ ] **P1 · Operação que conclui o pedido.** A proteção atual exige `status=concluido`, data de checkout passada, `reservation_status=booked` e pagamento aprovado. O fluxo normal ainda não produz esse estado de conclusão; não marcar automaticamente apenas por data. Definir operação autorizada e auditada para confirmação de checkout.
 - [ ] **P1 · Separação de funções financeiras.** Verificar se aprovação e registro de pagamento precisam de pessoas distintas, segundo política financeira; o sistema atual usa o mesmo papel administrativo.

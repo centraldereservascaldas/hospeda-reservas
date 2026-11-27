@@ -22,7 +22,9 @@ type Commission = {
   payment_status: string | null;
   status: string;
   approved_amount_cents: number | null;
+  calculated_amount_cents: number | null;
   quote_total: string;
+  currency: string;
   commission_basis_points: number | null;
 };
 type CommissionEvent = {
@@ -65,8 +67,15 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
           apiFetch('/api/owner/admin/affiliate-listings', { headers }).catch(() => null),
         ]);
       if (version !== requestVersion.current) return;
-      if (accountsResponse.status === 403 || accountsResponse.status === 503) {
+      if (accountsResponse.status === 401 || accountsResponse.status === 403 || accountsResponse.status === 503) {
         setAuthorized(false);
+        setAccounts([]);
+        setApprovedAccounts([]);
+        setCommissions([]);
+        setCommissionEvents({});
+        if (accountsResponse.status === 401) {
+          setMessage('Sua sessão expirou. Saia da conta e entre novamente para reabrir a administração.');
+        }
         return;
       }
       if (!accountsResponse.ok || !commissionsResponse.ok || !approvedResponse.ok)
@@ -153,16 +162,17 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                   min="0"
                   max="100"
                   step="0.01"
-                  value={values[account.user_id] || ''}
+                  value={values[account.user_id] ?? '3.5'}
                   onChange={(e) => setValues({ ...values, [account.user_id]: e.target.value })}
                 />
               </label>
               <button className="affiliate-secondary"
                 type="button"
                 onClick={() => {
-                  const number = Number(values[account.user_id]);
+                  const raw = values[account.user_id] ?? '3.5';
+                  const number = Number(raw);
                   if (
-                    !values[account.user_id] ||
+                    !raw ||
                     !Number.isFinite(number) ||
                     number < 0 ||
                     number > 100
@@ -353,17 +363,16 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
               )}
               {item.status === 'pending' && (
                 <>
-                  <label>
-                    Valor em reais{' '}
-                    <input
-                      className="border p-1"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={values[`c${item.id}`] || ''}
-                      onChange={(e) => setValues({ ...values, [`c${item.id}`]: e.target.value })}
-                    />
-                  </label>
+                  <p>
+                    Comissão estimada pelo servidor:{' '}
+                    {item.calculated_amount_cents === null
+                      ? 'indisponível para esta reserva'
+                      : new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: item.currency,
+                        }).format(item.calculated_amount_cents / 100)}{' '}
+                    ({((item.commission_basis_points ?? 350) / 100).toLocaleString('pt-BR')}% do valor da reserva)
+                  </p>
                   <label>
                     Motivo da aprovação{' '}
                     <textarea
@@ -377,19 +386,12 @@ export function AffiliateAdminPanel({ token }: { token: string }) {
                   <button className="affiliate-secondary"
                     type="button"
                     onClick={() => {
-                      const number = Number(values[`c${item.id}`]);
                       const reason = (values[`r${item.id}`] || '').trim();
-                      if (
-                        !Number.isFinite(number) ||
-                        number <= 0 ||
-                        Math.round(number * 100) > 9999999999 ||
-                        reason.length < 10
-                      ) {
-                        setMessage('Informe um valor e um motivo de pelo menos 10 caracteres.');
+                      if (reason.length < 10) {
+                        setMessage('Informe um motivo de pelo menos 10 caracteres.');
                         return;
                       }
                       void submit(`/api/owner/admin/affiliate-commissions/${item.id}/approve`, {
-                        amountCents: Math.round(number * 100),
                         reason,
                       });
                     }}

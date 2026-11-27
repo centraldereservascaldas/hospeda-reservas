@@ -57,6 +57,7 @@ export function AffiliatePortal() {
   const [conversionPage, setConversionPage] = useState(1);
   const [conversionMore, setConversionMore] = useState(false);
   const [message, setMessage] = useState('');
+  const [requestingAccess, setRequestingAccess] = useState(false);
   const activeToken = useRef<string | null>(null);
   const loadVersion = useRef(0);
   const visibleProperties = properties.filter((property) =>
@@ -166,13 +167,24 @@ export function AffiliatePortal() {
   }
 
   async function requestAccess() {
-    if (!session) return;
-    const response = await apiFetch('/api/affiliate/access', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (response.ok) await load(session.access_token);
-    else setMessage('Não foi possível solicitar acesso.');
+    if (!session || requestingAccess) return;
+    setRequestingAccess(true);
+    setMessage('');
+    try {
+      const response = await apiFetch('/api/affiliate/access', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (response.ok) {
+        await load(session.access_token);
+      } else {
+        setMessage('Não foi possível solicitar acesso. Tente novamente.');
+      }
+    } catch {
+      setMessage('Não foi possível conectar ao serviço. A solicitação não foi confirmada. Tente novamente.');
+    } finally {
+      setRequestingAccess(false);
+    }
   }
 
   async function generateLink(id: string) {
@@ -259,8 +271,8 @@ export function AffiliatePortal() {
         </form>
       )}
       {status === 'none' && (
-        <button type="button" onClick={() => void requestAccess()}>
-          Solicitar acesso de afiliado
+        <button type="button" disabled={requestingAccess} onClick={() => void requestAccess()}>
+          {requestingAccess ? 'Enviando solicitação…' : 'Solicitar acesso de afiliado'}
         </button>
       )}
       {status === 'pending' && <p>Seu acesso está aguardando aprovação da Central.</p>}

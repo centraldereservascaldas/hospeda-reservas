@@ -23,7 +23,6 @@ class ApproveAffiliateCommissionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'amountCents' => ['required', 'integer', 'min:1', 'max:9999999999'],
             'reason' => ['required', 'string', 'min:10', 'max:500'],
         ];
     }

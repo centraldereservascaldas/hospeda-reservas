@@ -195,14 +195,14 @@ class AffiliateAccessTest extends TestCase
                 'operational_events' => '[]', 'created_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('affiliate_conversions')->insert(['affiliate_user_id' => $affiliate, 'direct_booking_order_id' => $order,
-                'status' => 'pending', 'created_at' => now(), 'updated_at' => now()]);
+                'commission_basis_points' => 350, 'status' => 'pending', 'created_at' => now(), 'updated_at' => now()]);
         }
         $this->withToken('test')->getJson('/api/affiliate/dashboard')->assertOk()
             ->assertJsonCount(1, 'conversions')->assertJsonPath('conversions.0.listing_id', 'listing-0')
             ->assertJsonPath('conversions.0.commission_status', 'pending')->assertDontSee('private@example.test');
         $conversionId = DB::table('affiliate_conversions')->where('affiliate_user_id', $id)->value('id');
         config(['services.hospeda.owner_admin_emails' => ['admin@example.test']]);
-        $approval = ['amountCents' => 5000, 'reason' => 'Reserva validada pela equipe.'];
+        $approval = ['amountCents' => 1, 'reason' => 'Reserva validada pela equipe.'];
         $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", $approval)->assertForbidden();
         config(['services.hospeda.owner_admin_emails' => ['affiliate@example.test']]);
         $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", ['amountCents' => 5000])->assertUnprocessable();
@@ -224,9 +224,10 @@ class AffiliateAccessTest extends TestCase
         $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", $approval)->assertOk();
         $this->withToken('test')->getJson("/api/owner/admin/affiliate-commissions/{$conversionId}/events")
             ->assertJsonPath('events.3.type', 'approved')
-            ->assertJsonPath('events.3.evidence.reason', 'Reserva validada pela equipe.');
+            ->assertJsonPath('events.3.evidence.reason', 'Reserva validada pela equipe.')
+            ->assertJsonPath('events.3.evidence.calculated_amount_cents', 350);
         $this->withToken('test')->postJson("/api/owner/admin/affiliate-commissions/{$conversionId}/approve", $approval)->assertStatus(409);
-        $this->withToken('test')->getJson('/api/affiliate/dashboard')->assertJsonPath('conversions.0.approved_amount_cents', 5000);
+        $this->withToken('test')->getJson('/api/affiliate/dashboard')->assertJsonPath('conversions.0.approved_amount_cents', 350);
         DB::table('direct_booking_orders')->where('id', '62f03c01-e16a-4acf-817e-88f54cc62201')
             ->update(['status' => 'reembolsado', 'payment_status' => 'refunded']);
         $this->withToken('test')->getJson('/api/affiliate/dashboard')
