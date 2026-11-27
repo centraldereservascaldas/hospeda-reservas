@@ -21,6 +21,7 @@ class ExistingReservationThreePaymentsJourneyTest extends TestCase
         $this->assertSame('sqlite', DB::connection()->getDriverName());
         $this->assertSame(':memory:', config('database.connections.sqlite.database'));
         $this->artisan('migrate');
+        $this->useLegacyExistingReservationFixtures();
     }
 
     public function test_deposit_and_remaining_balance_are_settled_sequentially(): void

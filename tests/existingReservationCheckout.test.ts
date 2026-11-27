@@ -46,7 +46,7 @@ test('recovers a lost checkout response without the reservation summary', async 
     return new Response('{}', { status: 503 });
   };
   try {
-    render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.equal(getCheckoutResumeToken(reference), token));
     assert.equal(secretSent, secret);
     assert.equal(
@@ -106,7 +106,7 @@ test('existing reservation displays server data without enabling payment', async
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
   try {
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
     assert.ok(view.getByText(/13\/11\/2026 – 16\/11\/2026/));
     assert.ok(view.getAllByText(/197,50/).length > 0);
@@ -149,7 +149,7 @@ test('an unrecorded candidate is shown for review without offering payment', asy
           { status: 200 },
         );
   try {
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getAllByText('Em aberto').length > 0));
     assert.match(view.getAllByText(/1\.016,00/)[0].textContent || '', /1\.016,00/);
     assert.equal(view.queryByRole('button', { name: /pagar/i }), null);
@@ -189,7 +189,7 @@ test('checkout identifies Pix accessibly and does not imply unavailable card ins
           { status: 200 },
         );
   try {
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pague com Pix' })));
     assert.equal((view.getByLabelText('Telefone') as HTMLInputElement).type, 'tel');
     const phone = view.getByLabelText('Telefone') as HTMLInputElement;
@@ -248,7 +248,7 @@ test('accessible reservation details and card pricing follow the chosen installm
   };
   try {
     window.history.replaceState(null, '', '/checkout/ZX91K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K', accessToken: 'test-access-token' }));
     await waitFor(() =>
       assert.ok(view.getByRole('region', { name: 'Dados e pagamento da reserva' })),
     );
@@ -392,7 +392,7 @@ test('experimental unrecorded balance starts a pending Pix only after explicit c
   };
   try {
     window.history.replaceState(null, '', '/checkout/ZX91K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getAllByText('Em aberto').length > 0));
     assert.ok(view.getByText(/Este valor está em aberto/));
     assert.ok(view.getByText(/depois que a Cielo confirmar a transação/i));
@@ -523,7 +523,7 @@ test('experimental unrecorded balance shows selected card price and submits only
   };
   try {
     window.history.replaceState(null, '', '/checkout/ZX91K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.click(view.getByLabelText('Cartão em até 6x'));
     fireEvent.change(view.getByLabelText('CPF do titular da reserva'), {
@@ -593,7 +593,7 @@ test('reservation lookup failure provides retry and a support link without a fic
     return new Response('{}', { status: 503 });
   };
   try {
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByRole('alert')));
     const support = view.getByRole('link', { name: /whatsapp/i }) as HTMLAnchorElement;
     const message = new URL(support.href).searchParams.get('text')!;
@@ -656,7 +656,7 @@ for (const [code, message] of [
     };
     try {
       window.history.replaceState(null, '', '/checkout/ZX91K');
-      const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
+      const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K', accessToken: 'test-access-token' }));
       await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
       fireEvent.change(view.getByLabelText('CPF do titular da reserva'), {
         target: { value: '52998224725' },
@@ -739,7 +739,7 @@ test('an interrupted checkout preparation retries with the same idempotency key 
   };
   try {
     window.history.replaceState(null, '', '/checkout/ZX91K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZX91K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.change(view.getByLabelText('CPF do titular da reserva'), {
       target: { value: '52998224725' },
@@ -835,7 +835,7 @@ test('a prepared card order keeps its payment method and installments fixed afte
   };
   try {
     window.history.replaceState(null, '', '/checkout/ZY92K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.click(view.getByLabelText('Cartão em até 6x'));
     fireEvent.change(view.getByLabelText('CPF do titular da reserva'), {
@@ -963,7 +963,7 @@ test('Pix form creates a checkout and submits payment using only the resume toke
       '',
       '/checkout/ZY92K?utm_source=google&gclid=synthetic-click&token=not-a-credential',
     );
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.change(view.getByLabelText('CPF do titular da reserva'), {
       target: { value: '52998224725' },
@@ -1001,7 +1001,7 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     assert.equal(body.payerIdentification.number, '52998224725');
     cleanup();
     window.history.replaceState(null, '', '/checkout/ZY92K');
-    const reopened = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const reopened = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     const link = reopened.getByRole('link', { name: 'Acompanhar pagamento' }) as HTMLAnchorElement;
     assert.equal(new URL(link.href).pathname, `/checkout/${reference}`);
     assert.equal(link.href.includes(token), false);
@@ -1009,7 +1009,7 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     assert.equal(reopened.queryByRole('button', { name: /gerar qr code pix/i }), null);
     cleanup();
     window.history.replaceState(null, '', `/checkout/ZY92K?retry=1&renewal=${reference}`);
-    const retryView = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const retryView = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(retryView.getByLabelText('Nome completo')));
     assert.ok(retryView.getByRole('button', { name: /gerar qr code pix/i }));
     fireEvent.change(retryView.getByLabelText('CPF do titular da reserva'), {
@@ -1052,7 +1052,7 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     const nextOrderReference = 'D'.repeat(40);
     window.history.replaceState(null, '', `/checkout/ZY92K?retry=1&renewal=${nextOrderReference}`);
     const secondRenewalView = render(
-      React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }),
+      React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }),
     );
     await waitFor(() => assert.ok(secondRenewalView.getByLabelText('Nome completo')));
     fireEvent.change(secondRenewalView.getByLabelText('CPF do titular da reserva'), {
@@ -1153,7 +1153,7 @@ test('a prepared order with payment disabled never starts a Pix attempt', async 
   };
   try {
     window.history.replaceState(null, '', '/checkout/ZY92K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.change(view.getByLabelText('CPF do titular da reserva'), {
       target: { value: '52998224725' },
@@ -1274,7 +1274,7 @@ test('card form sends the Cielo token and installments, not card details, to the
   };
   try {
     window.history.replaceState(null, '', '/checkout/ZY92K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
     fireEvent.change(view.getByLabelText('CPF do titular da reserva'), {
       target: { value: '52998224725' },
@@ -1352,7 +1352,7 @@ test('a server-authorized deposit shows Pix and requires a valid reservation hol
           { status: 200 },
         );
   try {
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByText('Entrada de 50%')));
     assert.equal(view.queryByLabelText(/Cartão em/), null);
     assert.ok(view.getByText(/saldo restante.*até um dia antes do check-in/i));
@@ -1402,7 +1402,7 @@ test('shows distinct server amounts for full and deposit plans', async () => {
           { status: 200 },
         );
   try {
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByText(/Entrada de 50%/i)));
     const deposit = view.getByRole('radio', { name: /Entrada de 50%/i });
     fireEvent.click(deposit);
@@ -1448,7 +1448,7 @@ test('reopening after a deposit offers only the remaining balance', async () => 
           { status: 200 },
         );
   try {
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByText('Quitar saldo restante agora')));
     assert.ok(view.getByRole('button', { name: /Gerar QR Code Pix.*197,50/ }));
     assert.equal(view.queryByText('Entrada de 50%'), null);
@@ -1543,7 +1543,7 @@ test('same-browser checkout resumes after the deposit was reconciled and offers 
   };
   try {
     window.history.replaceState(null, '', '/checkout/ZY92K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() =>
       assert.ok(view.getByRole('button', { name: /Gerar QR Code Pix.*197,50/i })),
     );
@@ -1641,7 +1641,7 @@ test('same-browser checkout stays blocked when deposit review status is missing'
   };
   try {
     window.history.replaceState(null, '', '/checkout/ZY92K');
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(view.getByRole('link', { name: 'Acompanhar pagamento' })));
     assert.equal(view.queryByRole('button', { name: /Gerar QR Code Pix/ }), null);
     assert.equal(
@@ -1668,7 +1668,7 @@ test('fully paid reservation shows only confirmation and generic WhatsApp suppor
           { status: 200 },
         );
   try {
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() =>
       assert.ok(view.getByRole('heading', { name: 'Sua reserva está confirmada e 100% paga' })),
     );

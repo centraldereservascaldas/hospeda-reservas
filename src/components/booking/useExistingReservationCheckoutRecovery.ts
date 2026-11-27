@@ -18,9 +18,11 @@ type RecoveryState = 'checking' | 'clear' | 'error';
 export function useExistingReservationCheckoutRecovery({
   code,
   renewalGeneration,
+  accessToken,
 }: {
   code: string;
   renewalGeneration: string | null;
+  accessToken: string | null;
 }) {
   const [summaryRetry, setSummaryRetry] = useState(0);
   const [recoveryRetry, setRecoveryRetry] = useState(0);
@@ -83,6 +85,7 @@ export function useExistingReservationCheckoutRecovery({
   }, [code, previousReference, previousReferenceCheckRetry, settledPreviousReference]);
 
   useEffect(() => {
+    if (!accessToken) return;
     if (previousReference) {
       setRecoveryState('clear');
       return;
@@ -98,7 +101,7 @@ export function useExistingReservationCheckoutRecovery({
       method: 'POST',
       cache: 'no-store',
       signal: controller.signal,
-      headers: { 'X-Checkout-Recovery-Secret': secret },
+      headers: { 'X-Checkout-Recovery-Secret': secret, Authorization: `Bearer ${accessToken}` },
     })
       .then(async (response) => (response.ok ? (response.json() as Promise<unknown>) : null))
       .then((data) => {
@@ -150,7 +153,7 @@ export function useExistingReservationCheckoutRecovery({
         if (!controller.signal.aborted) setRecoveryState('error');
       });
     return () => controller.abort();
-  }, [code, previousReference, renewalGeneration, recoveryRetry]);
+  }, [accessToken, code, previousReference, renewalGeneration, recoveryRetry]);
 
   return {
     previousReference,

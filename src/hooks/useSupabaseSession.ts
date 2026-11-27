@@ -19,7 +19,9 @@ export function useSupabaseSession({
   loadClient = loadConfiguredClient,
 }: UseSupabaseSessionOptions) {
   const [accountSession, setAccountSession] = useState<Session | null>(null);
-  const [accountModalMode, setAccountModalMode] = useState<AccountModalMode>(null);
+  const [accountModalMode, setAccountModalMode] = useState<AccountModalMode>(() =>
+    new URLSearchParams(window.location.search).get('conta') === 'entrar' ? 'login' : null,
+  );
   const [authCallbackNotice, setAuthCallbackNotice] = useState('');
 
   useEffect(() => {

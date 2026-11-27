@@ -23,6 +23,12 @@ class ExistingReservationCieloJourneyTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->useLegacyExistingReservationFixtures();
+    }
+
     #[DataProvider('paymentMethods')]
     public function test_booking_payment_reuses_reservation_and_settles_its_receivable(string $method, string $scenario): void
     {

@@ -20,6 +20,7 @@ class ExistingReservationBootstrapDepositFlagsTest extends TestCase
         $this->assertSame('sqlite', DB::connection()->getDriverName());
         $this->assertSame(':memory:', config('database.connections.sqlite.database'));
         $this->artisan('migrate');
+        $this->useLegacyExistingReservationFixtures();
     }
 
     public function test_bootstrap_deposit_requires_all_flags_before_and_during_attempt_claim(): void

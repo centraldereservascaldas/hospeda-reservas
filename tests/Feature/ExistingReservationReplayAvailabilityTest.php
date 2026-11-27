@@ -17,6 +17,12 @@ class ExistingReservationReplayAvailabilityTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->useLegacyExistingReservationFixtures();
+    }
+
     public function test_existing_order_can_be_recovered_without_enabling_new_payment_when_checkout_becomes_unavailable(): void
     {
         $this->withoutMiddleware(ThrottleRequests::class);

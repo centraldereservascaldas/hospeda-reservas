@@ -23,6 +23,7 @@ export function getExistingCheckoutRecoverySecret(
 export async function getOrCreateExistingCheckoutRecoverySecret(
   code: string,
   generation: string | null,
+  accessToken: string,
 ): Promise<string> {
   const existing = getExistingCheckoutRecoverySecret(code, generation);
   if (existing) return existing;
@@ -32,7 +33,7 @@ export async function getOrCreateExistingCheckoutRecoverySecret(
     request = (async () => {
       const response = await apiFetch(
         `/api/existing-reservations/${encodeURIComponent(code)}/recovery-credential`,
-        { method: 'POST', cache: 'no-store' },
+        { method: 'POST', cache: 'no-store', headers: { Authorization: `Bearer ${accessToken}` } },
       );
       const data: unknown = await response.json();
       if (

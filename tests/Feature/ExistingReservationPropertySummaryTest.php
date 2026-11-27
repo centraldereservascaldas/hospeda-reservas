@@ -11,6 +11,12 @@ use Tests\TestCase;
 
 class ExistingReservationPropertySummaryTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->useLegacyExistingReservationFixtures();
+    }
+
     public function test_summary_includes_only_public_property_details_and_booking_code(): void
     {
         config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);

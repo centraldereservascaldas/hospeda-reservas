@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Cache\RateLimiter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -11,14 +10,9 @@ use Symfony\Component\Process\Process;
 
 class SofiaController extends Controller
 {
-    public function chat(Request $request, RateLimiter $limiter): JsonResponse
+    public function chat(Request $request): JsonResponse
     {
-        $input = $request->validate(['message' => ['required', 'string', 'max:1500'], 'history' => ['nullable', 'array'], 'history.*.role' => ['required_with:history', 'in:user,assistant'], 'history.*.content' => ['required_with:history', 'string', 'max:1200']]);
-        $key = 'sofia:'.$request->ip();
-        if ($limiter->tooManyAttempts($key, 20)) {
-            return response()->json(['success' => false, 'message' => 'Muitas mensagens em pouco tempo. Aguarde alguns minutos e tente novamente.'], 429);
-        }
-        $limiter->hit($key, 600);
+        $input = $request->validate(['message' => ['required', 'string', 'max:1500'], 'history' => ['nullable', 'array', 'max:10'], 'history.*.role' => ['required_with:history', 'in:user,assistant'], 'history.*.content' => ['required_with:history', 'string', 'max:1200']]);
         $history = collect($input['history'] ?? [])->take(-10)->map(fn (array $turn): array => ['role' => $turn['role'], 'content' => trim($turn['content'])])->filter(fn (array $turn): bool => $turn['content'] !== '')->values()->all();
         $catalog = json_decode(file_get_contents(resource_path('data/stays-apartments.json')), true, flags: JSON_THROW_ON_ERROR);
         $script = 'const m=require(process.argv[1]);const c=require(process.argv[2]);process.stdout.write(JSON.stringify(m.buildSofiaFallback(process.argv[3],JSON.parse(process.argv[4]),c)))';

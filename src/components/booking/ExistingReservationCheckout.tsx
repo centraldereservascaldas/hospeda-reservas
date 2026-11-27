@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { supabase } from '../../services/supabase';
 import { checkoutPathWithStayQuery } from '../../utils/checkoutUrl';
 import {
   CieloSopCardForm,
@@ -23,7 +24,17 @@ import { LockKeyhole, QrCode } from 'lucide-react';
 
 const money = (cents: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
-export function ExistingReservationCheckout({ code }: { code: string }) {
+export function ExistingReservationCheckout({
+  code,
+  accessToken: suppliedAccessToken,
+}: {
+  code: string;
+  accessToken?: string;
+}) {
+  const [accessToken, setAccessToken] = useState<string | null>(suppliedAccessToken ?? null);
+  const [authState, setAuthState] = useState<'loading' | 'signed-out' | 'ready'>(
+    suppliedAccessToken ? 'ready' : 'loading',
+  );
   const [guest, setGuest] = useState({ fullName: '', cpf: '', email: '', phone: '' });
   const [accepted, setAccepted] = useState(false);
   const [acceptanceError, setAcceptanceError] = useState(false);
@@ -37,6 +48,33 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
       ? generation
       : null;
   });
+
+  useEffect(() => {
+    if (suppliedAccessToken) {
+      setAccessToken(suppliedAccessToken);
+      setAuthState('ready');
+      return;
+    }
+    const client = supabase;
+    if (!client) {
+      setAuthState('signed-out');
+      return;
+    }
+
+    let active = true;
+    const applySession = (session: Awaited<ReturnType<typeof client.auth.getSession>>['data']['session']) => {
+      if (!active) return;
+      setAccessToken(session?.access_token ?? null);
+      setAuthState(session?.user.email_confirmed_at ? 'ready' : 'signed-out');
+    };
+    void client.auth.getSession().then(({ data }) => applySession(data.session));
+    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => applySession(session));
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [suppliedAccessToken]);
   const {
     previousReference,
     previousReferenceBlocksPayment,
@@ -47,7 +85,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     recoveredReference,
     summaryRetry,
     retrySummary,
-  } = useExistingReservationCheckoutRecovery({ code, renewalGeneration });
+  } = useExistingReservationCheckoutRecovery({ code, renewalGeneration, accessToken });
   const {
     summary,
     completed,
@@ -58,7 +96,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     setPlan,
     method,
     setMethod,
-  } = useExistingReservationCheckoutData({ code, refreshKey: summaryRetry });
+  } = useExistingReservationCheckoutData({ code, refreshKey: summaryRetry, accessToken });
 
   const planMethods =
     plan === 'full'
@@ -81,6 +119,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
     startPix,
   } = useExistingReservationPaymentPreparation({
     code,
+    accessToken,
     renewalGeneration,
     recoveryState,
     summary,
@@ -128,6 +167,16 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
         </div>
       </header>
       <div className="mx-auto w-full max-w-6xl flex-1 px-5 pt-7 sm:px-8 sm:pt-10">
+        {authState !== 'ready' && (
+          <section className="mx-auto max-w-xl rounded-2xl border border-orange-200 bg-white p-6 shadow-sm" role="status">
+            <h1 className="text-xl font-bold">{authState === 'loading' ? 'Verificando sua sessão' : 'Entre na sua conta para continuar'}</h1>
+            <p className="mt-2 text-sm text-neutral-600">A reserva só pode ser acessada pela conta confirmada com o mesmo e-mail do titular.</p>
+            {authState === 'signed-out' && (
+              <a href={`/?conta=entrar&retorno=${encodeURIComponent(window.location.href)}`} className="mt-4 inline-flex rounded-xl bg-orange-700 px-4 py-3 font-semibold text-white">Entrar com a conta do titular</a>
+            )}
+          </section>
+        )}
+        <div hidden={authState !== 'ready'}>
         {!showCompleted && (
           <div className="mb-6">
             <h1 className="mt-1 text-3xl font-black">Confirme e pague</h1>
@@ -530,6 +579,7 @@ export function ExistingReservationCheckout({ code }: { code: string }) {
             </div>
           </>
         )}
+        </div>
       </div>
       {!showCompleted && <CheckoutFooter hideContractLink />}
     </main>
