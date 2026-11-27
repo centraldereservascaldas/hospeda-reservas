@@ -1,0 +1,364 @@
+[
+  {
+    "repetition": 1,
+    "cache": "cold",
+    "startedAt": "2026-11-04T12:23:06.655Z",
+    "status": 200,
+    "apiRequests": 0,
+    "cacheControl": "no-cache, private",
+    "cdnCache": "DYNAMIC",
+    "cdnPop": "GRU",
+    "data": {
+      "dnsMs": 170.89999999850988,
+      "connectionMs": 82.10000000149012,
+      "tlsMs": 56.600000001490116,
+      "requestWaitMs": 1089.9000000059605,
+      "ttfbMs": 1346.6000000014901,
+      "responseEndMs": 1356.2999999970198,
+      "dclMs": 1408.8999999985099,
+      "nextHopProtocol": "h2",
+      "serverTiming": [
+        {
+          "name": "cfCacheStatus",
+          "duration": 0
+        },
+        {
+          "name": "cfEdge",
+          "duration": 19
+        },
+        {
+          "name": "cfOrigin",
+          "duration": 1032
+        }
+      ],
+      "entry": "/assets/index-Ctl2nyOA.js"
+    },
+    "documentNetwork": {
+      "protocol": "h2",
+      "timing": {
+        "requestTime": 60672.934263,
+        "proxyStart": -1,
+        "proxyEnd": -1,
+        "dnsStart": 1.855,
+        "dnsEnd": 172.721,
+        "connectStart": 173.064,
+        "connectEnd": 254.85,
+        "sslStart": 198.267,
+        "sslEnd": 254.834,
+        "workerStart": -1,
+        "workerReady": -1,
+        "workerFetchStart": -1,
+        "workerRespondWithSettled": -1,
+        "sendStart": 255.105,
+        "sendEnd": 255.38,
+        "pushStart": 0,
+        "pushEnd": 0,
+        "receiveHeadersStart": 1344.925,
+        "receiveHeadersEnd": 1348.169
+      }
+    }
+  },
+  {
+    "repetition": 1,
+    "cache": "warm",
+    "startedAt": "2026-11-04T12:23:08.373Z",
+    "status": 200,
+    "apiRequests": 0,
+    "cacheControl": "no-cache, private",
+    "cdnCache": "DYNAMIC",
+    "cdnPop": "GRU",
+    "data": {
+      "dnsMs": 0,
+      "connectionMs": 0,
+      "tlsMs": 0,
+      "requestWaitMs": 1026.7000000029802,
+      "ttfbMs": 1027.7999999970198,
+      "responseEndMs": 1037.0999999940395,
+      "dclMs": 1067.6999999955297,
+      "nextHopProtocol": "h3",
+      "serverTiming": [
+        {
+          "name": "cfCacheStatus",
+          "duration": 0
+        },
+        {
+          "name": "cfEdge",
+          "duration": 16
+        },
+        {
+          "name": "cfOrigin",
+          "duration": 920
+        },
+        {
+          "name": "cfExtPri",
+          "duration": 0
+        }
+      ],
+      "entry": "/assets/index-Ctl2nyOA.js"
+    },
+    "documentNetwork": {
+      "protocol": "h3",
+      "timing": {
+        "requestTime": 60674.649974,
+        "proxyStart": -1,
+        "proxyEnd": -1,
+        "dnsStart": 0,
+        "dnsEnd": 0,
+        "connectStart": 0,
+        "connectEnd": 0,
+        "sslStart": 0,
+        "sslEnd": 0,
+        "workerStart": -1,
+        "workerReady": -1,
+        "workerFetchStart": -1,
+        "workerRespondWithSettled": -1,
+        "sendStart": 0.367,
+        "sendEnd": 0.624,
+        "pushStart": 0,
+        "pushEnd": 0,
+        "receiveHeadersStart": 1027.073,
+        "receiveHeadersEnd": 1030.725
+      }
+    }
+  },
+  {
+    "repetition": 2,
+    "cache": "cold",
+    "startedAt": "2026-11-04T12:23:09.760Z",
+    "status": 200,
+    "apiRequests": 0,
+    "cacheControl": "no-cache, private",
+    "cdnCache": "DYNAMIC",
+    "cdnPop": "GRU",
+    "data": {
+      "dnsMs": 1.8000000044703484,
+      "connectionMs": 67.29999999701977,
+      "tlsMs": 33.600000001490116,
+      "requestWaitMs": 948.5,
+      "ttfbMs": 1018.5,
+      "responseEndMs": 1028.1000000014901,
+      "dclMs": 1049.1999999955297,
+      "nextHopProtocol": "h2",
+      "serverTiming": [
+        {
+          "name": "cfCacheStatus",
+          "duration": 0
+        },
+        {
+          "name": "cfEdge",
+          "duration": 18
+        },
+        {
+          "name": "cfOrigin",
+          "duration": 900
+        }
+      ],
+      "entry": "/assets/index-Ctl2nyOA.js"
+    },
+    "documentNetwork": {
+      "protocol": "h2",
+      "timing": {
+        "requestTime": 60676.035175,
+        "proxyStart": -1,
+        "proxyEnd": -1,
+        "dnsStart": 0.257,
+        "dnsEnd": 2.004,
+        "connectStart": 2.035,
+        "connectEnd": 69.348,
+        "sslStart": 35.738,
+        "sslEnd": 69.344,
+        "workerStart": -1,
+        "workerReady": -1,
+        "workerFetchStart": -1,
+        "workerRespondWithSettled": -1,
+        "sendStart": 69.427,
+        "sendEnd": 69.52,
+        "pushStart": 0,
+        "pushEnd": 0,
+        "receiveHeadersStart": 1017.951,
+        "receiveHeadersEnd": 1021.931
+      }
+    }
+  },
+  {
+    "repetition": 2,
+    "cache": "warm",
+    "startedAt": "2026-11-04T12:23:11.074Z",
+    "status": 200,
+    "apiRequests": 0,
+    "cacheControl": "no-cache, private",
+    "cdnCache": "DYNAMIC",
+    "cdnPop": "GRU",
+    "data": {
+      "dnsMs": 0,
+      "connectionMs": 0,
+      "tlsMs": 0,
+      "requestWaitMs": 445.70000000298023,
+      "ttfbMs": 446.5,
+      "responseEndMs": 454.19999999552965,
+      "dclMs": 478.5,
+      "nextHopProtocol": "h2",
+      "serverTiming": [
+        {
+          "name": "cfCacheStatus",
+          "duration": 0
+        },
+        {
+          "name": "cfEdge",
+          "duration": 2
+        },
+        {
+          "name": "cfOrigin",
+          "duration": 410
+        }
+      ],
+      "entry": "/assets/index-Ctl2nyOA.js"
+    },
+    "documentNetwork": {
+      "protocol": "h2",
+      "timing": {
+        "requestTime": 60677.350063,
+        "proxyStart": -1,
+        "proxyEnd": -1,
+        "dnsStart": -1,
+        "dnsEnd": -1,
+        "connectStart": -1,
+        "connectEnd": -1,
+        "sslStart": -1,
+        "sslEnd": -1,
+        "workerStart": -1,
+        "workerReady": -1,
+        "workerFetchStart": -1,
+        "workerRespondWithSettled": -1,
+        "sendStart": 0.434,
+        "sendEnd": 0.552,
+        "pushStart": 0,
+        "pushEnd": 0,
+        "receiveHeadersStart": 446.08,
+        "receiveHeadersEnd": 447.5
+      }
+    }
+  },
+  {
+    "repetition": 3,
+    "cache": "cold",
+    "startedAt": "2026-11-04T12:23:11.875Z",
+    "status": 200,
+    "apiRequests": 0,
+    "cacheControl": "no-cache, private",
+    "cdnCache": "DYNAMIC",
+    "cdnPop": "GRU",
+    "data": {
+      "dnsMs": 1.5,
+      "connectionMs": 65.39999999850988,
+      "tlsMs": 44.099999994039536,
+      "requestWaitMs": 958.2000000029802,
+      "ttfbMs": 1025.6000000014901,
+      "responseEndMs": 1033.8000000044703,
+      "dclMs": 1061.7000000029802,
+      "nextHopProtocol": "h2",
+      "serverTiming": [
+        {
+          "name": "cfCacheStatus",
+          "duration": 0
+        },
+        {
+          "name": "cfEdge",
+          "duration": 9
+        },
+        {
+          "name": "cfOrigin",
+          "duration": 916
+        }
+      ],
+      "entry": "/assets/index-Ctl2nyOA.js"
+    },
+    "documentNetwork": {
+      "protocol": "h2",
+      "timing": {
+        "requestTime": 60678.150327,
+        "proxyStart": -1,
+        "proxyEnd": -1,
+        "dnsStart": 0.114,
+        "dnsEnd": 1.537,
+        "connectStart": 1.567,
+        "connectEnd": 66.942,
+        "sslStart": 22.939,
+        "sslEnd": 66.938,
+        "workerStart": -1,
+        "workerReady": -1,
+        "workerFetchStart": -1,
+        "workerRespondWithSettled": -1,
+        "sendStart": 67.025,
+        "sendEnd": 67.117,
+        "pushStart": 0,
+        "pushEnd": 0,
+        "receiveHeadersStart": 1025.141,
+        "receiveHeadersEnd": 1027.664
+      }
+    }
+  },
+  {
+    "repetition": 3,
+    "cache": "warm",
+    "startedAt": "2026-11-04T12:23:13.213Z",
+    "status": 200,
+    "apiRequests": 0,
+    "cacheControl": "no-cache, private",
+    "cdnCache": "DYNAMIC",
+    "cdnPop": "GRU",
+    "data": {
+      "dnsMs": 0,
+      "connectionMs": 0,
+      "tlsMs": 0,
+      "requestWaitMs": 513,
+      "ttfbMs": 513.7000000029802,
+      "responseEndMs": 523.3000000044703,
+      "dclMs": 549.1000000014901,
+      "nextHopProtocol": "h3",
+      "serverTiming": [
+        {
+          "name": "cfCacheStatus",
+          "duration": 0
+        },
+        {
+          "name": "cfEdge",
+          "duration": 22
+        },
+        {
+          "name": "cfOrigin",
+          "duration": 334
+        },
+        {
+          "name": "cfExtPri",
+          "duration": 0
+        }
+      ],
+      "entry": "/assets/index-Ctl2nyOA.js"
+    },
+    "documentNetwork": {
+      "protocol": "h3",
+      "timing": {
+        "requestTime": 60679.488776,
+        "proxyStart": -1,
+        "proxyEnd": -1,
+        "dnsStart": 0,
+        "dnsEnd": 0,
+        "connectStart": 0,
+        "connectEnd": 0,
+        "sslStart": 0,
+        "sslEnd": 0,
+        "workerStart": -1,
+        "workerReady": -1,
+        "workerFetchStart": -1,
+        "workerRespondWithSettled": -1,
+        "sendStart": 0.198,
+        "sendEnd": 0.349,
+        "pushStart": 0,
+        "pushEnd": 0,
+        "receiveHeadersStart": 513.262,
+        "receiveHeadersEnd": 513.817
+      }
+    }
+  }
+]

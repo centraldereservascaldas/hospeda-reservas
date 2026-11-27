@@ -1,0 +1,116 @@
+{
+  "release": "08c76aeef25060d2793b8f8d15bccfe534c90cc1",
+  "method": "Five sequential GETs per phase, from VPS; TLS validation enabled; origin resolved to loopback; no CDP emulation; browser and backend caches not cleared.",
+  "rows": [
+    {
+      "phase": "origin_https",
+      "http": 200,
+      "dns": 0.000077,
+      "connect": 0.000364,
+      "tls": 0.043133,
+      "pretransfer": 0.04391,
+      "ttfb": 0.157158,
+      "total": 0.160773,
+      "newConnections": 1
+    },
+    {
+      "phase": "origin_https",
+      "http": 200,
+      "dns": 0.000033,
+      "connect": 0,
+      "tls": 0,
+      "pretransfer": 0.000123,
+      "ttfb": 0.086029,
+      "total": 0.086133,
+      "newConnections": 0
+    },
+    {
+      "phase": "origin_https",
+      "http": 200,
+      "dns": 0.000019,
+      "connect": 0,
+      "tls": 0,
+      "pretransfer": 0.000144,
+      "ttfb": 0.07128,
+      "total": 0.071381,
+      "newConnections": 0
+    },
+    {
+      "phase": "origin_https",
+      "http": 200,
+      "dns": 0.000019,
+      "connect": 0,
+      "tls": 0,
+      "pretransfer": 0.00011,
+      "ttfb": 0.184982,
+      "total": 0.192323,
+      "newConnections": 0
+    },
+    {
+      "phase": "origin_https",
+      "http": 200,
+      "dns": 0.000017,
+      "connect": 0,
+      "tls": 0,
+      "pretransfer": 0.000265,
+      "ttfb": 0.072138,
+      "total": 0.072282,
+      "newConnections": 0
+    },
+    {
+      "phase": "public_from_vps",
+      "http": 200,
+      "dns": 0.04173,
+      "connect": 0.049236,
+      "tls": 0.11425,
+      "pretransfer": 0.114508,
+      "ttfb": 0.387924,
+      "total": 0.389877,
+      "newConnections": 1
+    },
+    {
+      "phase": "public_from_vps",
+      "http": 200,
+      "dns": 0.000043,
+      "connect": 0,
+      "tls": 0,
+      "pretransfer": 0.000186,
+      "ttfb": 0.276426,
+      "total": 0.27656,
+      "newConnections": 0
+    },
+    {
+      "phase": "public_from_vps",
+      "http": 200,
+      "dns": 0.000019,
+      "connect": 0,
+      "tls": 0,
+      "pretransfer": 0.000112,
+      "ttfb": 0.184146,
+      "total": 0.184263,
+      "newConnections": 0
+    },
+    {
+      "phase": "public_from_vps",
+      "http": 200,
+      "dns": 0.000196,
+      "connect": 0,
+      "tls": 0,
+      "pretransfer": 0.000351,
+      "ttfb": 0.137108,
+      "total": 0.137218,
+      "newConnections": 0
+    },
+    {
+      "phase": "public_from_vps",
+      "http": 200,
+      "dns": 0.00002,
+      "connect": 0,
+      "tls": 0,
+      "pretransfer": 0.000109,
+      "ttfb": 0.197033,
+      "total": 0.200101,
+      "newConnections": 0
+    }
+  ]
+}
