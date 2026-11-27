@@ -1019,6 +1019,12 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       );
       if (!target) return;
       const rect = target.getBoundingClientRect();
+      if (rect.height > 0 && (rect.bottom <= 0 || rect.top >= window.innerHeight)) {
+        setActiveDropdown(null);
+        setActiveDatePicker(null);
+        setSharedPanelVisible(false);
+        return;
+      }
       const gutter = window.innerWidth <= 639 ? 12 : 16;
       const width = Math.min(
         activeSharedPanel === 'when' ? 850 : activeSharedPanel === 'where' ? 400 : 620,
@@ -1135,6 +1141,9 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       return;
     }
     setSearchValidationMessage('');
+    setActiveDropdown(null);
+    setActiveDatePicker(null);
+    setSharedPanelVisible(false);
     const personCount = isHero ? countOccupancyGuests(guestCounts) : parseInt(persons, 10) || 2;
     const currentGuests = currentFilters?.guests;
     const guests = isHero
@@ -1686,9 +1695,13 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     setCheckIn(newCheckIn);
                     setCheckOut(newCheckOut);
                     setActiveDatePicker(null);
-                    document
-                      .querySelector<HTMLButtonElement>('[data-search-segment="when"] button')
-                      ?.focus();
+                    if (window.innerWidth > 639) {
+                      setActiveDropdown('guests');
+                    } else {
+                      document
+                        .querySelector<HTMLButtonElement>('[data-search-segment="when"] button')
+                        ?.focus();
+                    }
                   }}
                 />
               )}
