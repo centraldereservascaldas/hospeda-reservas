@@ -523,6 +523,8 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 
 **Causa compatível no código local:** `src/index.css:749` posiciona o indicador em `::after`, enquanto os dois métodos dividem a largura em `SinglePageCheckout.tsx:689`. A relação com o artefato implantado ainda não foi confirmada. **Ação:** reservar espaço para o indicador ou ajustar a disposição sem prejudicar o nome e estado acessíveis. **Verificação:** 320 e 375 px, zoom de 200%, texto longo e ambos os métodos selecionados; conferir também foco, alvo de toque e altura reduzida.
 
+**Implementação em revisão:** até 339 px, os métodos de pagamento alinham ícone e texto em coluna, preservando o selo de seleção no canto superior direito sem encobrir o rótulo. Teste de contrato CSS e validação visual da prévia local cobrem cartão e Pix selecionados em 320 px; medição geométrica do cartão selecionado em 330, 340 e 375 px não encontrou interseção entre selo e rótulo. Zoom de 200%, outras fontes/locales, foco com leitor de tela e checkout de produção permanecem pendentes. PR #95, base `codex/ux-f10-breakpoint-focus`.
+
 ### F47 · P1 · Diálogos de checkout e imóvel impedem foco no painel de medição
 
 **Reproduzido na interface de produção em 26/11/2026:** com o checkout aberto em 320 × 400, reabri as preferências pelo evento usado pela aplicação, sem alterar a escolha salva. A tentativa de focar o título do painel devolveu o foco ao link da marca dentro do checkout; ao pressionar Tab, o foco passou para “Voltar para acomodação”, não para os controles de preferências. O painel estava visível sobre o checkout. Isso confirma o conflito nessa sequência; o uso com leitores de tela precisa de teste específico.
@@ -715,7 +717,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Validar o contrato de aceite após mudança do valor parcelado (F15).
 - [ ] Alinhar mensagem e destino no retorno de checkout não recuperável, preservando o contexto quando possível (F20).
 - [ ] Corrigir retorno do checkout aberto diretamente e testar botão, Escape e histórico sem reabrir o diálogo (F37).
-- [ ] Corrigir sobreposição do indicador de seleção no método de pagamento em largura estreita (F46).
+- [x] F46: em até 339 px, cartões de pagamento empilham conteúdo e preservam o indicador sem sobreposição do rótulo. Prévia local verificada a 320 px para cartão e Pix; medição do cartão também em 330/340/375 px; PR #95. Zoom e leitor de tela pendentes.
 - [ ] Sinalizar e recuperar interrupções no acompanhamento de pagamento pendente, sem induzir pagamento duplicado (F39).
 - [ ] Preservar o destino do pedido na passagem para autenticação e conferir alternativas seguras de recuperação entre dispositivos (F40).
 - [ ] Investigar falhas de asset e respostas 5xx observadas na rota de acompanhamento e validar publicação, cache e recuperação (F41).
