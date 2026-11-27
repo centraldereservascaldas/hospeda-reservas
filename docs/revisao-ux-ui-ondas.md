@@ -145,6 +145,8 @@ Há valores de camada distintos no código, como `z-50` no checkout e detalhe, `
 
 **Impacto:** a explicação expandida não fica visível nessa janela; outros tamanhos, zoom e texto ampliado ainda exigem verificação. **Ação:** permitir rolagem interna e manter ação de saída e foco visíveis. **Verificação:** repetir 1024 × 400, testar 320 px e zoom, inclusive texto de animal de serviço expandido e foco por teclado.
 
+**Implementação em revisão:** o painel de hóspedes agora permite rolagem vertical própria e contém a rolagem para que ela não se propague ao fundo; os demais painéis mantêm seu overflow atual. A 1024 × 400, após expandir a explicação, o navegador mostrou `scrollHeight` 423 px contra 374 px disponíveis; ajustar `scrollTop` revelou o parágrafo inteiro dentro do painel e manteve `window.scrollY` em zero. Teste direcionado cobre o limite de 400 px, a expansão e a disponibilidade dos controles. Roda/toque, zoom, 320 px e leitor de tela ainda pendentes.
+
 ### F07 · P2 · Risco de foco atravessar camadas independentes
 
 **Evidência de código:** `src/components/useDialogFocus.ts:14` agrega todos os elementos de todos os portais `data-dialog-focus-portal` do documento ao diálogo ativo; `:27` também considera qualquer portal como pertencente ao diálogo. A busca e a ação fixa do imóvel usam esse marcador. Isso não comprova uma falha em todos os casos, mas permite que um portal sem relação seja incluído no ciclo de foco.
@@ -234,6 +236,8 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 **Confirmado também em produção em 26/11/2026, 640 × 700 CSS px:** ao abrir “Quando”, a captura visual mostrou o botão “Buscar” sobre o texto do segmento “Quem”, que ficou parcialmente encoberto e quebrou em várias linhas. A observação não depende do simulador nem de criar uma reserva.
 
 **Impacto:** leitura e identificação dos controles ficam prejudicadas na largura observada. **Ação:** reservar largura suficiente aos controles ou mudar a composição nesse intervalo; manter nomes, foco e ação visíveis. **Verificação:** repetir em 640, 768 e valores próximos com cada painel aberto, rótulos longos e zoom. A causa de outras sobreposições relatadas ainda precisa de localização própria.
+
+**Implementação em revisão:** entre 640 e 839 px, o botão de busca mantém o ícone de lupa sem o rótulo visual, preservando o nome acessível “Buscar hospedagens”; o texto do resumo de hóspedes fica em uma linha, com reticências se o conteúdo for longo. Em navegador local, com “Quando” aberto, 640 e 768 px mantiveram “1 hóspede” em uma linha, botão de 48 px e sem overflow horizontal. A 840 px, o rótulo visual do botão voltou e o resumo continuou em uma linha. Rótulos longos e zoom ainda pendentes.
 
 ### F18 · P2 · Nova falha em sugestão para pets não oferece retorno
 
@@ -692,14 +696,17 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 **Complemento móvel F01/F55 · 27/11/2026.** A 390 × 844, a navegação por setas percorreu datas e meses; Enter selecionou o dia (estado `aria-pressed=true`) e Escape fechou o modal, devolvendo foco a “Iniciar busca”. Ao navegar por teclado, abrir “Onde” com Enter reproduziu perda de foco: o conteúdo mudava e o foco caía no `body`. A versão móvel agora transfere o foco, após a renderização da etapa, para o campo do condomínio, primeiro dia disponível ou primeiro contador habilitado de hóspedes. Teste de regressão cobre as três etapas e a transição “Todos os condomínios” → datas; não submete a busca. No navegador, Enter em “Onde” focou o campo; Enter em “Todos os condomínios” focou 26/11/2026; cliques em “Quando” e “Quem” focaram data e “Aumentar adultos”. `searchModalAccessibility.test.ts` passou 8/8; suíte frontend 646/646, lint/TypeScript, build frontend/blog (4/4 testes do blog) e `git diff --check` passaram. O build manteve avisos preexistentes de fonte não resolvida no build e chunk acima de 500 kB. Simulador local, sem chamada de busca, reserva ou pagamento; leitor de tela não testado. Branch `codex/ux-f55-mobile-focus`, commit de implementação `2750cf2` e PR #92.
 
+**Pacote responsivo F06/F17 · 27/11/2026.** F06: o portal da busca usa rolagem vertical contida apenas enquanto hóspedes estão abertos; datas e condomínio mantêm os contêineres existentes. F17: em 640–839 px, a barra mantém o CTA em 48 px com nome acessível, enquanto o resumo de hóspedes não quebra linha e pode usar reticências. No navegador local, a 1024 × 400, expandir a explicação elevou o conteúdo a 423 px contra 374 px visíveis; ajustar `scrollTop` do diálogo revelou o parágrafo dentro da borda sem deslocar o fundo (`window.scrollY` permaneceu em zero). A roda/toque não foi simulada. Com o calendário aberto, 640 e 768 px mantiveram “1 hóspede” em uma linha e CTA de 48 px; em 840 px o rótulo de texto voltou e os controles permaneceram em uma linha. O teste direcionado passou 19/19; `npm test` passou 648/648, `npm run lint`, `npm run build`, `blog:test` (4/4), Prettier nos arquivos alterados e `git diff --check` passaram. Build mantém avisos de fonte e chunk acima de 500 kB. Catálogo simulado; nenhuma busca foi submetida. F06 e F17 ficam concluídos após revisão do PR; zoom, rótulos longos, 320 px, leitor de tela e rolagem física continuam pendentes. F10 segue aberto como risco: uma troca de um para dois meses foi observada antes, mas perda de seleção/foco não foi reproduzida. Branch `codex/ux-f06-guest-panel-scroll`, PR #93.
+
 ### Onda 2 · Painéis, camadas e interação responsiva
 
 - [ ] F02 parcial: painéis fecham após envio ou quando a origem deixa a janela; testes direcionados passaram. Validar detalhe e saída real da origem em página longa/catálogo disponível antes de concluir.
 - [x] Corrigir transição datas → hóspedes no desktop (F03), preservando datas e foco; em mobile, manter o calendário fechado sem abrir hóspedes automaticamente. Testes direcionados e navegador local passaram.
 - [x] Corrigir F55: foco e retorno por teclado verificados nos painéis desktop e mobile. Em 390 × 844, Enter abriu “Onde” e levou foco ao campo; Enter em “Todos os condomínios” levou a uma data disponível; “Quando” e “Quem” focaram data e contador de adultos. Teste direcionado cobre as três etapas e não submete a busca. Leitor de tela não testado.
-- [ ] Reproduzir e resolver corte em altura curta e mudança de largura (F06 e F10).
+- [x] F06: painel de hóspedes rola verticalmente em altura curta; texto expandido ficou visível a 1024 × 400 sem mover o fundo. Teste direcionado e navegador local passaram; zoom, 320 px e leitor de tela pendentes. PR #93.
+- [ ] F10: definir fonte reativa de breakpoint ou layout CSS para o calendário; testar seleção parcial, foco e estado em 639/640 px. Mudança de um para dois meses foi observada anteriormente, mas perda de dados/foco ainda não reproduzida.
 - [ ] Delimitar portais ao diálogo correto e revisar modais aninhados (F07).
-- [ ] Corrigir a colisão do segmento de hóspedes com “Buscar” em 640 px (F17) e verificar controles adjacentes.
+- [x] F17: em 640–839 px, o CTA reduz para ícone com nome acessível e o texto de hóspedes fica em uma linha, truncado com reticências quando longo. Navegador local passou em 640, 768 e 840 px, sem overflow horizontal. Zoom e rótulos longos pendentes. PR #93.
 - [ ] Inspecionar os botões relatados sobrepostos com captura e reprodução por largura, altura, zoom e conteúdo longo; registrar local e causa antes de corrigir.
 
 ### Onda 3 · Imóvel e checkout

@@ -1611,7 +1611,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     ? 'Selecionar hóspedes'
                     : 'Calendário de entrada (check-in)'
               }
-              className={`search-shared-panel fixed z-[1000] overflow-hidden rounded-3xl border border-white/90 bg-white/90 p-4 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl [@media(max-width:639px)]:p-3 ${!activeDropdown && !activeDatePicker ? 'search-shared-panel--closing' : ''}`}
+              className={`search-shared-panel fixed z-[1000] ${activeDropdown === 'guests' ? 'overflow-x-hidden overflow-y-auto overscroll-contain' : 'overflow-hidden'} rounded-3xl border border-white/90 bg-white/90 p-4 text-neutral-800 shadow-[0_20px_60px_-16px_rgba(15,23,42,0.28)] backdrop-blur-2xl [@media(max-width:639px)]:p-3 ${!activeDropdown && !activeDatePicker ? 'search-shared-panel--closing' : ''}`}
               style={{
                 left: sharedPanelPosition.left,
                 top: sharedPanelPosition.top,
