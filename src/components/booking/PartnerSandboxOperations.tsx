@@ -101,6 +101,14 @@ export function PartnerSandboxOperations() {
       setMessage('Informe um valor válido.');
       return;
     }
+    if (typeof order.supplier_payable_observed_cents !== 'number') {
+      setMessage('O valor do fornecedor não está disponível para conferência. Mantenha o pedido na fila.');
+      return;
+    }
+    if (Math.round(amount * 100) !== order.supplier_payable_observed_cents) {
+      setMessage('O valor informado é diferente do valor observado. Confira o pagamento antes de concluir.');
+      return;
+    }
     setBusy(true);
     try {
       const response = await apiFetch(

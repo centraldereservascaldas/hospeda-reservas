@@ -2,11 +2,12 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Models\PartnerCheckoutOrder;
 use App\Services\ImobSysPreReservationClient;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
 
 class PartnerSandboxOperationsControllerTest extends TestCase
 {
@@ -102,6 +103,7 @@ class PartnerSandboxOperationsControllerTest extends TestCase
             ->assertJsonPath('orders.0.payment_method', 'pix')->assertJsonPath('orders.0.payment_cents', 52300)
             ->assertJsonMissingPath('orders.0.encrypted_customer');
         $url = '/api/owner/admin/partner-sandbox/orders/'.$order->id.'/manual-payment';
+        $order->update(['supplier_payable_observed_cents' => 52300]);
         $this->withToken('admin-token')->postJson($url, ['amountCents' => 52300, 'reference' => 'TEST-1'])
             ->assertOk()->assertJsonPath('status', 'supplier_payment_recorded');
         $this->withToken('admin-token')->postJson($url, ['amountCents' => 52300, 'reference' => 'TEST-1'])
@@ -114,7 +116,7 @@ class PartnerSandboxOperationsControllerTest extends TestCase
 
     public function test_admin_review_requires_exact_observed_details_and_is_audited_once(): void
     {
-        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->withoutMiddleware(ThrottleRequests::class);
         config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key', 'services.hospeda.owner_admin_emails' => ['admin@example.test']]);
         Http::fake(['*/auth/v1/user' => Http::response(['id' => '575c8054-6646-443c-bf62-07945019a32f', 'email' => 'admin@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Pessoa Teste']])]);
         $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('R', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown', 'reservation_reference' => '1600', 'payment_id' => 'PAY1', 'merchant_order_id' => 'ORDERREVIEW', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-review', 'encrypted_customer' => ['fullName' => 'Teste']]);
@@ -124,8 +126,13 @@ class PartnerSandboxOperationsControllerTest extends TestCase
         $unavailable = false;
         $changeDuringLookup = false;
         $this->mock(ImobSysPreReservationClient::class)->shouldReceive('lookupByKey')->zeroOrMoreTimes()->andReturnUsing(function () use (&$supplierResult, &$unavailable, &$changeDuringLookup, $order) {
-            if ($unavailable) throw new \RuntimeException('unavailable');
-            if ($changeDuringLookup) $order->update(['guests' => 3]);
+            if ($unavailable) {
+                throw new \RuntimeException('unavailable');
+            }
+            if ($changeDuringLookup) {
+                $order->update(['guests' => 3]);
+            }
+
             return $supplierResult;
         });
         $order->update(['payment_id' => null]);
@@ -160,6 +167,7 @@ class PartnerSandboxOperationsControllerTest extends TestCase
         $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
         $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders')->assertOk()->assertJsonPath('orders.0.id', $order->id)->assertJsonPath('orders.0.reservation_reference', '1600');
         $paymentUrl = '/api/owner/admin/partner-sandbox/orders/'.$order->id.'/manual-payment';
+        $order->update(['supplier_payable_observed_cents' => 41800]);
         $this->withToken('admin-token')->postJson($paymentUrl, ['amountCents' => 41800, 'reference' => 'MANUAL-TEST'])->assertOk();
         $this->assertSame('supplier_payment_recorded', $order->fresh()->status);
         $this->assertSame('admin@example.test', $order->fresh()->supplier_reviewed_by);

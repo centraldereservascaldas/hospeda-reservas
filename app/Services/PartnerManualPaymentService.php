@@ -18,6 +18,9 @@ class PartnerManualPaymentService
             if ($order->status !== 'awaiting_seller_payment' || ! $order->reservation_reference) {
                 throw new RuntimeException('Pedido não aguarda pagamento manual.');
             }
+            if ($order->supplier_payable_observed_cents === null || (int) $order->supplier_payable_observed_cents !== $amountCents) {
+                throw new RuntimeException('Valor do pagamento precisa de conferência.');
+            }
             $order->update(['status' => 'supplier_payment_recorded', 'supplier_paid_cents' => $amountCents, 'supplier_payment_reference' => trim($reference), 'supplier_paid_by' => trim($operator), 'supplier_paid_at' => now()]);
         });
     }

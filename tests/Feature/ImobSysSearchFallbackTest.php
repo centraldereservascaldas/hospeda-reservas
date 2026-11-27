@@ -97,7 +97,9 @@ class ImobSysSearchFallbackTest extends TestCase
         try {
             $this->assertSame(52400, $client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663')[0]['totalCents']);
             Http::assertSentCount(2);
-        } finally { $this->travelBack(); }
+        } finally {
+            $this->travelBack();
+        }
     }
 
     public function test_search_never_displays_an_offer_without_a_supplier_expiry(): void
@@ -114,7 +116,9 @@ class ImobSysSearchFallbackTest extends TestCase
         $body = ['success' => true, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'expiresAt' => now()->addSeconds(20)->toIso8601String(), 'offers' => [$offer], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false]];
         Http::fakeSequence()->push($body)->push([...$body, 'observedAt' => now()->addMinute()->toIso8601String()])->push([...$body, 'observedAt' => now()->addSeconds(3)->toIso8601String(), 'expiresAt' => now()->addSecond()->toIso8601String()]);
         $client = app(ImobSysSearchClient::class);
-        for ($i = 0; $i < 3; $i++) $this->assertNull($client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663'));
+        for ($i = 0; $i < 3; $i++) {
+            $this->assertNull($client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663'));
+        }
         Http::assertSentCount(3);
     }
 
@@ -161,8 +165,8 @@ class ImobSysSearchFallbackTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
-                'observedAt' => now()->toIso8601String(),
-                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
+            'observedAt' => now()->toIso8601String(),
+            'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true, 'source' => 'imobsys-live', 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 1,
             'offers' => [[
                 'id' => 'imobsys-crcn-1-961', 'condominiumName' => 'Piazza', 'unit' => '204', 'capacity' => 4,
@@ -210,8 +214,8 @@ class ImobSysSearchFallbackTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
-                'observedAt' => now()->toIso8601String(),
-                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
+            'observedAt' => now()->toIso8601String(),
+            'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true, 'source' => 'imobsys-live', 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2,
             'offers' => [[
                 'id' => 'imobsys-crcn-2-663', 'condominiumName' => 'Termas', 'unit' => '101',
@@ -317,7 +321,7 @@ class ImobSysSearchFallbackTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
-                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
+            'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true,
             'from' => '2027-01-10',
             'to' => '2027-01-12',
@@ -375,11 +379,62 @@ class ImobSysSearchFallbackTest extends TestCase
             ->assertJsonPath('data.1.imobsysOffer.availabilityConfirmed', false);
     }
 
+    public function test_filtered_destination_pages_keep_eligible_stays_first_and_do_not_skip_partner(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response([
+            'success' => true, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2,
+            'observedAt' => now()->toIso8601String(), 'expiresAt' => now()->addSeconds(20)->toIso8601String(),
+            'offers' => [['id' => 'imobsys-crcn-2-663', 'condominiumName' => 'Lacqua', 'capacity' => 4,
+                'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'nights' => 2,
+                'totalCents' => 52300, 'currency' => 'BRL', 'status' => 'offer_observed',
+                'availabilityConfirmed' => false, 'reservationGuaranteed' => false]],
+            'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
+        ])]);
+        $items = array_map(fn (int $i): array => ['id' => 'stays-'.$i, 'calculatedPrice' => ['totalAmount' => 600, 'dailyRate' => 300]], range(1, 101));
+        $this->mock(StaysAccommodationMapper::class)->shouldReceive('map')->times(303)->andReturnUsing(
+            fn (array $listing): array => ['id' => $listing['id'], 'title' => in_array($listing['id'], ['stays-1', 'stays-3', 'stays-101'], true) ? 'Lacqua apartamento' : 'Outro local', 'location' => ['city' => 'Caldas Novas']]
+        );
+        $this->mock(StaysSearchAvailabilityService::class)->shouldReceive('search')->times(6)->andReturnUsing(
+            fn (array $input): array => [
+                'items' => array_slice($items, $input['skip'], 100), 'unquotedCount' => 0,
+                'receivedCount' => count(array_slice($items, $input['skip'], 100)),
+                'meta' => ['fetchedAt' => now()->toIso8601String(), 'expiresAt' => now()->addSeconds(45)->toIso8601String()],
+            ]
+        );
+        $search = ['from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'destination' => 'Lacqua', 'limit' => 2];
+        $this->postJson('/api/search', [...$search, 'skip' => 0])->assertOk()
+            ->assertJsonPath('data.0.id', 'stays-1')->assertJsonPath('data.1.id', 'stays-3')
+            ->assertJsonPath('pagination.nextSkip', 2)->assertJsonPath('pagination.hasMore', true);
+        $this->postJson('/api/search', [...$search, 'skip' => 2])->assertOk()
+            ->assertJsonPath('data.0.id', 'stays-101')->assertJsonPath('data.1.id', 'imobsys-crcn-2-663')
+            ->assertJsonPath('pagination.nextSkip', 4)->assertJsonPath('pagination.hasMore', false);
+        $this->postJson('/api/search', [...$search, 'skip' => 4])->assertOk()
+            ->assertJsonCount(0, 'data')->assertJsonPath('pagination.hasMore', false);
+    }
+
+    public function test_filtered_search_returns_stays_but_reports_unavailable_partner_after_last_stays_page(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response([], 503)]);
+        $items = array_map(fn (int $i): array => ['id' => 'stays-'.$i, 'calculatedPrice' => ['totalAmount' => 600, 'dailyRate' => 300]], range(1, 2));
+        $this->mock(StaysAccommodationMapper::class)->shouldReceive('map')->times(4)->andReturnUsing(
+            fn (array $listing): array => ['id' => $listing['id'], 'title' => 'Lacqua apartamento', 'location' => ['city' => 'Caldas Novas']]
+        );
+        $this->mock(StaysSearchAvailabilityService::class)->shouldReceive('search')->twice()->andReturn([
+            'items' => $items, 'unquotedCount' => 0, 'receivedCount' => 2,
+            'meta' => ['fetchedAt' => now()->toIso8601String(), 'expiresAt' => now()->addSeconds(45)->toIso8601String()],
+        ]);
+        $search = ['from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'destination' => 'Lacqua', 'limit' => 2];
+        $this->postJson('/api/search', [...$search, 'skip' => 0])->assertOk()->assertJsonCount(2, 'data')->assertJsonPath('pagination.hasMore', true);
+        $this->postJson('/api/search', [...$search, 'skip' => 2])->assertStatus(503)->assertJsonPath('code', 'partner_unavailable');
+    }
+
     public function test_appends_imobsys_after_the_last_stays_page_when_all_condominiums_are_searched(): void
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
-                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
+            'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true,
             'from' => '2027-01-10',
             'to' => '2027-01-12',

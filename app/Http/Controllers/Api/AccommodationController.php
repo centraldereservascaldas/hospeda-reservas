@@ -324,11 +324,13 @@ class AccommodationController extends Controller
                 $knownStaysTotal = $skip + $resolved['receivedCount'];
                 Cache::put($combinedSearchKey, $knownStaysTotal, now()->addMinutes(10));
             }
+            $partnerUnavailable = false;
             if ($canAppendPartnerOffers && ($scanPriority || $partnerOnlyPage || $staysPageEnded)) {
                 $imobsysDestination = $verifiedImobsysDestination ?? $destination;
 
                 $offers = $imobSys->offers($from, $to, $guests, $imobsysDestination);
-                if ($offers === null && $mapped === [] && ($scanPriority || $partnerOnlyPage || $staysPageEnded)) {
+                $partnerUnavailable = $offers === null;
+                if ($offers === null && ($scanPriority ? count($mapped) <= $skip : $mapped === [])) {
                     return response()->json(['success' => false, 'code' => 'partner_unavailable', 'message' => 'Não foi possível consultar as opções do parceiro agora. Tente novamente.'], 503);
                 }
                 if ($offers !== null) {
@@ -396,7 +398,7 @@ class AccommodationController extends Controller
                 'pagination' => [
                     'receivedCount' => $receivedCount,
                     'nextSkip' => $skip + $receivedCount,
-                    'hasMore' => $scanPriority ? count($mapped) > $skip + $limit : $resolved['receivedCount'] === $limit,
+                    'hasMore' => $scanPriority ? count($mapped) > $skip + $limit || $partnerUnavailable : $resolved['receivedCount'] === $limit || $partnerUnavailable,
                 ],
             ]))->response();
         }
