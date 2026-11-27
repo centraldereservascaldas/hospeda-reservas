@@ -11,23 +11,56 @@ const focusableSelector = [
 
 const openDialogs: HTMLElement[] = [];
 
+function focusPortals(dialog: HTMLElement): HTMLElement[] {
+  const ownedIds = (dialog.getAttribute('aria-owns') ?? '').split(/\s+/).filter(Boolean);
+  const ownedPortals = ownedIds
+    .map((id) => document.getElementById(id))
+    .filter((portal): portal is HTMLElement => portal instanceof HTMLElement)
+    .filter((portal) => portal.hasAttribute('data-dialog-focus-portal'));
+  const globalPortals = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-dialog-focus-portal="global"]'),
+  );
+
+  return [...new Set([...ownedPortals, ...globalPortals])].filter(
+    (portal) => !portal.closest('[aria-hidden="true"], [inert]'),
+  );
+}
+
 function focusableElements(dialog: HTMLElement): HTMLElement[] {
-  const elements = [
-    ...dialog.querySelectorAll<HTMLElement>(focusableSelector),
-    ...Array.from(document.querySelectorAll<HTMLElement>('[data-dialog-focus-portal]')).flatMap(
-      (portal) => Array.from(portal.querySelectorAll<HTMLElement>(focusableSelector)),
+  const containers = [dialog, ...focusPortals(dialog)];
+  const elements = new Set(
+    containers.flatMap((container) =>
+      Array.from(container.querySelectorAll<HTMLElement>(focusableSelector)),
     ),
-  ];
-  return elements.filter((element) => {
+  );
+
+  return Array.from(elements).filter((element) => {
     const style = window.getComputedStyle(element);
-    return !element.hidden && style.visibility !== 'hidden' && style.display !== 'none' && element.tabIndex >= 0;
+    return (
+      !element.hidden &&
+      !element.closest('[aria-hidden="true"], [inert]') &&
+      style.visibility !== 'hidden' &&
+      style.display !== 'none' &&
+      element.tabIndex >= 0
+    );
   });
 }
 
 function isInDialogOrPortal(dialog: HTMLElement, target: EventTarget | null): boolean {
   if (!(target instanceof Node)) return false;
   if (dialog.contains(target)) return true;
-  return target instanceof Element && !!target.closest('[data-dialog-focus-portal]');
+  return focusPortals(dialog).some((portal) => portal.contains(target));
+}
+
+function isInNestedFocusPortal(dialog: HTMLElement, target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const portal = target.closest<HTMLElement>('[data-dialog-focus-portal]');
+  if (!portal || !focusPortals(dialog).includes(portal)) return false;
+
+  return (
+    portal.dataset.dialogFocusPortal === 'global' ||
+    ['dialog', 'group'].includes(portal.getAttribute('role') ?? '')
+  );
 }
 
 interface DialogFocusOptions {
@@ -62,12 +95,13 @@ export function useDialogFocus(
     const isTopDialog = () => openDialogs[openDialogs.length - 1] === dialog;
     const hasNestedDialog = () => !!dialog.querySelector('[role="dialog"][aria-modal="true"]');
     const isInAnotherDialog = (target: EventTarget | null) =>
-      target instanceof Element && !!target.closest('[role="dialog"][aria-modal="true"]:not([data-dialog-focus-root])');
+      target instanceof Element &&
+      !!target.closest('[role="dialog"][aria-modal="true"]:not([data-dialog-focus-root])');
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!isTopDialog() || isInAnotherDialog(event.target)) return;
       if (event.key === 'Escape' && closeOnEscape) {
-        if (event.target instanceof Element && event.target.closest('[data-dialog-focus-portal]')) return;
+        if (isInNestedFocusPortal(dialog, event.target)) return;
         if (hasNestedDialog()) return;
         event.preventDefault();
         event.stopPropagation();
@@ -91,7 +125,12 @@ export function useDialogFocus(
     };
 
     const handleFocusIn = (event: FocusEvent) => {
-      if (!isTopDialog() || isInDialogOrPortal(dialog, event.target) || isInAnotherDialog(event.target)) return;
+      if (
+        !isTopDialog() ||
+        isInDialogOrPortal(dialog, event.target) ||
+        isInAnotherDialog(event.target)
+      )
+        return;
       (focusableElements(dialog)[0] ?? dialog).focus();
     };
 

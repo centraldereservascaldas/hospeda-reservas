@@ -105,7 +105,7 @@ export function MeasurementPreferences({
   return (
     <section
       aria-labelledby="measurement-preferences-title"
-      data-dialog-focus-portal={placement === 'fixed' ? '' : undefined}
+      data-dialog-focus-portal={placement === 'fixed' ? 'global' : undefined}
       className={panelClassName}
     >
       <h2

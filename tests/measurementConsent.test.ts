@@ -233,6 +233,7 @@ test('fixed preference panel can scroll within short viewports while inline lega
   const fixedView = render(React.createElement(MeasurementPreferences));
   const fixedPanel = fixedView.getByRole('region', { name: 'Preferências de medição' });
   assert.equal(fixedPanel.hasAttribute('data-dialog-focus-portal'), true);
+  assert.equal(fixedPanel.getAttribute('data-dialog-focus-portal'), 'global');
   assert.match(fixedPanel.className, /max-h-\[calc\(100dvh/);
   assert.match(fixedPanel.className, /overflow-y-auto/);
   assert.match(fixedPanel.className, /overscroll-contain/);
