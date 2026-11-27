@@ -170,9 +170,15 @@ export function PartnerSandboxOperations() {
           : 'propertyIdentityMatch' in result && result.propertyIdentityMatch === false
             ? 'O link do imóvel diverge; não confirme este pedido.'
             : 'A identidade do imóvel não foi observada.';
+      const dates =
+        'stayDatesMatch' in result && result.stayDatesMatch === true
+          ? 'As datas observadas coincidem.'
+          : 'stayDatesMatch' in result && result.stayDatesMatch === false
+            ? 'As datas divergem; não confirme este pedido.'
+            : 'As datas não foram observadas.';
       setSupplierStatus((current) => ({
         ...current,
-        [order.id]: `Operação: ${stateLabel[state] ?? 'desconhecida'}; situação no fornecedor: ${partnerLabel[status] ?? 'não identificada'}; referência: ${ref}. ${identity} Confira datas e demais dados na ImobSys.`,
+        [order.id]: `Operação: ${stateLabel[state] ?? 'desconhecida'}; situação no fornecedor: ${partnerLabel[status] ?? 'não identificada'}; referência: ${ref}. ${identity} ${dates} Confira os demais dados na ImobSys.`,
       }));
     } catch {
       setSupplierStatus((current) => ({
