@@ -84,6 +84,22 @@ class ImobSysSearchFallbackTest extends TestCase
         $this->assertSame($expiry->timestamp, $offers[0]['_crcnExpiresAt']);
     }
 
+    public function test_cached_search_refreshes_when_supplier_offer_expires(): void
+    {
+        Http::preventStrayRequests();
+        $observed = now()->startOfSecond();
+        $offer = ['id' => 'imobsys-crcn-2-663', 'capacity' => 5, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'nights' => 2, 'totalCents' => 52300, 'currency' => 'BRL', 'status' => 'offer_observed', 'availabilityConfirmed' => false, 'reservationGuaranteed' => false];
+        $body = ['success' => true, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'observedAt' => $observed->toIso8601String(), 'offers' => [$offer], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false]];
+        Http::fakeSequence()->push([...$body, 'expiresAt' => $observed->copy()->addSeconds(5)->toIso8601String()])->push([...$body, 'expiresAt' => $observed->copy()->addSeconds(20)->toIso8601String(), 'offers' => [[...$offer, 'totalCents' => 52400]]]);
+        $client = app(ImobSysSearchClient::class);
+        $this->assertSame(52300, $client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663')[0]['totalCents']);
+        $this->travel(6)->seconds();
+        try {
+            $this->assertSame(52400, $client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663')[0]['totalCents']);
+            Http::assertSentCount(2);
+        } finally { $this->travelBack(); }
+    }
+
     public function test_production_partner_detail_requires_feature_flag_and_specific_property(): void
     {
         $originalEnvironment = $this->app['env'];

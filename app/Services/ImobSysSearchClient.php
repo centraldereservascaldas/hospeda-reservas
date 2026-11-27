@@ -18,7 +18,7 @@ class ImobSysSearchClient
             return null;
         }
 
-        $cacheKey = 'imobsys.search.shared.v3.'.hash('sha256', json_encode([
+        $cacheKey = 'imobsys.search.shared.v4.'.hash('sha256', json_encode([
             config('services.partner_api.base_url'), $from, $to, $guests, $propertyId,
         ], JSON_THROW_ON_ERROR));
 
@@ -69,11 +69,14 @@ class ImobSysSearchClient
                     if ($fresh && (! is_string($supplierExpiresAt) || strtotime($supplierExpiresAt) === false || strtotime($supplierExpiresAt) <= now()->timestamp || strtotime($supplierExpiresAt) <= strtotime($observedAt))) {
                         return null;
                     }
+                    if ($supplierExpiresAt !== null && (! is_string($supplierExpiresAt) || strtotime($supplierExpiresAt) === false || strtotime($supplierExpiresAt) <= now()->timestamp)) {
+                        return null;
+                    }
                     if (! is_string($observedAt) || strtotime($observedAt) === false) {
                         $observedAt = now()->toIso8601String();
                     }
                     $guestCountVerified = ($payload['guestCountVerified'] ?? null) === true;
-                    $supplierExpiryTimestamp = $fresh ? strtotime($supplierExpiresAt) : null;
+                    $supplierExpiryTimestamp = is_string($supplierExpiresAt) ? strtotime($supplierExpiresAt) : null;
                     $offers = [...$offers, ...array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnObservedAt' => $observedAt, '_crcnGuestCountVerified' => $guestCountVerified, '_crcnSupplierExpiresAt' => $supplierExpiryTimestamp] : $offer, $pageOffers)];
                     if ($propertyId !== null && collect($pageOffers)->contains(fn (mixed $offer): bool => is_array($offer) && ($offer['id'] ?? null) === $propertyId)) {
                         $hasMore = false;
@@ -95,7 +98,12 @@ class ImobSysSearchClient
         };
         $offers = $fresh ? $fetch() : Cache::remember($cacheKey, max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))), $fetch);
 
-        if ($offers === null) {
+        if (! $fresh && is_array($offers) && collect($offers)->contains(static fn (mixed $offer): bool => is_array($offer) && is_int($offer['_crcnExpiresAt'] ?? null) && $offer['_crcnExpiresAt'] <= now()->timestamp)) {
+            Cache::forget($cacheKey);
+            $offers = $fetch();
+        }
+
+        if ($offers === null || collect($offers)->contains(static fn (mixed $offer): bool => is_array($offer) && is_int($offer['_crcnExpiresAt'] ?? null) && $offer['_crcnExpiresAt'] <= now()->timestamp)) {
             return null;
         }
 
