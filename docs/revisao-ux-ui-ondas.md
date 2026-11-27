@@ -669,8 +669,8 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [x] Separar recuperação do checkout da página de catálogo; focar o título e manter a navegação nas ações (F21). Teste automatizado e navegador local em 1440 × 900 e 375 × 812; leitor de tela não testado. PR #84.
 - [ ] Reproduzir F05 com bebês, crianças e pets; alinhar composição, URL e parâmetros de busca.
 - [ ] Alinhar os limites de pets da interface, URLs e validação de reserva após definir a regra de negócio (F28).
-- [x] Identificar e comunicar preço expirado (F04), com atualização e estados de falha. PR #104: 31 testes direcionados, lint/build e preview responsivo passaram; checks remotos passaram. A interface usou resposta simulada e a API Laravel local estava indisponível; sem validação Stays ao vivo, leitor de tela ou produção. Aguarda revisão.
-- [x] Definir e testar preço desconhecido no filtro de faixa e sua comunicação na lista (F50). PR #105: 18 testes direcionados, lint/build e preview responsivo passaram; checks remotos passaram. A interface usou resposta simulada; sem validação Stays ao vivo ou em produção. Aguarda revisão.
+- [x] Identificar e comunicar preço expirado (F04), com atualização e estados de falha. PR fonte #104: 31 testes direcionados, lint/build e preview responsivo passaram; checks remotos passaram. A interface usou resposta simulada e a API Laravel local estava indisponível; sem validação Stays ao vivo, leitor de tela ou produção. Incluído no PR consolidado de release para `main`; checks integrados ainda pendentes.
+- [x] Definir e testar preço desconhecido no filtro de faixa e sua comunicação na lista (F50). PR fonte #105: 18 testes direcionados, lint/build e preview responsivo passaram; checks remotos passaram. A interface usou resposta simulada; sem validação Stays ao vivo ou em produção. Incluído no PR consolidado de release para `main`; checks integrados ainda pendentes.
 - [ ] Apresentar o ano de datas sazonais quando necessário (F16) e verificar expiração real antes de remover sugestões.
 - [ ] Tratar carregamento, falha repetida e recuperação no cartão de sugestão para pets (F18).
 - [ ] Revalidar sugestões ao retornar à aba após a expiração e encerrar corretamente consultas concluídas (F19).
@@ -697,7 +697,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 ### Onda 2 · Painéis, camadas e interação responsiva
 
 - [ ] F02 parcial: painéis fecham após envio ou quando a origem deixa a janela; testes direcionados passaram. Validar detalhe e saída real da origem em página longa/catálogo disponível antes de concluir.
-- [x] Corrigir transição datas → hóspedes no desktop (F03), preservando datas e foco; em mobile, manter o calendário fechado sem abrir hóspedes automaticamente. Testes direcionados e navegador local passaram.
+- [x] Corrigir transição datas → hóspedes no desktop (F03), preservando datas e foco; em mobile, manter o calendário fechado sem abrir hóspedes automaticamente. Testes direcionados passaram; no preview local consolidado, 1–3/12 abriu hóspedes em 1280 × 800, com a ação Buscar visível 16 px acima do painel. `prefers-reduced-motion` removeu a animação e reduziu a transição a 0,00001 s. API local indisponível; sem Stays, busca enviada, reserva ou pagamento.
 - [x] Corrigir F55: abertura e retorno por teclado verificados nos painéis de condomínio, datas e hóspedes; a seleção de “Todos os condomínios” transfere o foco para uma data disponível. Testes direcionados e navegador local a 1200 × 885 passaram em 26/11/2026. A matriz móvel continua na validação geral da onda 5.
 - [ ] Reproduzir e resolver corte em altura curta e mudança de largura (F06 e F10).
 - [ ] Delimitar portais ao diálogo correto e revisar modais aninhados (F07).
