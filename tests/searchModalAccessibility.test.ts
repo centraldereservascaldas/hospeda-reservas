@@ -155,6 +155,71 @@ test('date calendar enters the Tab order and moves focus by day with arrow keys'
   );
 });
 
+test('mobile search steps move focus into destination, dates, and guest controls', async () => {
+  const originalMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+  Object.defineProperty(window, 'matchMedia', {
+    configurable: true,
+    value: (query: string) => ({
+      matches: query === '(max-width: 639px)',
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+  });
+
+  try {
+    let searchCount = 0;
+    const { getByRole, getByPlaceholderText } = render(
+      React.createElement(SearchModal, {
+        isOpen: true,
+        onClose: () => {},
+        filters: createDefaultSearchFilters(),
+        onApplyFilters: () => {},
+        onResetFilters: () => {},
+        onSearchInApp: () => {
+          searchCount += 1;
+        },
+      }),
+    );
+
+    fireEvent.click(getByRole('button', { name: /QuandoAdicionar datas/ }));
+    const firstDate = document.querySelector<HTMLButtonElement>(
+      'button[data-calendar-day]:not(:disabled)[tabindex="0"]',
+    );
+    assert.ok(firstDate);
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    assert.equal(document.activeElement, firstDate);
+
+    fireEvent.click(getByRole('button', { name: /Quem1 hóspede/ }));
+    const increaseAdults = getByRole('button', { name: 'Aumentar adultos' });
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    assert.equal(document.activeElement, increaseAdults);
+
+    fireEvent.click(getByRole('button', { name: /OndeTodos os condomínios/ }));
+    const destinationInput = getByPlaceholderText('Buscar condomínio ou destino');
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    assert.equal(document.activeElement, destinationInput);
+
+    fireEvent.click(
+      getByRole('button', {
+        name: 'Todos os condomíniosBuscar em todos os empreendimentos',
+      }),
+    );
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    assert.equal(
+      document.activeElement?.hasAttribute('data-calendar-day'),
+      true,
+      'choosing all condominiums should transfer focus into the date step',
+    );
+    assert.equal(searchCount, 0, 'step navigation should not submit a search');
+  } finally {
+    if (originalMatchMedia) {
+      Object.defineProperty(window, 'matchMedia', originalMatchMedia);
+    } else {
+      Reflect.deleteProperty(window, 'matchMedia');
+    }
+  }
+});
+
 test('search modal keeps its mobile controls touch-sized and clear of input text', () => {
   const { getByRole, getByLabelText } = render(
     React.createElement(SearchModal, {
