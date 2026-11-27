@@ -5,6 +5,9 @@ import { Heart, Compass } from 'lucide-react';
 
 interface WishlistsViewProps {
   savedProperties: Property[];
+  status: 'loading' | 'error' | 'stale' | 'ready';
+  missingSavedPropertyCount: number;
+  onRetryCatalog: () => void;
   currency: Currency;
   onToggleSave: (id: string) => void;
   onSelectProperty: (property: Property) => void;
@@ -14,6 +17,9 @@ interface WishlistsViewProps {
 
 export const WishlistsView: React.FC<WishlistsViewProps> = ({
   savedProperties,
+  status,
+  missingSavedPropertyCount,
+  onRetryCatalog,
   currency,
   onToggleSave,
   onSelectProperty,
@@ -41,7 +47,39 @@ export const WishlistsView: React.FC<WishlistsViewProps> = ({
         </button>
       </div>
 
-      {savedProperties.length === 0 ? (
+      {status !== 'ready' && (
+        <div
+          role={status === 'error' ? 'alert' : 'status'}
+          className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+        >
+          <p>
+            {status === 'loading'
+              ? 'Carregando suas acomodações salvas…'
+              : status === 'error'
+                ? 'Não foi possível carregar todas as acomodações salvas.'
+                : 'Algumas acomodações podem não estar atualizadas.'}
+          </p>
+          {(status === 'error' || status === 'stale') && (
+            <button
+              type="button"
+              onClick={onRetryCatalog}
+              className="mt-2 min-h-11 rounded-lg underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+            >
+              Tentar carregar novamente
+            </button>
+          )}
+        </div>
+      )}
+
+      {status === 'ready' && missingSavedPropertyCount > 0 && (
+        <p role="status" className="mt-5 rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+          {missingSavedPropertyCount === 1
+            ? 'Uma acomodação salva não está disponível no catálogo.'
+            : `${missingSavedPropertyCount} acomodações salvas não estão disponíveis no catálogo.`}
+        </p>
+      )}
+
+      {savedProperties.length === 0 && missingSavedPropertyCount === 0 ? (
         <div className="text-center py-20 [@media(max-height:640px)]:py-6 [@media(max-height:400px)]:-mt-5 [@media(max-height:400px)]:py-1 max-w-md mx-auto space-y-4 [@media(max-height:640px)]:space-y-3 [@media(max-height:400px)]:space-y-0">
           <div className="w-16 h-16 [@media(max-height:400px)]:w-8 [@media(max-height:400px)]:h-8 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center mx-auto border border-orange-200/60 shadow-xs">
             <Heart className="w-8 h-8 [@media(max-height:400px)]:w-4 [@media(max-height:400px)]:h-4 fill-orange-500 text-orange-500" />
@@ -60,7 +98,7 @@ export const WishlistsView: React.FC<WishlistsViewProps> = ({
             Começar a explorar
           </button>
         </div>
-      ) : (
+      ) : savedProperties.length > 0 ? (
         <div className="mt-8 [@media(max-height:400px)]:mt-1">
           <p className="text-xs text-neutral-500 mb-6 [@media(max-height:400px)]:mb-1 font-semibold">
             {savedProperties.length} acomodaç
@@ -80,7 +118,7 @@ export const WishlistsView: React.FC<WishlistsViewProps> = ({
             ))}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

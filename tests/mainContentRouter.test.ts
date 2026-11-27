@@ -51,6 +51,8 @@ function createRouterProps(overrides: Record<string, unknown> = {}) {
     onRetryPropertyRoute: () => {},
     savedPropertyIds: [],
     savedProperties: [],
+    savedPropertiesStatus: 'ready' as const,
+    missingSavedPropertyCount: 0,
     showTotalWithTaxes: false,
     condominiums: [],
     reservations: [],
@@ -195,6 +197,53 @@ test('saved wishlists keep their catalog return action touch-sized', async () =>
     exploreButton.parentElement?.className ?? '',
     /\[@media\(min-width:480px\)_and_\(max-height:400px\)\]:flex-row/,
   );
+});
+
+test('saved wishlists distinguish catalog loading and offer retry after a load failure', async () => {
+  const loadingView = render(
+    React.createElement(MainContentRouter, {
+      ...createRouterProps({
+        currentView: 'wishlists',
+        savedPropertyIds: ['unknown-listing'],
+        savedPropertiesStatus: 'loading',
+      }),
+    }),
+  );
+  assert.ok(loadingView.getByRole('status').textContent?.includes('Carregando'));
+  loadingView.unmount();
+
+  let retries = 0;
+  const { getByRole } = render(
+    React.createElement(MainContentRouter, {
+      ...createRouterProps({
+        currentView: 'wishlists',
+        savedPropertyIds: ['unknown-listing'],
+        savedPropertiesStatus: 'error',
+        onRetryCatalog: () => retries++,
+      }),
+    }),
+  );
+  fireEvent.click(getByRole('button', { name: 'Tentar carregar novamente' }));
+  assert.equal(retries, 1);
+  assert.ok(getByRole('alert').textContent?.includes('Não foi possível carregar'));
+});
+
+test('saved wishlists do not claim to be empty when stored accommodations are unavailable', async () => {
+  const { getByRole, queryByRole } = render(
+    React.createElement(MainContentRouter, {
+      ...createRouterProps({
+        currentView: 'wishlists',
+        savedPropertyIds: ['removed-listing'],
+        savedPropertiesStatus: 'ready',
+        missingSavedPropertyCount: 1,
+      }),
+    }),
+  );
+
+  await waitFor(() => {
+    assert.ok(getByRole('status').textContent?.includes('Uma acomodação salva'));
+  });
+  assert.equal(queryByRole('heading', { name: 'Sua lista de favoritos está vazia' }), null);
 });
 
 test('condominium route does not render the search form and shows the empty directory state', () => {

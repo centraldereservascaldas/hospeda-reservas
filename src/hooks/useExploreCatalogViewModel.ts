@@ -10,6 +10,7 @@ import {
 
 interface UseExploreCatalogViewModelOptions {
   properties: Property[];
+  catalogProperties: Property[];
   filters: SearchFilters;
   savedPropertyIds: string[];
   catalogLoading: boolean;
@@ -19,6 +20,7 @@ interface UseExploreCatalogViewModelOptions {
 
 export function useExploreCatalogViewModel({
   properties,
+  catalogProperties,
   filters,
   savedPropertyIds,
   catalogLoading,
@@ -57,10 +59,31 @@ export function useExploreCatalogViewModel({
         : 'stale'
       : 'ready';
   const activeFilterCount = useMemo(() => countActivePropertyFilters(filters), [filters]);
-  const savedPropertiesList = useMemo(
-    () => properties.filter((property) => savedPropertyIds.includes(property.id)),
-    [properties, savedPropertyIds],
-  );
+  const savedPropertiesList = useMemo(() => {
+    const availableProperties = new Map<string, Property>();
+    for (const property of catalogProperties) availableProperties.set(property.id, property);
+    for (const property of properties) availableProperties.set(property.id, property);
+    return savedPropertyIds.flatMap((id) => {
+      const property = availableProperties.get(id);
+      return property ? [property] : [];
+    });
+  }, [catalogProperties, properties, savedPropertyIds]);
+  const missingSavedPropertyCount = useMemo(() => {
+    const availableIds = new Set([
+      ...catalogProperties.map(({ id }) => id),
+      ...properties.map(({ id }) => id),
+    ]);
+    return savedPropertyIds.filter((id) => !availableIds.has(id)).length;
+  }, [catalogProperties, properties, savedPropertyIds]);
+  const savedPropertiesStatus: 'loading' | 'error' | 'stale' | 'ready' = catalogLoading
+    ? catalogProperties.length === 0
+      ? 'loading'
+      : 'stale'
+    : catalogLoadError
+      ? catalogProperties.length === 0
+        ? 'error'
+        : 'stale'
+      : 'ready';
 
   return {
     filteredProperties,
@@ -70,5 +93,7 @@ export function useExploreCatalogViewModel({
     catalogStatus,
     activeFilterCount,
     savedPropertiesList,
+    missingSavedPropertyCount,
+    savedPropertiesStatus,
   };
 }
