@@ -111,6 +111,9 @@ PHP;
                     } proc_close($process);
                 }
             }
+            DB::table('partner_payment_notifications')->where('partner_checkout_order_id', $order->id)->delete();
+            DB::table('partner_checkout_events')->where('partner_checkout_order_id', $order->id)->delete();
+            DB::table('partner_payment_attempts')->where('partner_checkout_order_id', $order->id)->delete();
             $order->delete();
         }
     }
