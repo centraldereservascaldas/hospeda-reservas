@@ -184,6 +184,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     retryPrice,
     isCalculatingPrice,
     priceRequestFailed,
+    priceUnavailable,
+    priceAvailabilityUnavailable,
   } = usePropertyAvailability({
     property,
     checkIn,
@@ -720,6 +722,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                     isLoadingCalendar={isLoadingCalendar}
                     isCalculatingPrice={isCalculatingPrice}
                     priceRequestFailed={priceRequestFailed}
+                    priceUnavailable={priceUnavailable}
+                    priceAvailabilityUnavailable={priceAvailabilityUnavailable}
                     onRetryCalendar={retryCalendar}
                     onRetryPrice={retryPrice}
                     selectedRangeAvailable={selectedRangeAvailable}

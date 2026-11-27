@@ -31,12 +31,25 @@ const { PropertyDatePickerDialog } =
 const { formatPropertyDescription, PropertyOverviewSection } =
   await import('../src/components/property/PropertyOverviewSection.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
+type CalculatedPriceOutcome = import('../src/services/crcnBackendApi.ts').CalculatedPriceOutcome;
 const { checkoutApi } = await import('../src/services/checkoutApi.ts');
 const { CheckoutModal } = await import('../src/components/booking/CheckoutModal.tsx');
 const { CheckoutResumePage } = await import('../src/components/booking/CheckoutResumePage.tsx');
 const { PropertyHostSection } = await import('../src/components/property/PropertyHostSection.tsx');
 const { clearCheckoutResumeToken, saveCheckoutResumeToken } =
   await import('../src/utils/checkoutResumeStorage.ts');
+
+const useMockedPriceOutcome = async (
+  payload: Parameters<typeof crcnBackendApi.calculatePrice>[0],
+): Promise<CalculatedPriceOutcome> => {
+  try {
+    const quote = await crcnBackendApi.calculatePrice(payload);
+    return quote ? { status: 'quoted', quote } : { status: 'unavailable', reason: 'quote' };
+  } catch {
+    return { status: 'failed', reason: 'request' };
+  }
+};
+crcnBackendApi.calculatePriceOutcome = useMockedPriceOutcome;
 
 test('does not show Stays review links for ImobSys offer details', () => {
   const property = {
@@ -515,7 +528,7 @@ test('property detail page uses normal page semantics and labels unconfirmed pri
     assert.ok(pageSurface);
     assert.doesNotMatch(pageSurface.className, /rounded-3xl|shadow-xl|border-neutral-200/);
     assert.ok(getByRole('button', { name: 'Voltar para resultados' }));
-    await waitFor(() => assert.match(container.textContent || '', /Preço não confirmado/));
+    await waitFor(() => assert.match(container.textContent || '', /Cotação não disponível/));
     await waitFor(() =>
       assert.match(container.textContent || '', /Disponibilidade não confirmada para estas datas/),
     );
@@ -547,7 +560,7 @@ test('does not calculate a zero estimate when no reference rate or live quote ex
       }),
     );
 
-    await waitFor(() => assert.ok(getByText('Preço não confirmado')));
+    await waitFor(() => assert.ok(getByText('Cotação não disponível')));
     assert.equal(queryByText('Estimativa'), null);
     assert.equal(queryByText(/R\$\s?0,00/), null);
   } finally {
@@ -961,6 +974,7 @@ afterEach(() => {
   mock.timers.reset();
   cleanup();
   document.body.innerHTML = '';
+  crcnBackendApi.calculatePriceOutcome = useMockedPriceOutcome;
 });
 
 test('retries a failed price quote when availability is confirmed', async () => {
@@ -1092,11 +1106,53 @@ test('booking panel lets guests retry failed availability without opening the ca
     await waitFor(() => assert.equal(calendarAttempts, 2));
     await waitFor(() => {
       assert.equal(queryByRole('button', { name: 'Verificar disponibilidade novamente' }), null);
-      assert.match(document.body.textContent || '', /Disponibilidade confirmada/);
+      assert.match(document.body.textContent || '', /A cotação não está disponível no momento/);
     });
   } finally {
     crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
     crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
+});
+
+test('booking panel identifies a period the price service reports as unavailable', async () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalPriceOutcome = crcnBackendApi.calculatePriceOutcome;
+  const calendar = Array.from({ length: 5 }, (_, index) => ({
+    date: `2026-11-${String(11 + index).padStart(2, '0')}`,
+    avail: 1,
+  }));
+  crcnBackendApi.getAccommodationCalendar = async () => calendar;
+  crcnBackendApi.calculatePriceOutcome = async () => ({
+    status: 'unavailable',
+    reason: 'availability',
+  });
+
+  try {
+    const { getByText } = render(
+      React.createElement(PropertyDetailModal, {
+        property: STAYS_NET_APARTMENTS[0]!,
+        initialCheckIn: '2026-11-11',
+        initialCheckOut: '2026-11-13',
+        initialGuests: { adults: 2, children: 0, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking: () => {},
+      }),
+    );
+
+    await waitFor(() => {
+      assert.ok(getByText('O período selecionado não está disponível.'));
+      assert.equal(
+        document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')
+          ?.disabled,
+        true,
+      );
+    });
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePriceOutcome = originalPriceOutcome;
   }
 });
 
@@ -1341,10 +1397,7 @@ test('booking calendar names full dates and exposes the active date field', asyn
       assert.match(unavailableBooking.className, /disabled:text-neutral-700/);
       assert.match(unavailableBooking.className, /disabled:from-neutral-200/);
     });
-    assert.match(
-      container.textContent || '',
-      /Disponibilidade confirmada; cotação ainda não confirmada/,
-    );
+    assert.match(container.textContent || '', /A cotação não está disponível no momento/);
     assert.ok(getByRole('button', { name: 'Tentar cotação novamente' }));
 
     const [checkIn, checkOut] = Array.from(

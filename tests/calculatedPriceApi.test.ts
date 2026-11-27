@@ -40,6 +40,15 @@ test('returns a fully validated calculated price response', async () => {
 
   try {
     assert.deepEqual(
+      await crcnBackendApi.calculatePriceOutcome({
+        listingId: 'JQ08G',
+        from: '2026-10-13',
+        to: '2026-10-15',
+        guests: 1,
+      }),
+      { status: 'quoted', quote },
+    );
+    assert.deepEqual(
       await crcnBackendApi.calculatePrice({
         listingId: 'JQ08G',
         from: '2026-10-13',
@@ -53,6 +62,66 @@ test('returns a fully validated calculated price response', async () => {
   }
 });
 
+test('distinguishes an explicit unavailable quote from a request failure', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  console.warn = () => undefined;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        success: false,
+        code: 'quote_unavailable',
+        message: 'No quote for this stay.',
+      }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    );
+
+  try {
+    assert.deepEqual(
+      await crcnBackendApi.calculatePriceOutcome({
+        listingId: 'JQ08G',
+        from: '2026-10-13',
+        to: '2026-10-15',
+        guests: 1,
+      }),
+      { status: 'unavailable', reason: 'quote' },
+    );
+
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          success: false,
+          code: 'availability_unavailable',
+          message: 'Stay is unavailable.',
+        }),
+        { status: 409, headers: { 'Content-Type': 'application/json' } },
+      );
+    assert.deepEqual(
+      await crcnBackendApi.calculatePriceOutcome({
+        listingId: 'JQ08G',
+        from: '2026-10-13',
+        to: '2026-10-15',
+        guests: 1,
+      }),
+      { status: 'unavailable', reason: 'availability' },
+    );
+
+    globalThis.fetch = async () => new Response('Service unavailable', { status: 503 });
+    assert.deepEqual(
+      await crcnBackendApi.calculatePriceOutcome({
+        listingId: 'JQ08G',
+        from: '2026-10-13',
+        to: '2026-10-15',
+        guests: 1,
+      }),
+      { status: 'failed', reason: 'request' },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+});
+
 test('rejects incomplete calculated price responses', async () => {
   const originalFetch = globalThis.fetch;
   const originalWarn = console.warn;
@@ -60,6 +129,17 @@ test('rejects incomplete calculated price responses', async () => {
   console.warn = () => undefined;
 
   try {
+    assert.equal(
+      (
+        await crcnBackendApi.calculatePriceOutcome({
+          listingId: 'JQ08G',
+          from: '2026-10-13',
+          to: '2026-10-15',
+          guests: 1,
+        })
+      ).status,
+      'failed',
+    );
     assert.equal(
       await crcnBackendApi.calculatePrice({
         listingId: 'JQ08G',
@@ -72,5 +152,28 @@ test('rejects incomplete calculated price responses', async () => {
   } finally {
     globalThis.fetch = originalFetch;
     console.warn = originalWarn;
+  }
+});
+
+test('rejects a price response for another listing without discarding the failure reason', async () => {
+  const originalFetch = globalThis.fetch;
+  setPriceResponse({
+    ...quote,
+    listingId: 'another-listing',
+    staysListingId: 'another-stays-listing',
+  });
+
+  try {
+    assert.deepEqual(
+      await crcnBackendApi.calculatePriceOutcome({
+        listingId: 'JQ08G',
+        from: '2026-10-13',
+        to: '2026-10-15',
+        guests: 1,
+      }),
+      { status: 'failed', reason: 'context-mismatch' },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });

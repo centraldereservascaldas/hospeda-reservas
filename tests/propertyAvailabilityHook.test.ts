@@ -19,6 +19,19 @@ const { usePropertyAvailability } =
   await import('../src/components/property/usePropertyAvailability.ts');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 type CalculatedPriceResponse = import('../src/services/crcnBackendApi.ts').CalculatedPriceResponse;
+type CalculatedPriceOutcome = import('../src/services/crcnBackendApi.ts').CalculatedPriceOutcome;
+
+const useMockedPriceOutcome = async (
+  payload: Parameters<typeof crcnBackendApi.calculatePrice>[0],
+): Promise<CalculatedPriceOutcome> => {
+  try {
+    const quote = await crcnBackendApi.calculatePrice(payload);
+    return quote ? { status: 'quoted', quote } : { status: 'unavailable', reason: 'quote' };
+  } catch {
+    return { status: 'failed', reason: 'request' };
+  }
+};
+crcnBackendApi.calculatePriceOutcome = useMockedPriceOutcome;
 
 afterEach(() => {
   cleanup();
@@ -150,6 +163,7 @@ test('property availability hook distinguishes a rejected price request from an 
       JSON.stringify({
         isCalculatingPrice: result.isCalculatingPrice,
         priceRequestFailed: result.priceRequestFailed,
+        priceUnavailable: result.priceUnavailable,
       }),
     );
   }
@@ -159,6 +173,46 @@ test('property availability hook distinguishes a rejected price request from an 
     await waitFor(() => {
       assert.match(container.textContent || '', /"isCalculatingPrice":false/);
       assert.match(container.textContent || '', /"priceRequestFailed":true/);
+      assert.match(container.textContent || '', /"priceUnavailable":false/);
+    });
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
+});
+
+test('property availability distinguishes an unavailable quote from a failed request', async () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalCalculatePrice = crcnBackendApi.calculatePrice;
+  const property = STAYS_NET_APARTMENTS[0]!;
+  crcnBackendApi.getAccommodationCalendar = async () => [];
+  crcnBackendApi.calculatePrice = async () => null;
+
+  function Probe() {
+    const result = usePropertyAvailability({
+      property,
+      checkIn: '2026-11-11',
+      checkOut: '2026-11-15',
+      guests: 3,
+      todayIso: '2026-10-13',
+    });
+    return React.createElement(
+      'output',
+      null,
+      JSON.stringify({
+        isCalculatingPrice: result.isCalculatingPrice,
+        priceRequestFailed: result.priceRequestFailed,
+        priceUnavailable: result.priceUnavailable,
+      }),
+    );
+  }
+
+  try {
+    const { container } = render(React.createElement(Probe));
+    await waitFor(() => {
+      assert.match(container.textContent || '', /"isCalculatingPrice":false/);
+      assert.match(container.textContent || '', /"priceRequestFailed":false/);
+      assert.match(container.textContent || '', /"priceUnavailable":true/);
     });
   } finally {
     crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
