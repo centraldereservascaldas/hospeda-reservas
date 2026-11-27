@@ -141,7 +141,7 @@ test('returns focus to the page landmark when a deep-linked dialog has no opener
   assert.equal(document.activeElement, catalog);
 });
 
-test('includes marked portals in the dialog tab loop without letting their Escape close the dialog', () => {
+test('includes explicitly owned portals in the dialog tab loop without letting their Escape close the dialog', () => {
   function Dialog({ onClose }: { onClose: () => void }) {
     const dialogRef = useDialogFocus(true, onClose);
     return React.createElement(
@@ -154,6 +154,7 @@ test('includes marked portals in the dialog tab loop without letting their Escap
           role: 'dialog',
           'aria-modal': 'true',
           'data-dialog-focus-root': true,
+          'aria-owns': 'search-options',
           tabIndex: -1,
         },
         React.createElement('button', { type: 'button' }, 'First in dialog'),
@@ -162,7 +163,7 @@ test('includes marked portals in the dialog tab loop without letting their Escap
       createPortal(
         React.createElement(
           'div',
-          { 'data-dialog-focus-portal': true },
+          { id: 'search-options', role: 'group', 'data-dialog-focus-portal': true },
           React.createElement('button', { type: 'button' }, 'Portaled option'),
         ),
         document.body,
@@ -200,4 +201,55 @@ test('includes marked portals in the dialog tab loop without letting their Escap
 
   fireEvent.keyDown(portaledOption, { key: 'Escape' });
   assert.equal(closeCount, 0, 'Escape from the popover is left for its own close handler');
+});
+
+test('keeps unrelated and inert portals out of an active dialog focus loop', () => {
+  function Dialog() {
+    const dialogRef = useDialogFocus(true, () => {});
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement(
+        'div',
+        {
+          ref: dialogRef,
+          role: 'dialog',
+          'aria-modal': 'true',
+          'data-dialog-focus-root': true,
+          'aria-owns': 'inactive-owned-actions',
+          tabIndex: -1,
+        },
+        React.createElement('button', { type: 'button' }, 'Close login'),
+      ),
+      createPortal(
+        React.createElement(
+          'div',
+          { id: 'inactive-owned-actions', 'data-dialog-focus-portal': true, inert: true },
+          React.createElement('button', { type: 'button' }, 'Inactive action'),
+        ),
+        document.body,
+      ),
+      createPortal(
+        React.createElement(
+          'section',
+          { 'data-dialog-focus-portal': true, 'aria-label': 'Measurement preferences' },
+          React.createElement('button', { type: 'button' }, 'Consent analytics'),
+        ),
+        document.body,
+      ),
+    );
+  }
+
+  render(React.createElement(Dialog));
+  const closeButton = Array.from(document.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Close login',
+  )!;
+  const consentButton = Array.from(document.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Consent analytics',
+  )!;
+
+  assert.equal(document.activeElement, closeButton);
+  fireEvent.keyDown(closeButton, { key: 'Tab' });
+  assert.equal(document.activeElement, closeButton, 'Tab stays inside the active dialog');
+  assert.notEqual(document.activeElement, consentButton);
 });
