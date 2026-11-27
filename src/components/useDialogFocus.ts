@@ -11,17 +11,23 @@ const focusableSelector = [
 
 const openDialogs: HTMLElement[] = [];
 
-function ownedFocusPortals(dialog: HTMLElement): HTMLElement[] {
+function focusPortals(dialog: HTMLElement): HTMLElement[] {
   const ownedIds = (dialog.getAttribute('aria-owns') ?? '').split(/\s+/).filter(Boolean);
-
-  return ownedIds
+  const ownedPortals = ownedIds
     .map((id) => document.getElementById(id))
     .filter((portal): portal is HTMLElement => portal instanceof HTMLElement)
     .filter((portal) => portal.hasAttribute('data-dialog-focus-portal'));
+  const globalPortals = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-dialog-focus-portal="global"]'),
+  );
+
+  return [...new Set([...ownedPortals, ...globalPortals])].filter(
+    (portal) => !portal.closest('[aria-hidden="true"], [inert]'),
+  );
 }
 
 function focusableElements(dialog: HTMLElement): HTMLElement[] {
-  const containers = [dialog, ...ownedFocusPortals(dialog)];
+  const containers = [dialog, ...focusPortals(dialog)];
   const elements = new Set(
     containers.flatMap((container) =>
       Array.from(container.querySelectorAll<HTMLElement>(focusableSelector)),
@@ -43,16 +49,17 @@ function focusableElements(dialog: HTMLElement): HTMLElement[] {
 function isInDialogOrPortal(dialog: HTMLElement, target: EventTarget | null): boolean {
   if (!(target instanceof Node)) return false;
   if (dialog.contains(target)) return true;
-  return ownedFocusPortals(dialog).some((portal) => portal.contains(target));
+  return focusPortals(dialog).some((portal) => portal.contains(target));
 }
 
 function isInNestedFocusPortal(dialog: HTMLElement, target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
-  const portal = target.closest<HTMLElement>('[data-dialog-focus-portal][role]');
+  const portal = target.closest<HTMLElement>('[data-dialog-focus-portal]');
+  if (!portal || !focusPortals(dialog).includes(portal)) return false;
+
   return (
-    !!portal &&
-    ['dialog', 'group'].includes(portal.getAttribute('role') ?? '') &&
-    ownedFocusPortals(dialog).includes(portal)
+    portal.dataset.dialogFocusPortal === 'global' ||
+    ['dialog', 'group'].includes(portal.getAttribute('role') ?? '')
   );
 }
 

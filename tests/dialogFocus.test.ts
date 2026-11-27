@@ -232,8 +232,8 @@ test('keeps unrelated and inert portals out of an active dialog focus loop', () 
       createPortal(
         React.createElement(
           'section',
-          { 'data-dialog-focus-portal': true, 'aria-label': 'Measurement preferences' },
-          React.createElement('button', { type: 'button' }, 'Consent analytics'),
+          { 'data-dialog-focus-portal': true, 'aria-label': 'Unowned portal' },
+          React.createElement('button', { type: 'button' }, 'Unowned portal action'),
         ),
         document.body,
       ),
@@ -244,12 +244,70 @@ test('keeps unrelated and inert portals out of an active dialog focus loop', () 
   const closeButton = Array.from(document.querySelectorAll('button')).find(
     (button) => button.textContent === 'Close login',
   )!;
-  const consentButton = Array.from(document.querySelectorAll('button')).find(
-    (button) => button.textContent === 'Consent analytics',
+  const unownedButton = Array.from(document.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Unowned portal action',
   )!;
 
   assert.equal(document.activeElement, closeButton);
   fireEvent.keyDown(closeButton, { key: 'Tab' });
   assert.equal(document.activeElement, closeButton, 'Tab stays inside the active dialog');
-  assert.notEqual(document.activeElement, consentButton);
+  assert.notEqual(document.activeElement, unownedButton);
+});
+
+test('keeps the global measurement portal reachable while excluding unrelated portals', () => {
+  let closeCount = 0;
+
+  function Dialog() {
+    const dialogRef = useDialogFocus(true, () => {
+      closeCount += 1;
+    });
+    return React.createElement(
+      React.Fragment,
+      null,
+      React.createElement(
+        'div',
+        {
+          ref: dialogRef,
+          role: 'dialog',
+          'aria-modal': 'true',
+          'data-dialog-focus-root': true,
+          tabIndex: -1,
+        },
+        React.createElement('button', { type: 'button' }, 'Close checkout'),
+      ),
+      createPortal(
+        React.createElement(
+          'section',
+          { 'data-dialog-focus-portal': 'global', 'aria-label': 'Measurement preferences' },
+          React.createElement('button', { type: 'button' }, 'Accept measurement'),
+        ),
+        document.body,
+      ),
+      createPortal(
+        React.createElement(
+          'div',
+          { 'data-dialog-focus-portal': true },
+          React.createElement('button', { type: 'button' }, 'Unrelated booking action'),
+        ),
+        document.body,
+      ),
+    );
+  }
+
+  render(React.createElement(Dialog));
+  const closeButton = Array.from(document.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Close checkout',
+  )!;
+  const consentButton = Array.from(document.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Accept measurement',
+  )!;
+  const unrelatedButton = Array.from(document.querySelectorAll('button')).find(
+    (button) => button.textContent === 'Unrelated booking action',
+  )!;
+
+  fireEvent.keyDown(closeButton, { key: 'Tab' });
+  assert.equal(document.activeElement, consentButton);
+  assert.notEqual(document.activeElement, unrelatedButton);
+  fireEvent.keyDown(consentButton, { key: 'Escape' });
+  assert.equal(closeCount, 0, 'Escape from the global consent panel does not close checkout');
 });
