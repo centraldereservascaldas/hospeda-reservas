@@ -65,11 +65,16 @@ class ImobSysSearchClient
                     if ($fresh && (! is_string($observedAt) || strtotime($observedAt) === false || strtotime($observedAt) < now()->subSeconds(30)->timestamp || strtotime($observedAt) > now()->addSeconds(5)->timestamp)) {
                         return null;
                     }
+                    $supplierExpiresAt = $payload['expiresAt'] ?? null;
+                    if ($fresh && (! is_string($supplierExpiresAt) || strtotime($supplierExpiresAt) === false || strtotime($supplierExpiresAt) <= now()->timestamp || strtotime($supplierExpiresAt) <= strtotime($observedAt))) {
+                        return null;
+                    }
                     if (! is_string($observedAt) || strtotime($observedAt) === false) {
                         $observedAt = now()->toIso8601String();
                     }
                     $guestCountVerified = ($payload['guestCountVerified'] ?? null) === true;
-                    $offers = [...$offers, ...array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnObservedAt' => $observedAt, '_crcnGuestCountVerified' => $guestCountVerified] : $offer, $pageOffers)];
+                    $supplierExpiryTimestamp = $fresh ? strtotime($supplierExpiresAt) : null;
+                    $offers = [...$offers, ...array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnObservedAt' => $observedAt, '_crcnGuestCountVerified' => $guestCountVerified, '_crcnSupplierExpiresAt' => $supplierExpiryTimestamp] : $offer, $pageOffers)];
                     if ($propertyId !== null && collect($pageOffers)->contains(fn (mixed $offer): bool => is_array($offer) && ($offer['id'] ?? null) === $propertyId)) {
                         $hasMore = false;
                         break;
@@ -86,7 +91,7 @@ class ImobSysSearchClient
 
             $expiresAt = now()->addSeconds(max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))))->getTimestamp();
 
-            return array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnExpiresAt' => $expiresAt] : $offer, $offers);
+            return array_map(static fn (mixed $offer): mixed => is_array($offer) ? [...$offer, '_crcnExpiresAt' => is_int($offer['_crcnSupplierExpiresAt'] ?? null) ? min($expiresAt, $offer['_crcnSupplierExpiresAt']) : $expiresAt] : $offer, $offers);
         };
         $offers = $fresh ? $fetch() : Cache::remember($cacheKey, max(1, min(60, (int) config('services.partner_api.cache_ttl', 25))), $fetch);
 

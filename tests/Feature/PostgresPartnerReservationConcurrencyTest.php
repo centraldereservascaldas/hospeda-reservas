@@ -43,7 +43,7 @@ config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_chec
 Illuminate\Support\Facades\Http::preventStrayRequests();
 if ($argv[2] === 'payment') {
     $offers = Mockery::mock(App\Services\ImobSysSearchClient::class);
-    $offers->shouldReceive('offers')->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
+    $offers->shouldReceive('offers')->andReturn([['totalCents' => 52300, 'availabilityConfirmed' => true, '_crcnExpiresAt' => now()->addMinutes(5)->timestamp, '_crcnGuestCountVerified' => true, 'additionalChargesKnown' => true]]);
     $app->instance(App\Services\ImobSysSearchClient::class, $offers);
     $mock = Mockery::mock(App\Services\Payments\CieloEcommerceClient::class);
     $mock->shouldReceive('createPixPayment')->andReturnUsing(function () {

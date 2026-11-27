@@ -40,6 +40,7 @@ class ImobSysSearchFallbackTest extends TestCase
             'to' => '2027-01-12',
             'guests' => 2,
             'observedAt' => now()->toIso8601String(),
+            'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'offers' => [],
             'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
         ])]);
@@ -59,6 +60,28 @@ class ImobSysSearchFallbackTest extends TestCase
         $this->assertNull($client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663', true));
         $this->assertNull($client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663', true));
         Http::assertSentCount(2);
+    }
+
+    public function test_fresh_supplier_lookup_rejects_expired_or_missing_expiry(): void
+    {
+        Http::preventStrayRequests();
+        $body = ['success' => true, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'observedAt' => now()->subSeconds(10)->toIso8601String(), 'offers' => [], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false]];
+        Http::fakeSequence()->push([...$body, 'expiresAt' => now()->subSecond()->toIso8601String()])->push($body)->push([...$body, 'expiresAt' => now()->addSeconds(20)->toIso8601String()]);
+        $client = app(ImobSysSearchClient::class);
+        $this->assertNull($client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663', true));
+        $this->assertNull($client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663', true));
+        $this->assertSame([], $client->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663', true));
+        Http::assertSentCount(3);
+    }
+
+    public function test_fresh_supplier_offer_never_outlives_supplier_expiry(): void
+    {
+        Http::preventStrayRequests();
+        $expiry = now()->addSeconds(10)->startOfSecond();
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response(['success' => true, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'observedAt' => now()->toIso8601String(), 'expiresAt' => $expiry->toIso8601String(), 'guestCountVerified' => true, 'offers' => [['id' => 'imobsys-crcn-2-663', 'capacity' => 5, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'nights' => 2, 'totalCents' => 52300, 'currency' => 'BRL', 'status' => 'offer_observed', 'availabilityConfirmed' => true, 'reservationGuaranteed' => false]], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false]])]);
+        $offers = app(ImobSysSearchClient::class)->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663', true);
+        $this->assertCount(1, $offers);
+        $this->assertSame($expiry->timestamp, $offers[0]['_crcnExpiresAt']);
     }
 
     public function test_production_partner_detail_requires_feature_flag_and_specific_property(): void

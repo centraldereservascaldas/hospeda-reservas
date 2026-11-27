@@ -33,7 +33,7 @@ class PartnerPaymentStartService
         $gatewayStarted = false;
         try {
             $offers = $this->offers->offers($order->check_in->format('Y-m-d'), $order->check_out->format('Y-m-d'), (int) $order->guests, '', $order->supplier_property_id, true);
-            if (! is_array($offers) || count($offers) !== 1 || ($offers[0]['totalCents'] ?? null) !== (int) $order->base_cents || ($offers[0]['availabilityConfirmed'] ?? null) !== true || ($offers[0]['_crcnGuestCountVerified'] ?? null) !== true || ($offers[0]['additionalChargesKnown'] ?? null) !== true) {
+            if (! is_array($offers) || count($offers) !== 1 || ($offers[0]['totalCents'] ?? null) !== (int) $order->base_cents || ($offers[0]['availabilityConfirmed'] ?? null) !== true || ($offers[0]['_crcnGuestCountVerified'] ?? null) !== true || ($offers[0]['additionalChargesKnown'] ?? null) !== true || ! is_int($offers[0]['_crcnExpiresAt'] ?? null) || $offers[0]['_crcnExpiresAt'] <= now()->timestamp) {
                 throw new RuntimeException('Cotação mudou ou não pôde ser confirmada.');
             }
             $customer = $order->encrypted_customer;
