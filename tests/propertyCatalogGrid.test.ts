@@ -131,7 +131,7 @@ test('keeps Stays properties first and places ImobSys offers under Mais opções
     },
   };
 
-  const { container } = render(
+  const { container, rerender } = render(
     React.createElement(PropertyCatalogGrid, {
       ...commonProps,
       status: 'ready',
@@ -144,6 +144,16 @@ test('keeps Stays properties first and places ImobSys offers under Mais opções
   assert.match(cards[0]?.textContent ?? '', /Lacqua DiRoma IV/);
   assert.match(cards[1]?.textContent ?? '', /Lacqua \| Apartamento 101/);
   assert.ok(screen.getByRole('heading', { name: 'Mais opções' }));
+  assert.ok(screen.getByText(/Selecione as datas para consultar valores e disponibilidade/));
+  rerender(
+    React.createElement(PropertyCatalogGrid, {
+      ...commonProps,
+      status: 'ready',
+      hasSearchDates: true,
+      properties: [imobsysProperty, staysProperty],
+    }),
+  );
+  assert.ok(screen.getByText(/Mais acomodações para as mesmas datas/));
   assert.equal(screen.queryByText('Imóvel de parceiro'), null);
 });
 

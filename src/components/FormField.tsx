@@ -49,13 +49,11 @@ export function FormField({
 
   return (
     <div className={className}>
-      <label htmlFor={fieldId} className="block text-sm font-semibold text-neutral-800">
+      <label
+        htmlFor={fieldId}
+        className={`block text-sm font-semibold text-neutral-800 ${required ? "after:ml-1 after:text-rose-700 after:content-['*']" : ''}`}
+      >
         {label}
-        {required && (
-          <span aria-hidden="true" className="ml-1 text-rose-700">
-            *
-          </span>
-        )}
       </label>
       {control}
       {hint && (

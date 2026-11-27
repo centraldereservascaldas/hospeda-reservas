@@ -27,6 +27,8 @@ import { PropertyDetailHeader } from './PropertyDetailHeader';
 import { PropertyPhotoGrid } from './PropertyPhotoGrid';
 import { PropertyDetailActions } from './PropertyDetailActions';
 import { useDialogFocus } from '../useDialogFocus';
+import { Button } from '../Button';
+import { InlineNotice } from '../InlineNotice';
 import { usePropertyAvailability } from './usePropertyAvailability';
 import { selectAvailabilityDay, selectAvailabilityRange } from '../../utils/propertyDateSelection';
 import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
@@ -675,24 +677,21 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                             className="mt-1 block min-h-11 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-900 focus-visible:outline-2 focus-visible:outline-orange-600"
                           />
                         </label>
-                        <button
+                        <Button
                           type="submit"
-                          disabled={imobSysSearchState?.loading}
-                          className="min-h-11 w-full rounded-xl bg-orange-600 px-4 py-3 text-sm font-bold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-60"
+                          loading={imobSysSearchState?.loading}
+                          loadingLabel="Consultando…"
+                          className="w-full rounded-xl"
                         >
-                          {imobSysSearchState?.loading
-                            ? 'Consultando…'
-                            : 'Consultar datas e hóspedes'}
-                        </button>
+                          Consultar datas e hóspedes
+                        </Button>
                         {imobSysSearchState?.loading && (
-                          <p role="status" className="text-sm text-neutral-700">
+                          <InlineNotice variant="loading">
                             Consultando oferta para este imóvel…
-                          </p>
+                          </InlineNotice>
                         )}
                         {imobSysSearchState?.message && (
-                          <p role="alert" className="text-sm text-neutral-800">
-                            {imobSysSearchState.message}
-                          </p>
+                          <InlineNotice variant="error">{imobSysSearchState.message}</InlineNotice>
                         )}
                       </form>
                     )}

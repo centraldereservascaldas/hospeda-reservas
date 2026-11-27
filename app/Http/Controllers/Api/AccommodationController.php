@@ -427,6 +427,20 @@ class AccommodationController extends Controller
                 return true;
             })->values();
 
+            $destination = trim((string) ($input['destination'] ?? ''));
+            $propertyId = isset($input['propertyId']) ? (string) $input['propertyId'] : $imobSys->verifiedStaysPropertyId($destination);
+            $partnerName = $propertyId !== null ? $imobSys->catalogCondominiumName($propertyId) : $destination;
+            $partnerId = $propertyId !== null ? $imobSys->catalogCondominiumId($propertyId) : null;
+            if ($imobSys->isEnabled() && ($input['purpose'] ?? 'search') !== 'discovery'
+                && empty($input['cities']) && is_string($partnerId) && is_string($partnerName) && trim($partnerName) !== '') {
+                $partnerCatalog = $imobSys->catalogForCondominium($partnerName, $guests, $partnerId);
+                if (is_array($partnerCatalog)) {
+                    $partnerProperties = $imobSys->mapCatalogProperties($partnerCatalog);
+                    $imobSys->rememberProperties($partnerProperties);
+                    $results = $results->concat($partnerProperties)->unique('id')->values();
+                }
+            }
+
             return response()->json(['success' => true, 'total' => $results->count(), 'from' => null, 'to' => null, 'guests' => $guests, 'data' => $results->slice($skip, $limit)->values(), 'source' => 'stays-live']);
         }
 

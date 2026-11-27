@@ -2,17 +2,112 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\AccommodationController;
+use App\Http\Requests\SearchAccommodationsRequest;
 use App\Services\ImobSysSearchClient;
 use App\Services\StaysAccommodationMapper;
+use App\Services\StaysOfferWarmup;
 use App\Services\StaysSearchAvailabilityService;
+use App\Services\StaysSimulator;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Validator;
 use Mockery\MockInterface;
 use Tests\TestCase;
 
 class ImobSysSearchFallbackTest extends TestCase
 {
+    public function test_published_catalog_filters_condominium_and_guest_capacity_without_fabricating_quotes(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.example.test/v1/properties*' => Http::response([
+            'success' => true, 'publicationRevision' => 7,
+            'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
+            'data' => [
+                ['id' => 'imobsys-crcn-2-663', 'title' => 'Apartamento 101', 'condominiumId' => 'imobsys-crcn-condo-86', 'condominiumName' => 'Lacqua diRoma', 'capacity' => 5, 'images' => []],
+                ['id' => 'imobsys-crcn-2-664', 'title' => 'Apartamento 102', 'condominiumName' => 'Lacqua II', 'capacity' => 1, 'images' => []],
+                ['id' => 'imobsys-crcn-2-665', 'title' => 'Apartamento 103', 'condominiumName' => 'Outro', 'capacity' => 5, 'images' => []],
+                ['id' => 'imobsys-crcn-2-666', 'title' => 'Apartamento 104', 'condominiumId' => 'imobsys-crcn-condo-99', 'condominiumName' => 'Lacqua II', 'capacity' => 5, 'images' => []],
+            ],
+        ])]);
+        $client = app(ImobSysSearchClient::class);
+        $items = $client->catalogForCondominium('Lacqua II', 2, 'imobsys-crcn-condo-86');
+        $this->assertCount(1, $items);
+        $mapped = $client->mapCatalogProperties($items);
+        $this->assertSame('imobsys-crcn-2-663', $mapped[0]['id']);
+        $this->assertArrayNotHasKey('imobsysOffer', $mapped[0]);
+        $this->assertArrayNotHasKey('calculatedPrice', $mapped[0]);
+    }
+
+    public function test_published_catalog_rejects_changed_revision_between_pages(): void
+    {
+        Http::fakeSequence()
+            ->push(['success' => true, 'publicationRevision' => 1, 'data' => [], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => true]])
+            ->push(['success' => true, 'publicationRevision' => 2, 'data' => [], 'pagination' => ['page' => 2, 'pageSize' => 50, 'hasMore' => false]]);
+        $this->assertNull(app(ImobSysSearchClient::class)->catalogForCondominium('Lacqua II', 2));
+    }
+
+    public function test_condominium_catalog_uses_verified_partner_identifier(): void
+    {
+        $client = app(ImobSysSearchClient::class);
+        $this->assertSame('imobsys-crcn-condo-86', $client->catalogCondominiumId('imobsys-condo-86'));
+        $this->assertNull($client->catalogCondominiumId('imobsys-condo-999999999'));
+    }
+
+    public function test_condominium_search_without_dates_keeps_stays_first(): void
+    {
+        $previous = $this->app['env'];
+        $this->app['env'] = 'production';
+        try {
+            $controller = \Mockery::mock(AccommodationController::class)->makePartial();
+            $controller->shouldReceive('index')->once()->andReturn(response()->json(['data' => [
+                ['id' => 'stays-1', 'title' => 'Lacqua II', 'maxGuests' => 5],
+            ]]));
+            $request = SearchAccommodationsRequest::create('/api/search', 'POST', ['destination' => 'Lacqua II', 'guests' => 2]);
+            $request->setValidator(Validator::make($request->all(), $request->rules()));
+            $simulator = \Mockery::mock(StaysSimulator::class);
+            $simulator->shouldReceive('enabled')->andReturn(false);
+            $imobsys = \Mockery::mock(ImobSysSearchClient::class)->makePartial();
+            $imobsys->shouldReceive('isEnabled')->andReturn(true);
+            $imobsys->shouldReceive('verifiedStaysPropertyId')->andReturn('stays-condo');
+            $imobsys->shouldReceive('catalogCondominiumName')->andReturn('Lacqua II');
+            $imobsys->shouldReceive('catalogCondominiumId')->andReturn('imobsys-crcn-condo-86');
+            $imobsys->shouldReceive('catalogForCondominium')->once()->with('Lacqua II', 2, 'imobsys-crcn-condo-86')->andReturn([
+                ['id' => 'imobsys-crcn-2-663', 'title' => 'Apartamento 101', 'condominiumName' => 'Lacqua II', 'capacity' => 5, 'images' => []],
+            ]);
+            $result = $controller->search($request, $simulator, \Mockery::mock(StaysSearchAvailabilityService::class), \Mockery::mock(StaysOfferWarmup::class), $imobsys)->getData(true);
+            $this->assertSame(['stays-1', 'imobsys-crcn-2-663'], array_column($result['data'], 'id'));
+            $this->assertArrayNotHasKey('imobsysOffer', $result['data'][1]);
+        } finally {
+            $this->app['env'] = $previous;
+        }
+    }
+
+    public function test_home_discovery_never_fetches_partner_catalog_without_dates(): void
+    {
+        $previous = $this->app['env'];
+        $this->app['env'] = 'production';
+        try {
+            $controller = \Mockery::mock(AccommodationController::class)->makePartial();
+            $controller->shouldReceive('index')->once()->andReturn(response()->json(['data' => []]));
+            $request = SearchAccommodationsRequest::create('/api/search', 'POST', ['destination' => 'Lacqua II', 'purpose' => 'discovery']);
+            $request->setValidator(Validator::make($request->all(), $request->rules()));
+            $simulator = \Mockery::mock(StaysSimulator::class);
+            $simulator->shouldReceive('enabled')->andReturn(false);
+            $partner = \Mockery::mock(ImobSysSearchClient::class)->makePartial();
+            $partner->shouldReceive('isEnabled')->andReturn(true);
+            $partner->shouldReceive('verifiedStaysPropertyId')->andReturn('stays-condo');
+            $partner->shouldReceive('catalogCondominiumName')->andReturn('Lacqua II');
+            $partner->shouldReceive('catalogCondominiumId')->andReturn('imobsys-crcn-condo-86');
+            $partner->shouldNotReceive('catalogForCondominium');
+            $result = $controller->search($request, $simulator, \Mockery::mock(StaysSearchAvailabilityService::class), \Mockery::mock(StaysOfferWarmup::class), $partner)->getData(true);
+            $this->assertSame([], $result['data']);
+        } finally {
+            $this->app['env'] = $previous;
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
