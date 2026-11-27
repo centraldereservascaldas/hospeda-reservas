@@ -36,3 +36,15 @@ test('hydrates validated IDs and persists toggles', async () => {
   await act(async () => hook.result.current.toggleSavedProperty('JQ08G'));
   assert.deepEqual(hook.result.current.savedPropertyIds, ['custom-listing']);
 });
+
+test('keeps an explicitly empty wishlist empty after the hook is recreated', async () => {
+  const hook = renderHook(() => useSavedPropertyIds());
+  assert.deepEqual(hook.result.current.savedPropertyIds, []);
+  await act(async () => hook.result.current.toggleSavedProperty('JQ08G'));
+  await act(async () => hook.result.current.toggleSavedProperty('JQ08G'));
+  hook.unmount();
+
+  const reopened = renderHook(() => useSavedPropertyIds());
+  assert.deepEqual(reopened.result.current.savedPropertyIds, []);
+  assert.equal(localStorage.getItem('hospeda_wishlist'), '[]');
+});

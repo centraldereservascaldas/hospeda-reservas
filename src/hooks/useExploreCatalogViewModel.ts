@@ -10,19 +10,23 @@ import {
 
 interface UseExploreCatalogViewModelOptions {
   properties: Property[];
+  catalogProperties: Property[];
   filters: SearchFilters;
   savedPropertyIds: string[];
   catalogLoading: boolean;
   catalogLoadError: boolean;
+  catalogPropertiesLoadError: boolean;
   hasMoreSearchResults?: boolean;
 }
 
 export function useExploreCatalogViewModel({
   properties,
+  catalogProperties,
   filters,
   savedPropertyIds,
   catalogLoading,
   catalogLoadError,
+  catalogPropertiesLoadError,
   hasMoreSearchResults = false,
 }: UseExploreCatalogViewModelOptions) {
   const filteredProperties = useMemo(
@@ -57,10 +61,27 @@ export function useExploreCatalogViewModel({
         : 'stale'
       : 'ready';
   const activeFilterCount = useMemo(() => countActivePropertyFilters(filters), [filters]);
-  const savedPropertiesList = useMemo(
-    () => properties.filter((property) => savedPropertyIds.includes(property.id)),
-    [properties, savedPropertyIds],
-  );
+  const savedPropertiesList = useMemo(() => {
+    const availableProperties = new Map<string, Property>();
+    for (const property of catalogProperties) availableProperties.set(property.id, property);
+    for (const property of properties) availableProperties.set(property.id, property);
+    return savedPropertyIds.flatMap((id) => {
+      const property = availableProperties.get(id);
+      return property ? [property] : [];
+    });
+  }, [catalogProperties, properties, savedPropertyIds]);
+  const savedPropertiesState: 'loading' | 'error' | 'stale' | 'ready' = catalogPropertiesLoadError
+    ? 'error'
+    : catalogLoading
+      ? savedPropertiesList.length === 0
+        ? 'loading'
+        : 'stale'
+      : 'ready';
+  const savedPropertyIdsInCatalog = new Set(savedPropertiesList.map((property) => property.id));
+  const missingSavedPropertyIds =
+    savedPropertiesState === 'ready'
+      ? savedPropertyIds.filter((id) => !savedPropertyIdsInCatalog.has(id))
+      : [];
 
   return {
     filteredProperties,
@@ -70,5 +91,7 @@ export function useExploreCatalogViewModel({
     catalogStatus,
     activeFilterCount,
     savedPropertiesList,
+    savedPropertiesState,
+    missingSavedPropertyIds,
   };
 }

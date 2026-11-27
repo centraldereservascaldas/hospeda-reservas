@@ -119,6 +119,7 @@ function MarketplaceApp() {
     setProperties,
     catalogLoading,
     catalogLoadError,
+    catalogPropertiesLoadError,
     retryCatalog,
   } = useAccommodationCatalog();
 
@@ -312,12 +313,16 @@ function MarketplaceApp() {
     catalogStatus,
     activeFilterCount,
     savedPropertiesList,
+    savedPropertiesState,
+    missingSavedPropertyIds,
   } = useExploreCatalogViewModel({
     properties,
+    catalogProperties,
     filters,
     savedPropertyIds,
     catalogLoading,
     catalogLoadError,
+    catalogPropertiesLoadError,
     hasMoreSearchResults: searchPagination.hasMore,
   });
 
@@ -569,6 +574,8 @@ function MarketplaceApp() {
         onOpenSearch={() => setIsSearchOpen(true)}
         savedPropertyIds={savedPropertyIds}
         savedProperties={savedPropertiesList}
+        savedPropertiesState={savedPropertiesState}
+        missingSavedPropertyIds={missingSavedPropertyIds}
         showTotalWithTaxes={showTotalWithTaxes}
         condominiums={condominiums}
         reservations={reservations}

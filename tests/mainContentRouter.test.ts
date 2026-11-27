@@ -51,6 +51,8 @@ function createRouterProps(overrides: Record<string, unknown> = {}) {
     onRetryPropertyRoute: () => {},
     savedPropertyIds: [],
     savedProperties: [],
+    savedPropertiesState: 'ready' as const,
+    missingSavedPropertyIds: [],
     showTotalWithTaxes: false,
     condominiums: [],
     reservations: [],
@@ -232,6 +234,7 @@ test('saved wishlists keep their catalog return action touch-sized', async () =>
     React.createElement(MainContentRouter, {
       ...createRouterProps({
         currentView: 'wishlists',
+        savedPropertyIds: [STAYS_NET_APARTMENTS[0]!.id],
         savedProperties: [STAYS_NET_APARTMENTS[0]!],
       }),
     }),
@@ -247,6 +250,72 @@ test('saved wishlists keep their catalog return action touch-sized', async () =>
     exploreButton.parentElement?.className ?? '',
     /\[@media\(min-width:480px\)_and_\(max-height:400px\)\]:flex-row/,
   );
+});
+
+test('wishlist catalog failures offer recovery while preserving saved IDs', async () => {
+  let retries = 0;
+  const { getByRole, getByText } = render(
+    React.createElement(MainContentRouter, {
+      ...createRouterProps({
+        currentView: 'wishlists',
+        savedPropertyIds: ['saved-outside-search'],
+        savedPropertiesState: 'error',
+        onRetryCatalog: () => {
+          retries += 1;
+        },
+      }),
+    }),
+  );
+
+  getByText('Não foi possível carregar seus favoritos agora.');
+  fireEvent.click(getByRole('button', { name: 'Tentar novamente' }));
+  assert.equal(retries, 1);
+  assert.equal(
+    getByRole('heading', { name: 'Lugares Favoritos' }).textContent,
+    'Lugares Favoritos',
+  );
+});
+
+test('wishlist catalog failures keep cached saved cards visible and retryable', async () => {
+  let retries = 0;
+  const property = STAYS_NET_APARTMENTS[0]!;
+  const { getByRole, getByText } = render(
+    React.createElement(MainContentRouter, {
+      ...createRouterProps({
+        currentView: 'wishlists',
+        savedPropertyIds: [property.id],
+        savedProperties: [property],
+        savedPropertiesState: 'error',
+        onRetryCatalog: () => {
+          retries += 1;
+        },
+      }),
+    }),
+  );
+
+  getByRole('button', { name: `Ver detalhes de ${property.title}` });
+  getByText('Não foi possível atualizar todos os favoritos. Os lugares carregados continuam disponíveis.');
+  fireEvent.click(getByRole('button', { name: 'Tentar novamente' }));
+  assert.equal(retries, 1);
+});
+
+test('wishlist lets the visitor remove IDs missing from a successfully loaded catalog', async () => {
+  const removedIds: string[] = [];
+  const { getByRole, getByText } = render(
+    React.createElement(MainContentRouter, {
+      ...createRouterProps({
+        currentView: 'wishlists',
+        savedPropertyIds: ['old-listing-a', 'old-listing-b'],
+        savedPropertiesState: 'ready',
+        missingSavedPropertyIds: ['old-listing-a', 'old-listing-b'],
+        onToggleSave: (id: string) => removedIds.push(id),
+      }),
+    }),
+  );
+
+  getByText('2 lugares salvos não estão mais no catálogo.');
+  fireEvent.click(getByRole('button', { name: 'Remover itens indisponíveis' }));
+  assert.deepEqual(removedIds, ['old-listing-a', 'old-listing-b']);
 });
 
 test('condominium route does not render the search form and shows the empty directory state', () => {

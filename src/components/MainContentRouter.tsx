@@ -49,6 +49,7 @@ const OwnerAccessAdminView = React.lazy(() =>
   })),
 );
 type PropertyCatalogStatus = 'loading' | 'error' | 'stale' | 'ready';
+type SavedPropertiesStatus = 'loading' | 'error' | 'stale' | 'ready';
 
 interface MainContentRouterProps {
   currentView: MainView;
@@ -70,6 +71,8 @@ interface MainContentRouterProps {
   onRetryAvailabilitySearch: () => void;
   savedPropertyIds: string[];
   savedProperties: Property[];
+  savedPropertiesState: SavedPropertiesStatus;
+  missingSavedPropertyIds: string[];
   showTotalWithTaxes: boolean;
   condominiums: CondominiumSummary[];
   reservations: Reservation[];
@@ -125,6 +128,8 @@ export function MainContentRouter({
   onRetryAvailabilitySearch,
   savedPropertyIds,
   savedProperties,
+  savedPropertiesState,
+  missingSavedPropertyIds,
   showTotalWithTaxes,
   condominiums,
   reservations,
@@ -448,8 +453,12 @@ export function MainContentRouter({
         <LazyFeatureBoundary>
           <WishlistsView
             savedProperties={savedProperties}
+            savedPropertyIds={savedPropertyIds}
+            state={savedPropertiesState}
+            missingPropertyIds={missingSavedPropertyIds}
             currency={currency}
             onToggleSave={onToggleSave}
+            onRetryCatalog={onRetryCatalog}
             onSelectProperty={onSelectProperty}
             onExploreMore={onExploreMore}
             showTotalWithTaxes={showTotalWithTaxes}
