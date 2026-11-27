@@ -456,10 +456,11 @@ test('pagination keeps keyboard focus while loading and ignores repeated activat
 test('pagination loads the next page when its sentinel enters view and stops automatic retries on error', async () => {
   const { SearchPagination } = await import('../src/components/search/SearchPagination.tsx');
   const original = globalThis.IntersectionObserver;
-  let notify: IntersectionObserverCallback | undefined;
+  type ObserverCallback = ConstructorParameters<typeof globalThis.IntersectionObserver>[0];
+  let notify: ObserverCallback | undefined;
   let loads = 0;
   class Observer {
-    constructor(callback: IntersectionObserverCallback) { notify = callback; }
+    constructor(callback: ObserverCallback) { notify = callback; }
     observe() {}
     disconnect() {}
     unobserve() {}
@@ -468,13 +469,13 @@ test('pagination loads the next page when its sentinel enters view and stops aut
     readonly rootMargin = '';
     readonly thresholds = [];
   }
-  globalThis.IntersectionObserver = Observer as unknown as typeof IntersectionObserver;
+  globalThis.IntersectionObserver = Observer as unknown as typeof globalThis.IntersectionObserver;
   const state = { active: true, hasMore: true, isLoading: false, error: false, loadedCount: 12 };
   try {
     const view = render(React.createElement(SearchPagination, { state, onLoadMore: () => { loads++; } }));
-    const entry = { isIntersecting: true } as IntersectionObserverEntry;
-    notify?.([entry], {} as IntersectionObserver);
-    notify?.([entry], {} as IntersectionObserver);
+    const entry = { isIntersecting: true } as Parameters<ObserverCallback>[0][number];
+    notify?.([entry], {} as Parameters<ObserverCallback>[1]);
+    notify?.([entry], {} as Parameters<ObserverCallback>[1]);
     assert.equal(loads, 1);
     view.rerender(React.createElement(SearchPagination, { state: { ...state, error: true }, onLoadMore: () => { loads++; } }));
     fireEvent.click(view.getByRole('button', { name: 'Tentar carregar mais' }));
