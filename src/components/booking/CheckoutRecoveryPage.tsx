@@ -2,11 +2,17 @@ import { useEffect, useRef } from 'react';
 
 type CheckoutRecoveryPageProps = {
   status: 'loading' | 'error';
+  hasReturnContext: boolean;
   onRetry: () => void;
   onBack: () => void;
 };
 
-export function CheckoutRecoveryPage({ status, onRetry, onBack }: CheckoutRecoveryPageProps) {
+export function CheckoutRecoveryPage({
+  status,
+  hasReturnContext,
+  onRetry,
+  onBack,
+}: CheckoutRecoveryPageProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -26,7 +32,9 @@ export function CheckoutRecoveryPage({ status, onRetry, onBack }: CheckoutRecove
         <p role="status" aria-live="polite" className="mt-4 text-neutral-700">
           {status === 'loading'
             ? 'Conferindo disponibilidade e preço…'
-            : 'Não foi possível recuperar esta seleção ou confirmar a disponibilidade. Volte ao imóvel e escolha as datas novamente.'}
+            : hasReturnContext
+              ? 'Não foi possível recuperar esta seleção ou confirmar a disponibilidade. Volte ao imóvel para revisar as datas e tentar novamente.'
+              : 'Não foi possível recuperar esta seleção. Inicie uma nova busca para escolher um imóvel e as datas.'}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           {status === 'error' && (
@@ -43,7 +51,7 @@ export function CheckoutRecoveryPage({ status, onRetry, onBack }: CheckoutRecove
             onClick={onBack}
             className="rounded-lg px-4 py-2 font-medium underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           >
-            Voltar
+            {hasReturnContext ? 'Voltar ao imóvel' : 'Nova busca'}
           </button>
         </div>
       </section>

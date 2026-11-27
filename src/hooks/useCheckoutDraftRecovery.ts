@@ -6,7 +6,20 @@ import { countOccupancyGuests } from '../utils/guestCounts';
 import { isConfirmedPropertyQuote } from '../utils/propertyPricing';
 import { validateCalendarRange } from '../utils/staysAvailability';
 import { isNewCheckoutPath, readCheckoutDraft } from '../utils/checkoutDraft';
-import { checkoutStayFromSearch } from '../utils/checkoutUrl';
+import { checkoutStayFromSearch, checkoutUrlWithStay } from '../utils/checkoutUrl';
+import { accommodationPagePath } from '../utils/accommodationPageUrl';
+
+function propertyReturnUrl(
+  path: string,
+  stay: Parameters<typeof checkoutUrlWithStay>[1],
+  sourceSearch: string,
+  currency: string,
+): string {
+  const checkoutUrl = checkoutUrlWithStay(path, stay, sourceSearch, currency);
+  const destination = new URL(checkoutUrl, window.location.origin);
+  destination.searchParams.delete('accommodation');
+  return `${destination.pathname}${destination.search}`;
+}
 
 export function useCheckoutDraftRecovery(
   properties: Property[],
@@ -17,9 +30,11 @@ export function useCheckoutDraftRecovery(
 ) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   const [retry, setRetry] = useState(0);
+  const [returnUrl, setReturnUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!isNewCheckoutPath(window.location.pathname) || bookingPayload) {
       setStatus('idle');
+      setReturnUrl(null);
       return;
     }
     const storedDraft = readCheckoutDraft();
@@ -34,8 +49,27 @@ export function useCheckoutDraftRecovery(
       : storedDraft;
     if (!draft) {
       setStatus('error');
+      setReturnUrl(null);
       return;
     }
+    const stay = {
+      listingId: draft.propertyId,
+      from: draft.checkIn,
+      to: draft.checkOut,
+      guests: draft.guests,
+    };
+    const sourceParams = new URLSearchParams(window.location.search);
+    const requestedCurrency = sourceParams.getAll('currency');
+    const currency =
+      requestedCurrency.length === 1 && /^[A-Z]{3}$/.test(requestedCurrency[0])
+        ? requestedCurrency[0]
+        : 'BRL';
+    const fallbackPropertyId = draft.propertyId.replace(
+      /^imobsys-crcn-(\d+)-(\d+)$/,
+      'parceiro-crcn-$1-$2',
+    );
+    const fallbackPath = `/apartamento/${encodeURIComponent(fallbackPropertyId)}`;
+    setReturnUrl(propertyReturnUrl(fallbackPath, stay, window.location.search, currency));
     if (catalogLoading) {
       setStatus('loading');
       return;
@@ -55,6 +89,9 @@ export function useCheckoutDraftRecovery(
         setStatus('error');
         return;
       }
+      setReturnUrl(
+        propertyReturnUrl(accommodationPagePath(property), stay, window.location.search, currency),
+      );
       const listingId = property.staysListingId || property.id;
       const guests = countOccupancyGuests(draft.guests);
       const [calendar, quote] = await Promise.all([
@@ -97,5 +134,5 @@ export function useCheckoutDraftRecovery(
       active = false;
     };
   }, [properties, catalogLoading, bookingPayload, setBookingPayload, navigation, retry]);
-  return { status, retry: () => setRetry((value) => value + 1) };
+  return { status, returnUrl, retry: () => setRetry((value) => value + 1) };
 }

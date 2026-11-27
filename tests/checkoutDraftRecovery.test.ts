@@ -101,6 +101,19 @@ test('unavailable dates fail closed and do not restore checkout', async () => {
   );
   await waitFor(() => assert.equal(result.current.status, 'error'));
   assert.equal(restored, null);
+  const returnUrl = new URL(result.current.returnUrl!, 'http://localhost');
+  assert.equal(returnUrl.pathname.startsWith('/apartamento/'), true);
+  assert.equal(returnUrl.searchParams.get('checkin'), draft.checkIn);
+  assert.equal(returnUrl.searchParams.get('checkout'), draft.checkOut);
+  assert.equal(returnUrl.searchParams.get('adults'), '2');
+  assert.equal(returnUrl.searchParams.has('accommodation'), false);
+});
+
+test('missing or invalid trip context offers no property return destination', async () => {
+  window.history.replaceState({}, '', '/checkout?accommodation=bad%40id&checkin=invalid');
+  const { result } = renderHook(() => useCheckoutDraftRecovery([], false, null, () => {}, 0));
+  await waitFor(() => assert.equal(result.current.status, 'error'));
+  assert.equal(result.current.returnUrl, null);
 });
 
 test('fetches a property absent from the loaded catalog', async () => {
