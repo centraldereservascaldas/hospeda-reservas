@@ -199,3 +199,24 @@ test('offers revalidation for expired results instead of announcing no availabil
   assert.match(screen.getByRole('status').textContent || '', /perdeu a validade/);
   assert.doesNotMatch(document.body.textContent || '', /Nenhuma acomodação/);
 });
+
+test('warns that one or more displayed quotes may be stale and offers revalidation', () => {
+  let retries = 0;
+  render(
+    React.createElement(AvailabilitySearchState, {
+      state: 'stale',
+      checkIn: '2027-01-10',
+      checkOut: '2027-01-13',
+      hasResults: true,
+      hasAvailableResults: true,
+      onRetry: () => {
+        retries += 1;
+      },
+    }),
+  );
+
+  const status = screen.getByRole('status');
+  assert.match(status.textContent || '', /cotações podem estar desatualizadas/);
+  screen.getByRole('button', { name: 'Atualizar disponibilidade' }).click();
+  assert.equal(retries, 1);
+});
