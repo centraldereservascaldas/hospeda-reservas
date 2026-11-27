@@ -507,11 +507,14 @@ export const checkoutApi = {
       const json: unknown = await res.json();
       if (res.status === 422 && isRecord(json)) {
         const fieldErrors = parseCheckoutFieldErrors(json.errors);
+        const isGuestCountInvalid = json.code === 'invalid_guest_count';
 
         return {
           success: false,
-          code: 'invalid_checkout_request',
-          message: 'Confira os dados informados antes de continuar.',
+          code: isGuestCountInvalid ? 'invalid_guest_count' : 'invalid_checkout_request',
+          message: isGuestCountInvalid
+            ? 'A quantidade de hóspedes excede a capacidade atual deste imóvel. Volte à acomodação e ajuste o grupo. Nenhum pedido, reserva ou cobrança foi iniciado.'
+            : 'Confira os dados destacados antes de continuar. Para ajustar hóspedes ou datas, volte à acomodação.',
           ...(fieldErrors ? { fieldErrors } : {}),
           payment: { enabled: false, methods: [], publicKey: null, provider: 'unavailable' },
           idempotentReplay: false,

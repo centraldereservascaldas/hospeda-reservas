@@ -174,6 +174,63 @@ test('parcelamento destaca a parcela e mantém o total final para conferência',
   assert.match(view.getByLabelText('Resumo da compra').textContent!, /6x de até R\$/);
 });
 
+test('capacity validation from checkout points back to the accommodation without starting payment', async () => {
+  checkoutApi.createCheckout = async () => ({
+    success: false,
+    code: 'invalid_guest_count',
+    message:
+      'A quantidade de hóspedes excede a capacidade atual deste imóvel. Volte à acomodação e ajuste o grupo. Nenhum pedido, reserva ou cobrança foi iniciado.',
+    payment: { enabled: false, methods: [], publicKey: null, provider: 'unavailable' },
+    idempotentReplay: false,
+  });
+  checkoutApi.getCieloSopAccessToken = async () => {
+    throw new Error('A tokenização não deve iniciar para capacidade inválida.');
+  };
+  const view = setup();
+  await fill(view);
+  fireEvent.submit(view.container.querySelector('form')!);
+
+  await waitFor(() => {
+    assert.match(view.getByRole('alert').textContent ?? '', /Volte à acomodação e ajuste o grupo/);
+    assert.equal(
+      document.activeElement,
+      view.getByRole('button', { name: 'Voltar para acomodação' }),
+    );
+  });
+  assert.match(view.getByRole('alert').textContent ?? '', /Nenhum pedido, reserva ou cobrança/);
+  assert.equal(window.location.pathname, '/');
+});
+
+test('server field validation is associated with the guest input and focuses it for correction', async () => {
+  checkoutApi.createCheckout = async () => ({
+    success: false,
+    code: 'invalid_checkout_request',
+    message:
+      'Confira os dados destacados antes de continuar. Para ajustar hóspedes ou datas, volte à acomodação.',
+    fieldErrors: { 'guest.email': ['Informe um e-mail válido.'] },
+    payment: { enabled: false, methods: [], publicKey: null, provider: 'unavailable' },
+    idempotentReplay: false,
+  });
+  const view = setup();
+  await fill(view);
+  fireEvent.submit(view.container.querySelector('form')!);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const emailInput = view.container.querySelector<HTMLInputElement>('[name="guestEmail"]');
+  assert.ok(emailInput, 'checkout should keep the email field available for correction');
+  assert.equal(emailInput.getAttribute('aria-invalid'), 'true');
+  assert.equal(emailInput.getAttribute('aria-describedby'), 'checkout-error-guest-email');
+  assert.equal(document.activeElement, emailInput);
+  assert.equal(
+    view.container.querySelector('#checkout-error-guest-email')?.textContent,
+    'Informe um e-mail válido.',
+  );
+  assert.match(
+    view.container.querySelector('[role="alert"]')?.textContent ?? '',
+    /Confira os dados destacados/,
+  );
+});
+
 test('one submit prepares the reservation then tokenizes and pays without leaving the page or duplicating submission', async () => {
   const calls: string[] = [];
   let options: CieloSopOptions | undefined;
