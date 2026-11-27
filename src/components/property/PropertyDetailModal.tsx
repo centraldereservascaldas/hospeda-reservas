@@ -371,6 +371,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     });
   const totalGuests = countOccupancyGuests({ adults, children, infants });
   const guestLimit = Math.max(1, Number(property.maxGuests) || 1);
+  const isGuestCountOverLimit = totalGuests > guestLimit;
   const selectedRangeAvailable =
     calendarAvailable && isCalendarRangeAvailable(calendarDays, checkIn, checkOut);
   const showMobileBookingAction = !isDatePickerOpen && !isGuestSelectorOpen && !showAllPhotos;
@@ -477,6 +478,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     if (
       !hasExplicitDateSelectionRef.current ||
       property.simulatedData ||
+      isGuestCountOverLimit ||
       !isConfirmedPropertyQuote(staysPrice) ||
       isCalculatingPrice ||
       !selectedRangeAvailable
@@ -713,6 +715,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                     onToggleGuestSelector={toggleGuestSelector}
                     totalGuests={totalGuests}
                     infants={infants}
+                    guestLimit={guestLimit}
+                    isGuestCountOverLimit={isGuestCountOverLimit}
                     nights={nights}
                     staysPrice={staysPrice}
                     calendarAvailable={calendarAvailable}
