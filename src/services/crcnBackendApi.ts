@@ -116,6 +116,11 @@ export interface CalculatedPriceResponse {
   };
 }
 
+export type CalculatedPriceOutcome =
+  | { status: 'quoted'; quote: CalculatedPriceResponse }
+  | { status: 'unavailable'; reason: 'quote' | 'availability' }
+  | { status: 'failed'; reason: 'request' | 'invalid-response' | 'context-mismatch' };
+
 export interface StaysStatusResponse {
   connected: boolean;
   hasCredentials: boolean;
@@ -846,15 +851,15 @@ class CrcnBackendApiService {
   }
 
   // 5. POST /api/price
-  public async calculatePrice(payload: {
+  public async calculatePriceOutcome(payload: {
     listingId: string;
     from: string;
     to: string;
     guests?: number;
     promocode?: string;
-  }): Promise<CalculatedPriceResponse | null> {
+  }): Promise<CalculatedPriceOutcome> {
     try {
-      const json: unknown = await withApiRequestTimeout(async (signal) => {
+      const response = await withApiRequestTimeout(async (signal) => {
         const res = await apiFetch('/api/price', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -867,11 +872,41 @@ class CrcnBackendApiService {
           }),
           signal,
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
+        return res;
       });
+      if (!response.ok) {
+        let errorBody: unknown;
+        try {
+          errorBody = await response.json();
+        } catch {
+          return { status: 'failed', reason: 'request' };
+        }
+        if (isRecord(errorBody) && errorBody.success === false) {
+          if (errorBody.code === 'quote_unavailable') {
+            return { status: 'unavailable', reason: 'quote' };
+          }
+          if (errorBody.code === 'availability_unavailable') {
+            return { status: 'unavailable', reason: 'availability' };
+          }
+        }
+        return { status: 'failed', reason: 'request' };
+      }
+      let json: unknown;
+      try {
+        json = await response.json();
+      } catch {
+        return { status: 'failed', reason: 'invalid-response' };
+      }
+      if (isRecord(json) && json.success === false) {
+        if (json.code === 'quote_unavailable') {
+          return { status: 'unavailable', reason: 'quote' };
+        }
+        if (json.code === 'availability_unavailable') {
+          return { status: 'unavailable', reason: 'availability' };
+        }
+      }
       if (!isCalculatedPriceResponse(json)) {
-        throw new Error('A resposta de preço retornou dados inválidos.');
+        return { status: 'failed', reason: 'invalid-response' };
       }
 
       const requestedCheckIn = isIsoDate(payload.from)
@@ -891,14 +926,25 @@ class CrcnBackendApiService {
         json.nights !== requestedNights ||
         json.currency !== 'BRL'
       ) {
-        throw new Error('A cotação não corresponde ao imóvel, período ou moeda solicitados.');
+        return { status: 'failed', reason: 'context-mismatch' };
       }
 
-      return json;
+      return { status: 'quoted', quote: json };
     } catch (err) {
       console.warn('Error calculating price on backend:', err);
-      return null;
+      return { status: 'failed', reason: 'request' };
     }
+  }
+
+  public async calculatePrice(payload: {
+    listingId: string;
+    from: string;
+    to: string;
+    guests?: number;
+    promocode?: string;
+  }): Promise<CalculatedPriceResponse | null> {
+    const outcome = await this.calculatePriceOutcome(payload);
+    return outcome.status === 'quoted' ? outcome.quote : null;
   }
 
   public async getStaysCheckoutReadiness(): Promise<StaysCheckoutReadinessResponse | null> {
