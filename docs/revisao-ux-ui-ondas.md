@@ -14,7 +14,7 @@ Estado: revisão inicial referenciada em `main` no commit `7e5d1f2`, com evidên
 | Preferências e métricas | Painel longo ocupa grande área em telas pequenas; há conflito de foco e a rota de privacidade respondeu 404. Instrumentação e consentimento têm caminhos diferentes e exigem reconciliação. | F31–F34, F42–F44, F47, F51 |
 | Confiabilidade | Houve tela vazia com asset 404 e uma resposta 504 em amostras pontuais; causa e frequência são desconhecidas. | F41 |
 
-O destaque da parcela é intencional e não integra os achados. As prioridades P1 e evidências correspondentes estão na triagem antes das ondas. Há achados comprovados em produção, outros reproduzidos com simulação e outros que permanecem hipótese de código; consultar o estado de cada item. Não houve implementação de correções.
+O destaque da parcela é intencional e não integra os achados. As prioridades P1 e evidências correspondentes estão na triagem antes das ondas. Há achados comprovados em produção, outros reproduzidos com simulação e outros que permanecem hipótese de código; consultar o estado de cada item. Há correções em PRs abertos, ainda sem integração à `main` e sem validação correspondente em produção.
 
 ### Como usar os achados
 
@@ -149,6 +149,8 @@ Há valores de camada distintos no código, como `z-50` no checkout e detalhe, `
 
 **Impacto:** a explicação expandida não fica visível nessa janela; outros tamanhos, zoom e texto ampliado ainda exigem verificação. **Ação:** permitir rolagem interna e manter ação de saída e foco visíveis. **Verificação:** repetir 1024 × 400, testar 320 px e zoom, inclusive texto de animal de serviço expandido e foco por teclado.
 
+**Correção em revisão no PR #93:** a lista de hóspedes passa a rolar verticalmente dentro do painel, com `overscroll-contain`. O PR reporta reprodução local em 1024 × 400 com a explicação expandida visível sem mover o fundo; em 320 × 400 e 640 × 400 os nove botões ficaram no viewport, sem overflow horizontal. Testes do pacote (19/19), suíte (648/648), lint e build passaram. Zoom real, toque, rótulos longos e leitor de tela não foram testados. PR #93 está aberto, baseado no PR #92; não marcar F06 concluído até revisão, integração e verificação na versão publicada.
+
 ### F07 · P2 · Risco de foco atravessar camadas independentes
 
 **Evidência de código:** `src/components/useDialogFocus.ts:14` agrega todos os elementos de todos os portais `data-dialog-focus-portal` do documento ao diálogo ativo; `:27` também considera qualquer portal como pertencente ao diálogo. A busca e a ação fixa do imóvel usam esse marcador. Isso não comprova uma falha em todos os casos, mas permite que um portal sem relação seja incluído no ciclo de foco.
@@ -174,6 +176,8 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 **Evidência de código:** `StaysSearchWidget.tsx:739` calcula o número de meses com `window.innerWidth` durante a renderização; o pai atualiza posição no resize, mas a lógica depende de renderização incidental. Há outra implementação de calendário que acompanha `matchMedia` em `SearchDateCalendar.tsx:28`. No navegador local, o calendário aberto passou de dois meses a um ao reduzir de 640 para 639 px; nessa passagem ele permaneceu aberto sobre a navegação móvel. Isso confirma a mudança de disposição nessa sequência, mas não prova atualização correta em todos os caminhos de redimensionamento.
 
 **Risco:** divergência de estado ou foco ao redimensionar com seleção parcial; ainda não foi reproduzida. **Ação:** definir uma fonte reativa de breakpoint ou usar layout CSS adequado, preservando foco e data. **Verificação:** cruzar 639/640 px com datas parcialmente selecionadas e conferir fechamento, foco e disposição.
+
+**Correção em revisão no PR #94:** o calendário acompanha o redimensionamento e decide a continuação desktop/mobile no momento da seleção do intervalo. O teste direcionado cruza 640 → 639 px com check-in parcial em 1/12/2026, preserva as datas ISO, fecha o calendário ao concluir no modo mobile e retorna o foco ao botão visível “Iniciar busca”; não submete a busca. Os 19 testes direcionados e o build reportados no PR passaram. A evidência visual é preview local, não cobre zoom, rotação ou navegadores físicos. PR #94 está aberto sobre o PR #93; não marcar F10 concluído antes de revisão, integração e revalidação publicada.
 
 ### F11 · P2 · Favoritos removidos retornam ao reabrir
 
@@ -234,6 +238,8 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 **Confirmado também em produção em 26/11/2026, 640 × 700 CSS px:** ao abrir “Quando”, a captura visual mostrou o botão “Buscar” sobre o texto do segmento “Quem”, que ficou parcialmente encoberto e quebrou em várias linhas. A observação não depende do simulador nem de criar uma reserva.
 
 **Impacto:** leitura e identificação dos controles ficam prejudicadas na largura observada. **Ação:** reservar largura suficiente aos controles ou mudar a composição nesse intervalo; manter nomes, foco e ação visíveis. **Verificação:** repetir em 640, 768 e valores próximos com cada painel aberto, rótulos longos e zoom. A causa de outras sobreposições relatadas ainda precisa de localização própria.
+
+**Correção em revisão no PR #93:** entre 640 e 839 px, o CTA fica compacto e o resumo de hóspedes permanece em uma linha, mantendo seu nome acessível. O PR reporta preview local a 640 e 768 px e restauração do rótulo visual em 840 px sem colisão; zoom real, nomes longos, toque e leitor de tela não foram testados. F17 segue pendente de revisão, integração e validação na versão publicada.
 
 ### F18 · P2 · Nova falha em sugestão para pets não oferece retorno
 
@@ -713,9 +719,10 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] F02 parcial: painéis fecham após envio ou quando a origem deixa a janela; testes direcionados passaram. Validar detalhe e saída real da origem em página longa/catálogo disponível antes de concluir.
 - [x] Corrigir transição datas → hóspedes no desktop (F03), preservando datas e foco; em mobile, manter o calendário fechado sem abrir hóspedes automaticamente. Testes direcionados passaram; no preview local consolidado, 1–3/12 abriu hóspedes em 1280 × 800, com a ação Buscar visível 16 px acima do painel. `prefers-reduced-motion` removeu a animação e reduziu a transição a 0,00001 s. API local indisponível; sem Stays, busca enviada, reserva ou pagamento.
 - [ ] F55 parcial: correção desktop do PR #82 integrada; revalidação local em 27/11/2026 a 1366 × 885 confirmou Enter, foco dentro dos painéis de condomínio/datas/hóspedes e retorno por Escape. A tentativa de revalidação em produção foi inconclusiva por reaparecimento do aviso de medição. Correção mobile aguarda revisão no PR #92; repetir desktop e mobile em produção após publicação, sem enviar busca.
-- [ ] Reproduzir e resolver corte em altura curta e mudança de largura (F06 e F10).
+- [ ] F06 parcial: rolagem interna e expansão de conteúdo implementadas em revisão no PR #93; preview local reportado em 1024 × 400, 640 × 400 e 320 × 400. Zoom, toque, leitor de tela, integração e validação publicada pendentes.
+- [ ] F10 parcial: mudança reativa de layout e retorno de foco após 640 → 639 px implementados em revisão no PR #94; datas parciais preservadas no teste e preview local. Integração, zoom, rotação, navegadores físicos e validação publicada pendentes.
 - [ ] Delimitar portais ao diálogo correto e revisar modais aninhados (F07).
-- [ ] Corrigir a colisão do segmento de hóspedes com “Buscar” em 640 px (F17) e verificar controles adjacentes.
+- [ ] F17 parcial: layout compacto entre 640 e 839 px implementado em revisão no PR #93; preview local reportado sem colisão em 640/768 px e com rótulo visual restaurado em 840 px. Zoom, rótulos longos, integração e validação publicada pendentes.
 - [ ] Inspecionar os botões relatados sobrepostos com captura e reprodução por largura, altura, zoom e conteúdo longo; registrar local e causa antes de corrigir.
 - [ ] Investigar F58 com gravação de performance em CPU limitada e computador representativo; comparar View Transition, transições geométricas, `will-change` e blur antes de propor alterações. Sem reprodução ou métricas, manter como risco condicional.
 
