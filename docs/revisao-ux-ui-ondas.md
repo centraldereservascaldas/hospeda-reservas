@@ -569,6 +569,10 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 
 **Evidência de código local:** `PublicLegalPageController.php:19–23` retorna 404 quando o registro não contém a página; `LegalDocumentPage.tsx:16` depende da API. Não foi verificado o registro ou a versão implantada. **Ação:** identificar e validar com os responsáveis o documento público correto, seu conteúdo e publicação, e vincular o painel ao destino funcional; evitar incluir link quebrado. **Verificação:** GET direto e navegação pelo painel, título e conteúdo, falha e recuperação, versão e atualização, teclado e mobile; confirmar também o comportamento caso o documento deixe de estar disponível.
 
+**Rechecagem e classificação, 27/11/2026:** GET público de `/privacidade` e `/api/public/legal-pages/privacidade` voltou a responder 404. No código local, `config/legal_pages.php` contém somente a versão `0.1` com `status: draft`, sem data de publicação e sem aprovações registradas; `LegalPageRegistry::find` só expõe documentos completos com estado publicado. O rascunho `docs/rascunhos-politicas-legais.md` mantém pendentes os papéis dos participantes e a confirmação de um canal operacional para solicitações de privacidade. Classificação: **dependência de conteúdo e operação**, não defeito do endpoint; a resposta 404 é o comportamento fail-closed esperado. Não publicar nem vincular o rascunho.
+
+**Próximo passo:** obter e aprovar o texto exato, confirmar os papéis e o canal de atendimento, registrar versão e aprovação no formato já exigido pelo registro legal, publicar a rota e então validar o link do painel. Não foi presumido que o e-mail comercial seja o canal de privacidade. Nenhum texto legal foi alterado.
+
 ### F52 · P2 · Exportação financeira pode interpretar texto como fórmula em planilhas
 
 **Evidência de código:** `src/components/owner/OwnerAccountingTransactions.tsx:26,116–134` envolve as células do CSV em aspas e duplica aspas internas, mas não neutraliza prefixos que aplicativos de planilha podem interpretar como fórmulas. A exportação inclui título do imóvel, código da reserva, descrição e observação pública. Em `app/Http/Controllers/Api/OwnerDashboardController.php:129–145`, descrição e observação podem vir dos dados de contas da integração; não foi comprovado quem consegue inserir esses valores nem que exista dado malicioso em produção. Aspas CSV garantem estrutura, mas não necessariamente impedem interpretação posterior como fórmula.
@@ -634,7 +638,7 @@ Em 26/11/2026, a conferência de rastreabilidade encontrou referências diretas 
 | F39 · Acompanhamento Pix | Reproduzido em teste local com consulta simulada. | Comunicar falha e recuperar consulta sem induzir novo pagamento. |
 | F41 · Tela vazia e 504 | Observados pontualmente em produção; causa desconhecida e resposta posterior bem-sucedida. | Investigar artefato, cache, deploy e origem antes de escolher a correção. |
 | F47 · Preferências e foco | Reproduzido em primeira visita isolada no checkout e no imóvel, e na reabertura sobre checkout; marcação de portal e contrato de navegação por teclado verificados em testes. | Em revisão no PR #87; fluxo combinado e leitor de tela pendentes. |
-| F51 · Política de privacidade | Rota e API responderam 404 na amostra em produção. | Identificar documento correto e publicar destino acessível antes de vinculá-lo no painel. |
+| F51 · Política de privacidade | Rota e API retornaram 404 em 26/11 e novamente em 27/11; o documento fonte continua como rascunho sem aprovações e com canal operacional pendente. | Dependência: aprovar conteúdo e canal, publicar a versão aprovada e só então validar/vincular o destino no painel. |
 | F55 · Foco nos painéis da busca | Abertura por Enter e percurso de 100 Tabs não alcançaram os controles dos três painéis nas amostras em produção. | Garantir foco inicial e navegação coerente, testando abertura, troca e saída de cada painel. |
 
 As prioridades indicam impacto potencial na tarefa, não frequência medida. F41 não deve ser tratado como causa confirmada de F23; são observações distintas. A decisão de produto sobre destaque de parcelas foi retirada dos achados e não entra nesta triagem.
@@ -716,7 +720,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Investigar e corrigir apresentação ou origem da descrição e da composição de camas, sem inferir dados ausentes (F45).
 - [ ] Preservar explicações de erros 422 e associar validações aos campos ou à etapa de correção (F30).
 - [ ] Redesenhar preferências de medição com recusa, personalização, aceite direto, link de privacidade e reabertura, validando responsividade, foco e escolhas (F31).
-- [ ] Identificar e disponibilizar a política de privacidade correta antes de incluí-la no painel (F51).
+- [ ] F51 é dependência de conteúdo/operação: aprovar texto e canal, registrar a versão, publicar a rota e validar o destino antes de incluir link no painel. Fonte atual está em rascunho; nenhuma aprovação foi presumida.
 - [ ] Marcar as preferências fixas como portal de foco do diálogo ativo, sem aplicar isso ao texto embutido nas páginas legais (F47). Testes do contrato de portal e da marcação condicional passaram; fluxo combinado no navegador, Escape/fechamento e leitor de tela pendentes. PR #87.
 - [ ] Auditar destinos e eventos por categoria de consentimento e definir métricas de interação sem coletar dados indevidos (F32).
 - [ ] Alinhar evento de busca entre barra e modal, distinguindo envio, limpeza e restauração sem duplicidade (F42).
