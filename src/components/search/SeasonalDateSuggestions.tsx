@@ -13,6 +13,9 @@ import {
 } from '../../utils/propertyImageSources';
 import { isSafeMediaUrl } from '../../utils/propertyMedia';
 import { matchesPropertyCategory } from '../../utils/propertyCategories';
+import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { getConfirmedPropertyQuote } from '../../utils/propertyDisplayPrice';
+import { formatCurrency } from '../../utils/formatters';
 
 interface SeasonalDateSuggestionsProps {
   guests: AccommodationWidgetSearchParams['guests'];
@@ -22,6 +25,89 @@ interface SeasonalDateSuggestionsProps {
 }
 
 const EMPTY_PROPERTIES: Property[] = [];
+
+function SuggestedPrice({
+  property,
+  suggestion,
+  guests,
+}: {
+  property: Property;
+  suggestion: HomeDateSuggestion;
+  guests: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [price, setPrice] = useState<{
+    total: number;
+    expiresAt: number;
+    requestKey: string;
+  } | null>(null);
+  const requestKey = `${property.id}|${suggestion.checkIn}|${suggestion.checkOut}|${guests}`;
+
+  useEffect(() => {
+    setPrice(null);
+    if (!ref.current || typeof IntersectionObserver === 'undefined') return;
+    const controller = new AbortController();
+    let timer: number | undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      observer.disconnect();
+      void crcnBackendApi
+        .searchAccommodationsPage(
+          {
+            purpose: 'discovery',
+            from: suggestion.checkIn,
+            to: suggestion.checkOut,
+            guests,
+            limit: 20,
+          },
+          { signal: controller.signal, priority: 'visible' },
+        )
+        .then((result) => {
+          const match = result.data.find(
+            (item) =>
+              item.id === property.id ||
+              (item.staysListingId && item.staysListingId === property.staysListingId),
+          );
+          const quote = match && getConfirmedPropertyQuote(match);
+          const expiresAt = Math.min(result.expiresAt ?? 0, quote?.expiresAt ?? 0);
+          if (
+            !quote ||
+            quote.nights !==
+              Math.round(
+                (Date.parse(suggestion.checkOut) - Date.parse(suggestion.checkIn)) / 86_400_000,
+              ) ||
+            expiresAt <= Date.now() ||
+            controller.signal.aborted
+          )
+            return;
+          setPrice({ total: quote.totalAmount, expiresAt, requestKey });
+          timer = window.setTimeout(() => setPrice(null), Math.max(0, expiresAt - Date.now()));
+        })
+        .catch(() => {});
+    });
+    observer.observe(ref.current);
+    return () => {
+      observer.disconnect();
+      controller.abort();
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [
+    property.id,
+    property.staysListingId,
+    suggestion.checkIn,
+    suggestion.checkOut,
+    guests,
+    requestKey,
+  ]);
+
+  return (
+    <span ref={ref} className="mt-1.5 block text-xs font-semibold text-neutral-700">
+      {price && price.requestKey === requestKey && price.expiresAt > Date.now()
+        ? `${formatCurrency(price.total)} na hospedagem${suggestion.petFriendlyOnly ? ' · consulte taxa para pet' : ''}`
+        : 'Ver disponibilidade e preço final'}
+    </span>
+  );
+}
 
 export const formatPeriod = (suggestion: Pick<HomeDateSuggestion, 'checkIn' | 'checkOut'>) => {
   const checkIn = new Date(`${suggestion.checkIn}T12:00:00`);
@@ -286,9 +372,11 @@ export function SeasonalDateSuggestions({
                           {property.complexName || property.location.city} · {nights}{' '}
                           {nights === 1 ? 'noite' : 'noites'} · até {property.maxGuests} hóspedes
                         </span>
-                        <span className="mt-1.5 block text-xs font-semibold text-neutral-700">
-                          Ver disponibilidade e preço final
-                        </span>
+                        <SuggestedPrice
+                          property={property}
+                          suggestion={suggestion}
+                          guests={guestCount}
+                        />
                       </span>
                       <ArrowRight
                         aria-hidden="true"

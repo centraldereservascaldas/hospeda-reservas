@@ -133,6 +133,57 @@ test('seasonal date labels distinguish years, including a stay across New Year',
   assert.match(acrossYears, /2027/);
 });
 
+test('shows only a fresh quote belonging to the displayed property and dates', async () => {
+  const previous = globalThis.IntersectionObserver;
+  class VisibleObserver {
+    constructor(private callback: ConstructorParameters<typeof IntersectionObserver>[0]) {}
+    observe(element: Element) {
+      queueMicrotask(() =>
+        this.callback(
+          [{ isIntersecting: true, target: element } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver,
+        ),
+      );
+    }
+    disconnect() {}
+  }
+  globalThis.IntersectionObserver = VisibleObserver as unknown as typeof IntersectionObserver;
+  const expiresAt = Date.now() + 60_000;
+  crcnBackendApi.searchAccommodationsPage = async (params) => ({
+    expiresAt,
+    total: 1,
+    unquotedCount: 0,
+    pagination: { receivedCount: 1, nextSkip: 1, hasMore: false },
+    data: [
+      {
+        ...property('listing-a', 'Apartamento A', 'pet_friendly'),
+        calculatedPrice: {
+          totalAmount: 450,
+          dailyRate: 225,
+          basePrice: 450,
+          cleaningFee: 0,
+          serviceFee: 0,
+          nights: Math.round((Date.parse(params.to!) - Date.parse(params.from!)) / 86_400_000),
+          currency: 'BRL',
+          expiresAt,
+        },
+      },
+    ],
+  });
+  try {
+    render(createElement());
+    assert.ok((await screen.findAllByText(/R\$\s?450,00 na hospedagem/)).length > 0);
+    assert.ok(screen.getAllByText(/consulte taxa para pet/).length > 0);
+    const other = screen
+      .getAllByRole('button')
+      .find((item) => item.getAttribute('aria-label')?.includes('Apartamento B'))!;
+    assert.doesNotMatch(other.textContent || '', /R\$\s?450,00/);
+  } finally {
+    cleanup();
+    globalThis.IntersectionObserver = previous;
+  }
+});
+
 test('offers horizontal carousel controls on desktop and mobile carousels keep a centered inset', () => {
   render(createElement());
   assert.ok(screen.getAllByRole('button', { name: 'Ver opções anteriores' }).length > 0);
