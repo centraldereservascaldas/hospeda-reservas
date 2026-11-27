@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CalendarDays, Sparkles } from 'lucide-react';
 import type { Property } from '../../types';
 import type { AccommodationWidgetSearchParams } from '../../hooks/useAccommodationSearch';
@@ -30,10 +30,14 @@ function SuggestedPrice({
   property,
   suggestion,
   guests,
+  candidates,
+  onAlternative,
 }: {
   property: Property;
-  suggestion: HomeDateSuggestion;
+  suggestion: HomeDateSuggestion & { id: string };
   guests: number;
+  candidates: Property[];
+  onAlternative: (id: string, property: Property) => void;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [price, setPrice] = useState<{
@@ -68,6 +72,37 @@ function SuggestedPrice({
               item.id === property.id ||
               (item.staysListingId && item.staysListingId === property.staysListingId),
           );
+          if (!match || !getConfirmedPropertyQuote(match)) {
+            const validOffer = (item: Property) => {
+              const quoted = getConfirmedPropertyQuote(item);
+              return (
+                quoted &&
+                quoted.nights ===
+                  Math.round(
+                    (Date.parse(suggestion.checkOut) - Date.parse(suggestion.checkIn)) / 86_400_000,
+                  ) &&
+                Math.min(result.expiresAt ?? 0, quoted.expiresAt ?? 0) > Date.now()
+              );
+            };
+            const alternative =
+              candidates.find((candidate) =>
+                result.data.some(
+                  (item) =>
+                    (item.id === candidate.id ||
+                      (item.staysListingId && item.staysListingId === candidate.staysListingId)) &&
+                    validOffer(item),
+                ),
+              ) ??
+              result.data.find(
+                (item) =>
+                  validOffer(item) &&
+                  item.images?.some(isSafeMediaUrl) &&
+                  (!suggestion.petFriendlyOnly || matchesPropertyCategory(item, 'pet_friendly')),
+              );
+            if (alternative && !controller.signal.aborted)
+              onAlternative(suggestion.id, alternative);
+            return;
+          }
           const quote = match && getConfirmedPropertyQuote(match);
           const expiresAt = Math.min(result.expiresAt ?? 0, quote?.expiresAt ?? 0);
           if (
@@ -98,6 +133,10 @@ function SuggestedPrice({
     suggestion.checkOut,
     guests,
     requestKey,
+    candidates,
+    onAlternative,
+    suggestion.id,
+    suggestion.petFriendlyOnly,
   ]);
 
   return (
@@ -178,6 +217,12 @@ export function SeasonalDateSuggestions({
   fallbackProperties = EMPTY_PROPERTIES,
   onOpenProperty,
 }: SeasonalDateSuggestionsProps) {
+  const [alternatives, setAlternatives] = useState<Record<string, Property>>({});
+  const onAlternative = useCallback((id: string, property: Property) => {
+    setAlternatives((current) =>
+      current[id]?.id === property.id ? current : { ...current, [id]: property },
+    );
+  }, []);
   const [collections, setCollections] = useState(() => getHomeDiscoveryCollections());
   useEffect(() => {
     let day = new Date().toDateString();
@@ -285,11 +330,16 @@ export function SeasonalDateSuggestions({
           .map((suggestion) => ({
             suggestion,
             property:
-              collectionProperties.length > 0
+              (alternatives[suggestion.id] &&
+              (!collection.includePet ||
+                matchesPropertyCategory(alternatives[suggestion.id]!, 'pet_friendly'))
+                ? alternatives[suggestion.id]
+                : undefined) ??
+              (collectionProperties.length > 0
                 ? collectionProperties[
                     (suggestion.propertyIndex ?? 0) % collectionProperties.length
                   ]
-                : undefined,
+                : undefined),
           }))
           .filter((entry) => Boolean(entry.property));
 
@@ -376,6 +426,8 @@ export function SeasonalDateSuggestions({
                           property={property}
                           suggestion={suggestion}
                           guests={guestCount}
+                          candidates={collectionProperties}
+                          onAlternative={onAlternative}
                         />
                       </span>
                       <ArrowRight

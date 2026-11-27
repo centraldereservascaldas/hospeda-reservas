@@ -174,10 +174,11 @@ test('shows only a fresh quote belonging to the displayed property and dates', a
     render(createElement());
     assert.ok((await screen.findAllByText(/R\$\s?450,00 na hospedagem/)).length > 0);
     assert.ok(screen.getAllByText(/consulte taxa para pet/).length > 0);
-    const other = screen
-      .getAllByRole('button')
-      .find((item) => item.getAttribute('aria-label')?.includes('Apartamento B'))!;
-    assert.doesNotMatch(other.textContent || '', /R\$\s?450,00/);
+    for (const button of screen.getAllByRole('button')) {
+      if (/R\$\s?450,00/.test(button.textContent || '')) {
+        assert.match(button.getAttribute('aria-label') || '', /Apartamento A/);
+      }
+    }
   } finally {
     cleanup();
     globalThis.IntersectionObserver = previous;
