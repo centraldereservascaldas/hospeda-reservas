@@ -473,10 +473,11 @@ function MarketplaceApp() {
     return (
       <CheckoutRecoveryPage
         status={checkoutRecovery.status}
+        hasReturnContext={checkoutRecovery.returnUrl !== null}
         onRetry={checkoutRecovery.retry}
         onBack={() => {
           if (window.history.state?.[CHECKOUT_MODAL_HISTORY_ENTRY]) window.history.back();
-          else window.location.assign('/');
+          else window.location.assign(checkoutRecovery.returnUrl ?? '/');
         }}
       />
     );

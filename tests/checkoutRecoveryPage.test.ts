@@ -24,6 +24,7 @@ test('checkout recovery is a focused page without background content', () => {
   render(
     React.createElement(CheckoutRecoveryPage, {
       status: 'error',
+      hasReturnContext: true,
       onRetry: () => {},
       onBack: () => {},
     }),
@@ -34,12 +35,14 @@ test('checkout recovery is a focused page without background content', () => {
   assert.equal(screen.queryByRole('navigation'), null);
   assert.equal(document.activeElement?.textContent, 'Recuperar checkout');
   assert.equal(screen.getByRole('status').textContent?.startsWith('Não foi possível'), true);
+  assert.equal(screen.getByRole('button', { name: 'Voltar ao imóvel' }) !== null, true);
 });
 
 test('checkout recovery loading state exposes back action and progress status', () => {
   render(
     React.createElement(CheckoutRecoveryPage, {
       status: 'loading',
+      hasReturnContext: false,
       onRetry: () => {},
       onBack: () => {},
     }),
@@ -47,4 +50,18 @@ test('checkout recovery loading state exposes back action and progress status', 
 
   assert.equal(screen.getAllByRole('button').length, 1);
   assert.equal(screen.getByRole('status').textContent, 'Conferindo disponibilidade e preço…');
+});
+
+test('checkout recovery explains a new search when no valid trip context exists', () => {
+  render(
+    React.createElement(CheckoutRecoveryPage, {
+      status: 'error',
+      hasReturnContext: false,
+      onRetry: () => {},
+      onBack: () => {},
+    }),
+  );
+
+  assert.equal(screen.getByRole('status').textContent?.includes('Inicie uma nova busca'), true);
+  assert.equal(screen.getByRole('button', { name: 'Nova busca' }) !== null, true);
 });
