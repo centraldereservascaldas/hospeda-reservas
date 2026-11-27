@@ -84,6 +84,10 @@ export function SinglePageCheckout({
   const [retry, setRetry] = useState(0);
   const [accepted, setAccepted] = useState(false);
   const [quote, setQuote] = useState(bookingData?.quote ?? null);
+  const [quoteRefreshState, setQuoteRefreshState] = useState<'current' | 'refreshing' | 'stale'>(
+    'current',
+  );
+  const [quoteErrorResetKey, setQuoteErrorResetKey] = useState(0);
   const [prepared, setPrepared] = useState(false);
   const preparedRef = useRef<CieloPaymentContext | null>(null);
   const [attemptFinished, setAttemptFinished] = useState(false);
@@ -228,7 +232,8 @@ export function SinglePageCheckout({
     quote.source === 'stays-live' &&
     !prepared &&
     !attemptFinished;
-  const ready = paymentMethod === 'card' ? cardReady : pixReady;
+  const ready =
+    quoteRefreshState === 'current' && (paymentMethod === 'card' ? cardReady : pixReady);
   const fees = getVisiblePropertyFees(quote.fees || []);
   const paymentTotal =
     paymentMethod === 'card' && cardPricing ? cardPricing.totalCents / 100 : total;
@@ -249,6 +254,29 @@ export function SinglePageCheckout({
       }}
     />
   );
+
+  const refreshQuote = async (): Promise<boolean> => {
+    setQuoteRefreshState('refreshing');
+    try {
+      const updated = await crcnBackendApi.calculatePrice({
+        listingId: property.staysListingId || property.id,
+        from: checkIn,
+        to: checkOut,
+        guests: countOccupancyGuests(guests),
+      });
+      if (updated?.source !== 'stays-live') {
+        setQuoteRefreshState('stale');
+        return false;
+      }
+      setQuote(updated);
+      setQuoteRefreshState('current');
+      setQuoteErrorResetKey((value) => value + 1);
+      return true;
+    } catch {
+      setQuoteRefreshState('stale');
+      return false;
+    }
+  };
 
   const preparePayment = async (): Promise<CieloPaymentContext> => {
     if (preparedRef.current) return preparedRef.current;
@@ -311,15 +339,11 @@ export function SinglePageCheckout({
     }
     if (response?.code === 'quote_changed') {
       setAccepted(false);
-      const updated = await crcnBackendApi.calculatePrice({
-        listingId: property.staysListingId || property.id,
-        from: checkIn,
-        to: checkOut,
-        guests: countOccupancyGuests(guests),
-      });
-      if (updated?.source === 'stays-live') setQuote(updated);
+      const refreshed = await refreshQuote();
       throw new Error(
-        'O preço ou a disponibilidade mudou. Confira o resumo atualizado e aceite novamente antes de pagar.',
+        refreshed
+          ? 'O preço ou a disponibilidade mudou. Confira o resumo atualizado e aceite novamente antes de pagar.'
+          : 'Não foi possível confirmar o preço atualizado. Tente consultar novamente antes de continuar.',
       );
     }
     throw new Error(
@@ -577,6 +601,7 @@ export function SinglePageCheckout({
                 onPricingChange={setCardPricing}
                 failureContent={supportLink}
                 onAlternativeSubmit={startCieloPix}
+                errorResetKey={quoteErrorResetKey}
                 alternativeContent={
                   <section className="checkout-pix-panel" aria-labelledby="checkout-pix-title">
                     <h2 id="checkout-pix-title" className="text-lg font-bold text-neutral-950">
@@ -711,7 +736,7 @@ export function SinglePageCheckout({
                       type="button"
                       aria-label="Pix, aprovação rápida"
                       aria-pressed={paymentMethod === 'pix'}
-                      disabled={!pixReady}
+                      disabled={!pixReady || quoteRefreshState !== 'current'}
                       onClick={() => {
                         setPaymentMethod('pix');
                         setAccepted(false);
@@ -812,6 +837,28 @@ export function SinglePageCheckout({
                     </div>
                   </details>
                   <CheckoutContractLink />
+                  {quoteRefreshState !== 'current' && (
+                    <div
+                      role={quoteRefreshState === 'stale' ? 'alert' : 'status'}
+                      className="mt-4 rounded-xl border border-amber-400 bg-amber-50 p-4 text-sm leading-6 text-amber-950"
+                    >
+                      {quoteRefreshState === 'refreshing' ? (
+                        'Consultando o preço atualizado. O pagamento está temporariamente bloqueado.'
+                      ) : (
+                        <>
+                          Não foi possível confirmar o preço atual. O valor exibido pode estar
+                          desatualizado e o pagamento permanece bloqueado.
+                          <button
+                            type="button"
+                            onClick={() => void refreshQuote()}
+                            className="ml-2 min-h-11 font-semibold underline"
+                          >
+                            Tentar atualizar preço
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <label className="mt-4 flex min-h-11 items-start gap-3 text-sm leading-6">
                     <input
                       type="checkbox"

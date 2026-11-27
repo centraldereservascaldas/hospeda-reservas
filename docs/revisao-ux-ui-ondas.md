@@ -291,11 +291,13 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 
 ### F24 · P2 · Checkout afirma que preço foi atualizado quando a nova consulta falha
 
-**Evidência de código, ainda não reproduzida em navegador:** ao receber `quote_changed`, `src/components/booking/SinglePageCheckout.tsx:312` desmarca o aceite e consulta o preço. Em `:320`, só substitui a cotação se a resposta tiver origem `stays-live`; mesmo com resposta nula ou outra origem, em `:321` informa que o resumo foi atualizado. `src/services/crcnBackendApi.ts:766` retorna `null` quando a consulta falha ou seus dados não conferem, deixando o valor anterior em tela. O teste em `tests/singlePageCheckout.test.ts:500` cobre a atualização bem-sucedida, não a falha. O serviço direto rejeita a divergência antes de criar o pedido (`app/Services/DirectCheckoutService.php:145`), portanto esta evidência não demonstra cobrança indevida.
+**Evidência de código:** ao receber `quote_changed`, `SinglePageCheckout` desmarcava o aceite e consultava o preço. Se a resposta fosse nula ou de origem diferente de `stays-live`, mantinha o valor anterior, mas dizia para conferir o resumo atualizado. `crcnBackendApi.calculatePrice` retorna `null` quando a consulta falha ou os dados não conferem. O serviço direto rejeita a divergência antes de criar o pedido (`app/Services/DirectCheckoutService.php:145`), portanto esta evidência não demonstrou cobrança indevida.
 
 **Confirmado em teste isolado em 26/11/2026:** adaptei temporariamente o teste existente para que a atualização retornasse `null` após `quote_changed`. A tela pediu para conferir o “resumo atualizado”, mas manteve o valor anterior de R$ 3.192,22; o aceite foi desmarcado e a tokenização não foi iniciada. A primeira execução falhou por uma expectativa numérica incorreta; corrigida a expectativa, o teste passou e o arquivo temporário foi removido. Não houve pagamento real.
 
 **Impacto provável:** a pessoa recebe uma instrução incorreta, pode aceitar novamente o valor antigo e encontrar outra rejeição, sem saber que precisa recuperar a cotação. **Ação:** distinguir atualização confirmada de falha ou origem inválida, impedir nova aceitação de cotação sabidamente desatualizada e oferecer nova consulta e retorno apropriado. **Verificação:** simular `quote_changed` seguido de erro, resposta inválida e sucesso, nos fluxos Pix e cartão; conferir mensagem, valor, aceite e ausência de pagamento enquanto não houver preço confirmado.
+
+**Implementação em `codex/ux-f24-quote-refresh`:** atualização bem-sucedida só libera o checkout com a cotação `stays-live` recebida; falha, `null` ou outra origem mantêm o aceite e o pagamento bloqueados, marcam o preço visível como não confirmado e oferecem nova consulta. A recuperação limpa o erro anterior do formulário e exige novo aceite. Cobertura simulada: resposta nula e recuperação, origem inválida, sucesso, cartão e Pix; não foram iniciados tokenização ou pagamento. `tsx --test tests/singlePageCheckout.test.ts` passou 17/17; ESLint direcionado e TypeScript frontend passaram; `npm run build` passou (warnings preexistentes de fonte não resolvida e chunk maior que 500 kB). A validação visual foi via DOM/jsdom, sem navegador real, Stays ou backend ativo. **Status:** implementado localmente, aguardando PR/revisão. Sem alteração de backend ou contrato.
 
 ### F25 · P2 · Barra final pode impedir recuperação de link direto do checkout
 
@@ -716,7 +718,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Investigar falhas de asset e respostas 5xx observadas na rota de acompanhamento e validar publicação, cache e recuperação (F41).
 - [ ] Esclarecer taxa local e formas de pagamento nas regras e no checkout (F22).
 - [ ] Projetar entrada independente para o checkout novo e medir carregamento, preservando recuperação e contratos (F23).
-- [ ] Tratar falha na atualização de preço após rejeição por mudança, sem apresentar cotação antiga como nova (F24).
+- [x] Tratar falha na atualização de preço após rejeição por mudança, sem apresentar cotação antiga como nova (F24). Cobertura simulada de null, origem inválida, sucesso, cartão e Pix; 17 testes de checkout, ESLint/TypeScript e build aprovados. Implementado em `codex/ux-f24-quote-refresh`, aguardando PR/revisão; sem validação em navegador real nem chamada a Stays/pagamento.
 - [ ] Verificar e normalizar barras finais em links diretos de checkout, preservando parâmetros e histórico (F25).
 - [ ] Corrigir status HTTP da rota válida de checkout e preservar `noindex` e 404 de caminhos desconhecidos (F26).
 - [ ] Diferenciar erro de consulta de preço e cotação ausente no detalhe, preservando tentativa e bloqueio de reserva (F27).

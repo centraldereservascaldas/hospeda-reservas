@@ -531,6 +531,134 @@ test('a changed quote requires fresh consent and never starts Cielo', async () =
   assert.match(view.getByRole('button', { name: /Confirmar e pagar/ }).textContent!, /3.403,90/);
 });
 
+test('a failed quote refresh blocks payment until a live quote is recovered', async () => {
+  let tokens = 0;
+  let priceCalls = 0;
+  checkoutApi.createCheckout = async () => ({
+    success: false,
+    code: 'quote_changed',
+    payment,
+    idempotentReplay: false,
+  });
+  checkoutApi.getCieloSopAccessToken = async () => {
+    tokens++;
+    return null;
+  };
+  crcnBackendApi.calculatePrice = async () => {
+    priceCalls++;
+    return priceCalls === 1 ? null : { ...bookingData.quote, baseTotal: 3200, total: 3200 };
+  };
+  const view = setup();
+  await fill(view);
+  fireEvent.submit(view.container.querySelector('form')!);
+
+  const quoteAlert = await waitFor(() => {
+    const alert = view
+      .getAllByRole('alert')
+      .find((candidate) =>
+        candidate.textContent?.includes('valor exibido pode estar desatualizado'),
+      );
+    assert.ok(alert);
+    assert.match(alert.textContent!, /valor exibido pode estar desatualizado/);
+    return alert;
+  });
+  assert.ok(quoteAlert);
+  assert.equal(
+    (view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement).disabled,
+    true,
+  );
+  assert.equal(
+    view.getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
+    true,
+  );
+  assert.equal(tokens, 0);
+
+  fireEvent.click(view.getByRole('button', { name: 'Tentar atualizar preço' }));
+  await waitFor(() => assert.equal(view.queryAllByRole('alert').length, 0));
+  assert.equal(priceCalls, 2);
+  assert.match(view.getByLabelText('Resumo da compra').textContent!, /3\.200,00/);
+  assert.equal(
+    (view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement).checked,
+    false,
+  );
+  assert.equal(
+    (view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement).disabled,
+    false,
+  );
+  assert.equal(tokens, 0);
+});
+
+test('a non-live refreshed quote keeps card payment blocked', async () => {
+  checkoutApi.createCheckout = async () => ({
+    success: false,
+    code: 'quote_changed',
+    payment,
+    idempotentReplay: false,
+  });
+  crcnBackendApi.calculatePrice = async () =>
+    ({
+      ...bookingData.quote,
+      source: 'preview',
+      total: 2800,
+    }) as unknown as typeof bookingData.quote;
+  const view = setup();
+  await fill(view);
+  fireEvent.submit(view.container.querySelector('form')!);
+
+  await waitFor(() =>
+    assert.ok(
+      view
+        .getAllByRole('alert')
+        .some((alert) => alert.textContent?.includes('valor exibido pode estar desatualizado')),
+    ),
+  );
+  assert.match(view.getByLabelText('Resumo da compra').textContent!, /3\.001,00/);
+  assert.equal(
+    view.getByRole('button', { name: /Confirmar e pagar/ }).hasAttribute('disabled'),
+    true,
+  );
+});
+
+test('Pix is blocked when the changed quote cannot be refreshed', async () => {
+  let paymentCalls = 0;
+  checkoutApi.createCheckout = async () => ({
+    success: false,
+    code: 'quote_changed',
+    payment: { ...payment, methods: ['card', 'pix'] },
+    idempotentReplay: false,
+  });
+  checkoutApi.createCheckoutPayment = async () => {
+    paymentCalls++;
+    throw new Error('Payment must not start');
+  };
+  crcnBackendApi.calculatePrice = async () => null;
+  const view = setup(false, { ...payment, methods: ['card', 'pix'] });
+  await fill(view);
+  fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
+  fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), {
+    target: { value: '12345678901' },
+  });
+  fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
+  fireEvent.submit(view.container.querySelector('form')!);
+
+  await waitFor(() =>
+    assert.ok(
+      view
+        .getAllByRole('alert')
+        .some((alert) => alert.textContent?.includes('valor exibido pode estar desatualizado')),
+    ),
+  );
+  assert.equal(
+    (view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement).disabled,
+    true,
+  );
+  assert.equal(
+    (view.getByRole('button', { name: 'Pix, aprovação rápida' }) as HTMLButtonElement).disabled,
+    true,
+  );
+  assert.equal(paymentCalls, 0);
+});
+
 test('a recovered paid order is displayed without tokenization or another payment', async () => {
   let tokens = 0;
   checkoutApi.createCheckout = async () => ({
