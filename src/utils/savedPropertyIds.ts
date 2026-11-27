@@ -10,6 +10,7 @@ export function readSavedPropertyIds(serialized: string | null): string[] {
     const cleaned = parsed.filter(
       (id): id is string => typeof id === 'string' && !id.startsWith('prop-'),
     );
+    if (parsed.length === 0) return [];
     return cleaned.length > 0 ? cleaned : DEFAULT_SAVED_PROPERTY_IDS;
   } catch {
     return DEFAULT_SAVED_PROPERTY_IDS;

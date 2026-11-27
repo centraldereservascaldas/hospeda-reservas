@@ -17,3 +17,8 @@ test('keeps saved string IDs and ignores demo IDs and malformed entries', () => 
     'custom-listing',
   ]);
 });
+
+test('preserves an explicitly empty saved list', () => {
+  assert.deepEqual(readSavedPropertyIds('[]'), []);
+  assert.deepEqual(readSavedPropertyIds('["prop-demo",3,null]'), defaults);
+});

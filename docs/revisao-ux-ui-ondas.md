@@ -173,11 +173,13 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 
 ### F11 · P2 · Favoritos removidos retornam ao reabrir
 
-**Evidência de código, confiança alta:** `src/utils/savedPropertyIds.ts:13` converte uma lista armazenada vazia em dois IDs padrão. `src/hooks/useSavedPropertyIds.ts:12` grava a lista após cada alteração. Assim, remover todos os favoritos grava `[]`, mas a próxima inicialização restaura os IDs padrão; uma primeira visita sem dados também recebe favoritos sem ação do visitante. Os testes em `tests/savedPropertyIds.test.ts` registram esse fallback, mas não cobrem o caso `[]`.
+**Evidência de código, confiança alta:** `src/utils/savedPropertyIds.ts:13` convertia uma lista armazenada vazia em dois IDs padrão. `src/hooks/useSavedPropertyIds.ts:12` grava a lista após cada alteração. Assim, remover todos os favoritos gravava `[]`, mas a próxima inicialização restaurava os IDs padrão; uma primeira visita sem dados também recebia favoritos sem ação do visitante. A reprodução em produção abaixo confirmou essa sequência.
 
 **Confirmado em produção em 26/11/2026, na sessão isolada de teste:** após gravar uma lista de favoritos vazia e recarregar a página, o armazenamento passou a conter dois IDs. O estado anterior da sessão foi restaurado em seguida. O teste verifica a persistência do estado, não a apresentação dos dois imóveis em todas as consultas.
 
 **Impacto provável:** a lista deixa de refletir a escolha explícita e o estado vazio não persiste. **Ação:** distinguir ausência de dados, armazenamento inválido e lista vazia válida; verificar se existe migração necessária para IDs antigos. **Verificação:** remover todos, recarregar e confirmar lista vazia; iniciar em armazenamento limpo e testar dados inválidos. Não foi alterado o armazenamento do usuário para reproduzir.
+
+**Implementação em revisão:** `readSavedPropertyIds` preserva `[]` como lista válida e mantém os defaults para ausência, JSON inválido e listas não vazias sem IDs utilizáveis. Testes unitários e do hook cobrem remoção de todos e nova inicialização com lista vazia. Não foi repetida a validação visual no navegador nesta sprint. PR #88, base `codex/ux-measurement-focus`.
 
 ### F12 · P2 · Favoritos dependem do resultado atual
 
@@ -734,7 +736,8 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 ### Onda 5 · Regressão e áreas complementares
 
-- [ ] Corrigir persistência e recuperação de favoritos sem depender da pesquisa atual (F11 e F12), com estados vazios e falhas distintos.
+- [x] Preservar a lista vazia de favoritos após remover todos e reabrir (F11). Testes de parser e hook passaram; validação visual no navegador ainda pendente. PR #88.
+- [ ] Corrigir favoritos que desaparecem quando não estão na página atual da pesquisa (F12), com estados de carregamento, vazio e falha distintos.
 - [ ] Preservar mensagens de validação local no cadastro e associá-las aos campos (F13).
 - [ ] Impedir que respostas antigas do painel do proprietário substituam o período mais recente (F14).
 - [ ] Neutralizar interpretação de fórmulas em campos textuais da exportação financeira e validar planilhas suportadas (F52).
