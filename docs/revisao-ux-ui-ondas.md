@@ -219,9 +219,9 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 
 ### F16 · P2 · Sugestões de datas não informam o ano
 
-**Observação e correção da revisão anterior:** no site público foi visto “Consciência Negra, 19 nov – 22 nov” em 26/11/2026, e inicialmente foi descrito como data passada. Isso não está comprovado: `src/utils/surpriseDates.ts:62` constrói opções futuras até 370 dias, incluindo o ano seguinte, enquanto `src/components/search/SeasonalDateSuggestions.tsx:92` formata apenas dia e mês. O período pode ser de 2027. O achado confirmado pela implementação é a ausência do ano, que impede distinguir as duas situações; não se deve tratar aquele cartão como vencido sem conferir seus parâmetros.
+**Status: corrigido pelo PR #81, agora integrado e publicado em `706a2f83`.** A observação original de 26/11/2026 descrevia “19 nov – 22 nov” sem ano; não havia evidência de que as datas fossem passadas, pois as sugestões podem incluir os próximos 370 dias. O PR #81 alterou `formatPeriod` para incluir dia, mês e ano nos dois extremos. A função é usada no texto visível e nos nomes acessíveis dos cartões de datas sazonais e de descoberta de imóveis.
 
-**Ação:** mostrar o ano quando necessário para identificar o período, inclusive na descrição acessível e ao atravessar ano. **Verificação:** revisar sugestões entre novembro e dezembro, datas no ano seguinte e períodos que atravessam o Réveillon; conferir também a URL gerada.
+**Evidência automatizada:** `tests/seasonalDateSuggestions.test.ts` verifica ano futuro, travessia do Réveillon e ano no nome acessível do cartão. **Revalidação visual e acessível em produção em 27/11/2026:** sem acionar cartões ou fazer buscas, examinei os textos e nomes acessíveis renderizados na página inicial. A amostra incluiu “4 de dez de 2026 – 6 de dez de 2026”, “1 de jan de 2027 – 3 de jan de 2027” e períodos de feriado em 2027; os anos aparecem em ambos os extremos. Portanto, F16 não requer correção adicional. Essa consulta pontual não substitui a cobertura automatizada para outras datas nem executa pesquisa de disponibilidade.
 
 ### F17 · P2 · Texto de hóspedes sobrepõe o botão de busca em 640 px
 
@@ -612,7 +612,7 @@ Em 26/11/2026, o PR [#81](https://github.com/centraldereservascaldas/hospeda-res
 | Item | Relação com o PR | Próxima validação |
 | --- | --- | --- |
 | F18 e F19 | O componente remove as consultas e cotações automáticas dos cartões que originavam esses caminhos. A solução substitui o comportamento anterior; os achados deixam de se aplicar àquele código caso o PR seja integrado. | Testar carregamento, erro, ausência de resultados e recuperação da busca iniciada pelo cartão; não marcar resolvido na produção antes de implantação e verificação. |
-| F16 | `formatPeriod` continua mostrando dia e mês sem ano, tanto no texto como no nome acessível do cartão. | Mostrar o ano quando necessário e testar datas do ano seguinte e travessia de ano. |
+| F16 | O PR #81 incluiu ano no texto e no nome acessível dos cartões. Testes cobrem ano seguinte e travessia de ano; revalidação em produção em 27/11/2026 encontrou os anos visíveis e acessíveis. | Corrigido em `706a2f83`; sem mudança adicional. |
 | F03, F06, F17 e F55 | O PR não modifica o seletor compartilhado da busca; o PR #80 modificou estilos desse componente. | Reproduzir cada problema na base mais recente e no PR, pois o diff sozinho não prova o comportamento visual. |
 | Imóvel apresentado | O cartão sazonal exibe foto e título do imóvel, mas chama `onSelect` com datas e hóspedes sem identificador do imóvel. Cartões de outras coleções usam `onOpenProperty`. | Definir a intenção e testar se o resultado corresponde à expectativa gerada pelo cartão, inclusive imóvel indisponível. |
 | Pets | A escolha do cartão inclui ao menos um pet, mas não passa categoria `pet_friendly`; a consulta usa a contagem de pessoas e o filtro local avalia a categoria já existente, não o número de pets. | Simular resultados que aceitam e não aceitam pets, testar categoria anterior e decidir o contrato da busca. O risco é de código, não foi reproduzido na interface do PR. |
@@ -645,7 +645,7 @@ As prioridades indicam impacto potencial na tarefa, não frequência medida. F41
 
 | Sprint | Entrega verificável | Dependência principal |
 | --- | --- | --- |
-| 1 | Datas acessíveis, foco da recuperação, hóspedes consistentes, informação de cotação válida e recuperação de sugestões (F01, F04, F05, F16, F18, F19, F21, F28, F50) | Definir regra de contagem e apresentação da cotação expirada. |
+| 1 | Datas acessíveis, foco da recuperação, hóspedes consistentes, informação de cotação válida e recuperação de sugestões (F01, F04, F05, F18, F19, F21, F28, F50) | Definir regra de contagem e apresentação da cotação expirada. |
 | 2 | Painéis não encobrem conteúdo nem sobrevivem a mudanças de contexto; transição de datas para hóspedes (F02, F03, F06, F07, F10, F17, F55) | Mapear foco, ancoragem, camadas e comportamento em rolagem antes de extrair código compartilhado. |
 | 3 | Imóvel e checkout preservam viagem, recuperam falhas e oferecem escolhas de medição claras (F09, F15, F20, F22–F27, F29–F37, F39–F47, F51) | Definir contrato de aceite, confirmar taxas locais, mapear destinos de medição e medir a jornada antes de alterar a arquitetura. |
 | 4 | Componentes, camadas e tokens extraídos conforme contratos comprovados | Inventariar repetição real e aproveitar o aprendizado das jornadas anteriores; executar gradualmente. |
@@ -665,7 +665,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Alinhar os limites de pets da interface, URLs e validação de reserva após definir a regra de negócio (F28).
 - [ ] Identificar e comunicar preço expirado (F04), com atualização e estados de falha.
 - [ ] Definir e testar preço desconhecido no filtro de faixa e sua comunicação na lista (F50).
-- [ ] Apresentar o ano de datas sazonais quando necessário (F16) e verificar expiração real antes de remover sugestões.
+- [x] F16 corrigido no PR #81: ano presente no texto visível e nome acessível; testes cobrem datas futuras e travessia do Réveillon. Revalidado na página pública em 27/11/2026; nenhuma busca foi enviada.
 - [ ] Tratar carregamento, falha repetida e recuperação no cartão de sugestão para pets (F18).
 - [ ] Revalidar sugestões ao retornar à aba após a expiração e encerrar corretamente consultas concluídas (F19).
 - [ ] Validar que mudanças não alteram contratos de API e não apresentam disponibilidade vencida como confirmada.
