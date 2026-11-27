@@ -8,6 +8,7 @@ import { countOccupancyGuests } from '../../utils/guestCounts';
 import { matchesMediaQuery } from '../../utils/motion';
 import { GuestCounterList } from './GuestCounterList';
 import { CalendarMonthGrid } from './CalendarMonthGrid';
+import { focusWithoutScrolling } from '../../utils/focus';
 
 function toLocalIsoDate(date: Date): string {
   const year = date.getFullYear();
@@ -51,6 +52,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const tabPanelRef = useRef<HTMLDivElement>(null);
   const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const shouldFocusDateRef = useRef(false);
+  const mobileDestinationInputRef = useRef<HTMLInputElement>(null);
   const mobileCalendarScrollRef = useRef<HTMLDivElement>(null);
   const mobileCalendarSentinelRef = useRef<HTMLDivElement>(null);
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
@@ -60,6 +62,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     'destination',
   );
   const [displayedTab, setDisplayedTab] = useState(activeTab);
+  const previousDisplayedTabRef = useRef(displayedTab);
   const [destination, setDestination] = useState(filters.destination);
   const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => {
@@ -219,6 +222,32 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     tabPanelRef.current.scrollTop = 0;
     setDisplayedTab(activeTab);
   }, [activeTab, isOpen]);
+
+  useEffect(() => {
+    const previousDisplayedTab = previousDisplayedTabRef.current;
+    previousDisplayedTabRef.current = displayedTab;
+    if (!isOpen || !mobile || previousDisplayedTab === displayedTab) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const target =
+        displayedTab === 'destination'
+          ? mobileDestinationInputRef.current
+          : displayedTab === 'dates'
+            ? (dateButtonRefs.current.get(focusDate) ??
+              dialogRef.current?.querySelector<HTMLButtonElement>(
+                'button[data-calendar-day]:not(:disabled)[tabindex="0"]',
+              ))
+            : displayedTab === 'guests'
+              ? dialogRef.current?.querySelector<HTMLButtonElement>(
+                  '[aria-label^="Aumentar "]:not(:disabled), [aria-label^="Diminuir "]:not(:disabled)',
+                )
+              : null;
+
+      focusWithoutScrolling(target ?? null);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [dialogRef, displayedTab, focusDate, isOpen, mobile]);
 
   useEffect(() => {
     if (!isOpen || !mobile || activeTab !== 'dates' || !('IntersectionObserver' in window)) return;
@@ -447,6 +476,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         Buscar condomínio ou destino
                       </label>
                       <input
+                        ref={mobileDestinationInputRef}
                         id={`${fieldId}-mobile-destination`}
                         value={destination}
                         onChange={(event) => setDestination(event.target.value)}
