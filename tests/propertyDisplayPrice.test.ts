@@ -75,6 +75,7 @@ test('an expired search quote stays visible while explicit-date checkout still r
     amount: 550,
     detail: 'Total da estadia • 2 noites',
     dailyRate: 250,
+    expired: true,
   });
   assert.equal(getPropertyDisplayPrice(expired, false, true).kind, 'select-dates');
 });

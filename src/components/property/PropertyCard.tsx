@@ -322,6 +322,11 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
                     {displayPrice.note}
                   </span>
                 )}
+                {displayPrice.kind === 'quote' && displayPrice.expired && (
+                  <span className="text-caption font-semibold text-amber-800">
+                    Cotação expirada. Atualize para confirmar preço e disponibilidade.
+                  </span>
+                )}
               </div>
             ) : (
               <span className="text-xs font-semibold text-neutral-500">{displayPrice.message}</span>
