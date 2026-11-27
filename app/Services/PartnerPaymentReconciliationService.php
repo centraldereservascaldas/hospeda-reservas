@@ -42,6 +42,16 @@ class PartnerPaymentReconciliationService
             return false;
         }
 
+        // Status 2 can also include a requested or partial refund. Even a
+        // pending refund makes the amount available for the booking uncertain.
+        $refunds = $payment['Refunds'] ?? [];
+        $voided = $payment['VoidedAmount'] ?? 0;
+        if (! is_array($refunds) || count($refunds) > 0 || ! is_int($voided) || $voided !== 0) {
+            PartnerCheckoutOrder::query()->whereKey($id)->where('status', $order->status)->where('attention_reason', $order->attention_reason)->where('payment_id', $order->payment_id)->update(['status' => 'attention_required', 'attention_reason' => 'payment_refund_review', 'payment_qr_code' => null]);
+
+            return false;
+        }
+
         return DB::transaction(function () use ($order): bool {
             $locked = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($order->id);
             if (($locked->status !== 'payment_pending' && ! ($locked->status === 'attention_required' && $locked->attention_reason === 'payment_outcome_unknown')) || $locked->payment_id !== $order->payment_id || $locked->payment_cents !== $order->payment_cents || $locked->merchant_order_id !== $order->merchant_order_id) {

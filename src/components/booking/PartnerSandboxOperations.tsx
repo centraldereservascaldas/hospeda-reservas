@@ -39,6 +39,8 @@ function attentionMessage(order: Order): string {
       return 'Resultado do pagamento ainda não confirmado. Consulte a Cielo antes de qualquer nova cobrança.';
     case 'payment_mismatch':
       return 'Dados do pagamento divergem do pedido. Confira a Cielo antes de continuar.';
+    case 'payment_refund_review':
+      return 'Há indício de devolução no pagamento. Confira o valor recebido na Cielo antes de continuar.';
     case 'supplier_outcome_unknown':
       return 'Pagamento confirmado; pré-reserva sem resultado confirmado. Confira a ImobSys e trate o pagamento com a equipe antes de repetir.';
     default:
