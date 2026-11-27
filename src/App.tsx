@@ -310,8 +310,11 @@ function MarketplaceApp() {
     catalogStatus,
     activeFilterCount,
     savedPropertiesList,
+    missingSavedPropertyCount,
+    savedPropertiesStatus,
   } = useExploreCatalogViewModel({
     properties,
+    catalogProperties,
     filters,
     savedPropertyIds,
     catalogLoading,
@@ -547,6 +550,8 @@ function MarketplaceApp() {
         onOpenSearch={() => setIsSearchOpen(true)}
         savedPropertyIds={savedPropertyIds}
         savedProperties={savedPropertiesList}
+        savedPropertiesStatus={savedPropertiesStatus}
+        missingSavedPropertyCount={missingSavedPropertyCount}
         showTotalWithTaxes={showTotalWithTaxes}
         condominiums={condominiums}
         reservations={reservations}

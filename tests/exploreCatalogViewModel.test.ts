@@ -33,7 +33,8 @@ test('derives catalog results, categories, saved properties, and empty-catalog s
     guests: { adults: 2, children: 0, infants: 0, pets: 0 },
   };
   const options = {
-    properties: [property, otherProperty],
+    properties: [property],
+    catalogProperties: [property, otherProperty],
     filters,
     savedPropertyIds: [otherProperty.id],
     catalogLoading: true,
@@ -85,6 +86,7 @@ test('condominium directory contains only groups with listings matching active f
   };
   const options = {
     properties: [matchingProperty, otherProperty],
+    catalogProperties: [matchingProperty, otherProperty],
     filters: {
       ...createDefaultSearchFilters(),
       category: 'condominiums',
@@ -109,6 +111,7 @@ test('condominium directory contains only groups with listings matching active f
 test('keeps category choices available while later search pages remain unchecked', () => {
   const options = {
     properties: [],
+    catalogProperties: [],
     filters: createDefaultSearchFilters(),
     savedPropertyIds: [],
     catalogLoading: false,
@@ -124,4 +127,33 @@ test('keeps category choices available while later search pages remain unchecked
     result.current.availableCategories.some((category) => category.id === 'hot_tub'),
     true,
   );
+});
+
+test('saved accommodations use the full catalog when search results are narrowed', () => {
+  const savedProperty = STAYS_NET_APARTMENTS[1]!;
+  const searchProperty = STAYS_NET_APARTMENTS[0]!;
+  const options = {
+    properties: [searchProperty],
+    catalogProperties: [savedProperty, searchProperty],
+    filters: createDefaultSearchFilters(),
+    savedPropertyIds: [savedProperty.id],
+    catalogLoading: false,
+    catalogLoadError: false,
+  };
+  const { result, rerender } = renderHook((props) => useExploreCatalogViewModel(props), {
+    initialProps: options,
+  });
+
+  assert.deepEqual(result.current.savedPropertiesList.map(({ id }) => id), [savedProperty.id]);
+  assert.equal(result.current.missingSavedPropertyCount, 0);
+  assert.equal(result.current.savedPropertiesStatus, 'ready');
+
+  rerender({ ...options, catalogProperties: [], catalogLoading: true });
+  assert.equal(result.current.savedPropertiesStatus, 'loading');
+
+  rerender({ ...options, catalogProperties: [], catalogLoading: false, catalogLoadError: true });
+  assert.equal(result.current.savedPropertiesStatus, 'error');
+
+  rerender({ ...options, catalogProperties: [], catalogLoading: false, catalogLoadError: false });
+  assert.equal(result.current.missingSavedPropertyCount, 1);
 });

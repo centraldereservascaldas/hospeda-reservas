@@ -70,6 +70,8 @@ interface MainContentRouterProps {
   onRetryAvailabilitySearch: () => void;
   savedPropertyIds: string[];
   savedProperties: Property[];
+  savedPropertiesStatus: 'loading' | 'error' | 'stale' | 'ready';
+  missingSavedPropertyCount: number;
   showTotalWithTaxes: boolean;
   condominiums: CondominiumSummary[];
   reservations: Reservation[];
@@ -125,6 +127,8 @@ export function MainContentRouter({
   onRetryAvailabilitySearch,
   savedPropertyIds,
   savedProperties,
+  savedPropertiesStatus,
+  missingSavedPropertyCount,
   showTotalWithTaxes,
   condominiums,
   reservations,
@@ -435,6 +439,9 @@ export function MainContentRouter({
         <LazyFeatureBoundary>
           <WishlistsView
             savedProperties={savedProperties}
+            status={savedPropertiesStatus}
+            missingSavedPropertyCount={missingSavedPropertyCount}
+            onRetryCatalog={onRetryCatalog}
             currency={currency}
             onToggleSave={onToggleSave}
             onSelectProperty={onSelectProperty}

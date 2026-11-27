@@ -189,6 +189,8 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 
 **Ação:** obter os imóveis salvos independentemente da página atual, com estados de carregamento, indisponível e erro. **Verificação:** salvar dois imóveis, buscar um intervalo que retorne somente um, abrir favoritos, recarregar e conferir ambos sem repetir consultas desnecessárias. Reprodução visual ainda pendente.
 
+**Implementação em revisão:** a lista combina `catalogProperties` com os resultados atuais, preservando cotação dos resultados quando o mesmo ID existe nas duas fontes. A tela diferencia carregamento, falha com nova tentativa e IDs ausentes após catálogo carregado. Testes cobrem busca estreita, estados e retry. A rota de favoritos foi inspecionada em navegador local a 390 × 844; a busca estreita específica foi coberta por teste automatizado, não reproduzida manualmente no navegador. PR #89, base `codex/ux-favorites-empty`.
+
 ### F13 · P2 · Cadastro perde a explicação de erro local
 
 **Evidência de código:** `src/components/account/GuestAccountModal.tsx:179` lança erro específico para nome incompleto; o `catch` em `:210` passa a mensagem por `getAccountErrorMessage`, que em `:16` reconhece apenas erros de autenticação e usa mensagem genérica para esse caso. A validação nativa cobre alguns outros campos, mas a regra de nome completo depende desta verificação.
@@ -736,8 +738,8 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 ### Onda 5 · Regressão e áreas complementares
 
-- [x] Preservar a lista vazia de favoritos após remover todos e reabrir (F11). Testes de parser e hook passaram; validação visual no navegador ainda pendente. PR #88.
-- [ ] Corrigir favoritos que desaparecem quando não estão na página atual da pesquisa (F12), com estados de carregamento, vazio e falha distintos.
+- [x] Preservar a lista vazia de favoritos após remover todos e reabrir (F11). Testes de parser e hook passaram; validação visual específica da remoção ainda pendente. PR #88.
+- [x] Manter favoritos vindos do catálogo completo quando a busca reduz os resultados e distinguir estados de catálogo indisponível (F12). Testes de modelo e renderização passaram; rota de favoritos conferida em navegador mobile, sem busca estreita manual. PR #89.
 - [ ] Preservar mensagens de validação local no cadastro e associá-las aos campos (F13).
 - [ ] Impedir que respostas antigas do painel do proprietário substituam o período mais recente (F14).
 - [ ] Neutralizar interpretação de fórmulas em campos textuais da exportação financeira e validar planilhas suportadas (F52).
