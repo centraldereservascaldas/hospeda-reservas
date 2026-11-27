@@ -60,17 +60,19 @@ export function SearchPagination({ state, onLoadMore }: SearchPaginationProps) {
       <Button
         variant="secondary"
         disabled={!state.hasMore}
-        loading={state.isLoading}
-        loadingLabel="Carregando mais…"
+        aria-disabled={state.isLoading || undefined}
+        aria-busy={state.isLoading || undefined}
         onClick={() => {
           if (!state.isLoading && state.hasMore) onLoadMore();
         }}
       >
-        {state.error
-          ? 'Tentar carregar mais'
-          : state.hasMore
-            ? 'Carregar mais'
-            : 'Fim dos resultados'}
+        {state.isLoading
+          ? 'Carregando mais…'
+          : state.error
+            ? 'Tentar carregar mais'
+            : state.hasMore
+              ? 'Carregar mais'
+              : 'Fim dos resultados'}
       </Button>
     </section>
   );
