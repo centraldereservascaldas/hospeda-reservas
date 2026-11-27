@@ -1218,6 +1218,36 @@ body::before {
   grid-row: 1 / span 2;
 }
 
+@media (min-width: 640px) and (max-width: 839px) {
+  #widgetStaysSearchForm[data-search-variant='hero'] [data-search-segment='guests'] {
+    column-gap: 0.5rem;
+    padding-inline: 0.75rem 0.375rem;
+  }
+
+  #widgetStaysSearchForm[data-search-variant='hero']
+    [data-search-segment='guests']
+    > button[type='submit'] {
+    width: 3rem;
+    gap: 0;
+    padding-inline: 0;
+  }
+
+  #widgetStaysSearchForm[data-search-variant='hero']
+    [data-search-segment='guests']
+    > button[type='submit']
+    > span {
+    display: none;
+  }
+
+  #widgetStaysSearchForm[data-search-variant='hero']
+    [data-search-segment='guests']
+    [aria-haspopup='dialog'] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 #widgetStaysSearchForm[data-search-variant='hero'] > p[role='alert'] {
   grid-column: 1 / -1;
 }

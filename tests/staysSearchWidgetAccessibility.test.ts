@@ -277,6 +277,44 @@ test('closes a shared search panel when its segment scrolls out of view', async 
   }
 });
 
+test('guest panel can scroll vertically when its content exceeds the viewport', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  const originalInnerHeight = window.innerHeight;
+  const originalInnerWidth = window.innerWidth;
+  crcnBackendApi.getResorts = async () => [];
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 400 });
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+
+  try {
+    const { getByRole } = render(
+      React.createElement(StaysSearchWidget, {
+        onSearchInApp: () => {},
+      }),
+    );
+
+    fireEvent.click(getByRole('button', { name: /Quem:/ }));
+    const guestsDialog = getByRole('dialog', { name: 'Selecionar hóspedes' });
+    const serviceAnimalInfo = getByRole('button', { name: 'Vai levar um animal de serviço?' });
+
+    await waitFor(() => assert.equal(guestsDialog.style.height, '376px'));
+    assert.match(guestsDialog.className, /overflow-y-auto/);
+    assert.match(guestsDialog.className, /overscroll-contain/);
+    fireEvent.click(serviceAnimalInfo);
+    assert.equal(serviceAnimalInfo.getAttribute('aria-expanded'), 'true');
+    assert.ok(getByRole('button', { name: 'Aumentar animais de estimação' }));
+  } finally {
+    crcnBackendApi.getResorts = originalGetResorts;
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: originalInnerHeight,
+    });
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: originalInnerWidth,
+    });
+  }
+});
+
 test('closes the shared search panel after a valid search is submitted', async () => {
   const originalGetResorts = crcnBackendApi.getResorts;
   crcnBackendApi.getResorts = async () => [];
