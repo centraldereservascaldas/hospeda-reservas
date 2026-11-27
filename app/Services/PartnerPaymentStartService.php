@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\PartnerCheckoutOrder;
+use App\Models\PartnerPaymentAttempt;
 use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\CieloEcommerceClient;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,7 @@ class PartnerPaymentStartService
         if (! app()->environment(['local', 'testing']) || $this->configuration->environment() !== 'sandbox' || ! config('services.partner_checkout_sandbox.enabled')) {
             throw new RuntimeException('Pagamento de testes indisponível.');
         }
-        $order = DB::transaction(function () use ($id, $paymentToken): PartnerCheckoutOrder {
+        $attempt = DB::transaction(function () use ($id, $paymentToken): PartnerPaymentAttempt {
             $locked = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
             if ($locked->status !== 'quoted') {
                 throw new RuntimeException('Pedido já iniciado ou precisa de conferência.');
@@ -28,8 +29,19 @@ class PartnerPaymentStartService
             }
             $locked->update(['status' => 'payment_starting']);
 
-            return $locked;
+            return $locked->paymentAttempts()->create([
+                'supplier_property_id' => $locked->supplier_property_id,
+                'gateway_provider' => $this->configuration->provider(),
+                'merchant_order_id' => $locked->merchant_order_id,
+                'payment_method' => $locked->payment_method,
+                'installments' => $locked->installments,
+                'amount_cents' => $locked->payment_cents,
+                'currency' => $locked->currency,
+                'status' => 'starting',
+                'submitted_at' => now(),
+            ]);
         });
+        $order = $attempt->partnerCheckoutOrder()->firstOrFail();
         $gatewayStarted = false;
         try {
             $offers = $this->offers->offers($order->check_in->format('Y-m-d'), $order->check_out->format('Y-m-d'), (int) $order->guests, '', $order->supplier_property_id, true);
@@ -53,13 +65,19 @@ class PartnerPaymentStartService
             if ($order->payment_method === 'pix' && ((! is_string($qr) || $qr === '') || data_get($result, 'Payment.Status') !== 12)) {
                 throw new RuntimeException('Código Pix requer conferência.');
             }
-            DB::transaction(function () use ($id, $paymentId, $qr): void {
+            DB::transaction(function () use ($id, $paymentId, $qr, $attempt, $result): void {
                 $locked = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
                 if ($locked->status === 'attention_required' && $locked->attention_reason === 'payment_outcome_unknown' && $locked->payment_id === null) {
                     // A late response can arrive after the stale-request watchdog.
                     // Keep the ID for independent reconciliation; never return the
                     // unverified Pix code to the customer from this state.
                     $locked->update(['payment_id' => $paymentId]);
+                    $attempt->update([
+                        'gateway_payment_id' => $paymentId,
+                        'provider_status' => (string) data_get($result, 'Payment.Status', ''),
+                        'status' => 'attention_required',
+                        'error_code' => 'late_gateway_response_requires_reconciliation',
+                    ]);
 
                     return;
                 }
@@ -67,6 +85,13 @@ class PartnerPaymentStartService
                     throw new RuntimeException('Pedido requer conferência.');
                 }
                 $locked->update(['status' => 'payment_pending', 'payment_id' => $paymentId, 'payment_qr_code' => $qr]);
+                $attempt->update([
+                    'gateway_payment_id' => $paymentId,
+                    'provider_status' => (string) data_get($result, 'Payment.Status', ''),
+                    'provider_status_detail' => is_string(data_get($result, 'Payment.ReturnCode')) ? mb_substr((string) data_get($result, 'Payment.ReturnCode'), 0, 100) : null,
+                    'status' => 'pending',
+                    'expires_at' => $locked->payment_method === 'pix' ? now()->addSeconds(1800) : null,
+                ]);
             });
 
             if (PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'attention_required')->exists()) {
@@ -75,7 +100,16 @@ class PartnerPaymentStartService
 
             return $result;
         } catch (Throwable $exception) {
-            PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'payment_starting')->update(['status' => $gatewayStarted ? 'attention_required' : 'quote_unavailable', 'attention_reason' => $gatewayStarted ? 'payment_outcome_unknown' : null]);
+            DB::transaction(function () use ($id, $gatewayStarted, $attempt): void {
+                $locked = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
+                if ($locked->status === 'payment_starting') {
+                    $locked->update(['status' => $gatewayStarted ? 'attention_required' : 'quote_unavailable', 'attention_reason' => $gatewayStarted ? 'payment_outcome_unknown' : null]);
+                }
+                $attempt->update([
+                    'status' => $gatewayStarted ? 'attention_required' : 'failed',
+                    'error_code' => $gatewayStarted ? 'payment_outcome_unknown' : 'quote_unavailable',
+                ]);
+            });
             throw $exception;
         }
     }

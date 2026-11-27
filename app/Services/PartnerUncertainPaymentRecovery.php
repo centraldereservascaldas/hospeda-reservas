@@ -35,6 +35,13 @@ class PartnerUncertainPaymentRecovery
             }
             $qr = $locked->payment_method === 'pix' && ($payment['Status'] ?? null) === 12 && $locked->hasCurrentPixWindow() && is_string($payment['QrCodeString'] ?? null) ? $payment['QrCodeString'] : null;
             $locked->update(['status' => 'payment_pending', 'attention_reason' => null, 'payment_id' => $paymentId, 'payment_qr_code' => $qr]);
+            $locked->paymentAttempts()->whereNull('gateway_payment_id')->latest()->first()?->update([
+                'gateway_payment_id' => $paymentId,
+                'provider_status' => is_scalar($payment['Status'] ?? null) ? (string) $payment['Status'] : null,
+                'status' => 'pending',
+                'error_code' => null,
+                'provider_updated_at' => now(),
+            ]);
 
             return true;
         });

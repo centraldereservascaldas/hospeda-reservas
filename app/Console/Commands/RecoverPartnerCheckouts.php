@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\CompletePartnerCheckout;
 use App\Models\PartnerCheckoutOrder;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class RecoverPartnerCheckouts extends Command
 {
@@ -29,10 +30,22 @@ class RecoverPartnerCheckouts extends Command
         // A worker can terminate after claiming an order and before persisting the
         // external response. Never repeat either mutation on that uncertainty.
         $staleBefore = now()->subMinutes(10);
-        PartnerCheckoutOrder::query()->where('status', 'payment_starting')->where('updated_at', '<', $staleBefore)
-            ->update(['status' => 'attention_required', 'attention_reason' => 'payment_outcome_unknown']);
-        PartnerCheckoutOrder::query()->where('status', 'reservation_starting')->where('updated_at', '<', $staleBefore)
-            ->update(['status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown']);
+        foreach ([
+            'payment_starting' => 'payment_outcome_unknown',
+            'reservation_starting' => 'supplier_outcome_unknown',
+        ] as $status => $reason) {
+            PartnerCheckoutOrder::query()->where('status', $status)->where('updated_at', '<', $staleBefore)
+                ->orderBy('id')->chunkById(100, function ($orders) use ($status, $reason): void {
+                    foreach ($orders as $order) {
+                        DB::transaction(function () use ($order, $status, $reason): void {
+                            $locked = PartnerCheckoutOrder::query()->lockForUpdate()->find($order->id);
+                            if ($locked?->status === $status) {
+                                $locked->update(['status' => 'attention_required', 'attention_reason' => $reason]);
+                            }
+                        });
+                    }
+                });
+        }
 
         $count = 0;
         PartnerCheckoutOrder::query()->where(function ($query): void {
@@ -42,10 +55,10 @@ class RecoverPartnerCheckouts extends Command
                 });
         })->orderByRaw('CASE WHEN recovery_requested_at IS NULL THEN 0 ELSE 1 END')
             ->orderBy('recovery_requested_at')->orderBy('id')->limit($limit)->get(['id'])->each(function (PartnerCheckoutOrder $order) use (&$count): void {
-            CompletePartnerCheckout::dispatch($order->id)->afterCommit();
-            PartnerCheckoutOrder::query()->whereKey($order->id)->update(['recovery_requested_at' => now()]);
-            $count++;
-        });
+                CompletePartnerCheckout::dispatch($order->id)->afterCommit();
+                $order->update(['recovery_requested_at' => now()]);
+                $count++;
+            });
         $this->info("Pedidos enfileirados: {$count}");
 
         return self::SUCCESS;
