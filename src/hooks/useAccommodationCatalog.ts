@@ -11,6 +11,7 @@ export function useAccommodationCatalog() {
   const [properties, setDisplayedProperties] = useState<Property[]>(() => catalogProperties);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogLoadError, setCatalogLoadError] = useState(false);
+  const [catalogPropertiesLoadError, setCatalogPropertiesLoadError] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const externallyUpdated = useRef(false);
 
@@ -22,6 +23,7 @@ export function useAccommodationCatalog() {
 
   const retryCatalog = useCallback(() => {
     setCatalogLoading(true);
+    setCatalogPropertiesLoadError(false);
     setLoadAttempt((attempt) => attempt + 1);
   }, []);
 
@@ -34,10 +36,14 @@ export function useAccommodationCatalog() {
         setCatalogProperties(list);
         if (!externallyUpdated.current) setDisplayedProperties(list);
         setCatalogLoadError(false);
+        setCatalogPropertiesLoadError(false);
       })
       .catch((error) => {
         console.warn('Unable to load accommodation catalogue:', error);
-        if (!cancelled && !externallyUpdated.current) setCatalogLoadError(true);
+        if (!cancelled) {
+          setCatalogPropertiesLoadError(true);
+          if (!externallyUpdated.current) setCatalogLoadError(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setCatalogLoading(false);
@@ -54,6 +60,7 @@ export function useAccommodationCatalog() {
     setProperties,
     catalogLoading,
     catalogLoadError,
+    catalogPropertiesLoadError,
     retryCatalog,
   };
 }

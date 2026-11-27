@@ -157,6 +157,7 @@ test('announces catalog failure when the live source rejects', async () => {
     const { result } = renderHook(() => useAccommodationCatalog());
     await waitFor(() => assert.equal(result.current.catalogLoading, false));
     assert.equal(result.current.catalogLoadError, true);
+    assert.equal(result.current.catalogPropertiesLoadError, true);
     assert.deepEqual(result.current.properties, []);
   } finally {
     crcnBackendApi.getAccommodations = originalGetAccommodations;
@@ -179,6 +180,7 @@ test('retries a failed catalog request and replaces the error with live properti
   try {
     const { result } = renderHook(() => useAccommodationCatalog());
     await waitFor(() => assert.equal(result.current.catalogLoadError, true));
+    assert.equal(result.current.catalogPropertiesLoadError, true);
     assert.equal(result.current.catalogLoading, false);
 
     act(() => result.current.retryCatalog());
@@ -186,6 +188,7 @@ test('retries a failed catalog request and replaces the error with live properti
 
     await waitFor(() => assert.equal(result.current.catalogLoading, false));
     assert.equal(result.current.catalogLoadError, false);
+    assert.equal(result.current.catalogPropertiesLoadError, false);
     assert.equal(result.current.properties[0]?.title, 'Acomodação recuperada');
     assert.equal(attempts, 2);
   } finally {
@@ -232,10 +235,12 @@ test('shows a stale-data warning for cached listings after API failure, then cle
     const { result } = renderHook(() => useAccommodationCatalog());
     await waitFor(() => assert.equal(result.current.catalogLoading, false));
     assert.equal(result.current.catalogLoadError, true);
+    assert.equal(result.current.catalogPropertiesLoadError, true);
     assert.equal(result.current.properties.length, 1);
 
     act(() => result.current.setProperties([]));
     assert.equal(result.current.catalogLoadError, false);
+    assert.equal(result.current.catalogPropertiesLoadError, true);
     assert.deepEqual(result.current.properties, []);
   } finally {
     crcnBackendApi.getAccommodations = originalGetAccommodations;

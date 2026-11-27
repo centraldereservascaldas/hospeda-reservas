@@ -5,8 +5,12 @@ import { Heart, Compass } from 'lucide-react';
 
 interface WishlistsViewProps {
   savedProperties: Property[];
+  savedPropertyIds: string[];
+  state: 'loading' | 'error' | 'stale' | 'ready';
+  missingPropertyIds: string[];
   currency: Currency;
   onToggleSave: (id: string) => void;
+  onRetryCatalog: () => void;
   onSelectProperty: (property: Property) => void;
   onExploreMore: () => void;
   showTotalWithTaxes: boolean;
@@ -14,8 +18,12 @@ interface WishlistsViewProps {
 
 export const WishlistsView: React.FC<WishlistsViewProps> = ({
   savedProperties,
+  savedPropertyIds,
+  state,
+  missingPropertyIds,
   currency,
   onToggleSave,
+  onRetryCatalog,
   onSelectProperty,
   onExploreMore,
   showTotalWithTaxes,
@@ -34,14 +42,14 @@ export const WishlistsView: React.FC<WishlistsViewProps> = ({
 
         <button
           onClick={onExploreMore}
-          className={`flex min-h-11 items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-black cursor-pointer ${savedProperties.length === 0 ? '[@media(max-height:400px)]:hidden' : ''}`}
+          className={`flex min-h-11 items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-black cursor-pointer ${savedPropertyIds.length === 0 ? '[@media(max-height:400px)]:hidden' : ''}`}
         >
           <Compass className="w-4 h-4" />
           <span>Explorar mais lugares</span>
         </button>
       </div>
 
-      {savedProperties.length === 0 ? (
+      {savedPropertyIds.length === 0 ? (
         <div className="text-center py-20 [@media(max-height:640px)]:py-6 [@media(max-height:400px)]:-mt-5 [@media(max-height:400px)]:py-1 max-w-md mx-auto space-y-4 [@media(max-height:640px)]:space-y-3 [@media(max-height:400px)]:space-y-0">
           <div className="w-16 h-16 [@media(max-height:400px)]:w-8 [@media(max-height:400px)]:h-8 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center mx-auto border border-orange-200/60 shadow-xs">
             <Heart className="w-8 h-8 [@media(max-height:400px)]:w-4 [@media(max-height:400px)]:h-4 fill-orange-500 text-orange-500" />
@@ -60,8 +68,70 @@ export const WishlistsView: React.FC<WishlistsViewProps> = ({
             Começar a explorar
           </button>
         </div>
+      ) : state === 'loading' && savedProperties.length === 0 ? (
+        <p
+          className="mt-8 rounded-2xl border border-neutral-200 bg-white p-6 text-center text-sm text-neutral-600"
+          role="status"
+        >
+          Carregando seus lugares favoritos…
+        </p>
+      ) : state === 'error' && savedProperties.length === 0 ? (
+        <div
+          className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-center"
+          role="alert"
+        >
+          <p className="text-sm text-neutral-800">
+            {savedProperties.length === 0
+              ? 'Não foi possível carregar seus favoritos agora.'
+              : 'Não foi possível atualizar todos os favoritos. Os lugares carregados continuam disponíveis.'}
+          </p>
+          <button
+            type="button"
+            onClick={onRetryCatalog}
+            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-neutral-900 px-5 text-sm font-bold text-white hover:bg-black"
+          >
+            Tentar novamente
+          </button>
+        </div>
       ) : (
         <div className="mt-8 [@media(max-height:400px)]:mt-1">
+          {state === 'error' && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4" role="alert">
+              <p className="text-sm text-neutral-800">
+                Não foi possível atualizar todos os favoritos. Os lugares carregados continuam
+                disponíveis.
+              </p>
+              <button
+                type="button"
+                onClick={onRetryCatalog}
+                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-neutral-900 px-5 text-sm font-bold text-white hover:bg-black"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+          {state === 'stale' && (
+            <p className="mb-4 text-sm text-neutral-600" role="status">
+              Estamos atualizando seus favoritos. Os lugares já carregados continuam disponíveis.
+              {savedProperties.length === 0 && ' Aguarde enquanto tentamos carregar a lista.'}
+            </p>
+          )}
+          {state === 'ready' && missingPropertyIds.length > 0 && (
+            <div className="mb-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-neutral-200 bg-white p-4 sm:flex-row sm:items-center">
+              <p className="text-sm text-neutral-700" role="status">
+                {missingPropertyIds.length === 1
+                  ? '1 lugar salvo não está mais no catálogo.'
+                  : `${missingPropertyIds.length} lugares salvos não estão mais no catálogo.`}
+              </p>
+              <button
+                type="button"
+                onClick={() => missingPropertyIds.forEach(onToggleSave)}
+                className="min-h-11 rounded-full border border-neutral-300 px-4 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+              >
+                Remover itens indisponíveis
+              </button>
+            </div>
+          )}
           <p className="text-xs text-neutral-500 mb-6 [@media(max-height:400px)]:mb-1 font-semibold">
             {savedProperties.length} acomodaç
             {savedProperties.length === 1 ? 'ão salva' : 'ões salvas'}
