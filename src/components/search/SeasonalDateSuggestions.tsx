@@ -34,7 +34,7 @@ function SuggestedPrice({
   onAlternative,
 }: {
   property: Property;
-  suggestion: HomeDateSuggestion & { id: string };
+  suggestion: HomeDateSuggestion & { id: string; propertyIndex?: number };
   guests: number;
   candidates: Property[];
   onAlternative: (id: string, property: Property) => void;
@@ -84,21 +84,24 @@ function SuggestedPrice({
                 Math.min(result.expiresAt ?? 0, quoted.expiresAt ?? 0) > Date.now()
               );
             };
-            const alternative =
-              candidates.find((candidate) =>
-                result.data.some(
-                  (item) =>
-                    (item.id === candidate.id ||
-                      (item.staysListingId && item.staysListingId === candidate.staysListingId)) &&
-                    validOffer(item),
-                ),
-              ) ??
-              result.data.find(
+            const eligibleCandidates = candidates.filter((candidate) =>
+              result.data.some(
                 (item) =>
-                  validOffer(item) &&
-                  item.images?.some(isSafeMediaUrl) &&
-                  (!suggestion.petFriendlyOnly || matchesPropertyCategory(item, 'pet_friendly')),
-              );
+                  (item.id === candidate.id ||
+                    (item.staysListingId && item.staysListingId === candidate.staysListingId)) &&
+                  validOffer(item),
+              ),
+            );
+            const eligibleOffers = result.data.filter(
+              (item) =>
+                validOffer(item) &&
+                item.images?.some(isSafeMediaUrl) &&
+                (!suggestion.petFriendlyOnly || matchesPropertyCategory(item, 'pet_friendly')),
+            );
+            const options = [...eligibleCandidates, ...eligibleOffers].filter(
+              (item, index, all) => all.findIndex((other) => other.id === item.id) === index,
+            );
+            const alternative = options[(suggestion.propertyIndex ?? 0) % options.length];
             if (alternative && !controller.signal.aborted)
               onAlternative(suggestion.id, alternative);
             return;
@@ -137,6 +140,7 @@ function SuggestedPrice({
     onAlternative,
     suggestion.id,
     suggestion.petFriendlyOnly,
+    suggestion.propertyIndex,
   ]);
 
   return (
