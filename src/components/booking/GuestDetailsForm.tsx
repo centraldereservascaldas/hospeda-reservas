@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Plus, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
+import { FormField } from '../FormField';
 import { apiFetch } from '../../services/apiFetch';
 import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
 import { isCpfDocument, isValidCpf } from '../../utils/cpf';
@@ -121,8 +122,7 @@ export function GuestDetailsForm({
       <form onSubmit={submit} className="space-y-6 px-6 py-7 sm:px-8">
         <fieldset disabled={state === 'sending'} className="space-y-4">
           <legend className="mb-3 font-bold">Titular da hospedagem</legend>
-          <label className={labelClass}>
-            Nome completo
+          <FormField label="Nome completo" id="guest-holder-name" required>
             <input
               className={inputClass}
               required
@@ -131,9 +131,8 @@ export function GuestDetailsForm({
               value={holder.name}
               onChange={(event) => setHolder({ ...holder, name: event.target.value })}
             />
-          </label>
-          <label className={labelClass}>
-            E-mail
+          </FormField>
+          <FormField label="E-mail" id="guest-holder-email">
             <input
               className={inputClass}
               type="email"
@@ -142,37 +141,27 @@ export function GuestDetailsForm({
               value={holder.email}
               onChange={(event) => setHolder({ ...holder, email: event.target.value })}
             />
-          </label>
+          </FormField>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className={labelClass}>
-              CPF ou outro documento
+            <FormField
+              label="CPF ou outro documento"
+              id="guest-holder-document"
+              required
+              hint="Se informar CPF, verificaremos se ele é válido."
+              error={documentError || undefined}
+            >
               <input
                 className={inputClass}
                 required
                 maxLength={30}
-                aria-invalid={documentError !== ''}
-                aria-describedby={documentError ? 'holder-document-error' : undefined}
                 value={holder.document}
                 onChange={(event) => {
                   setHolder({ ...holder, document: event.target.value });
                   setDocumentError('');
                 }}
               />
-              <span className="mt-1 block text-xs font-normal text-neutral-500">
-                Se informar CPF, verificaremos se ele é válido.
-              </span>
-              {documentError && (
-                <span
-                  id="holder-document-error"
-                  className="mt-1 block text-sm text-red-700"
-                  role="alert"
-                >
-                  {documentError}
-                </span>
-              )}
-            </label>
-            <label className={labelClass}>
-              Telefone
+            </FormField>
+            <FormField label="Telefone" id="guest-holder-phone" required>
               <input
                 className={inputClass}
                 type="tel"
@@ -182,7 +171,7 @@ export function GuestDetailsForm({
                 value={holder.phone}
                 onChange={(event) => setHolder({ ...holder, phone: event.target.value })}
               />
-            </label>
+            </FormField>
           </div>
           <div className="border-t border-neutral-100 pt-5">
             <h3 className="font-bold">Acompanhantes</h3>

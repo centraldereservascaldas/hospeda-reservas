@@ -10,7 +10,7 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 
 - [x] Buscar skills, arquivos e referências dedicados a design systems nas skills globais, plugins locais e skills do projeto.
 - [x] Consultar o grafo Graphify já existente e conferir os arquivos de estilo e o plano de qualidade do frontend.
-- [x] Registrar a conclusão: não foi encontrada uma skill local dedicada a design system; esta checklist é o roteiro específico do projeto.
+- [x] Consultar a skill `ux-ui-intelligence` e seu workflow de design system; esta checklist registra a adoção e as pendências específicas do produto.
 
 ## Retrato inicial do frontend
 
@@ -20,7 +20,7 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 - [x] Ícones usam a biblioteca compartilhada `lucide-react`.
 - [ ] Escala tipográfica ainda precisa ser consolidada: há valores arbitrários em dezenas de componentes e permanecem usos abaixo de 11 px em conteúdo da interface.
 - [ ] Escala e regras de tamanho de ícones precisam ser inventariadas; a biblioteca é consistente, mas os tamanhos são definidos por componente.
-- [ ] Tokens semânticos de cor, espaçamento, raio, sombra, camada e dimensões responsivas precisam ser definidos ou validados contra os usos atuais.
+- [ ] Tokens semânticos de cor, raio, sombra, camada e dimensões responsivas precisam ser definidos ou validados contra os usos atuais; a auditoria espacial inicial está registrada separadamente.
 - [ ] Componentes compartilhados e componentes de domínio precisam ser inventariados por papel e estados antes de decidir novas abstrações.
 - [ ] Contraste, zoom, aumento de texto, safe areas, estados completos e consistência visual precisam de validação por fluxo e breakpoint.
 
@@ -66,7 +66,9 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 
 ### Espaçamento, layout e responsividade
 
-- [ ] Inventariar espaçamentos e estabelecer escala coerente para gaps, padding e margens.
+- [x] Inventariar inicialmente utilities de spacing, raios e variáveis semânticas em [auditoria de espaçamento e layout](design-system-layout-audit.md), com escopo e limites da busca estática.
+- [ ] Validar layouts renderizados e decidir se os usos recorrentes pedem tokens semânticos além da escala-base existente do Tailwind.
+- [ ] Registrar medidas arbitrárias, margens, padding e exceções por contexto antes de migrar consumidores.
 - [ ] Definir breakpoints e mudanças de composição com base no conteúdo, evitando exceções sem justificativa.
 - [ ] Documentar largura de conteúdo, margens, colunas, grids, densidade, proporção de mídia e trilhos horizontais.
 - [ ] Definir alvos de toque, dimensões mínimas de controles, altura de campos e distância entre ações.
@@ -81,20 +83,39 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 - [ ] Definir níveis de sombra/elevação que funcionem em superfícies claras e glass.
 - [ ] Centralizar níveis de empilhamento de conteúdo, menus, diálogos, navegação fixa e notificações.
 - [ ] Definir bordas, divisores e estados hover, pressed, selected, disabled e focus-visible.
+- [x] Documentar no catálogo o exemplo interativo de hover, foco visível, pressionado, seleção persistente e desabilitado; hover não desloca o layout nem substitui o foco de teclado.
+- [ ] Conferir cada controle em dispositivo com ponteiro e touch; hover deve ser apenas um aprimoramento e não pode ser a única indicação de ação ou estado.
 - [ ] Validar a família liquid-glass e consolidar variantes visualmente duplicadas após o inventário.
 
 ### Movimento
 
-- [ ] Catalogar duração, curva e distância de transições por tipo de interação.
+- [x] Registrar um inventário estático inicial de animações, transições, View Transitions e rolagem em [auditoria de motion](design-system-motion-audit.md), com fontes e limites da evidência.
+- [x] Remover o pulso infinito decorativo da CTA de pagamento de reserva existente, mantendo a hierarquia visual e os estados acionados por interação.
+- [ ] Catalogar duração, curva e distância restantes por tipo de interação e validar as exceções no navegador.
 - [ ] Usar movimento para explicar estado e hierarquia, sem prejudicar tarefas.
 - [ ] Respeitar `prefers-reduced-motion` em CSS e animações controladas por JavaScript.
 - [ ] Verificar que ausência de movimento não remove informação ou feedback de estado.
+- [ ] Aprovar tokens somente após verificar usos repetidos, propósito e comportamento dos consumidores.
+
+### Governança e ciclo de vida
+
+- [x] Registrar na auditoria de motion que os exemplos e valores observados não equivalem a uma escala aprovada.
+- [ ] Para decisões compartilhadas, registrar motivação, evidência, alternativas, escopo, preferência reduzida, validação, limites e responsável.
+- [ ] Registrar exceções locais com seu contexto e condição de revisão; não exigir abstração quando o comportamento for específico do domínio.
+- [ ] Para mudanças de tokens compartilhados, localizar consumidores e definir migração e validação antes de alterar os usos.
 
 ## Componentes e padrões
 
 - [ ] Inventariar componentes por domínio: navegação, busca, catálogo, imóvel, condomínio, conta, reservas, checkout, proprietário e suporte.
 - [ ] Para cada componente candidato ao sistema, registrar propósito, API/props, conteúdo, variações, composição e limites de uso.
 - [ ] Definir estados comuns: padrão, hover, foco, pressionado, selecionado, desabilitado, loading, vazio, erro e sucesso, conforme aplicável.
+- [x] Ampliar o catálogo Laravel/React com exemplos de hover em botão, link, card e campo, e distinguir foco visível, pressionado, seleção persistente e desabilitado.
+- [x] Registrar dropdown nativo, localizar os seletores customizados de busca e parcelamento e mostrar uma prévia estática do estado aberto; interação real permanece nos componentes de origem.
+- [x] Exemplificar estados de campo preenchido, erro associado, sucesso, desabilitado e feedback de salvamento.
+- [x] Exibir tabela semântica, paginação e orientação para não aplicar comportamento de grid ARIA sem necessidade.
+- [x] Diferenciar feedback e componentes observados de propostas de toast e tooltip, sem declarar essas propostas como implementações existentes.
+- [x] Criar primitivas compartilhadas `Button`, `FormField`, `InlineNotice` e `StatusBadge`, com exemplos no catálogo e adoção inicial em busca, catálogo, checkout e painel do proprietário.
+- [ ] Migrar outros consumidores por domínio após revisar seus contratos e estados; esta primeira adoção não torna todos os padrões do produto validados.
 - [ ] Revisar botões e links: hierarquia, largura, ícones, loading, disabled e nomes acessíveis.
 - [ ] Revisar campos: label associado, descrição, obrigatório, erro, foco, teclado móvel e valor longo.
 - [ ] Revisar cards, badges/chips, tabs, menus, accordions, navegação, tabelas, calendário, paginação e estados vazios.
@@ -120,6 +141,7 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 ### Wave DS0 — inventário e decisões
 
 - [x] Registrar stack e tokens globais existentes.
+- [x] Registrar a escala-base de spacing/radius do Tailwind e os principais valores semânticos de layout já existentes.
 - [x] Confirmar biblioteca de ícones e buscar material local dedicado.
 - [ ] Catalogar componentes, variações e divergências por domínio.
 - [ ] Validar a identidade atual com produto e registrar decisões que dependam de preferência visual.
@@ -134,9 +156,10 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 
 ### Wave DS2 — primitivas e componentes comuns
 
-- [ ] Mapear componentes compartilhados e padrões repetidos antes de criar abstrações.
-- [ ] Consolidar componentes primitivos para controles, formulários, superfícies, badges e ícones quando houver repetição real.
-- [ ] Definir estados, APIs e acessibilidade por componente.
+- [x] Mapear consumidores representativos de ações, campos, avisos e status antes de criar as primeiras abstrações compartilhadas.
+- [x] Implementar `Button`, `FormField`, `InlineNotice` e `StatusBadge` sem adicionar dependências.
+- [x] Definir variantes e semântica inicial: carregamento/desabilitado; label/obrigatório/ajuda/erro; aviso com papel acessível; tons de status.
+- [ ] Validar API, acessibilidade, renderização responsiva e estados nos consumidores antes de ampliar a adoção.
 - [ ] Evitar migração em massa que misture refatoração visual com jornadas críticas sem cobertura.
 
 ### Wave DS3 — padrões de domínio
@@ -147,17 +170,22 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 
 ### Wave DS4 — documentação viva e adoção
 
-- [ ] Documentar tokens, componentes, exemplos recomendados e usos a evitar no repositório.
+- [x] Catalogar as quatro primitivas com seus arquivos, propósito e exemplos vivos em `/design-system`.
+- [ ] Documentar contratos completos, usos a evitar, estados restantes e notas de migração no repositório.
+- [x] Conectar a seção de espaçamento e layout à auditoria de valores, consumidores e exceções.
 - [ ] Usar nomes e imports diretos conforme as convenções do projeto.
 - [ ] Integrar os critérios ao plano de qualidade do frontend e às waves de responsividade.
+- [x] Ligar a seção de motion do catálogo ao inventário técnico e manter exemplos identificados como demonstrações.
 - [ ] Revisar diff, lint, build e verificações direcionadas; registrar pendências com evidência.
 
 ## Critérios de conclusão
 
 - [ ] Tokens centrais têm uma fonte de verdade e nomes por papel de uso.
+- [ ] Espaçamento, raios e layout usam a escala-base existente ou tokens semânticos aprovados, com exceções rastreáveis e verificadas nos consumidores.
 - [ ] Tipografia e ícones têm escalas conferidas em larguras móveis, intermediárias e desktop.
 - [ ] Componentes principais têm estados e regras de composição documentados e aplicados nos fluxos cobertos.
 - [ ] Acessibilidade, zoom, textos longos, safe areas e movimento reduzido fazem parte da validação.
+- [ ] Motion tem inventário rastreável, finalidade, fallback reduzido e verificação de repetição/interrupção nos fluxos selecionados.
 - [ ] Exceções remanescentes são conhecidas e justificadas; nenhum valor arbitrário novo é introduzido sem papel definido.
 - [ ] `npm run lint`, `npm run build` e `git diff --check` passam na adoção; testes existentes relacionados são executados quando aplicável.
 - [ ] Checklist do design system e plano de qualidade apontam para a mesma fonte de decisões.

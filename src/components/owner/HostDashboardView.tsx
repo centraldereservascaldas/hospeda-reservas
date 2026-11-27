@@ -14,6 +14,7 @@ import {
 import { OwnerDashboardData } from '../../services/crcnBackendApi';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { getOwnerCalendarDaySegment } from '../../utils/ownerCalendar';
+import { StatusBadge, type StatusBadgeTone } from '../StatusBadge';
 import { OwnerAccountingTransactions } from './OwnerAccountingTransactions';
 
 type DashboardSection = 'overview' | 'properties' | 'reservations' | 'calendar' | 'accounting';
@@ -716,6 +717,17 @@ const ReservationList: React.FC<{ rows: OwnerDashboardData['reservations'] }> = 
           reservation.paymentStatus !== 'paid' &&
           reservation.paymentStatus !== 'partial';
         const badgeLabel = isPreReservation ? 'Pré-reserva' : statusLabel[reservation.status];
+        const badgeTone: StatusBadgeTone = isPreReservation
+          ? 'warning'
+          : reservation.status === 'blocked'
+            ? 'danger'
+            : reservation.status === 'cancelled'
+              ? 'neutral'
+              : reservation.paymentStatus === 'paid'
+                ? 'success'
+                : reservation.paymentStatus === 'partial'
+                  ? 'info'
+                  : 'warning';
 
         return (
           <div
@@ -725,11 +737,9 @@ const ReservationList: React.FC<{ rows: OwnerDashboardData['reservations'] }> = 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm font-bold text-neutral-900">{reservation.guestName}</p>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${calendarEntryClass(reservation)}`}
-                >
+                <StatusBadge tone={badgeTone} className="px-2 py-0.5 text-[10px]">
                   {badgeLabel}
-                </span>
+                </StatusBadge>
               </div>
               <p className="mt-1 truncate text-xs text-neutral-600">
                 {reservation.propertyTitle} · {dateText(reservation.checkIn)} a{' '}
