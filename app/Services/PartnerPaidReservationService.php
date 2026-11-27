@@ -35,6 +35,7 @@ class PartnerPaidReservationService
         }
 
         try {
+            $operationConflict = false;
             $result = $this->supplier->create([
                 'propertyId' => $claimed->supplier_property_id,
                 'from' => $claimed->check_in->format('Y-m-d'),
@@ -42,9 +43,21 @@ class PartnerPaidReservationService
                 'guests' => (int) $claimed->guests,
                 'acceptedTotalCents' => (int) $claimed->base_cents,
                 'customer' => $claimed->encrypted_customer,
-            ], $claimed->reservation_idempotency_key, function (string $operationId) use ($id): void {
-                PartnerCheckoutOrder::query()->whereKey($id)->whereIn('status', ['reservation_starting', 'attention_required'])->update(['supplier_operation_id' => $operationId]);
+            ], $claimed->reservation_idempotency_key, function (string $operationId) use ($id, &$operationConflict): void {
+                $updated = PartnerCheckoutOrder::query()->whereKey($id)
+                    ->where(function ($query): void {
+                        $query->where('status', 'reservation_starting')
+                            ->orWhere(fn ($query) => $query->where('status', 'attention_required')->where('attention_reason', 'supplier_outcome_unknown'));
+                    })
+                    ->where(function ($query) use ($operationId): void {
+                        $query->whereNull('supplier_operation_id')->orWhere('supplier_operation_id', $operationId);
+                    })
+                    ->update(['supplier_operation_id' => $operationId]);
+                $operationConflict = $updated === 0;
             });
+            if ($operationConflict) {
+                throw new RuntimeException('Identificador da operação exige conferência.');
+            }
             $updated = PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'awaiting_seller_payment', 'reservation_reference' => $result['id'], 'supplier_payable_observed_cents' => $result['supplierPayableObservedCents'] ?? null]);
             if ($updated === 0) {
                 // Recovery may have marked a slow request uncertain while it was

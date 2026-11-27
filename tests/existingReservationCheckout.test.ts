@@ -1553,7 +1553,7 @@ test('same-browser checkout resumes after the deposit was reconciled and offers 
     assert.equal(window.sessionStorage.getItem('crcn.existing-reservation.resume.ZY92K'), null);
     assert.equal(getCheckoutResumeToken(reference), token);
     assert.ok(calls.some((url) => url.endsWith(`/api/checkout/${reference}`)));
-    assert.ok(calls.filter((url) => url.includes('/checkout-summary')).length >= 2);
+    await waitFor(() => assert.ok(calls.filter((url) => url.includes('/checkout-summary')).length >= 2));
   } finally {
     cleanup();
     globalThis.fetch = originalFetch;
