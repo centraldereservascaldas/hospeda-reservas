@@ -137,7 +137,7 @@ Há valores de camada distintos no código, como `z-50` no checkout e detalhe, `
 
 **Confirmado em produção em 26/11/2026:** após buscar com 1 adulto e 1 bebê, “Surpreenda-me” mostrava “2 Pessoas + 1 bebê”. Selecionar “3 Pessoas” e iniciar a busca resultou em “3 adultos, 1 bebê” e URL `adults=3&infants=1`. O teste não iniciou reserva.
 
-**Contrato técnico observado:** a busca serializa adultos, crianças e bebês em `persons` pelo total de ocupantes; a Stays OpenAPI descreve `search-listings.guests` como contagem máxima de hóspedes, sem discriminar bebês. Isso não decide, por si só, se o seletor visual “Pessoas” inclui bebês, pois a interface os apresenta à parte. **Decisão de produto pendente:** confirmar essa semântica antes de alterar a composição enviada. **Verificação após decisão:** repetir com bebês e crianças, comparar rótulo, estado, URL e requisição simulada, preservando o total exigido pelo contrato de disponibilidade.
+**Contrato técnico observado:** a busca serializa adultos, crianças e bebês em `persons` pelo total de ocupantes; a Stays OpenAPI descreve `search-listings.guests` como contagem máxima de hóspedes, sem discriminar bebês. **Decisão de produto confirmada:** “Pessoas” conta adultos e crianças; bebês são somados separadamente. Portanto, “3 Pessoas” com 1 bebê representa 4 hóspedes no total enviado. A implementação está em andamento na branch local `codex/ux-f05-people-infants`; repetir com bebês e crianças e comparar rótulo, estado, URL e requisição simulada antes de concluir.
 
 ### F06 · P2 · Conteúdo cortado no painel de hóspedes
 
@@ -221,9 +221,11 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 
 ### F15 · P2 · Aceite permanece marcado quando o valor parcelado muda
 
-**Observado na prévia local e evidência de código:** marquei o aceite demonstrativo de R$ 957,35 em 1x e selecionei 6x. O texto passou para R$ 1.097,57 e o checkbox permaneceu marcado; o resumo e o acréscimo também mudaram. `src/components/booking/SinglePageCheckout.tsx:573` recebe novo preço do formulário, e o texto em `:822` acompanha o valor. Trocar método limpa o aceite, mas mudar parcelas em `CieloSopCardForm.tsx:690` não limpa esse estado. Não foi verificado se usuários percebem a mudança ou se o produto exige nova confirmação.
+**Observação inicial:** na prévia local, o aceite demonstrativo de R$ 957,35 em 1x continuava marcado após a seleção de 6x, quando o texto e o resumo passaram para R$ 1.097,57. O checkbox declara “Li e aceito as condições da hospedagem e a cobrança de R$ X”, portanto o aceite está vinculado ao valor exibido.
 
-**Ação:** revisar o contrato de aceite quando parcelas mudam, mantendo o total e a consequência visíveis; se o aceite representar valor específico, exigir confirmação novamente após alteração relevante. **Verificação:** na prévia, aceitar e trocar 1x/6x, observar checkbox, resumo e ação; verificar acessibilidade do anúncio do total. Nenhum pagamento foi iniciado.
+**Implementação em revisão no PR #111 (commit `6fd826d`):** mudar as parcelas desmarca o checkbox imediatamente e bloqueia o envio. Voltar à parcela anterior também exige novo aceite. A mudança é aplicada ao checkout de reserva nova; o método de pagamento e a atualização por `quote_changed` já limpavam o aceite.
+
+**Validação:** 15 testes direcionados passaram. Na prévia local em navegador, aceitei 1x (R$ 957,35), mudei para 6x (R$ 1.097,57) e confirmei o checkbox desmarcado. Nenhum formulário foi enviado nem pagamento/reserva iniciado. `lint`, build e `git diff --check` passaram; permanecem um warning de lint e avisos de build não relacionados. Aguardar revisão/integração e revalidar após publicação. Usuários e leitores de tela não testados.
 
 ### F16 · P2 · Sugestões de datas não informam o ano
 
@@ -677,15 +679,15 @@ As prioridades indicam impacto potencial na tarefa, não frequência medida. F41
 
 | Sprint | Entrega verificável | Dependência principal |
 | --- | --- | --- |
-| 1 | Datas acessíveis, foco da recuperação, hóspedes consistentes, informação de cotação válida e recuperação de sugestões (F01, F04, F05, F21, F28, F50) | Definir regra de contagem em Surpreenda-me (F05) e validar os fluxos restantes. F16/F18/F19 foram reavaliados após o PR #81; ver evidência abaixo. |
+| 1 | Datas acessíveis, foco da recuperação, hóspedes consistentes, informação de cotação válida e recuperação de sugestões (F01, F04, F05, F21, F28, F50) | Implementar e validar a regra confirmada em Surpreenda-me (F05); validar os fluxos restantes. F16/F18/F19 foram reavaliados após o PR #81; ver evidência abaixo. |
 | 2 | Painéis não encobrem conteúdo nem sobrevivem a mudanças de contexto; transição de datas para hóspedes (F02, F03, F06, F07, F10, F17, F55) | Mapear foco, ancoragem, camadas e comportamento em rolagem antes de extrair código compartilhado. |
-| 3 | Imóvel e checkout preservam viagem, recuperam falhas e oferecem escolhas de medição claras (F09, F15, F20, F22–F27, F29–F37, F39–F47, F51) | Definir contrato de aceite, confirmar taxas locais, mapear destinos de medição e medir a jornada antes de alterar a arquitetura. |
+| 3 | Imóvel e checkout preservam viagem, recuperam falhas e oferecem escolhas de medição claras (F09, F15, F20, F22–F27, F29–F37, F39–F47, F51) | Aguardar integração e validação pós-publicação da F15; confirmar taxas locais, mapear destinos de medição e medir a jornada antes de alterar a arquitetura. |
 | 4 | Componentes, camadas e tokens extraídos conforme contratos comprovados | Inventariar repetição real e aproveitar o aprendizado das jornadas anteriores; executar gradualmente. |
 | 5 | Favoritos e conta preservam escolhas, painel do proprietário mostra período correto e diretório oferece continuidade (F11–F14, F38, F48–F49, F52–F54) | Isolar fontes de favoritos e preparar respostas simuladas para corrida e falha; reservar acesso para validação das áreas restritas. |
 
 Critério comum de conclusão para cada sprint: casos de reprodução do achado passam, estados de carregamento/vazio/erro aplicáveis têm recuperação, navegação por teclado e foco foram conferidos, layout foi verificado em tamanhos pertinentes e o resultado foi registrado. A matriz completa de dispositivos, leitores de tela e validação com usuários precisa ser planejada conforme acesso; uma captura isolada não substitui essas verificações. A lista de larguras é cobertura proposta, não alegação de dispositivos oficialmente suportados.
 
-A ordem das sprints é uma proposta, não uma dependência rígida entre todas as tarefas. F01 e F21 têm prioridade P1; a correção de foco em F21 deve ser coordenada com a possível página independente de F23 para evitar retrabalho. A hierarquia de destaque da parcela é uma decisão de produto aprovada. F22 exige confirmação das regras do imóvel, F15 exige decisão sobre o aceite e F25 continua condicional à forma como cada ambiente normaliza a URL.
+A ordem das sprints é uma proposta, não uma dependência rígida entre todas as tarefas. F01 e F21 têm prioridade P1; a correção de foco em F21 deve ser coordenada com a possível página independente de F23 para evitar retrabalho. A hierarquia de destaque da parcela é uma decisão de produto aprovada. F22 exige confirmação das regras do imóvel; F15 está implementada no PR #111 e aguarda revisão; F25 continua condicional à forma como cada ambiente normaliza a URL.
 
 **Sequência sugerida dentro das ondas:** validar as mudanças integradas de foco, retorno do checkout e acompanhamento Pix (F21, F37, F39, F47), concluir as verificações de busca responsiva (F01, F55) e tratar contagem, transição e painéis que ficam sobrepostos (F05, F02, F03, F06, F17). Coordenar recuperação, erros e carregamento do checkout com F20, F23, F24, F26 e F30. Os testes locais de F35, F36 e F39 cobrem cenários específicos simulados; os demais estados do provedor e a correção futura exigem validação adicional. As preferências e métricas (F31–F34 e F47) devem ser definidas juntas para que o novo painel reflita a instrumentação efetiva. F04 e F29 exigem preservar validação de dados e não substituir preço ou hóspedes silenciosamente. F19 não se aplica mais aos cartões de sugestão; a retomada da cotação no detalhe é uma limitação de cobertura, sem defeito reproduzido. Favoritos, conta e proprietário continuam no escopo da onda 5; a posição na tabela não impede antecipar uma correção independente.
 
@@ -693,7 +695,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 
 - [x] F01: dias disponíveis entram na ordem de Tab e setas movem o foco entre datas, inclusive virada de mês; Enter seleciona datas e datas passadas não ficam focáveis. PR #82 (`a6db248`) incluído no release #106 (`b51e87e`). Regressão automatizada passou; produção a 1366 × 941 e preview local a 375 × 812 verificados com Tab, setas, seleção por Enter, Escape e retorno do foco ao acionador. Sem leitor de tela ou dispositivo físico.
 - [x] Separar recuperação do checkout da página de catálogo; focar o título e manter a navegação nas ações (F21). Teste automatizado e navegador local em 1440 × 900 e 375 × 812; leitor de tela não testado. PR #84.
-- [ ] F05: decidir se “Pessoas” inclui bebês (a busca técnica soma todos no parâmetro de hóspedes, enquanto o rótulo separa bebês); depois alinhar composição, URL e parâmetros e validar com crianças/bebês.
+- [ ] F05: aplicar a decisão “Pessoas” exclui bebês e validar composição, URL e parâmetros com dados simulados; decisão confirmada, implementação local em andamento na branch `codex/ux-f05-people-infants`.
 - [ ] F28: confirmar limite de pets e contrato para transmiti-los à reserva Stays; depois alinhar controle, URLs e validação do servidor. A OpenAPI inspecionada não expõe campo de pets na busca nem em `guestsDetails`.
 - [x] F04: preço expirado é identificado e oferece atualização com estados de falha. PR fonte #104 incorporado ao release #106 (`b51e87e`), integrado e publicado em 27/11/2026; testes direcionados, lint, build, preview responsivo e checks do release passaram. Preview usou resposta simulada. Health/readiness de produção passaram após deploy; não foi feita nova jornada com cotação Stays ao vivo, leitor de tela ou dispositivo físico. PR fonte #104 ainda está aberto e duplicado pelo release consolidado.
 - [x] F50: filtro de faixa exclui preço desconhecido e informa a situação na lista. PR fonte #105 incorporado ao release #106 (`b51e87e`), integrado e publicado em 27/11/2026; testes direcionados, lint, build, preview responsivo e checks do release passaram. Preview usou resposta simulada. Health/readiness de produção passaram após deploy; não foi feita nova busca Stays ao vivo para validar dados reais. PR fonte #105 ainda está aberto e duplicado pelo release consolidado.
@@ -735,7 +737,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 ### Onda 3 · Imóvel e checkout
 
 - [ ] Revisar mudança de parcela depois do aceite, condições, erros de campos, loading, falha, recuperação e retorno ao imóvel com dados fictícios.
-- [ ] Validar o contrato de aceite após mudança do valor parcelado (F15).
+- [ ] Integrar e validar após publicação a nova exigência de aceite depois de mudar parcelas (F15; PR #111 em revisão).
 - [ ] Alinhar mensagem e destino no retorno de checkout não recuperável, preservando o contexto quando possível (F20).
 - [ ] Validar em navegador publicado o retorno do checkout aberto diretamente e o ciclo voltar/avançar (F37). A implementação do PR #85 está integrada antes do release #106; testes de hook cobrem URL/contexto direto e preservação do histórico modal. A validação visual e leitores de tela continuam pendentes. Escape deve ser verificado apenas no caminho em que checkout é um diálogo.
 - [ ] Corrigir sobreposição do indicador de seleção no método de pagamento em largura estreita (F46).
