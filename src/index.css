@@ -771,6 +771,15 @@ body::before {
   transform: scale(0.985);
 }
 
+@media (max-width: 339px) {
+  .checkout-payment-method {
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.65rem 0.5rem;
+    text-align: center;
+  }
+}
+
 .checkout-trust-badges {
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.34);
