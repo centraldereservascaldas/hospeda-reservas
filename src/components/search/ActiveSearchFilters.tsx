@@ -34,6 +34,8 @@ export function ActiveSearchFilters({
   const hasTripCriteria = hasDestinationFilter || hasDateFilter || hasGuestFilter;
   const selectedCategory = CATEGORIES.find(({ id }) => id === filters.category && id !== 'all');
   const hasPropertyFilters = activeFilterCount > 0;
+  const hasPriceFilter =
+    filters.minPrice > defaultFilters.minPrice || filters.maxPrice < defaultFilters.maxPrice;
 
   if (!hasTripCriteria && !selectedCategory && !hasPropertyFilters) return null;
 
@@ -94,8 +96,7 @@ export function ActiveSearchFilters({
           <span className="sr-only font-extrabold text-neutral-800 sm:not-sr-only sm:w-auto">
             Filtros do imóvel:
           </span>
-          {(filters.minPrice > defaultFilters.minPrice ||
-            filters.maxPrice < defaultFilters.maxPrice) && (
+          {hasPriceFilter && (
             <FilterChip
               label={`Preço em reais: ${formatCurrency(filters.minPrice, 'BRL')} – ${formatCurrency(filters.maxPrice, 'BRL')} / noite`}
               onRemove={() =>
@@ -185,6 +186,11 @@ export function ActiveSearchFilters({
             Limpar filtros
           </button>
         </div>
+      )}
+      {hasPriceFilter && !hasDateFilter && (
+        <p className="text-xs text-neutral-600">
+          Imóveis sem diária informada não entram nesta faixa de preço.
+        </p>
       )}
     </div>
   );
