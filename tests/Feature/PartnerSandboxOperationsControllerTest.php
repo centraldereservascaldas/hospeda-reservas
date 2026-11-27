@@ -120,6 +120,14 @@ class PartnerSandboxOperationsControllerTest extends TestCase
         $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('R', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown', 'reservation_reference' => '1600', 'payment_id' => 'PAY1', 'merchant_order_id' => 'ORDERREVIEW', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-review', 'encrypted_customer' => ['fullName' => 'Teste']]);
         $url = '/api/owner/admin/partner-sandbox/orders/'.$order->id.'/supplier-review';
         $input = ['reference' => '1600', 'propertyId' => 'imobsys-crcn-2-663', 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'baseCents' => 52300, 'confirmed' => true];
+        $supplierResult = ['state' => 'unknown', 'partnerStatus' => 'unknown', 'propertyId' => 'imobsys-crcn-2-663', 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'reservationReference' => '1600'];
+        $unavailable = false;
+        $changeDuringLookup = false;
+        $this->mock(ImobSysPreReservationClient::class)->shouldReceive('lookupByKey')->zeroOrMoreTimes()->andReturnUsing(function () use (&$supplierResult, &$unavailable, &$changeDuringLookup, $order) {
+            if ($unavailable) throw new \RuntimeException('unavailable');
+            if ($changeDuringLookup) $order->update(['guests' => 3]);
+            return $supplierResult;
+        });
         $order->update(['payment_id' => null]);
         $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
         $order->update(['payment_id' => 'PAY1']);
@@ -130,6 +138,22 @@ class PartnerSandboxOperationsControllerTest extends TestCase
             $this->withToken('admin-token')->postJson($url, [...$input, ...$difference])->assertStatus(409);
             $this->assertSame('attention_required', $order->fresh()->status);
         }
+        foreach ([['partnerStatus' => 'cancelled'], ['state' => 'rejected'], ['propertyIdentityMatch' => false], ['stayDatesMatch' => false], ['reservationReference' => '1601'], ['propertyId' => 'imobsys-crcn-2-664'], ['amountCents' => 52301], ['propertyIdentityMatch' => true, 'propertyIdentityObservedAt' => '2020-01-01T00:00:00Z']] as $difference) {
+            $original = $supplierResult;
+            $supplierResult = [...$supplierResult, ...$difference];
+            $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
+            $this->assertSame('attention_required', $order->fresh()->status);
+            $supplierResult = $original;
+        }
+        $unavailable = true;
+        $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
+        $this->assertSame('attention_required', $order->fresh()->status);
+        $unavailable = false;
+        $changeDuringLookup = true;
+        $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
+        $this->assertSame('attention_required', $order->fresh()->status);
+        $changeDuringLookup = false;
+        $order->update(['guests' => 2]);
         $this->withToken('admin-token')->postJson($url, $input)->assertOk()->assertJsonPath('status', 'awaiting_seller_payment');
         $this->assertSame('admin@example.test', $order->fresh()->supplier_reviewed_by);
         $this->assertNotNull($order->fresh()->supplier_reviewed_at);
