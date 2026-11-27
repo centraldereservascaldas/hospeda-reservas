@@ -492,7 +492,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
               : '';
         const accessiblePriceLabel =
           displayPrice.kind === 'quote'
-            ? `${pinPrice}, ${displayPrice.detail}`
+            ? `${pinPrice}, ${displayPrice.detail}${displayPrice.expired ? ', cotação expirada' : ''}`
             : displayPrice.kind === 'reference'
               ? `${pinPrice} por noite, tarifa de referência`
               : displayPrice.message;
@@ -719,6 +719,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
                         {activePropertyDisplayPrice.note}
                       </p>
                     )}
+                    {activePropertyDisplayPrice.kind === 'quote' &&
+                      activePropertyDisplayPrice.expired && (
+                        <p className="mt-0.5 text-[11px] font-semibold text-amber-800">
+                          Cotação expirada. Atualize para confirmar preço e disponibilidade.
+                        </p>
+                      )}
                   </>
                 ) : (
                   <span className="text-xs font-semibold text-neutral-600">

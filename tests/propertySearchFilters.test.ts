@@ -95,6 +95,18 @@ test('counts active filters using the existing filter-pill rules', () => {
   );
 });
 
+test('does not treat an unknown nightly price as below an active maximum', () => {
+  const filters = {
+    ...createDefaultSearchFilters(),
+    maxPrice: 1000,
+  };
+  const unknownPrice = { ...property, pricePerNight: 0 };
+  const knownPrice = { ...property, pricePerNight: 500 };
+
+  assert.deepEqual(filterPropertiesBySearchFilters([unknownPrice], filters), []);
+  assert.deepEqual(filterPropertiesBySearchFilters([knownPrice], filters), [knownPrice]);
+});
+
 test('matches translated Stays amenity names despite accent and punctuation differences', () => {
   const liveProperty = {
     ...property,

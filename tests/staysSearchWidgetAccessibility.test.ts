@@ -25,6 +25,7 @@ const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
 
 beforeEach(() => {
   mock.timers.enable({ apis: ['Date'], now: Date.UTC(2026, 10, 3, 12) });
+  crcnBackendApi.getResorts = async () => [];
 });
 
 afterEach(() => {
@@ -49,7 +50,7 @@ test('mobile search heading uses readable compact copy while desktop keeps the l
   assert.match(desktopHeading.className, /hidden sm:inline/);
 });
 
-test('date picker announces full dates and restores focus on Escape and selection', async () => {
+test('date picker announces full dates, restores focus on Escape, and advances to guests after selection', async () => {
   const originalGetResorts = crcnBackendApi.getResorts;
   crcnBackendApi.getResorts = async () => [];
   try {
@@ -103,13 +104,17 @@ test('date picker announces full dates and restores focus on Escape and selectio
     fireEvent.click(getByRole('button', { name: /16 de novembro de 2026/ }));
     assert.equal(queryByRole('dialog', { name: /Calendário de entrada/ }), null);
     assert.match(checkIn.getAttribute('aria-label') ?? '', /12 de nov\. - 16 de nov\./);
-    assert.equal(document.activeElement, checkIn);
+    const guestsDialog = getByRole('dialog', { name: 'Selecionar hóspedes' });
+    await waitFor(() => {
+      assert.ok(guestsDialog.contains(document.activeElement));
+      assert.equal(document.activeElement?.getAttribute('aria-label'), 'Diminuir adultos');
+    });
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
   }
 });
 
-test('calendar selects a check-in to check-out range in the shared search panel', async () => {
+test('calendar advances to guest controls after selecting a range on desktop', async () => {
   const originalGetResorts = crcnBackendApi.getResorts;
   crcnBackendApi.getResorts = async () => [];
 
@@ -146,6 +151,168 @@ test('calendar selects a check-in to check-out range in the shared search panel'
 
     assert.ok(getByRole('button', { name: /Quando 12 de nov\. - 15 de nov\./ }));
     assert.equal(queryByRole('dialog', { name: /Calendário de entrada/ }), null);
+    const guestsDialog = getByRole('dialog', { name: 'Selecionar hóspedes' });
+    await waitFor(() => {
+      assert.ok(guestsDialog.contains(document.activeElement));
+      assert.equal(document.activeElement?.getAttribute('aria-label'), 'Diminuir adultos');
+    });
+    assert.equal(
+      (document.querySelector('input[name="checkIn"]') as HTMLInputElement).value,
+      '2026-11-12',
+    );
+    assert.equal(
+      (document.querySelector('input[name="checkOut"]') as HTMLInputElement).value,
+      '2026-11-15',
+    );
+  } finally {
+    crcnBackendApi.getResorts = originalGetResorts;
+  }
+});
+
+test('mobile date selection does not automatically open guest controls', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  const originalInnerWidth = window.innerWidth;
+  crcnBackendApi.getResorts = async () => [];
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+
+  try {
+    const { getByRole, queryByRole } = render(
+      React.createElement(StaysSearchWidget, {
+        onSearchInApp: () => {},
+      }),
+    );
+
+    fireEvent.click(getByRole('button', { name: /Quando/ }));
+    const calendar = getByRole('dialog', { name: /Calendário de entrada/ });
+    fireEvent.click(
+      calendar.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-05"]')!,
+    );
+    fireEvent.click(
+      calendar.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-11-07"]')!,
+    );
+
+    assert.equal(queryByRole('dialog', { name: /Calendário de entrada/ }), null);
+    assert.equal(queryByRole('dialog', { name: 'Selecionar hóspedes' }), null);
+    assert.ok(getByRole('button', { name: /Quando 5 de nov\. - 7 de nov\./ }));
+  } finally {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: originalInnerWidth,
+    });
+    crcnBackendApi.getResorts = originalGetResorts;
+  }
+});
+
+test('shared search panels move focus into condominium, date, and guest controls', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  crcnBackendApi.getResorts = async () => [];
+
+  try {
+    const { getByRole, getByLabelText } = render(
+      React.createElement(StaysSearchWidget, {
+        onSearchInApp: () => {},
+      }),
+    );
+
+    const destinationTrigger = getByRole('button', { name: /Todos os condomínios/ });
+    fireEvent.click(destinationTrigger);
+    const resortInput = getByLabelText('Buscar condomínio');
+    await waitFor(() => assert.equal(document.activeElement, resortInput));
+
+    fireEvent.click(getByRole('option', { name: 'Todos os condomínios' }));
+    const dateDialog = getByRole('dialog', { name: /Calendário de entrada/ });
+    await waitFor(() => assert.ok(dateDialog.contains(document.activeElement)));
+    assert.equal(
+      document.activeElement?.hasAttribute('data-calendar-day'),
+      true,
+      'moving from condominium selection to dates should focus an available date',
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      assert.equal(document.activeElement, getByRole('button', { name: /Quando/ })),
+    );
+
+    const guestTrigger = getByRole('button', { name: /Quem:/ });
+    fireEvent.click(guestTrigger);
+    const guestDialog = getByRole('dialog', { name: 'Selecionar hóspedes' });
+    const increaseAdults = getByRole('button', { name: 'Aumentar adultos' });
+    await waitFor(() => {
+      assert.equal(document.activeElement, increaseAdults);
+      assert.ok(guestDialog.contains(document.activeElement));
+    });
+  } finally {
+    crcnBackendApi.getResorts = originalGetResorts;
+  }
+});
+
+test('closes a shared search panel when its segment scrolls out of view', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  crcnBackendApi.getResorts = async () => [];
+
+  try {
+    const { getByRole, queryByRole } = render(
+      React.createElement(StaysSearchWidget, {
+        onSearchInApp: () => {},
+      }),
+    );
+    const guestSegment = document.querySelector<HTMLElement>('[data-search-segment="guests"]');
+    assert.ok(guestSegment);
+    guestSegment.getBoundingClientRect = () =>
+      ({ top: 40, bottom: 100, left: 0, right: 300, width: 300, height: 60 }) as DOMRect;
+
+    fireEvent.click(getByRole('button', { name: /Quem:/ }));
+    await waitFor(() =>
+      assert.equal(document.activeElement?.getAttribute('aria-label'), 'Aumentar adultos'),
+    );
+    assert.ok(getByRole('dialog', { name: 'Selecionar hóspedes' }));
+
+    guestSegment.getBoundingClientRect = () =>
+      ({ top: -70, bottom: -10, left: 0, right: 300, width: 300, height: 60 }) as DOMRect;
+    fireEvent.scroll(window);
+
+    await waitFor(() => assert.equal(queryByRole('dialog', { name: 'Selecionar hóspedes' }), null));
+  } finally {
+    crcnBackendApi.getResorts = originalGetResorts;
+  }
+});
+
+test('closes the shared search panel after a valid search is submitted', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  crcnBackendApi.getResorts = async () => [];
+  let searches = 0;
+
+  try {
+    const filters: SearchFilters = {
+      destination: '',
+      checkIn: '2026-11-11',
+      checkOut: '2026-11-15',
+      guests: { adults: 2, children: 0, infants: 0, pets: 0 },
+      category: 'all',
+      minPrice: 0,
+      maxPrice: 100000,
+      propertyTypes: [],
+      amenities: [],
+      minBedrooms: 0,
+      minBaths: 0,
+      superhostOnly: false,
+      instantBookOnly: false,
+    };
+    const { getByRole, queryByRole } = render(
+      React.createElement(StaysSearchWidget, {
+        currentFilters: filters,
+        onSearchInApp: () => {
+          searches += 1;
+        },
+      }),
+    );
+
+    fireEvent.click(getByRole('button', { name: /Quem:/ }));
+    assert.ok(getByRole('dialog', { name: 'Selecionar hóspedes' }));
+    fireEvent.submit(document.getElementById('widgetStaysSearchForm')!);
+
+    assert.equal(searches, 1);
+    await waitFor(() => assert.equal(queryByRole('dialog', { name: 'Selecionar hóspedes' }), null));
   } finally {
     crcnBackendApi.getResorts = originalGetResorts;
   }

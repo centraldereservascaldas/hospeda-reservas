@@ -49,6 +49,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
   const tabPanelRef = useRef<HTMLDivElement>(null);
+  const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const shouldFocusDateRef = useRef(false);
   const mobileCalendarScrollRef = useRef<HTMLDivElement>(null);
   const mobileCalendarSentinelRef = useRef<HTMLDivElement>(null);
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
@@ -75,6 +77,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   }, [isOpen]);
   const [checkIn, setCheckIn] = useState(filters.checkIn);
   const [checkOut, setCheckOut] = useState(filters.checkOut);
+  const [focusDate, setFocusDate] = useState(() => {
+    const today = toLocalIsoDate(new Date());
+    return filters.checkIn >= today ? filters.checkIn : today;
+  });
   const [dateFlexibility, setDateFlexibility] = useState<0 | 1 | 2>(filters.dateFlexibility ?? 0);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const date = filters.checkIn ? new Date(`${filters.checkIn}T12:00:00`) : new Date();
@@ -112,6 +118,60 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     { id: 'stays_engine', label: 'Surpreenda-me' },
   ] as const;
 
+  const getFocusableDate = (monthOffset: number): string | undefined => {
+    const month = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + monthOffset, 1);
+    const monthPrefix = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-`;
+    if (focusDate.startsWith(monthPrefix) && focusDate >= todayIso) return focusDate;
+    if (checkIn.startsWith(monthPrefix) && checkIn >= todayIso) return checkIn;
+    const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, index) =>
+      toLocalIsoDate(new Date(month.getFullYear(), month.getMonth(), index + 1)),
+    ).find((date) => date >= todayIso);
+  };
+
+  const handleDateKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, dateValue: string) => {
+    const dayOffset =
+      event.key === 'ArrowLeft'
+        ? -1
+        : event.key === 'ArrowRight'
+          ? 1
+          : event.key === 'ArrowUp'
+            ? -7
+            : event.key === 'ArrowDown'
+              ? 7
+              : 0;
+    if (!dayOffset) return;
+    event.preventDefault();
+
+    const candidate = new Date(`${dateValue}T12:00:00`);
+    candidate.setDate(candidate.getDate() + dayOffset);
+    const nextDate = toLocalIsoDate(candidate);
+    if (nextDate < todayIso) return;
+
+    shouldFocusDateRef.current = true;
+    setFocusDate(nextDate);
+    const monthDifference =
+      (candidate.getFullYear() - visibleMonth.getFullYear()) * 12 +
+      candidate.getMonth() -
+      visibleMonth.getMonth();
+    if (monthDifference < 0 || monthDifference >= (mobile ? mobileMonthCount : 2)) {
+      setVisibleMonth(new Date(candidate.getFullYear(), candidate.getMonth(), 1));
+    }
+  };
+
+  useEffect(() => {
+    if (!shouldFocusDateRef.current) return;
+    const button = dateButtonRefs.current.get(focusDate);
+    if (!isOpen || activeTab !== 'dates' || !button) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      shouldFocusDateRef.current = false;
+      button.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeTab, focusDate, isOpen, mobile, visibleMonth]);
+
   const handleTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
@@ -145,6 +205,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     setDestination(filters.destination);
     setCheckIn(filters.checkIn);
     setCheckOut(filters.checkOut);
+    setFocusDate(filters.checkIn >= todayIso ? filters.checkIn : todayIso);
     setDateFlexibility(filters.dateFlexibility ?? 0);
     setAdults(filters.guests.adults);
     setChildren(filters.guests.children);
@@ -295,9 +356,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
             selectedStart={checkIn}
             selectedEnd={checkOut}
             pendingStart={checkIn && !checkOut ? checkIn : null}
-            focusDate={undefined}
-            registerDateButton={() => () => {}}
-            onDateKeyDown={() => {}}
+            focusDate={getFocusableDate(offset)}
+            registerDateButton={(date) => (button) => {
+              if (button) dateButtonRefs.current.set(date, button);
+              else dateButtonRefs.current.delete(date);
+            }}
+            onDateKeyDown={handleDateKeyDown}
             onSelectDate={(date) => {
               if (!checkIn || checkOut || date <= checkIn) {
                 setCheckIn(date);
@@ -306,6 +370,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 setCheckOut(date);
               }
               setSearchError('');
+              setFocusDate(date);
             }}
           />
         ))}

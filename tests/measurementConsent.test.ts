@@ -232,6 +232,7 @@ test('preference UI saves independent choices and restores them when reopened', 
 test('fixed preference panel can scroll within short viewports while inline legal copy stays in flow', () => {
   const fixedView = render(React.createElement(MeasurementPreferences));
   const fixedPanel = fixedView.getByRole('region', { name: 'Preferências de medição' });
+  assert.equal(fixedPanel.hasAttribute('data-dialog-focus-portal'), true);
   assert.match(fixedPanel.className, /max-h-\[calc\(100dvh/);
   assert.match(fixedPanel.className, /overflow-y-auto/);
   assert.match(fixedPanel.className, /overscroll-contain/);
@@ -240,6 +241,7 @@ test('fixed preference panel can scroll within short viewports while inline lega
   const inlineView = render(React.createElement(MeasurementPreferences, { placement: 'inline' }));
   const inlinePanel = inlineView.getByRole('region', { name: 'Preferências de medição' });
   assert.doesNotMatch(inlinePanel.className, /max-h-|overflow-y-auto|overscroll-contain/);
+  assert.equal(inlinePanel.hasAttribute('data-dialog-focus-portal'), false);
 });
 
 test('single-category consent does not load GTM', () => {

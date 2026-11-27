@@ -10,6 +10,7 @@ import {
   saveCheckoutDraft,
 } from '../utils/checkoutDraft';
 import { checkoutUrlWithStay } from '../utils/checkoutUrl';
+import { accommodationPagePath } from '../utils/accommodationPageUrl';
 
 export const CHECKOUT_MODAL_HISTORY_ENTRY = '__crcnCheckoutModalEntry';
 
@@ -84,6 +85,48 @@ export function useAppOverlayActions({
     [currency, setBookingPayload],
   );
 
+  const handleCloseBooking = useCallback(
+    (payload: AppOverlayBookingPayload | null) => {
+      const state: unknown = window.history.state;
+      const hasCheckoutModalEntry =
+        state !== null &&
+        typeof state === 'object' &&
+        CHECKOUT_MODAL_HISTORY_ENTRY in state &&
+        (state as Record<string, unknown>)[CHECKOUT_MODAL_HISTORY_ENTRY] === true;
+
+      if (hasCheckoutModalEntry) {
+        window.history.back();
+      } else if (payload) {
+        const nextState: Record<string, unknown> =
+          state && typeof state === 'object' ? { ...state } : {};
+        const currencyFromUrl = new URLSearchParams(window.location.search).get('currency');
+        const returnCurrency =
+          currencyFromUrl === 'USD' || currencyFromUrl === 'EUR' || currencyFromUrl === 'BRL'
+            ? currencyFromUrl
+            : currency;
+        delete nextState[CHECKOUT_MODAL_HISTORY_ENTRY];
+        delete nextState[CHECKOUT_DRAFT_HISTORY_KEY];
+        const accommodationUrl = checkoutUrlWithStay(
+          accommodationPagePath(payload.property),
+          {
+            listingId: payload.property.staysListingId || payload.property.id,
+            from: payload.checkIn,
+            to: payload.checkOut,
+            guests: payload.guests,
+          },
+          window.location.search,
+          returnCurrency,
+        );
+
+        window.history.replaceState(nextState, '', accommodationUrl);
+        window.dispatchEvent(new window.PopStateEvent('popstate', { state: nextState }));
+      }
+
+      setBookingPayload(null);
+    },
+    [currency, setBookingPayload],
+  );
+
   const handleAssistantApplyFilters = useCallback(
     (suggested: AppOverlaySuggestedFilters) => {
       if (suggested.destination || suggested.guests) {
@@ -122,6 +165,7 @@ export function useAppOverlayActions({
   return {
     handleAddNewProperty,
     handleStartBooking,
+    handleCloseBooking,
     handleAssistantApplyFilters,
     handleSelectPropertyFromSofia,
   };

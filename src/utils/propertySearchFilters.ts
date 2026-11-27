@@ -58,7 +58,9 @@ export function filterPropertiesBySearchFilters(
           (property.imobsysOffer
             ? property.imobsysOffer.totalAmount / property.imobsysOffer.nights
             : null))
-        : property.pricePerNight;
+        : property.pricePerNight > 0
+          ? property.pricePerNight
+          : null;
       if (
         confirmedNightlyPrice === null ||
         confirmedNightlyPrice < filters.minPrice ||

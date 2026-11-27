@@ -121,6 +121,45 @@ test('explore content leaves search and assistant actions to the shared header',
   assert.equal(queryByRole('button', { name: 'Falar com Sofia, assistente virtual' }), null);
 });
 
+test('keeps search results visible while marking expired prices and offering a refresh', () => {
+  const filters = {
+    ...createDefaultSearchFilters(),
+    checkIn: '2027-01-10',
+    checkOut: '2027-01-13',
+  };
+  const expiredProperty = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    calculatedPrice: {
+      nights: 3,
+      dailyRate: 250,
+      basePrice: 750,
+      cleaningFee: 50,
+      serviceFee: 0,
+      totalAmount: 800,
+      currency: 'BRL',
+      expiresAt: 1,
+    },
+  };
+  let retries = 0;
+  const { getByRole, getByText } = render(
+    React.createElement(MainContentRouter, {
+      ...createRouterProps({
+        filters,
+        filteredProperties: [expiredProperty],
+        availabilitySearchState: 'stale',
+        onRetryAvailabilitySearch: () => {
+          retries += 1;
+        },
+      }),
+    }),
+  );
+
+  assert.ok(getByRole('button', { name: /Ver detalhes de/ }));
+  getByText('Cotação expirada. Atualize para confirmar preço e disponibilidade.');
+  getByRole('button', { name: 'Atualizar disponibilidade' }).click();
+  assert.equal(retries, 1);
+});
+
 test('simulated catalogue shows its warning before the search and results', () => {
   const simulatedProperty = {
     ...STAYS_NET_APARTMENTS[0]!,

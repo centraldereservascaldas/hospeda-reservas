@@ -52,6 +52,7 @@ import { LegalDocumentPage } from './components/LegalDocumentPage';
 import { existingReservationCodeFromPath } from './utils/checkoutUrl';
 import { NotFoundPage } from './components/NotFoundPage';
 import { isNewCheckoutPath, NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
+import { CheckoutRecoveryPage } from './components/booking/CheckoutRecoveryPage';
 import { useCheckoutDraftRecovery } from './hooks/useCheckoutDraftRecovery';
 
 const CheckoutResumePage = lazy(() =>
@@ -246,18 +247,6 @@ function MarketplaceApp() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const handleCloseCheckout = () => {
-    const state: unknown = window.history.state;
-    const hasCheckoutModalEntry =
-      state !== null &&
-      typeof state === 'object' &&
-      CHECKOUT_MODAL_HISTORY_ENTRY in state &&
-      (state as Record<string, unknown>)[CHECKOUT_MODAL_HISTORY_ENTRY] === true;
-
-    if (hasCheckoutModalEntry) window.history.back();
-    setBookingPayload(null);
-  };
-
   // Search & Filter State
   const [filters, setFilters] = useState<SearchFilters>(() => {
     const initialFilters = parseSearchFilters(window.location.search);
@@ -449,6 +438,7 @@ function MarketplaceApp() {
   const {
     handleAddNewProperty,
     handleStartBooking,
+    handleCloseBooking,
     handleAssistantApplyFilters,
     handleSelectPropertyFromSofia,
   } = useAppOverlayActions({
@@ -459,6 +449,8 @@ function MarketplaceApp() {
     setBookingPayload,
     onSelectProperty: handleSelectProperty,
   });
+
+  const handleCloseCheckout = () => handleCloseBooking(bookingPayloadRef.current);
 
   const handleOpenSuggestedProperty = (
     property: Property,
@@ -472,6 +464,23 @@ function MarketplaceApp() {
     }));
     handleSelectProperty(property);
   };
+
+  if (
+    isNewCheckoutPath(window.location.pathname) &&
+    !bookingPayload &&
+    checkoutRecovery.status !== 'idle'
+  ) {
+    return (
+      <CheckoutRecoveryPage
+        status={checkoutRecovery.status}
+        onRetry={checkoutRecovery.retry}
+        onBack={() => {
+          if (window.history.state?.[CHECKOUT_MODAL_HISTORY_ENTRY]) window.history.back();
+          else window.location.assign('/');
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-transparent text-neutral-900 [overflow-anchor:none] selection:bg-orange-500/20 selection:text-orange-950">
@@ -623,37 +632,6 @@ function MarketplaceApp() {
         compactMobileFloating={isCondominiumView && filteredProperties.length === 0}
       />
 
-      {isNewCheckoutPath(window.location.pathname) &&
-        !bookingPayload &&
-        checkoutRecovery.status !== 'idle' && (
-          <div
-            role="status"
-            className="fixed inset-0 z-50 flex items-center justify-center bg-white p-6"
-          >
-            <div className="max-w-md text-center">
-              <p>
-                {checkoutRecovery.status === 'loading'
-                  ? 'Conferindo disponibilidade e preço…'
-                  : 'Não foi possível recuperar esta seleção ou confirmar a disponibilidade. Volte ao imóvel e escolha as datas novamente.'}
-              </p>
-              {checkoutRecovery.status === 'error' && (
-                <button type="button" onClick={checkoutRecovery.retry} className="mt-4 underline">
-                  Tentar novamente
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.history.state?.[CHECKOUT_MODAL_HISTORY_ENTRY]) window.history.back();
-                  else window.location.assign('/');
-                }}
-                className="ml-4 mt-4 underline"
-              >
-                Voltar
-              </button>
-            </div>
-          </div>
-        )}
       <AppOverlayLayer
         currency={currency}
         filters={filters}
