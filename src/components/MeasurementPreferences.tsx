@@ -37,7 +37,7 @@ export function MeasurementPreferences({
   const panelClassName =
     placement === 'inline'
       ? 'w-full rounded-2xl border border-neutral-300 bg-white p-4 text-neutral-900 shadow-sm'
-      : 'fixed inset-x-3 bottom-[calc(5rem_+_env(safe-area-inset-bottom,0px))] z-[1100] mx-auto max-h-[calc(100dvh_-_6rem_-_env(safe-area-inset-top,0px)_-_env(safe-area-inset-bottom,0px))] max-w-7xl overflow-y-auto overscroll-contain rounded-2xl border border-neutral-300 bg-white p-4 text-neutral-900 shadow-xl sm:bottom-4 sm:max-h-[calc(100dvh_-_2rem)] sm:px-6 sm:py-4';
+      : 'fixed inset-x-3 bottom-[calc(5rem_+_env(safe-area-inset-bottom,0px))] z-[1100] mx-auto max-h-[calc(100dvh_-_6rem_-_env(safe-area-inset-top,0px)_-_env(safe-area-inset-bottom,0px))] max-w-4xl overflow-y-auto overscroll-contain rounded-2xl border border-neutral-300 bg-white p-4 text-neutral-900 shadow-xl sm:bottom-4 sm:max-h-[calc(100dvh_-_2rem)] sm:px-6 sm:py-4';
 
   useEffect(() => {
     if (placement !== 'fixed' || !isOpen) return;
@@ -139,7 +139,9 @@ export function MeasurementPreferences({
       >
         Privacidade e medição
       </h2>
-      <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div
+        className={`mt-3 flex flex-col gap-4 ${isCustomizing ? 'xl:gap-3' : 'xl:flex-row xl:items-center xl:justify-between xl:gap-6'}`}
+      >
         <div className="min-w-0 flex-1">
           <p className="text-sm leading-5">
             Usamos cookies para medir o uso do site e avaliar campanhas. Você pode mudar essa
@@ -170,7 +172,7 @@ export function MeasurementPreferences({
           )}
         </div>
         {isCustomizing && (
-          <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm sm:shrink-0">
+          <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
             <label className="inline-flex min-h-11 items-center gap-2">
               <input
                 type="checkbox"
@@ -189,7 +191,7 @@ export function MeasurementPreferences({
             </label>
           </div>
         )}
-        <div className="grid grid-cols-3 gap-2 sm:flex sm:shrink-0 sm:items-center">
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:justify-end">
           <button
             type="button"
             onClick={() => save({ analytics: false, advertising: false })}
