@@ -15,7 +15,7 @@ Object.assign(globalThis, {
 });
 
 const React = (await import('react')).default;
-const { render, fireEvent, cleanup } = await import('@testing-library/react');
+const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
 const { MeasurementPreferences } = await import('../src/components/MeasurementPreferences.tsx');
 
 const { loadGtmIfConsented, readMeasurementConsent, saveMeasurementConsent } =
@@ -189,7 +189,7 @@ test('preference UI saves independent choices and restores them when reopened', 
   const view = render(React.createElement(MeasurementPreferences, { showReopenButton: true }));
   assert.equal(
     document.activeElement,
-    view.getByRole('heading', { name: 'Preferências de medição' }),
+    view.getByRole('heading', { name: 'Privacidade e medição' }),
   );
   fireEvent.click(view.getByRole('button', { name: 'Recusar' }));
   assert.deepEqual(readMeasurementConsent(), { analytics: false, advertising: false });
@@ -198,15 +198,16 @@ test('preference UI saves independent choices and restores them when reopened', 
   fireEvent.click(reopen);
   assert.equal(
     document.activeElement,
-    view.getByRole('heading', { name: 'Preferências de medição' }),
+    view.getByRole('heading', { name: 'Privacidade e medição' }),
   );
-  const getAnalytics = () =>
-    view.getByRole('checkbox', { name: 'Permitir analytics (medição de uso)' }) as HTMLInputElement;
-  const getAdvertising = () =>
-    view.getByRole('checkbox', { name: 'Permitir publicidade' }) as HTMLInputElement;
-  assert.equal(getAnalytics().checked, false);
-  assert.equal(getAdvertising().checked, false);
-  fireEvent.click(getAnalytics());
+  assert.equal(view.queryByRole('checkbox'), null);
+  assert.equal(view.getAllByRole('button').length, 3);
+  fireEvent.click(view.getByRole('button', { name: 'Personalizar' }));
+  const analytics = view.getByRole('checkbox', { name: 'Analytics (medição de uso)' });
+  const advertising = view.getByRole('checkbox', { name: 'Publicidade' });
+  assert.equal((analytics as HTMLInputElement).checked, false);
+  assert.equal((advertising as HTMLInputElement).checked, false);
+  fireEvent.click(analytics);
   fireEvent.click(view.getByRole('button', { name: 'Salvar escolhas' }));
   assert.deepEqual(readMeasurementConsent(), { analytics: true, advertising: false });
   assert.equal(
@@ -215,33 +216,67 @@ test('preference UI saves independent choices and restores them when reopened', 
   );
 
   fireEvent.click(view.getByRole('button', { name: 'Preferências de medição' }));
-  assert.equal(getAnalytics().checked, true);
-  assert.equal(getAdvertising().checked, false);
-  fireEvent.click(getAnalytics());
-  fireEvent.click(getAdvertising());
+  fireEvent.click(view.getByRole('button', { name: 'Personalizar' }));
+  fireEvent.click(view.getByRole('checkbox', { name: 'Analytics (medição de uso)' }));
+  fireEvent.click(view.getByRole('checkbox', { name: 'Publicidade' }));
   fireEvent.click(view.getByRole('button', { name: 'Salvar escolhas' }));
   assert.deepEqual(readMeasurementConsent(), { analytics: false, advertising: true });
 
   fireEvent.click(view.getByRole('button', { name: 'Preferências de medição' }));
-  assert.equal(getAnalytics().checked, false);
-  assert.equal(getAdvertising().checked, true);
+  fireEvent.click(view.getByRole('button', { name: 'Aceitar tudo' }));
+  assert.deepEqual(readMeasurementConsent(), { analytics: true, advertising: true });
+
+  fireEvent.click(view.getByRole('button', { name: 'Preferências de medição' }));
   fireEvent.click(view.getByRole('button', { name: 'Recusar' }));
   assert.deepEqual(readMeasurementConsent(), { analytics: false, advertising: false });
 });
 
 test('fixed preference panel can scroll within short viewports while inline legal copy stays in flow', () => {
   const fixedView = render(React.createElement(MeasurementPreferences));
-  const fixedPanel = fixedView.getByRole('region', { name: 'Preferências de medição' });
+  const fixedPanel = fixedView.getByRole('region', { name: 'Privacidade e medição' });
   assert.equal(fixedPanel.hasAttribute('data-dialog-focus-portal'), true);
+  assert.match(fixedPanel.className, /max-w-7xl/);
   assert.match(fixedPanel.className, /max-h-\[calc\(100dvh/);
   assert.match(fixedPanel.className, /overflow-y-auto/);
   assert.match(fixedPanel.className, /overscroll-contain/);
 
   fixedView.unmount();
   const inlineView = render(React.createElement(MeasurementPreferences, { placement: 'inline' }));
-  const inlinePanel = inlineView.getByRole('region', { name: 'Preferências de medição' });
+  const inlinePanel = inlineView.getByRole('region', { name: 'Privacidade e medição' });
   assert.doesNotMatch(inlinePanel.className, /max-h-|overflow-y-auto|overscroll-contain/);
   assert.equal(inlinePanel.hasAttribute('data-dialog-focus-portal'), false);
+});
+
+test('preference panel links only legal documents returned as published', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    ({
+      ok: true,
+      json: async () => ({
+        pages: [
+          {
+            slug: 'privacidade',
+            path: '/privacidade',
+            title: 'Política de privacidade',
+            version: '1.0',
+            publishedAt: '2026-11-27',
+          },
+        ],
+      }),
+    }) as Response;
+
+  try {
+    const view = render(React.createElement(MeasurementPreferences));
+    await waitFor(() => {
+      assert.equal(
+        view.getByRole('link', { name: 'Política de privacidade' }).getAttribute('href'),
+        '/privacidade',
+      );
+    });
+    assert.equal(view.queryByRole('link', { name: 'Termos de uso' }), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('single-category consent does not load GTM', () => {

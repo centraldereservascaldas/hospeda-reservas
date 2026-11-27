@@ -53,7 +53,7 @@ test('renders legal copy as text and validates published page summaries', async 
 
     render(React.createElement(LegalDocumentPage, { slug: 'privacidade' }));
     await screen.findByRole('heading', { name: 'Aviso de privacidade' });
-    const measurementPreferences = screen.getByRole('region', { name: 'Preferências de medição' });
+    const measurementPreferences = screen.getByRole('region', { name: 'Privacidade e medição' });
     assert.ok(measurementPreferences.closest('main'));
     assert.doesNotMatch(measurementPreferences.className, /\bfixed\b/);
     await waitFor(() => {
