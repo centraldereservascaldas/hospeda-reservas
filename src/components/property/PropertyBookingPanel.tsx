@@ -29,6 +29,8 @@ interface PropertyBookingPanelProps {
   onToggleGuestSelector: () => void;
   totalGuests: number;
   infants: number;
+  guestLimit: number;
+  isGuestCountOverLimit: boolean;
   nights: number;
   staysPrice: CalculatedPriceResponse | null;
   calendarAvailable: boolean;
@@ -69,6 +71,8 @@ export function PropertyBookingPanel({
   onToggleGuestSelector,
   totalGuests,
   infants,
+  guestLimit,
+  isGuestCountOverLimit,
   nights,
   staysPrice,
   calendarAvailable,
@@ -90,27 +94,30 @@ export function PropertyBookingPanel({
     selectedRangeAvailable &&
     !isCalculatingPrice &&
     hasConfirmedLivePrice &&
+    !isGuestCountOverLimit &&
     !property.simulatedData,
   );
   const hasCalendarCoverage = Boolean(calendarCoverageEnd && checkOut <= calendarCoverageEnd);
   const bookingButtonLabel =
     property.simulatedData && hasConfirmedLivePrice
       ? 'Simulação: reserva desativada'
-      : isLoadingCalendar
-        ? 'Consultando disponibilidade...'
-        : !calendarAvailable
-          ? 'Disponibilidade não confirmada'
-          : !hasExplicitDateSelection
-            ? 'Confirme as datas'
-            : !hasCalendarCoverage
-              ? 'Disponibilidade não confirmada'
-              : isCalculatingPrice
-                ? 'Atualizando cotação...'
-                : canProceedWithBooking
-                  ? 'Continuar para reserva'
-                  : selectedRangeAvailable
-                    ? 'Cotação indisponível'
-                    : 'Escolha datas disponíveis';
+      : isGuestCountOverLimit
+        ? 'Ajuste os hóspedes para continuar'
+        : isLoadingCalendar
+          ? 'Consultando disponibilidade...'
+          : !calendarAvailable
+            ? 'Disponibilidade não confirmada'
+            : !hasExplicitDateSelection
+              ? 'Confirme as datas'
+              : !hasCalendarCoverage
+                ? 'Disponibilidade não confirmada'
+                : isCalculatingPrice
+                  ? 'Atualizando cotação...'
+                  : canProceedWithBooking
+                    ? 'Continuar para reserva'
+                    : selectedRangeAvailable
+                      ? 'Cotação indisponível'
+                      : 'Escolha datas disponíveis';
   const bookingStatusMessage =
     property.simulatedData && hasConfirmedLivePrice
       ? 'Valores e disponibilidade simulados; não é possível reservar neste ambiente.'
@@ -243,6 +250,25 @@ export function PropertyBookingPanel({
           </button>
         </div>
       </div>
+
+      {isGuestCountOverLimit && (
+        <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 text-sm text-amber-950">
+          <p role="status" aria-live="polite" className="leading-5">
+            Esta acomodação aceita até {guestLimit} hóspedes. Você selecionou {totalGuests}{' '}
+            hóspedes. Ajuste a quantidade para continuar.
+          </p>
+          <button
+            type="button"
+            onClick={onToggleGuestSelector}
+            aria-haspopup="dialog"
+            aria-controls="property-guest-selector-dialog"
+            aria-expanded={isGuestSelectorOpen}
+            className="min-h-11 rounded-lg px-2 font-bold text-amber-950 underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-800"
+          >
+            Ajustar hóspedes
+          </button>
+        </div>
+      )}
 
       <div
         className="flex items-center justify-center gap-1.5 py-1 px-2.5 rounded-full bg-orange-50 text-orange-800 text-caption font-bold border border-orange-200/80"

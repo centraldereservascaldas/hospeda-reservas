@@ -1302,6 +1302,91 @@ test('simulated quote is visible but cannot start a reservation', async () => {
   }
 });
 
+test('preserves over-capacity guests and blocks booking until they are adjusted', async () => {
+  const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
+  const originalCalculatePrice = crcnBackendApi.calculatePrice;
+  const property = { ...STAYS_NET_APARTMENTS[0]!, maxGuests: 5 };
+  const calendar = Array.from({ length: 5 }, (_, index) => ({
+    date: `2026-11-${String(11 + index).padStart(2, '0')}`,
+    avail: 1,
+  }));
+  const priceRequests: number[] = [];
+  const submittedBookings: Array<{
+    guests: { adults: number; children: number; infants: number; pets: number };
+  }> = [];
+  crcnBackendApi.getAccommodationCalendar = async () => calendar;
+  crcnBackendApi.calculatePrice = async (payload) => {
+    priceRequests.push(payload.guests ?? 0);
+    return liveQuote;
+  };
+
+  try {
+    const { getByRole, getByText, queryByText } = render(
+      React.createElement(PropertyDetailModal, {
+        property,
+        initialCheckIn: '2026-11-11',
+        initialCheckOut: '2026-11-13',
+        initialGuests: { adults: 7, children: 0, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking: ({ guests }) => submittedBookings.push({ guests }),
+      }),
+    );
+
+    await waitFor(() => {
+      assert.ok(getByText(/Você selecionou 7 hóspedes/));
+      assert.equal(
+        document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')
+          ?.disabled,
+        true,
+      );
+      assert.equal(
+        document.querySelector('#property-detail-mobile-booking-action > button')?.textContent,
+        'Ajuste os hóspedes para continuar',
+      );
+    });
+    assert.equal(
+      getByRole('button', { name: /Hóspedes/ }).textContent?.includes('7 pessoas'),
+      true,
+    );
+
+    fireEvent.click(getByRole('button', { name: /Hóspedes/ }));
+    const guestDialog = getByRole('dialog', { name: 'Hóspedes' });
+    assert.ok(getByText(/A acomodação aceita até 5 hóspedes/));
+    assert.equal(
+      (getByRole('button', { name: 'Remover: Adultos' }) as HTMLButtonElement).disabled,
+      false,
+    );
+    fireEvent.click(getByRole('button', { name: 'Remover: Adultos' }));
+    fireEvent.click(getByRole('button', { name: 'Remover: Adultos' }));
+    await waitFor(() => {
+      assert.equal(guestDialog.querySelector('[aria-label="Adultos: 5"]')?.textContent, '5');
+      assert.equal(queryByText(/Você selecionou 7 hóspedes/), null);
+    });
+    fireEvent.click(getByRole('button', { name: 'Aplicar' }));
+
+    await waitFor(() => {
+      assert.equal(
+        document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')
+          ?.disabled,
+        false,
+      );
+      assert.equal(priceRequests[priceRequests.length - 1], 5);
+    });
+    fireEvent.click(
+      document.querySelector<HTMLButtonElement>('#property-detail-mobile-booking-action > button')!,
+    );
+    assert.deepEqual(submittedBookings, [
+      { guests: { adults: 5, children: 0, infants: 0, pets: 0 } },
+    ]);
+  } finally {
+    crcnBackendApi.getAccommodationCalendar = originalGetCalendar;
+    crcnBackendApi.calculatePrice = originalCalculatePrice;
+  }
+});
+
 test('booking calendar names full dates and exposes the active date field', async () => {
   const originalGetCalendar = crcnBackendApi.getAccommodationCalendar;
   const originalCalculatePrice = crcnBackendApi.calculatePrice;

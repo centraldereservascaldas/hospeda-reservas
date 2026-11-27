@@ -30,6 +30,8 @@ export const PropertyGuestSelectorDialog: React.FC<PropertyGuestSelectorDialogPr
 }) => {
   const closeButtonRef = React.useRef<HTMLButtonElement>(null);
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
+  const selectedGuestCount = adults + children + infants;
+  const isGuestCountOverLimit = selectedGuestCount > guestLimit;
 
   const guestCounter = (
     label: string,
@@ -119,6 +121,17 @@ export const PropertyGuestSelectorDialog: React.FC<PropertyGuestSelectorDialogPr
             <X className="h-4 w-4" />
           </button>
         </div>
+        {isGuestCountOverLimit && (
+          <p
+            id="guest-selector-capacity-warning"
+            role="status"
+            aria-live="polite"
+            className="mb-2 shrink-0 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-950"
+          >
+            A acomodação aceita até {guestLimit} hóspedes. A seleção atual tem {selectedGuestCount};
+            reduza a quantidade para continuar.
+          </p>
+        )}
         <div className="property-guest-selector-list min-h-0 flex-1 divide-y divide-neutral-100 overflow-y-auto">
           {guestCounter('Adultos', adults, 1, guestLimit - children - infants, onAdultsChange)}
           {guestCounter(
