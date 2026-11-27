@@ -38,6 +38,7 @@ interface CieloSopCardFormProps {
   alternativeContent?: ReactNode;
   onAlternativeSubmit?: () => Promise<void>;
   onPricingChange?: (pricing: CieloCardPricing) => void;
+  onInstallmentsChange?: () => void;
   lockInstallments?: boolean;
   allowedInstallments?: number[];
   failureContent?: ReactNode;
@@ -136,6 +137,7 @@ export function CieloSopCardForm({
   alternativeContent,
   onAlternativeSubmit,
   onPricingChange,
+  onInstallmentsChange,
   lockInstallments = false,
   allowedInstallments,
   failureContent,
@@ -691,7 +693,13 @@ export function CieloSopCardForm({
                 required
                 disabled={lockInstallments || installmentOptions.length === 0}
                 value={selectedPricing?.installments ?? installments}
-                onChange={(event) => setInstallments(Number(event.target.value))}
+                onChange={(event) => {
+                  const nextInstallments = Number(event.target.value);
+                  if (nextInstallments !== installments) {
+                    onInstallmentsChange?.();
+                  }
+                  setInstallments(nextInstallments);
+                }}
                 className="min-h-11 w-full rounded-xl border border-neutral-400/70 bg-white px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
               >
                 {installmentOptions.length === 0 && (
