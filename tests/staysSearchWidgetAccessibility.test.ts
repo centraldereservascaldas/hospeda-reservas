@@ -647,6 +647,65 @@ test('keeps surprise search available without asking guests to choose dates firs
   }
 });
 
+test('surprise search labels infants separately and keeps them in the submitted guest total', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  crcnBackendApi.getResorts = async () => [];
+  const guests = { adults: 1, children: 0, infants: 1, pets: 0 };
+  let submitted: unknown = null;
+
+  try {
+    const { container, getByRole } = render(
+      React.createElement(StaysSearchWidget, {
+        variant: 'modal',
+        surpriseMe: true,
+        currentFilters: {
+          destination: '',
+          checkIn: '',
+          checkOut: '',
+          guests,
+          category: 'all',
+          minPrice: 0,
+          maxPrice: 100000,
+          propertyTypes: [],
+          amenities: [],
+          minBedrooms: 0,
+          minBaths: 0,
+          superhostOnly: false,
+          instantBookOnly: false,
+        },
+        onSearchInApp: (params) => {
+          submitted = params;
+        },
+      }),
+    );
+
+    const personSelector = getByRole('button', { name: /1 Pessoa \+ 1 bebê/ });
+    assert.equal(container.querySelector<HTMLInputElement>('input[name="persons"]')?.value, '2');
+
+    fireEvent.click(personSelector);
+    fireEvent.click(getByRole('option', { name: '3 Pessoas' }));
+
+    assert.equal(container.querySelector<HTMLInputElement>('input[name="persons"]')?.value, '4');
+    assert.equal(container.querySelector<HTMLInputElement>('input[name="adults"]')?.value, '3');
+    assert.equal(container.querySelector<HTMLInputElement>('input[name="children"]')?.value, '0');
+    assert.equal(container.querySelector<HTMLInputElement>('input[name="infants"]')?.value, '1');
+    fireEvent.submit(getByRole('search'));
+
+    assert.deepEqual(submitted, {
+      checkIn: '',
+      checkOut: '',
+      dateFlexibility: 0,
+      persons: 4,
+      guests: { adults: 3, children: 0, infants: 1, pets: 0 },
+      destination: '',
+      propertyId: '',
+      surpriseMe: true,
+    });
+  } finally {
+    crcnBackendApi.getResorts = originalGetResorts;
+  }
+});
+
 test('preserves the guest breakdown when the compact guest total is unchanged', async () => {
   const originalGetResorts = crcnBackendApi.getResorts;
   crcnBackendApi.getResorts = async () => [];
