@@ -25,7 +25,7 @@ class ImobSysSearchFallbackTest extends TestCase
             'success' => true, 'publicationRevision' => 7,
             'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false],
             'data' => [
-                ['id' => 'imobsys-crcn-2-663', 'title' => 'Apartamento 101', 'condominiumId' => 'imobsys-crcn-condo-86', 'condominiumName' => 'Lacqua II', 'capacity' => 5, 'images' => []],
+                ['id' => 'imobsys-crcn-2-663', 'title' => 'Apartamento 101', 'condominiumId' => 'imobsys-crcn-condo-86', 'condominiumName' => 'Lacqua diRoma', 'capacity' => 5, 'images' => []],
                 ['id' => 'imobsys-crcn-2-664', 'title' => 'Apartamento 102', 'condominiumName' => 'Lacqua II', 'capacity' => 1, 'images' => []],
                 ['id' => 'imobsys-crcn-2-665', 'title' => 'Apartamento 103', 'condominiumName' => 'Outro', 'capacity' => 5, 'images' => []],
                 ['id' => 'imobsys-crcn-2-666', 'title' => 'Apartamento 104', 'condominiumId' => 'imobsys-crcn-condo-99', 'condominiumName' => 'Lacqua II', 'capacity' => 5, 'images' => []],

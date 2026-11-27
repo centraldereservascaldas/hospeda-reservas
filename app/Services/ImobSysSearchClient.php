@@ -330,7 +330,7 @@ class ImobSysSearchClient
                         || ! is_int($item['capacity'] ?? null) || $item['capacity'] < $guests
                         || ($condominiumId !== null && ($item['condominiumId'] ?? null) !== $condominiumId)
                         || ! is_string($item['condominiumName'] ?? null)
-                        || $this->normalize($item['condominiumName']) !== $normalized) {
+                        || ($condominiumId === null && $this->normalize($item['condominiumName']) !== $normalized)) {
                         continue;
                     }
                     $items[] = $item;
