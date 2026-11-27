@@ -8,6 +8,10 @@ interface SofiaAssistantTriggerProps {
   compactMobileFloating?: boolean;
 }
 
+const compactShortViewportButtonClasses =
+  '[@media(max-width:743px)_and_(max-height:500px)]:h-11 [@media(max-width:743px)_and_(max-height:500px)]:w-11 [@media(max-width:743px)_and_(max-height:500px)]:justify-center [@media(max-width:743px)_and_(max-height:500px)]:gap-0 [@media(max-width:743px)_and_(max-height:500px)]:p-1';
+const compactShortViewportLabelClass = '[@media(max-width:743px)_and_(max-height:500px)]:sr-only';
+
 export function SofiaAssistantTrigger({
   onOpen,
   showMobileFloating = true,
@@ -86,7 +90,7 @@ export function SofiaAssistantTrigger({
       <button
         type="button"
         onClick={onOpen}
-        className={`group flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-br from-orange-500/75 via-amber-400/70 to-orange-500/75 backdrop-blur-2xl text-white font-black text-xs shadow-[0_8px_26px_rgba(234,88,12,0.24),inset_0_1.5px_2px_rgba(255,255,255,0.8),inset_0_-1px_2px_rgba(255,255,255,0.25)] border border-white/85 ring-1 ring-white/30 hover:from-orange-500/85 hover:via-amber-400/80 hover:to-orange-500/85 hover:scale-105 active:scale-95 transition-all cursor-pointer [@media(max-width:639px)_and_(max-height:400px)]:h-11 [@media(max-width:639px)_and_(max-height:400px)]:w-11 [@media(max-width:639px)_and_(max-height:400px)]:justify-center [@media(max-width:639px)_and_(max-height:400px)]:gap-0 [@media(max-width:639px)_and_(max-height:400px)]:p-1 ${compactMobileFloating ? '[@media(max-width:639px)_and_(max-height:639px)]:h-11 [@media(max-width:639px)_and_(max-height:639px)]:w-11 [@media(max-width:639px)_and_(max-height:639px)]:justify-center [@media(max-width:639px)_and_(max-height:639px)]:gap-0 [@media(max-width:639px)_and_(max-height:639px)]:p-1' : ''}`}
+        className={`group flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-br from-orange-500/75 via-amber-400/70 to-orange-500/75 backdrop-blur-2xl text-white font-black text-xs shadow-[0_8px_26px_rgba(234,88,12,0.24),inset_0_1.5px_2px_rgba(255,255,255,0.8),inset_0_-1px_2px_rgba(255,255,255,0.25)] border border-white/85 ring-1 ring-white/30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 hover:from-orange-500/85 hover:via-amber-400/80 hover:to-orange-500/85 hover:scale-105 active:scale-95 transition-all cursor-pointer [@media(max-width:639px)_and_(max-height:400px)]:h-11 [@media(max-width:639px)_and_(max-height:400px)]:w-11 [@media(max-width:639px)_and_(max-height:400px)]:justify-center [@media(max-width:639px)_and_(max-height:400px)]:gap-0 [@media(max-width:639px)_and_(max-height:400px)]:p-1 ${compactShortViewportButtonClasses} ${compactMobileFloating ? '[@media(max-width:639px)_and_(max-height:639px)]:h-11 [@media(max-width:639px)_and_(max-height:639px)]:w-11 [@media(max-width:639px)_and_(max-height:639px)]:justify-center [@media(max-width:639px)_and_(max-height:639px)]:gap-0 [@media(max-width:639px)_and_(max-height:639px)]:p-1' : ''}`}
       >
         <div className="relative flex h-8 w-8 flex-shrink-0 items-center justify-center">
           <LogoCRCN
@@ -98,7 +102,7 @@ export function SofiaAssistantTrigger({
           <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border-2 border-white rounded-full" />
         </div>
         <div
-          className={`flex flex-col text-left [@media(max-width:639px)_and_(max-height:400px)]:sr-only ${compactMobileFloating ? '[@media(max-width:639px)_and_(max-height:639px)]:sr-only' : ''}`}
+          className={`flex flex-col text-left [@media(max-width:639px)_and_(max-height:400px)]:sr-only ${compactShortViewportLabelClass} ${compactMobileFloating ? '[@media(max-width:639px)_and_(max-height:639px)]:sr-only' : ''}`}
         >
           <span className="leading-tight flex items-center gap-1 font-black">
             Sofia • Assistente virtual

@@ -78,6 +78,25 @@ test('compacts the floating assistant when a mobile empty-state action needs spa
   );
 });
 
+test('compacts the assistant on narrow short viewports and keeps its full accessible label', () => {
+  const { container, getByRole } = render(
+    React.createElement(SofiaAssistantTrigger, {
+      onOpen: () => {},
+    }),
+  );
+
+  const trigger = getByRole('button', {
+    name: /Sofia • Assistente virtual.*Tire dúvidas sobre hospedagens/,
+  });
+  assert.match(trigger.className, /max-width:743px\)_and_\(max-height:500px\)\]:h-11/);
+  assert.match(trigger.className, /max-width:743px\)_and_\(max-height:500px\)\]:w-11/);
+  assert.match(trigger.className, /focus-visible:outline-2/);
+  assert.match(
+    container.querySelector('.flex.flex-col.text-left')?.className || '',
+    /max-width:743px\)_and_\(max-height:500px\)\]:sr-only/,
+  );
+});
+
 test('hides and removes the assistant trigger from focus while it overlaps the booking panel', async () => {
   document.body.innerHTML = '<div class="property-booking-panel"></div>';
   originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
