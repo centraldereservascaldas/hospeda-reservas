@@ -1,6 +1,6 @@
 # Revisão de UX/UI e plano de correção por ondas
 
-Estado: revisão e plano concluídos dentro do acesso disponível, com limitações registradas abaixo. Referência examinada: `main` no commit `7e5d1f2`. Este documento é um plano de revisão e correção; nenhuma alteração de produto está autorizada por ele.
+Estado: revisão inicial concluída dentro do acesso disponível; execução autorizada pela Goal ativa, em PRs pequenos aguardando revisão, sem merge ou deploy. Referência da revisão inicial: `main` no commit `7e5d1f2`; reavaliações e correções registram suas bases e PRs nos respectivos achados.
 
 ## Leitura rápida
 
@@ -14,7 +14,7 @@ Estado: revisão e plano concluídos dentro do acesso disponível, com limitaç�
 | Preferências e métricas | Painel longo ocupa grande área em telas pequenas; há conflito de foco e a rota de privacidade respondeu 404. Instrumentação e consentimento têm caminhos diferentes e exigem reconciliação. | F31–F34, F42–F44, F47, F51 |
 | Confiabilidade | Houve tela vazia com asset 404 e uma resposta 504 em amostras pontuais; causa e frequência são desconhecidas. | F41 |
 
-O destaque da parcela é intencional e não integra os achados. As prioridades P1 e evidências correspondentes estão na triagem antes das ondas. Há achados comprovados em produção, outros reproduzidos com simulação e outros que permanecem hipótese de código; consultar o estado de cada item. Não houve implementação de correções.
+O destaque da parcela é intencional e não integra os achados. As prioridades P1 e evidências correspondentes estão na triagem antes das ondas. Há achados comprovados em produção, outros reproduzidos com simulação e outros que permanecem hipótese de código; consultar o estado de cada item. Correções em andamento são identificadas por branch e PR, sem presumir que estejam publicadas.
 
 ### Como usar os achados
 
@@ -322,6 +322,8 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 **Confirmado na interface de produção com erro interceptado localmente:** no imóvel LI23J, para 1 a 3/12 e dois adultos, a resposta de `/api/price` foi substituída por HTTP 503 somente na sessão de teste. O painel mostrou “Disponibilidade confirmada; cotação ainda não confirmada”, ofereceu nova tentativa e manteve “Cotação indisponível” desabilitado, sem comunicar a falha da consulta. Após retirar a interceptação e selecionar “Tentar cotação novamente”, a interface habilitou “Continuar para reserva”. Não foi criada reserva nem se afirma que a API real retornou 503.
 
 **Impacto provável:** a pessoa vê preço não confirmado sem saber que uma consulta falhou; o caminho de recuperação existe. **Ação:** definir um resultado tipado que distinga falha de consulta, resposta sem cotação e sucesso, mantendo a reserva bloqueada até confirmação. **Verificação:** simular timeout, erro HTTP, resposta inválida e retorno válido vazio no limite real do serviço, conferir mensagem e retry; testar também respostas fora de ordem após mudar datas e hóspedes. O hook já usa chave de contexto e limpeza para rejeitar respostas antigas, comportamento que deve ser preservado.
+
+**Implementação em revisão:** o serviço agora preserva o resultado como cotação válida, cotação indisponível, período indisponível ou falha de consulta, sem mudar o contrato HTTP nem os consumidores antigos de `calculatePrice`. O detalhe mostra mensagens distintas para falha, cotação ausente e período indisponível; a tentativa continua disponível e a ação de reserva continua bloqueada sem cotação confirmada. Testes direcionados passaram (61 casos em `calculatedPriceApi`, `propertyAvailabilityHook` e `propertyDetailBookingAccessibility`); `npm run lint`, `npm run build` e `git diff --check` passaram. A lint mantém um warning de dependência em `PropertyDetailModal.tsx`; build mantém avisos de fonte e tamanho de chunk. PR #114, baseado em `main` `0e7c824`, commit `5ef79fb`; checks do GitHub pendentes. Sem consulta Stays real, reserva ou pagamento nesta sprint.
 
 ### F28 · P3 · Limites de pets divergem entre seleção, URL e checkout
 
@@ -719,7 +721,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Tratar falha na atualização de preço após rejeição por mudança, sem apresentar cotação antiga como nova (F24).
 - [ ] Verificar e normalizar barras finais em links diretos de checkout, preservando parâmetros e histórico (F25).
 - [ ] Corrigir status HTTP da rota válida de checkout e preservar `noindex` e 404 de caminhos desconhecidos (F26).
-- [ ] Diferenciar erro de consulta de preço e cotação ausente no detalhe, preservando tentativa e bloqueio de reserva (F27).
+- [ ] Diferenciar erro de consulta, cotação indisponível e período indisponível no detalhe; preservar tentativa e bloqueio de reserva. Implementação aguardando revisão e checks no [PR #114](https://github.com/centraldereservascaldas/hospeda-reservas/pull/114) (F27).
 - [ ] Validar capacidade no detalhe e orientar ajuste explícito quando a viagem recebida excede o imóvel (F29).
 - [ ] Investigar e corrigir apresentação ou origem da descrição e da composição de camas, sem inferir dados ausentes (F45).
 - [ ] Preservar explicações de erros 422 e associar validações aos campos ou à etapa de correção (F30).
