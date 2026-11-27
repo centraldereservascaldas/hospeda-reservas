@@ -132,8 +132,9 @@ export function PropertyCatalogGrid({
                     Mais opções
                   </h2>
                   <p className="mt-1 text-sm text-neutral-600">
-                    Mais acomodações para as mesmas datas. Valores e disponibilidade sujeitos a
-                    confirmação.
+                    {hasSearchDates
+                      ? 'Mais acomodações para as mesmas datas. Valores e disponibilidade sujeitos a confirmação.'
+                      : 'Mais acomodações neste condomínio. Selecione as datas para consultar valores e disponibilidade.'}
                   </p>
                 </div>
               )}
