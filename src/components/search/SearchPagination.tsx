@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { SearchPaginationState } from '../../hooks/useAccommodationSearch';
+import { Button } from '../Button';
 
 interface SearchPaginationProps {
   state: SearchPaginationState;
@@ -16,13 +17,23 @@ export function SearchPagination({ state, onLoadMore }: SearchPaginationProps) {
 
   useEffect(() => {
     const element = sentinel.current;
-    if (!element || !state.hasMore || state.isLoading || state.error || typeof IntersectionObserver === 'undefined') return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting) && !requested.current) {
-        requested.current = true;
-        onLoadMore();
-      }
-    }, { rootMargin: '200px 0px' });
+    if (
+      !element ||
+      !state.hasMore ||
+      state.isLoading ||
+      state.error ||
+      typeof IntersectionObserver === 'undefined'
+    )
+      return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting) && !requested.current) {
+          requested.current = true;
+          onLoadMore();
+        }
+      },
+      { rootMargin: '200px 0px' },
+    );
     observer.observe(element);
     return () => observer.disconnect();
   }, [state.hasMore, state.isLoading, state.error, state.loadedCount, onLoadMore]);
@@ -46,23 +57,21 @@ export function SearchPagination({ state, onLoadMore }: SearchPaginationProps) {
           novamente.
         </p>
       )}
-      <button
-        type="button"
+      <Button
+        variant="secondary"
         disabled={!state.hasMore}
-        aria-disabled={state.isLoading || !state.hasMore}
+        loading={state.isLoading}
+        loadingLabel="Carregando mais…"
         onClick={() => {
           if (!state.isLoading && state.hasMore) onLoadMore();
         }}
-        className="min-h-11 rounded-full border border-neutral-300 bg-white px-6 py-3 text-sm font-bold text-neutral-900 hover:bg-neutral-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-default disabled:text-neutral-500"
       >
-        {state.isLoading
-          ? 'Carregando mais…'
-          : state.error
-            ? 'Tentar carregar mais'
-            : state.hasMore
-              ? 'Carregar mais'
-              : 'Fim dos resultados'}
-      </button>
+        {state.error
+          ? 'Tentar carregar mais'
+          : state.hasMore
+            ? 'Carregar mais'
+            : 'Fim dos resultados'}
+      </Button>
     </section>
   );
 }

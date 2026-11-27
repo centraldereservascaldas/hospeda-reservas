@@ -661,33 +661,6 @@ body::before {
   letter-spacing: -0.01em;
 }
 
-.checkout-existing-reservation .checkout-payment-submit:not(:disabled) {
-  animation: checkout-submit-pulse 3.2s ease-in-out infinite;
-}
-
-.checkout-existing-reservation .checkout-payment-submit:not(:disabled):hover,
-.checkout-existing-reservation .checkout-payment-submit:not(:disabled):focus-visible,
-.checkout-existing-reservation .checkout-payment-submit:not(:disabled):active {
-  animation-play-state: paused;
-}
-
-@keyframes checkout-submit-pulse {
-  0%,
-  72%,
-  100% {
-    box-shadow:
-      inset 0 1px 1px rgba(255, 255, 255, 0.3),
-      0 8px 20px -10px rgba(194, 65, 12, 0.55);
-  }
-
-  84% {
-    box-shadow:
-      inset 0 1px 1px rgba(255, 255, 255, 0.32),
-      0 10px 25px -9px rgba(194, 65, 12, 0.68),
-      0 0 0 4px rgba(234, 88, 12, 0.1);
-  }
-}
-
 .checkout-purchase .checkout-payment-submit:not(:disabled):hover {
   transform: translateY(-1px);
   box-shadow:

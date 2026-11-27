@@ -1,4 +1,6 @@
 import { LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Button } from '../Button';
+import { InlineNotice } from '../InlineNotice';
 
 type CatalogLoadStatus = 'loading' | 'error' | 'stale' | 'ready';
 
@@ -13,24 +15,24 @@ export function CatalogLoadNotice({ status, isRefreshing, onRetry }: CatalogLoad
 
   if (status === 'loading') {
     return (
-      <div
-        role="status"
-        aria-live="polite"
-        className="flex items-center justify-center gap-3 py-16 text-sm font-semibold text-neutral-700"
+      <InlineNotice
+        variant="loading"
+        icon={<LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin text-orange-700" />}
+        className="items-center justify-center border-transparent bg-transparent py-16 text-sm font-semibold"
       >
-        <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin text-orange-700" />
         Carregando acomodações…
-      </div>
+      </InlineNotice>
     );
   }
 
   if (status === 'error') {
     return (
-      <div
+      <InlineNotice
+        variant="warning"
         role="alert"
-        className="mx-auto flex max-w-xl flex-col items-center gap-1 sm:gap-3 rounded-3xl border border-amber-200 bg-amber-50 px-6 py-4 sm:py-12 text-center"
+        icon={<TriangleAlert aria-hidden="true" className="h-8 w-8 text-amber-700" />}
+        className="mx-auto max-w-xl flex-col items-center gap-1 rounded-3xl px-6 py-4 text-center sm:gap-3 sm:py-12"
       >
-        <TriangleAlert aria-hidden="true" className="h-8 w-8 text-amber-700" />
         <div className="space-y-1">
           <h2 className="text-base font-bold text-amber-950">
             Não foi possível carregar as acomodações
@@ -39,48 +41,46 @@ export function CatalogLoadNotice({ status, isRefreshing, onRetry }: CatalogLoad
             Tente novamente para atualizar a lista de hospedagens.
           </p>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={onRetry}
-          className="mt-1 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-neutral-950 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+          className="mt-1 bg-neutral-950 hover:bg-neutral-800"
         >
           <RefreshCw aria-hidden="true" className="h-4 w-4" />
           Tentar novamente
-        </button>
-      </div>
+        </Button>
+      </InlineNotice>
     );
   }
 
   return (
-    <div
+    <InlineNotice
+      variant="warning"
       role={isRefreshing ? 'status' : 'alert'}
-      aria-live={isRefreshing ? 'polite' : undefined}
-      className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950"
-    >
-      <div className="flex min-w-0 items-start gap-3">
-        {isRefreshing ? (
-          <LoaderCircle
-            aria-hidden="true"
-            className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-amber-700"
-          />
+      className="mb-6 flex-wrap items-center justify-between gap-3 px-5 py-4"
+      icon={
+        isRefreshing ? (
+          <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin text-amber-700" />
         ) : (
-          <TriangleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-        )}
-        <p>
-          {isRefreshing
-            ? 'Atualizando acomodações salvas…'
-            : 'Não foi possível atualizar as acomodações. Exibindo informações salvas; confirme a disponibilidade e o preço antes de reservar.'}
-        </p>
-      </div>
-      <button
-        type="button"
+          <TriangleAlert aria-hidden="true" className="h-4 w-4 text-amber-700" />
+        )
+      }
+    >
+      <p className="min-w-0 flex-1">
+        {isRefreshing
+          ? 'Atualizando acomodações salvas…'
+          : 'Não foi possível atualizar as acomodações. Exibindo informações salvas; confirme a disponibilidade e o preço antes de reservar.'}
+      </p>
+      <Button
+        variant="secondary"
+        size="small"
         onClick={onRetry}
         disabled={isRefreshing}
-        className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-950 transition hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-70"
+        className="shrink-0 border-amber-300 text-xs text-amber-950 hover:bg-amber-100 disabled:cursor-wait"
       >
         {!isRefreshing && <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />}
         {isRefreshing ? 'Atualizando…' : 'Tentar atualizar'}
-      </button>
-    </div>
+      </Button>
+    </InlineNotice>
   );
 }

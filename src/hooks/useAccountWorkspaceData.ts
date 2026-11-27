@@ -132,6 +132,13 @@ export function useAccountWorkspaceData({
     canManagePayments: false,
   });
   const isOwnerAdmin = ownerAdminState.accessToken === accessToken && ownerAdminState.isAdmin;
+  const ownerAdminAccess = !accessToken
+    ? 'signed-out'
+    : ownerAdminState.accessToken !== accessToken
+      ? 'loading'
+      : ownerAdminState.isAdmin
+        ? 'approved'
+        : 'denied';
   const canManagePayments =
     ownerAdminState.accessToken === accessToken && ownerAdminState.canManagePayments;
 
@@ -280,6 +287,7 @@ export function useAccountWorkspaceData({
     ownerAccessStatus,
     setOwnerAccessStatus,
     isOwnerAdmin,
+    ownerAdminAccess,
     canManagePayments,
   };
 }

@@ -55,6 +55,10 @@ import { isNewCheckoutPath, NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
 import { CheckoutRecoveryPage } from './components/booking/CheckoutRecoveryPage';
 import { useCheckoutDraftRecovery } from './hooks/useCheckoutDraftRecovery';
 
+const DesignSystemPage = lazy(() =>
+  import('./components/DesignSystemPage').then(({ DesignSystemPage: page }) => ({ default: page })),
+);
+
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
     default: CheckoutResumePage,
@@ -170,6 +174,7 @@ function MarketplaceApp() {
     ownerAccessStatus,
     setOwnerAccessStatus,
     isOwnerAdmin,
+    ownerAdminAccess,
     canManagePayments,
   } = useAccountWorkspaceData({
     accessToken: accountSession?.access_token,
@@ -464,6 +469,63 @@ function MarketplaceApp() {
   });
 
   const handleCloseCheckout = () => handleCloseBooking(bookingPayloadRef.current);
+
+  if (window.location.pathname.replace(/\/+$/, '') === '/design-system') {
+    if (import.meta.env.DEV) {
+      return (
+        <Suspense
+          fallback={
+            <main role="status" className="p-8">
+              Carregando design system…
+            </main>
+          }
+        >
+          <DesignSystemPage isAdmin={isOwnerAdmin} isDevelopment />
+        </Suspense>
+      );
+    }
+
+    if (ownerAdminAccess === 'approved') {
+      return (
+        <Suspense
+          fallback={
+            <main role="status" className="p-8">
+              Carregando design system…
+            </main>
+          }
+        >
+          <DesignSystemPage isAdmin isDevelopment={false} />
+        </Suspense>
+      );
+    }
+
+    const accessMessage =
+      ownerAdminAccess === 'loading'
+        ? 'Verificando acesso administrativo…'
+        : ownerAdminAccess === 'signed-out'
+          ? 'Entre na sua conta administrativa para acessar esta referência.'
+          : 'Esta referência está disponível somente para administradores.';
+
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f8f7f4] px-5 py-12 text-neutral-900">
+        <section className="w-full max-w-md rounded-3xl border border-neutral-200 bg-white p-7 text-center shadow-sm">
+          <h1 className="text-xl font-bold">Acesso restrito</h1>
+          <p
+            role={ownerAdminAccess === 'loading' ? 'status' : undefined}
+            className="mt-2 text-sm leading-6 text-neutral-600"
+          >
+            {accessMessage}
+          </p>
+          <a
+            href="/"
+            className="mt-6 inline-flex min-h-11 items-center justify-center rounded-full bg-orange-600 px-5 text-sm font-bold text-white hover:bg-orange-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+          >
+            Voltar ao site
+          </a>
+        </section>
+      </main>
+    );
+  }
 
   const handleOpenSuggestedProperty = (
     property: Property,
@@ -840,6 +902,7 @@ export default function App() {
     normalizedPathname !== NEW_CHECKOUT_PATH &&
     normalizedPathname !== '/condominios' &&
     normalizedPathname !== '/s/homes' &&
+    normalizedPathname !== '/design-system' &&
     !legalSlug &&
     normalizedPathname !== '/auth/confirm' &&
     !isPropertyPath &&
