@@ -40,6 +40,14 @@ class PartnerPaymentStartServiceTest extends TestCase
         $this->mock(CieloEcommerceClient::class)->shouldReceive('createPixPayment')->once()->andReturn(['Payment' => ['PaymentId' => '11111111-1111-4111-8111-111111111111', 'Status' => 12, 'QrCodeString' => 'PIX-TESTE']]);
         app(PartnerPaymentStartService::class)->start($order->id);
         $this->assertSame('payment_pending', $order->fresh()->status);
+        $attempt = $order->paymentAttempts()->sole();
+        $this->assertSame('pending', $attempt->status);
+        $this->assertSame(52300, $attempt->amount_cents);
+        $this->assertSame('imobsys-crcn-2-663', $attempt->supplier_property_id);
+        $this->assertSame('11111111-1111-4111-8111-111111111111', $attempt->gateway_payment_id);
+        $this->assertDatabaseHas('partner_checkout_events', ['partner_checkout_order_id' => $order->id, 'event_type' => 'payment_attempt_started']);
+        $this->assertDatabaseHas('partner_checkout_events', ['partner_checkout_order_id' => $order->id, 'event_type' => 'payment_attempt_created']);
+        $this->assertDatabaseCount('partner_payment_attempts', 1);
     }
 
     public function test_start_is_persisted_and_cannot_be_submitted_twice(): void

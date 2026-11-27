@@ -4,7 +4,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ReconcileCieloPaymentWebhook;
+use App\Jobs\ReconcilePartnerPaymentNotification;
 use App\Models\DirectBookingPaymentWebhook;
+use App\Models\PartnerCheckoutEvent;
+use App\Models\PartnerCheckoutOrder;
+use App\Models\PartnerPaymentNotification;
 use App\Services\Payments\CieloDirectConfiguration;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -51,6 +55,47 @@ class CieloWebhookController extends Controller
             (string) $changeType,
             (string) intdiv(now()->timestamp, 300),
         ]));
+
+        $partnerOrder = PartnerCheckoutOrder::query()->where('payment_id', $paymentId)->first();
+        if ($partnerOrder !== null) {
+            try {
+                $notification = DB::transaction(function () use ($eventKey, $paymentId, $changeType, $request, $queueConnection, $configuration, $partnerOrder): PartnerPaymentNotification {
+                    $attempt = $partnerOrder->paymentAttempts()->where('gateway_payment_id', $paymentId)->first();
+                    $notification = PartnerPaymentNotification::query()->create([
+                        'event_key' => $eventKey,
+                        'partner_checkout_order_id' => $partnerOrder->id,
+                        'partner_payment_attempt_id' => $attempt?->id,
+                        'gateway_provider' => $configuration->provider(),
+                        'gateway_payment_id' => $paymentId,
+                        'change_type' => $changeType,
+                        'request_id' => $request->header('x-request-id') === null
+                            ? null
+                            : Str::limit((string) $request->header('x-request-id'), 150, ''),
+                        'status' => 'received',
+                        'received_at' => now(),
+                    ]);
+                    PartnerCheckoutEvent::query()->create([
+                        'partner_checkout_order_id' => $partnerOrder->id,
+                        'event_type' => 'payment_notification_received',
+                        'from_status' => $partnerOrder->status,
+                        'to_status' => $partnerOrder->status,
+                        'source' => 'provider',
+                        'metadata' => ['notificationId' => $notification->id, 'paymentId' => $paymentId, 'changeType' => $changeType],
+                        'occurred_at' => now(),
+                    ]);
+
+                    ReconcilePartnerPaymentNotification::dispatch($notification->id)
+                        ->onConnection($queueConnection)
+                        ->afterCommit();
+
+                    return $notification;
+                });
+            } catch (UniqueConstraintViolationException) {
+                return response()->json(['success' => true, 'duplicate' => true], 200);
+            }
+
+            return response()->json(['success' => true, 'queued' => true, 'id' => $notification->id], 200);
+        }
 
         try {
             $webhook = DB::transaction(function () use ($eventKey, $paymentId, $changeType, $request, $queueConnection, $configuration): DirectBookingPaymentWebhook {

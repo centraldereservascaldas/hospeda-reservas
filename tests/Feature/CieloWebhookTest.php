@@ -4,10 +4,16 @@ namespace Tests\Feature;
 
 use App\Enums\DirectBookingOrderStatus;
 use App\Jobs\ReconcileCieloPaymentWebhook;
+use App\Jobs\ReconcilePartnerPaymentNotification;
 use App\Models\DirectBookingOrder;
 use App\Models\DirectBookingPaymentAttempt;
 use App\Models\DirectBookingPaymentWebhook;
+use App\Models\PartnerCheckoutOrder;
+use App\Models\PartnerPaymentAttempt;
+use App\Models\PartnerPaymentNotification;
 use App\Services\DirectStaysPaymentService;
+use App\Services\PartnerPaymentReconciliationService;
+use App\Services\Payments\CieloEcommerceClient;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -18,6 +24,108 @@ use Tests\TestCase;
 class CieloWebhookTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_partner_payment_notification_is_persisted_and_reconciled_separately(): void
+    {
+        $this->configureWebhook();
+        $order = PartnerCheckoutOrder::query()->create([
+            'public_reference' => str_repeat('P', 40),
+            'supplier_property_id' => 'imobsys-crcn-2-663',
+            'check_in' => '2027-05-17',
+            'check_out' => '2027-05-19',
+            'guests' => 2,
+            'base_cents' => 52300,
+            'payment_cents' => 52300,
+            'currency' => 'BRL',
+            'status' => 'payment_pending',
+            'payment_id' => '123e4567-e89b-12d3-a456-426614174040',
+            'merchant_order_id' => 'PARTNER-WEBHOOK-ORDER',
+            'payment_method' => 'pix',
+            'reservation_idempotency_key' => 'partner-webhook-idempotency',
+            'encrypted_customer' => ['fullName' => 'Synthetic Guest'],
+        ]);
+        $attempt = PartnerPaymentAttempt::query()->create([
+            'partner_checkout_order_id' => $order->id,
+            'supplier_property_id' => 'imobsys-crcn-2-663',
+            'gateway_provider' => 'cielo_sandbox',
+            'merchant_order_id' => 'PARTNER-WEBHOOK-ORDER',
+            'gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174040',
+            'payment_method' => 'pix',
+            'amount_cents' => 52300,
+            'currency' => 'BRL',
+            'status' => 'pending',
+        ]);
+        Queue::fake([ReconcileCieloPaymentWebhook::class, ReconcilePartnerPaymentNotification::class]);
+
+        $this->postJson('/api/webhooks/cielo', $this->notification(), [
+            'X-Cielo-Secret' => 'synthetic-cielo-webhook-secret',
+            'X-Request-Id' => 'partner-notification-sentinel',
+        ])->assertOk()->assertJsonPath('queued', true);
+
+        $notification = PartnerPaymentNotification::query()->sole();
+        $this->assertSame($order->id, $notification->partner_checkout_order_id);
+        $this->assertSame($attempt->id, $notification->partner_payment_attempt_id);
+        $this->assertSame('received', $notification->status);
+        $this->assertSame('partner-notification-sentinel', $notification->request_id);
+        $this->assertDatabaseHas('partner_checkout_events', [
+            'partner_checkout_order_id' => $order->id,
+            'event_type' => 'payment_notification_received',
+        ]);
+        Queue::assertPushed(ReconcilePartnerPaymentNotification::class, 1);
+        Queue::assertNotPushed(ReconcileCieloPaymentWebhook::class);
+    }
+
+    public function test_partner_payment_notification_reconciliation_updates_attempt_and_order(): void
+    {
+        $order = PartnerCheckoutOrder::query()->create([
+            'public_reference' => str_repeat('R', 40),
+            'supplier_property_id' => 'imobsys-crcn-2-663',
+            'check_in' => '2027-05-17',
+            'check_out' => '2027-05-19',
+            'guests' => 2,
+            'base_cents' => 52300,
+            'payment_cents' => 52300,
+            'currency' => 'BRL',
+            'status' => 'payment_pending',
+            'payment_id' => '123e4567-e89b-12d3-a456-426614174040',
+            'merchant_order_id' => 'PARTNER-WEBHOOK-ORDER',
+            'payment_method' => 'pix',
+            'reservation_idempotency_key' => 'partner-webhook-reconcile-idempotency',
+            'encrypted_customer' => ['fullName' => 'Synthetic Guest'],
+        ]);
+        $attempt = PartnerPaymentAttempt::query()->create([
+            'partner_checkout_order_id' => $order->id,
+            'supplier_property_id' => 'imobsys-crcn-2-663',
+            'gateway_provider' => 'cielo_sandbox',
+            'merchant_order_id' => 'PARTNER-WEBHOOK-ORDER',
+            'gateway_payment_id' => '123e4567-e89b-12d3-a456-426614174040',
+            'payment_method' => 'pix',
+            'amount_cents' => 52300,
+            'currency' => 'BRL',
+            'status' => 'pending',
+        ]);
+        $notification = PartnerPaymentNotification::query()->create([
+            'event_key' => hash('sha256', 'partner-reconciliation-notification'),
+            'partner_checkout_order_id' => $order->id,
+            'partner_payment_attempt_id' => $attempt->id,
+            'gateway_provider' => 'cielo_sandbox',
+            'gateway_payment_id' => $attempt->gateway_payment_id,
+            'change_type' => 1,
+            'status' => 'received',
+            'received_at' => now(),
+        ]);
+        $this->mock(CieloEcommerceClient::class)->shouldReceive('findPaymentById')->once()->with($attempt->gateway_payment_id)->andReturn([
+            'MerchantOrderId' => 'PARTNER-WEBHOOK-ORDER',
+            'Payment' => ['PaymentId' => $attempt->gateway_payment_id, 'Amount' => 52300, 'Currency' => 'BRL', 'Type' => 'Pix', 'Status' => 2],
+        ]);
+
+        (new ReconcilePartnerPaymentNotification($notification->id))->handle(app(PartnerPaymentReconciliationService::class));
+
+        $this->assertSame('payment_verified', $order->fresh()->status);
+        $this->assertSame('approved', $attempt->fresh()->status);
+        $this->assertSame('processed', $notification->fresh()->status);
+        $this->assertSame(1, $notification->fresh()->reconciliation_attempts);
+    }
 
     public function test_production_webhook_remains_disabled_without_explicit_authorization(): void
     {
