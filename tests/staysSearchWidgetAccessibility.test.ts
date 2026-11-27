@@ -203,6 +203,68 @@ test('mobile date selection does not automatically open guest controls', async (
   }
 });
 
+test('keeps a partial range across the 640px breakpoint and returns focus to the visible mobile search button', async () => {
+  const originalGetResorts = crcnBackendApi.getResorts;
+  const originalInnerWidth = Object.getOwnPropertyDescriptor(window, 'innerWidth');
+  crcnBackendApi.getResorts = async () => [];
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 640 });
+  const mobileSearchButton = document.createElement('button');
+  mobileSearchButton.type = 'button';
+  mobileSearchButton.setAttribute('aria-label', 'Iniciar busca');
+  document.body.append(mobileSearchButton);
+
+  try {
+    const { getByRole, queryByRole } = render(
+      React.createElement(StaysSearchWidget, {
+        onSearchInApp: () => assert.fail('selecting dates must not submit the search'),
+      }),
+    );
+
+    fireEvent.click(getByRole('button', { name: /Quando/ }));
+    const calendar = getByRole('dialog', { name: /Calendário de entrada/ });
+    assert.ok(calendar.querySelector('section[aria-label="dezembro de 2026"]'));
+    fireEvent.click(
+      calendar.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-12-01"]')!,
+    );
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 639 });
+    fireEvent.resize(window);
+    await waitFor(() => {
+      assert.equal(
+        getByRole('dialog', { name: /Calendário de entrada/ }).querySelector(
+          'section[aria-label="dezembro de 2026"]',
+        ),
+        null,
+      );
+    });
+
+    fireEvent.click(getByRole('button', { name: 'Próximo mês' }));
+    fireEvent.click(
+      calendar.querySelector<HTMLButtonElement>('button[data-calendar-day="2026-12-03"]')!,
+    );
+
+    await waitFor(() => assert.equal(document.activeElement, mobileSearchButton));
+    assert.equal(queryByRole('dialog', { name: /Calendário de entrada/ }), null);
+    assert.equal(queryByRole('dialog', { name: 'Selecionar hóspedes' }), null);
+    assert.equal(
+      (document.querySelector('input[name="checkIn"]') as HTMLInputElement).value,
+      '2026-12-01',
+    );
+    assert.equal(
+      (document.querySelector('input[name="checkOut"]') as HTMLInputElement).value,
+      '2026-12-03',
+    );
+  } finally {
+    crcnBackendApi.getResorts = originalGetResorts;
+    if (originalInnerWidth) {
+      Object.defineProperty(window, 'innerWidth', originalInnerWidth);
+    } else {
+      Reflect.deleteProperty(window, 'innerWidth');
+    }
+    mobileSearchButton.remove();
+  }
+});
+
 test('shared search panels move focus into condominium, date, and guest controls', async () => {
   const originalGetResorts = crcnBackendApi.getResorts;
   crcnBackendApi.getResorts = async () => [];

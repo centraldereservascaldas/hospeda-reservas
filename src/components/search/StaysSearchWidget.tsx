@@ -17,6 +17,8 @@ import { countOccupancyGuests } from '../../utils/guestCounts';
 import { emitFunnelEvent } from '../../utils/measurementEvents';
 import { CalendarMonthGrid } from './CalendarMonthGrid';
 import { GuestCounterList, type GuestCounts } from './GuestCounterList';
+import { focusWithoutScrolling } from '../../utils/focus';
+import { matchesMediaQuery } from '../../utils/motion';
 
 interface StaysSearchWidgetProps {
   onSearchInApp: (searchParams: {
@@ -717,7 +719,7 @@ interface SharedCalendarContentProps {
   today: string;
   dateFlexibility: 0 | 1 | 2;
   onFlexibilityChange: (days: 0 | 1 | 2) => void;
-  onSelectRange: (checkIn: string, checkOut: string) => void;
+  onSelectRange: (checkIn: string, checkOut: string, isWide: boolean) => void;
 }
 
 function SharedCalendarContent({
@@ -736,7 +738,13 @@ function SharedCalendarContent({
   const [previewEnd, setPreviewEnd] = useState<string | null>(null);
   const [focusDate, setFocusDate] = useState(checkIn || undefined);
   const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
-  const isWide = typeof window !== 'undefined' && window.innerWidth > 639;
+  const [isWide, setIsWide] = useState(() => !matchesMediaQuery('(max-width: 639px)'));
+
+  useEffect(() => {
+    const updateLayout = () => setIsWide(window.innerWidth > 639);
+    window.addEventListener('resize', updateLayout);
+    return () => window.removeEventListener('resize', updateLayout);
+  }, []);
 
   const getFocusableDate = (monthOffset: number): string | undefined => {
     const month = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + monthOffset, 1);
@@ -798,7 +806,7 @@ function SharedCalendarContent({
           return;
         }
         if (date > pendingStart) {
-          onSelectRange(pendingStart, date);
+          onSelectRange(pendingStart, date, isWide);
           setPendingStart(null);
           return;
         }
@@ -1690,17 +1698,19 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                   today={today}
                   dateFlexibility={dateFlexibility}
                   onFlexibilityChange={setDateFlexibility}
-                  onSelectRange={(newCheckIn, newCheckOut) => {
+                  onSelectRange={(newCheckIn, newCheckOut, isWide) => {
                     setSearchValidationMessage('');
                     setCheckIn(newCheckIn);
                     setCheckOut(newCheckOut);
                     setActiveDatePicker(null);
-                    if (window.innerWidth > 639) {
+                    if (isWide) {
                       setActiveDropdown('guests');
                     } else {
-                      document
-                        .querySelector<HTMLButtonElement>('[data-search-segment="when"] button')
-                        ?.focus();
+                      focusWithoutScrolling(
+                        document.querySelector<HTMLButtonElement>(
+                          'button[aria-label="Iniciar busca"]',
+                        ),
+                      );
                     }
                   }}
                 />
