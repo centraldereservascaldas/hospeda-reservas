@@ -193,3 +193,62 @@ test('offers horizontal carousel controls on desktop and mobile carousels keep a
   assert.ok(document.querySelector('.overflow-x-auto.px-4'));
   assert.ok(document.querySelector('img[fetchpriority="high"]'));
 });
+
+test('uses different quoted alternatives for consecutive weekend cards when available', async () => {
+  const previous = globalThis.IntersectionObserver;
+  class VisibleObserver {
+    constructor(private callback: ConstructorParameters<typeof IntersectionObserver>[0]) {}
+    observe(element: Element) {
+      queueMicrotask(() =>
+        this.callback(
+          [{ isIntersecting: true, target: element } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver,
+        ),
+      );
+    }
+    disconnect() {}
+  }
+  globalThis.IntersectionObserver = VisibleObserver as unknown as typeof IntersectionObserver;
+  const expiresAt = Date.now() + 60_000;
+  crcnBackendApi.searchAccommodationsPage = async (params) => ({
+    expiresAt,
+    total: 2,
+    unquotedCount: 0,
+    pagination: { receivedCount: 2, nextSkip: 2, hasMore: false },
+    data: ['a', 'b'].map((id) => ({
+      ...property(`available-${id}`, `Disponível ${id}`, 'pet_friendly'),
+      calculatedPrice: {
+        totalAmount: 450,
+        dailyRate: 225,
+        basePrice: 450,
+        cleaningFee: 0,
+        serviceFee: 0,
+        nights: Math.round((Date.parse(params.to!) - Date.parse(params.from!)) / 86_400_000),
+        currency: 'BRL',
+        expiresAt,
+      },
+    })),
+  });
+  try {
+    render(
+      createElement({
+        fallbackProperties: [
+          property('old-c', 'Antigo C', 'pet_friendly'),
+          property('old-d', 'Antigo D', 'pet_friendly'),
+        ],
+      }),
+    );
+    await screen.findAllByText(/R\$\s?450,00 na hospedagem/);
+    const section = screen
+      .getByRole('heading', { name: 'Hospedagens para viajar com seu pet' })
+      .closest('section')!;
+    const cards = [...section.querySelectorAll('button')].filter((button) =>
+      button.getAttribute('aria-label')?.includes('Fim de semana com seu pet'),
+    );
+    assert.match(cards[0]!.getAttribute('aria-label') || '', /Disponível a/);
+    assert.match(cards[1]!.getAttribute('aria-label') || '', /Disponível b/);
+  } finally {
+    cleanup();
+    globalThis.IntersectionObserver = previous;
+  }
+});
