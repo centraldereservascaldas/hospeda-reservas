@@ -100,6 +100,13 @@ class ImobSysSearchFallbackTest extends TestCase
         } finally { $this->travelBack(); }
     }
 
+    public function test_search_never_displays_an_offer_without_a_supplier_expiry(): void
+    {
+        Http::preventStrayRequests();
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response(['success' => true, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'offers' => [['id' => 'imobsys-crcn-2-663', 'capacity' => 5, 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2, 'nights' => 2, 'totalCents' => 52300, 'currency' => 'BRL', 'status' => 'offer_observed', 'availabilityConfirmed' => false, 'reservationGuaranteed' => false]], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false]])]);
+        $this->assertNull(app(ImobSysSearchClient::class)->offers('2027-01-10', '2027-01-12', 2, '', 'imobsys-crcn-2-663'));
+    }
+
     public function test_production_partner_detail_requires_feature_flag_and_specific_property(): void
     {
         $originalEnvironment = $this->app['env'];
@@ -143,6 +150,7 @@ class ImobSysSearchFallbackTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
+                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true, 'source' => 'imobsys-live', 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 1,
             'offers' => [[
                 'id' => 'imobsys-crcn-1-961', 'condominiumName' => 'Piazza', 'unit' => '204', 'capacity' => 4,
@@ -190,6 +198,7 @@ class ImobSysSearchFallbackTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
+                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true, 'source' => 'imobsys-live', 'from' => '2027-01-10', 'to' => '2027-01-12', 'guests' => 2,
             'offers' => [[
                 'id' => 'imobsys-crcn-2-663', 'condominiumName' => 'Termas', 'unit' => '101',
@@ -211,6 +220,7 @@ class ImobSysSearchFallbackTest extends TestCase
         Http::fake([
             'https://stays.test/external/v1/booking/search-listings' => Http::response([]),
             'https://api.example.test/v1/offers*' => Http::response([
+                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
                 'success' => true,
                 'source' => 'imobsys-live',
                 'from' => '2027-01-10',
@@ -294,6 +304,7 @@ class ImobSysSearchFallbackTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
+                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true,
             'from' => '2027-01-10',
             'to' => '2027-01-12',
@@ -355,6 +366,7 @@ class ImobSysSearchFallbackTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['https://api.example.test/v1/offers*' => Http::response([
+                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
             'success' => true,
             'from' => '2027-01-10',
             'to' => '2027-01-12',
@@ -478,6 +490,7 @@ class ImobSysSearchFallbackTest extends TestCase
         Http::fake([
             'https://stays.test/external/v1/booking/search-listings' => Http::response([]),
             'https://api.example.test/v1/offers*' => Http::response([
+                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
                 'success' => true,
                 'source' => 'imobsys-live',
                 'from' => '2027-01-10',
@@ -549,6 +562,7 @@ class ImobSysSearchFallbackTest extends TestCase
         Http::fake([
             'https://stays.test/external/v1/booking/search-listings' => Http::response([]),
             'https://api.example.test/v1/offers*' => Http::response([
+                'expiresAt' => now()->addSeconds(20)->toIso8601String(),
                 'success' => true,
                 'source' => 'imobsys-live',
                 'from' => '2027-01-10',

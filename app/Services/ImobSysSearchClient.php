@@ -69,7 +69,7 @@ class ImobSysSearchClient
                     if ($fresh && (! is_string($supplierExpiresAt) || strtotime($supplierExpiresAt) === false || strtotime($supplierExpiresAt) <= now()->timestamp || strtotime($supplierExpiresAt) <= strtotime($observedAt))) {
                         return null;
                     }
-                    if ($supplierExpiresAt !== null && (! is_string($supplierExpiresAt) || strtotime($supplierExpiresAt) === false || strtotime($supplierExpiresAt) <= now()->timestamp)) {
+                    if (($supplierExpiresAt !== null || $pageOffers !== []) && (! is_string($supplierExpiresAt) || strtotime($supplierExpiresAt) === false || strtotime($supplierExpiresAt) <= now()->timestamp)) {
                         return null;
                     }
                     if (! is_string($observedAt) || strtotime($observedAt) === false) {
