@@ -84,6 +84,19 @@ const PaymentConfirmationPreview = lazy(() =>
   ),
 );
 
+const ImobSysPreviewPage = lazy(() => import('./components/ImobSysPreviewPage'));
+const PartnerSandboxCheckout = lazy(() =>
+  import('./components/booking/PartnerSandboxCheckout').then(({ PartnerSandboxCheckout }) => ({
+    default: PartnerSandboxCheckout,
+  })),
+);
+const PartnerSandboxOperations = lazy(() =>
+  import('./components/booking/PartnerSandboxOperations').then(({ PartnerSandboxOperations }) => ({
+    default: PartnerSandboxOperations,
+  })),
+);
+const ImobSysPropertyPage = lazy(() => import('./components/ImobSysPropertyPage'));
+
 const initialAuthCallbackError = getAuthCallbackError(window.location.search, window.location.hash);
 
 function CheckoutResumeEntry({ reference }: { reference: string }) {
@@ -727,6 +740,28 @@ export default function App() {
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
 
+  if (
+    import.meta.env.DEV &&
+    (normalizedPathname === '/imobsys' || normalizedPathname === '/parceiros')
+  ) {
+    return (
+      <Suspense fallback={<main role="status">Carregando imóveis…</main>}>
+        <ImobSysPreviewPage />
+      </Suspense>
+    );
+  }
+  if (
+    /^\/apartamento\/(?:imobsys|parceiro)-crcn-[1-9]\d*-[1-9]\d*(?:\/[a-z0-9-]+)?$/.test(
+      normalizedPathname,
+    )
+  ) {
+    return (
+      <Suspense fallback={<main role="status">Carregando imóvel…</main>}>
+        <ImobSysPropertyPage />
+      </Suspense>
+    );
+  }
+
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/pagamento-confirmado') {
     return (
       <Suspense fallback={<main role="status">Carregando prévia…</main>}>
@@ -745,6 +780,22 @@ export default function App() {
         }
       >
         <CieloCheckoutPreviewPage />
+      </Suspense>
+    );
+  }
+
+  if (import.meta.env?.DEV && pathname === '/checkout-preview/parceiro/operacao') {
+    return (
+      <Suspense fallback={<main role="status">Carregando prévia…</main>}>
+        <PartnerSandboxOperations />
+      </Suspense>
+    );
+  }
+
+  if (import.meta.env?.DEV && pathname === '/checkout-preview/parceiro') {
+    return (
+      <Suspense fallback={<main role="status">Carregando prévia…</main>}>
+        <PartnerSandboxCheckout />
       </Suspense>
     );
   }

@@ -27,6 +27,7 @@ const React = (await import('react')).default;
 const { cleanup, fireEvent, render, screen, waitFor } = await import('@testing-library/react');
 const { AppOverlayLayer } = await import('../src/components/AppOverlayLayer.tsx');
 const { crcnBackendApi } = await import('../src/services/crcnBackendApi.ts');
+const { STAYS_NET_APARTMENTS } = await import('../src/data/staysApartments.ts');
 const originalGetResorts = crcnBackendApi.getResorts;
 
 afterEach(() => {
@@ -73,6 +74,56 @@ function createOverlayProps(): AppOverlayLayerProps {
     onSearchInApp: async () => {},
   };
 }
+
+test('rechecks a partner offer from the main catalog detail', async () => {
+  const props = createOverlayProps();
+  props.filters = {
+    ...props.filters,
+    checkIn: '2027-01-10',
+    checkOut: '2027-01-12',
+    guests: { adults: 1, children: 1, infants: 0, pets: 0 },
+  };
+  const property = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    id: 'imobsys-crcn-1-961',
+    dataSource: 'imobsys-live' as const,
+    imobsysOffer: {
+      from: '2027-01-10',
+      to: '2027-01-12',
+      nights: 2,
+      totalAmount: 500,
+      currency: 'BRL' as const,
+      observedAt: new Date().toISOString(),
+      availabilityConfirmed: false as const,
+      expiresAt: Date.now() + 60000,
+    },
+  };
+  props.selectedProperty = property;
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = '';
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes('/api/imobsys/offers')) {
+      requestedUrl = url;
+      return new Response(
+        JSON.stringify({
+          data: [{ ...property, imobsysOffer: { ...property.imobsysOffer, totalAmount: 610 } }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    return new Response('{}', { status: 404 });
+  };
+  try {
+    render(React.createElement(AppOverlayLayer, props));
+    fireEvent.click(await screen.findByRole('button', { name: 'Consultar datas e hóspedes' }));
+    await waitFor(() => assert.match(requestedUrl, /propertyId=imobsys-crcn-1-961/));
+    assert.equal(new URL(requestedUrl, 'http://localhost').searchParams.get('guests'), '2');
+    await waitFor(() => assert.ok(screen.getByText(/610,00/)));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('keeps overlays deferred until open and wires the search close action', async () => {
   crcnBackendApi.getResorts = async () => [];

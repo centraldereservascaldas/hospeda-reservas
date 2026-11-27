@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
+
+class PartnerCheckoutOrder extends Model
+{
+    use HasUuids;
+
+    protected $guarded = ['id'];
+
+    protected $hidden = ['encrypted_customer', 'reservation_idempotency_key', 'submission_key_hash', 'submission_fingerprint', 'public_reference', 'payment_qr_code'];
+
+    protected function casts(): array
+    {
+        return ['encrypted_customer' => 'encrypted:array', 'payment_qr_code' => 'encrypted', 'check_in' => 'date', 'check_out' => 'date'];
+    }
+
+    public function hasCurrentPixWindow(): bool
+    {
+        return $this->created_at !== null
+            && $this->created_at->lessThanOrEqualTo(now())
+            && $this->created_at->copy()->addSeconds(1800)->isFuture();
+    }
+}

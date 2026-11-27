@@ -14,6 +14,21 @@ export function isSafeMediaUrl(value: string): boolean {
   }
 }
 
+export function isImobSysPhotoUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'reservascrcn.com.br' &&
+      !url.username &&
+      !url.password &&
+      /^\/fotos\/[^/]+\/imoveis\/[^/]+\/fotos\/[^/]+\.(?:jpe?g|png|webp)$/i.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function sanitizePropertyMedia(property: Property): Property {
   return {
     ...property,

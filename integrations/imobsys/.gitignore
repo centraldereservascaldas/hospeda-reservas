@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+node_modules/
+*.log
+data/
+data/admin-control.json
+data/*.sqlite

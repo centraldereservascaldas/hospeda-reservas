@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Laboratório de integração · ImobSys</title>
+  <link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><p class="eyebrow">CENTRAL DE RESERVAS · INTEGRAÇÕES</p><h1>Conector ImobSys</h1><p class="intro">Um ambiente separado para conhecer o fornecedor e preparar uma integração confiável.</p><span class="badge">Somente leitura · Local</span></header>
+    <div class="notice"><strong>O site e o checkout atuais estão preservados.</strong><p>Este serviço não cria reservas, não bloqueia datas, não gera Pix e não cobra cartão.</p></div>
+    <p><a href="/previa">Abrir prévia dos apartamentos com fotos e preços →</a></p>
+    <section class="panel catalog-panel"><h2>Preparação para integração</h2><p id="integration-status" role="status">Conferindo o pacote local…</p><p class="small">Marca e fonte conferidas no site publicado. A disponibilidade é observada por período; ausência de oferta continua desconhecida. Este pacote ainda não publica imóveis nem habilita pagamentos.</p></section>
+    <section class="panel catalog-panel"><h2>Inventário observado</h2><div class="catalog-counts"><p><strong id="condominium-count">—</strong> condomínios no sitemap</p><p><strong id="property-count">—</strong> imóveis identificados</p><p><strong id="base-count">—</strong> bases observadas</p></div><p id="catalog-status" role="status">Carregando o snapshot local…</p><p class="small">A descoberta reúne ofertas em diferentes datas. Um imóvel ausente pode estar ocupado ou não ser exposto nessa consulta; o catálogo ainda não tem completude comprovada.</p></section>
+    <div class="layout">
+      <section class="panel"><h2>Consultar uma oferta</h2><p>Os imóveis abaixo são referências cadastradas neste laboratório. Ainda não existe sincronização de catálogo pela API externa.</p>
+        <form id="quote-form"><label>Buscar no inventário<input id="property-search" type="search" placeholder="Condomínio, unidade ou referência"></label><label>Imóvel<select id="property" required></select></label><div class="dates"><label>Entrada<input id="from" type="date" required></label><label>Saída<input id="to" type="date" required></label></div><button id="quote-button" type="submit">Consultar preços no fornecedor</button></form>
+        <button id="availability-button" class="secondary" type="button">Conferir oferta para estas datas</button>
+        <button id="details-button" class="secondary" type="button">Consultar identificação do imóvel</button>
+        <hr><h2>Consulta autenticada da rede</h2><p class="small">Pesquisa o painel interno. Uma oferta encontrada não bloqueia datas nem garante a reserva.</p>
+        <label>Unidade no painel (opcional)<input id="admin-unit" type="text" maxlength="30" placeholder="Ex.: 00109; vazio consulta toda a rede"></label>
+        <label>Hóspedes<select id="admin-guests"><option value="">Todos</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
+        <button id="admin-button" class="secondary" type="button">Consultar rede autenticada para estas datas</button><p id="admin-status" role="status">A sessão do painel precisa estar conectada em memória.</p>
+        <p id="message" role="status" aria-live="polite"></p>
+        <div id="amounts" class="amounts" hidden><article><span>Oferta no Pix</span><strong id="pix"></strong></article><article><span>Oferta no cartão</span><strong id="card"></strong></article><article><span>Sinal anunciado</span><strong id="deposit"></strong></article></div>
+        <div id="warning" class="warning" hidden>Preço anunciado pelo site parceiro. Disponibilidade, bloqueio das datas, quantidade de hóspedes e composição das taxas ainda não estão confirmados. Não usar este retorno para cobrar.</div>
+        <details id="response-box" hidden><summary>Ver resposta normalizada</summary><pre id="response"></pre></details>
+      </section>
+      <aside class="panel"><h2>Configuração e limites</h2><dl><dt>Origem de conteúdo</dt><dd>reservascrcn.com.br</dd><dt>API externa</dt><dd>api.cnsp.app/crcn</dd><dt>Reservas e pagamentos</dt><dd>Não implementados neste serviço</dd><dt>Integração com nosso site</dt><dd>Desconectada nesta etapa</dd></dl><button id="status-button" class="secondary" type="button">Conferir conexão CNSP</button><p id="provider-status" role="status" aria-live="polite">A credencial fica exclusivamente no backend local.</p><p class="small">A consulta HTTP de preços do site é conhecida. Os nomes das ações da API CNSP ainda não foram mapeados. Autenticação aceita não significa integração de reservas disponível.</p><hr><h2>Mapa mensal público</h2><label>Mês<input id="calendar-month" type="month"></label><button id="calendar-button" class="secondary" type="button">Consultar mapa mensal</button><p id="calendar-status" role="status" aria-live="polite">Mostra as unidades expostas pelo mapa público. A legenda ainda não comprova dias livres ou ocupados.</p></aside>
+    </div>
+    <footer>Laboratório independente · HTTP direto · Sem acesso ao banco, à Stays ou à Cielo do site atual</footer>
+  </main>
+</body>
+</html>

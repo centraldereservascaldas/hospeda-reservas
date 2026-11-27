@@ -34,12 +34,19 @@ export function filterPropertiesBySearchFilters(
 
     if (
       filters.destinationPropertyId &&
+      property.dataSource !== 'imobsys-live' &&
       property.staysPropertyId !== filters.destinationPropertyId
     ) {
       return false;
     }
 
-    if (!matchesPropertyDestination(property, filters.destination)) return false;
+    // Dated searches are already filtered by the server, which also resolves
+    // verified condominium names that differ between providers.
+    if (
+      !(filters.checkIn && filters.checkOut) &&
+      !matchesPropertyDestination(property, filters.destination)
+    )
+      return false;
 
     const requestedGuests = countOccupancyGuests(filters.guests);
     if (requestedGuests > property.maxGuests) return false;
@@ -47,7 +54,10 @@ export function filterPropertiesBySearchFilters(
     if (hasPriceFilter) {
       const hasSearchDates = Boolean(filters.checkIn && filters.checkOut);
       const confirmedNightlyPrice = hasSearchDates
-        ? (getStoredPropertyQuote(property)?.dailyRate ?? null)
+        ? (getStoredPropertyQuote(property)?.dailyRate ??
+          (property.imobsysOffer
+            ? property.imobsysOffer.totalAmount / property.imobsysOffer.nights
+            : null))
         : property.pricePerNight;
       if (
         confirmedNightlyPrice === null ||

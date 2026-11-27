@@ -21,8 +21,10 @@ Object.assign(globalThis, {
 });
 
 const React = (await import('react')).default;
-const { render, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
+const { render, fireEvent, cleanup, waitFor, screen } = await import('@testing-library/react');
 const { PropertyDetailModal } = await import('../src/components/property/PropertyDetailModal.tsx');
+const { PropertyDetailHeader } =
+  await import('../src/components/property/PropertyDetailHeader.tsx');
 const { PropertyDetailPage } = await import('../src/components/property/PropertyDetailModal.tsx');
 const { PropertyDatePickerDialog } =
   await import('../src/components/property/PropertyDatePickerDialog.tsx');
@@ -35,6 +37,81 @@ const { CheckoutResumePage } = await import('../src/components/booking/CheckoutR
 const { PropertyHostSection } = await import('../src/components/property/PropertyHostSection.tsx');
 const { clearCheckoutResumeToken, saveCheckoutResumeToken } =
   await import('../src/utils/checkoutResumeStorage.ts');
+
+test('does not show Stays review links for ImobSys offer details', () => {
+  const property = {
+    ...STAYS_NET_APARTMENTS[0]!,
+    dataSource: 'imobsys-live' as const,
+    staysSynced: undefined,
+    reviewsSynced: undefined,
+    reviewCount: 0,
+    reviews: [],
+  };
+
+  render(
+    React.createElement(PropertyDetailHeader, {
+      property,
+      hasReviews: false,
+      onShowReviews: () => {},
+      titleRef: React.createRef<HTMLHeadingElement>(),
+    }),
+  );
+
+  assert.equal(screen.queryByRole('button', { name: /avaliações/i }), null);
+});
+
+test('loads ImobSys photos only after opening that property detail', async () => {
+  const originalGetImobSysPropertyImages = crcnBackendApi.getImobSysPropertyImages;
+  let requestedPropertyId: string | null = null;
+  crcnBackendApi.getImobSysPropertyImages = async (id) => {
+    requestedPropertyId = id;
+    return ['https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png'];
+  };
+
+  try {
+    const property = {
+      ...STAYS_NET_APARTMENTS[0]!,
+      id: 'imobsys-crcn-2-663',
+      dataSource: 'imobsys-live' as const,
+      images: [],
+      imobsysOffer: {
+        from: '2027-01-10',
+        to: '2027-01-12',
+        nights: 2,
+        totalAmount: 523,
+        currency: 'BRL',
+        observedAt: '2026-11-20T12:00:00Z',
+        availabilityConfirmed: false as const,
+        expiresAt: Date.now() + 60_000,
+      },
+    };
+
+    render(
+      React.createElement(PropertyDetailModal, {
+        property,
+        initialCheckIn: '2027-01-10',
+        initialCheckOut: '2027-01-12',
+        initialGuests: { adults: 2, children: 0, infants: 0, pets: 0 },
+        onClose: () => {},
+        currency: 'BRL',
+        isSaved: false,
+        onToggleSave: () => {},
+        onStartBooking: () => {},
+      }),
+    );
+
+    await waitFor(() => {
+      assert.equal(requestedPropertyId, 'imobsys-crcn-2-663');
+      assert.ok(
+        document.querySelector(
+          'img[src="https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png"]',
+        ),
+      );
+    });
+  } finally {
+    crcnBackendApi.getImobSysPropertyImages = originalGetImobSysPropertyImages;
+  }
+});
 
 test('property description formatter separates Stays sections and amenity bullets', () => {
   const formatted = formatPropertyDescription(

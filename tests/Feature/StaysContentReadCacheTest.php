@@ -46,8 +46,8 @@ class StaysContentReadCacheTest extends TestCase
     {
         Http::preventStrayRequests();
         Http::fake(['*content/properties*' => Http::response([['_id' => 'resort', '_mstitle' => ['pt_BR' => 'Termas']]])]);
-        $this->getJson('/api/resorts')->assertOk()->assertJsonPath('data.0.name', 'Termas');
-        $this->getJson('/api/resorts')->assertOk()->assertJsonPath('data.0.id', 'resort');
+        $this->getJson('/api/resorts')->assertOk()->assertJsonFragment(['id' => 'resort', 'name' => 'Termas']);
+        $this->getJson('/api/resorts')->assertOk()->assertJsonFragment(['id' => 'resort', 'name' => 'Termas']);
         Http::assertSentCount(1);
     }
 

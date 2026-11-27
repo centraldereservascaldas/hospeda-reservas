@@ -10,10 +10,13 @@ use App\Http\Controllers\Api\CieloWebhookController;
 use App\Http\Controllers\Api\ExistingReservationCheckoutController;
 use App\Http\Controllers\Api\ExistingReservationContractController;
 use App\Http\Controllers\Api\GuestReservationController;
+use App\Http\Controllers\Api\ImobSysPreviewController;
 use App\Http\Controllers\Api\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\OwnerAccessController;
 use App\Http\Controllers\Api\OwnerAdminController;
 use App\Http\Controllers\Api\OwnerDashboardController;
+use App\Http\Controllers\Api\PartnerSandboxCheckoutController;
+use App\Http\Controllers\Api\PartnerSandboxOperationsController;
 use App\Http\Controllers\Api\PropertyMetadataController;
 use App\Http\Controllers\Api\PublicLegalPageController;
 use App\Http\Controllers\Api\SofiaController;
@@ -37,7 +40,10 @@ Route::get('/ready', function () {
 });
 
 Route::get('/resorts', [AccommodationController::class, 'resorts']);
+Route::get('/imobsys/offers', [ImobSysPreviewController::class, 'index'])->middleware('throttle:30,1');
 Route::get('/accommodations', [AccommodationController::class, 'index']);
+Route::get('/accommodations/{id}/media', [AccommodationController::class, 'media'])
+    ->middleware('throttle:30,1');
 Route::get('/accommodations/{id}', [AccommodationController::class, 'show']);
 Route::post('/search', [AccommodationController::class, 'search']);
 Route::get('/accommodations/{id}/calendar', [AccommodationController::class, 'calendar']);
@@ -80,6 +86,10 @@ Route::middleware(['supabase.guest', 'owner.admin:reviewer'])->prefix('owner/adm
     Route::post('/reject', [OwnerAdminController::class, 'reject']);
 });
 Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->group(function (): void {
+    Route::get('/partner-sandbox/orders', [PartnerSandboxOperationsController::class, 'index']);
+    Route::get('/partner-sandbox/orders/{id}/supplier-status', [PartnerSandboxOperationsController::class, 'supplierStatus'])->middleware('throttle:10,1');
+    Route::post('/partner-sandbox/orders/{id}/supplier-review', [PartnerSandboxOperationsController::class, 'review'])->middleware('throttle:10,1');
+    Route::post('/partner-sandbox/orders/{id}/manual-payment', [PartnerSandboxOperationsController::class, 'record'])->middleware('throttle:10,1');
     Route::get('/direct-booking-orders', [OwnerAdminController::class, 'directBookingOrders']);
     Route::post('/direct-booking-webhooks/{webhookId}/retry', [OwnerAdminController::class, 'retryDirectBookingWebhook'])->middleware('throttle:10,1');
     Route::post('/direct-booking-orders/{publicReference}/start-manual-cancellation', [OwnerAdminController::class, 'startManualDirectBookingCancellation'])->middleware('throttle:10,1');
@@ -88,6 +98,11 @@ Route::middleware(['supabase.guest', 'owner.admin'])->prefix('owner/admin')->gro
     Route::post('/direct-booking-orders/{publicReference}/revoke-resume-token', [OwnerAdminController::class, 'revokeDirectBookingResumeToken'])->middleware('throttle:10,1');
 });
 Route::post('/checkout', [BookingController::class, 'createCheckoutOrder'])->middleware('throttle:5,1');
+Route::post('/partner-sandbox/checkout', [PartnerSandboxCheckoutController::class, 'store'])->middleware('throttle:5,1');
+Route::get('/partner-sandbox/checkout/{reference}', [PartnerSandboxCheckoutController::class, 'show'])->middleware('throttle:checkout-resume');
+Route::post('/partner-sandbox/checkout/{reference}/reconcile', [PartnerSandboxCheckoutController::class, 'reconcile'])->middleware('throttle:10,1');
+Route::post('/partner-sandbox/checkout/{reference}/payment', [PartnerSandboxCheckoutController::class, 'payment'])->middleware('throttle:5,1');
+Route::post('/partner-sandbox/checkout/{reference}/card-token', [PartnerSandboxCheckoutController::class, 'cardToken'])->middleware('throttle:5,1');
 Route::get('/checkout/terms/{listingId}', [BookingController::class, 'checkoutTerms'])->middleware('throttle:30,1');
 Route::get('/checkout/readiness/{listingId}', [BookingController::class, 'checkoutReadiness'])->middleware('throttle:30,1');
 Route::get('/checkout/{publicReference}', [BookingController::class, 'resumeCheckout'])->middleware('throttle:checkout-resume');
