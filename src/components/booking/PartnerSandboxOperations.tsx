@@ -164,9 +164,15 @@ export function PartnerSandboxOperations() {
         unknown: 'não identificada',
       };
       const state = result.state;
+      const identity =
+        'propertyIdentityMatch' in result && result.propertyIdentityMatch === true
+          ? 'O link do imóvel coincide.'
+          : 'propertyIdentityMatch' in result && result.propertyIdentityMatch === false
+            ? 'O link do imóvel diverge; não confirme este pedido.'
+            : 'A identidade do imóvel não foi observada.';
       setSupplierStatus((current) => ({
         ...current,
-        [order.id]: `Operação: ${stateLabel[state] ?? 'desconhecida'}; situação no fornecedor: ${partnerLabel[status] ?? 'não identificada'}; referência: ${ref}. Confira imóvel e datas na ImobSys.`,
+        [order.id]: `Operação: ${stateLabel[state] ?? 'desconhecida'}; situação no fornecedor: ${partnerLabel[status] ?? 'não identificada'}; referência: ${ref}. ${identity} Confira datas e demais dados na ImobSys.`,
       }));
     } catch {
       setSupplierStatus((current) => ({

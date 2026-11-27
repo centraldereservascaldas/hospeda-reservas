@@ -51,7 +51,12 @@ class PartnerSandboxOperationsController extends Controller
             if (! in_array($partnerStatus, ['unknown', 'confirmed', 'cancelled'], true) || ($reference !== null && (! is_string($reference) || ! preg_match('/\A[1-9]\d{0,11}\z/D', $reference)))) {
                 throw new \RuntimeException('Resposta da operação inválida.');
             }
-            return response()->json(['success' => true, 'state' => $result['state'], 'partnerStatus' => $partnerStatus, 'reservationReference' => $reference])->header('Cache-Control', 'no-store, private');
+            $identityMatch = $result['propertyIdentityMatch'] ?? null;
+            $identityAt = $result['propertyIdentityObservedAt'] ?? null;
+            if (($identityMatch !== null || $identityAt !== null) && (! is_bool($identityMatch) || ! is_string($identityAt) || strtotime($identityAt) === false || abs(now()->timestamp - strtotime($identityAt)) >= 60)) {
+                throw new \RuntimeException('Identidade observada inválida.');
+            }
+            return response()->json(['success' => true, 'state' => $result['state'], 'partnerStatus' => $partnerStatus, 'reservationReference' => $reference, 'propertyIdentityMatch' => $identityMatch])->header('Cache-Control', 'no-store, private');
         } catch (Throwable) {
             return response()->json(['success' => false, 'message' => 'Não foi possível consultar. Mantenha a conferência manual.'], 503)->header('Cache-Control', 'no-store, private');
         }

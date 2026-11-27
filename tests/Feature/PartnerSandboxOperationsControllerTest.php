@@ -27,10 +27,10 @@ class PartnerSandboxOperationsControllerTest extends TestCase
         $operation = '123e4567-e89b-42d3-a456-426614174000';
         Http::fake([
             '*/auth/v1/user' => Http::response(['id' => '575c8054-6646-443c-bf62-07945019a32f', 'email' => 'admin@example.test', 'email_confirmed_at' => '2026-01-01T00:00:00Z', 'user_metadata' => ['full_name' => 'Pessoa Teste']]),
-            'api.example.test/*' => Http::response(['success' => true, 'data' => ['operationId' => $operation, 'state' => 'unknown', 'propertyId' => 'imobsys-crcn-2-663', 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'partnerStatus' => 'unknown', 'reservationReference' => '1600']]),
+            'api.example.test/*' => Http::response(['success' => true, 'data' => ['operationId' => $operation, 'state' => 'unknown', 'propertyId' => 'imobsys-crcn-2-663', 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'partnerStatus' => 'unknown', 'reservationReference' => '1600', 'propertyIdentityMatch' => true, 'propertyIdentityObservedAt' => now()->toIso8601String()]]),
         ]);
         $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('Q', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown', 'supplier_operation_id' => $operation, 'payment_id' => 'PAY1', 'merchant_order_id' => 'ORDER1', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-123456', 'encrypted_customer' => ['fullName' => 'Teste']]);
-        $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders/'.$order->id.'/supplier-status')->assertOk()->assertJsonPath('state', 'unknown')->assertJsonPath('reservationReference', '1600')->assertHeader('Cache-Control', 'no-store, private');
+        $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders/'.$order->id.'/supplier-status')->assertOk()->assertJsonPath('state', 'unknown')->assertJsonPath('reservationReference', '1600')->assertJsonPath('propertyIdentityMatch', true)->assertHeader('Cache-Control', 'no-store, private');
         $this->assertSame('attention_required', $order->fresh()->status);
         Http::assertSent(fn ($request): bool => $request->method() === 'GET' && str_contains($request->url(), '/v1/pre-reservations/'));
         $order->update(['supplier_operation_id' => null]);
