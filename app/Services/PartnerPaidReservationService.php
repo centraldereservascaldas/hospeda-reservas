@@ -44,31 +44,45 @@ class PartnerPaidReservationService
                 'acceptedTotalCents' => (int) $claimed->base_cents,
                 'customer' => $claimed->encrypted_customer,
             ], $claimed->reservation_idempotency_key, function (string $operationId) use ($id, &$operationConflict): void {
-                $updated = PartnerCheckoutOrder::query()->whereKey($id)
-                    ->where(function ($query): void {
-                        $query->where('status', 'reservation_starting')
-                            ->orWhere(fn ($query) => $query->where('status', 'attention_required')->where('attention_reason', 'supplier_outcome_unknown'));
-                    })
-                    ->where(function ($query) use ($operationId): void {
-                        $query->whereNull('supplier_operation_id')->orWhere('supplier_operation_id', $operationId);
-                    })
-                    ->update(['supplier_operation_id' => $operationId]);
-                $operationConflict = $updated === 0;
+                $operationConflict = ! DB::transaction(function () use ($id, $operationId): bool {
+                    $order = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
+                    if (! in_array($order->status, ['reservation_starting', 'attention_required'], true)
+                        || ($order->status === 'attention_required' && $order->attention_reason !== 'supplier_outcome_unknown')
+                        || ($order->supplier_operation_id !== null && $order->supplier_operation_id !== $operationId)) {
+                        return false;
+                    }
+
+                    if ($order->supplier_operation_id === null) {
+                        $order->update(['supplier_operation_id' => $operationId]);
+                    }
+
+                    return true;
+                });
             });
             if ($operationConflict) {
                 throw new RuntimeException('Identificador da operação exige conferência.');
             }
-            $updated = PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'awaiting_seller_payment', 'reservation_reference' => $result['id'], 'supplier_payable_observed_cents' => $result['supplierPayableObservedCents'] ?? null]);
-            if ($updated === 0) {
+            DB::transaction(function () use ($id, $result): void {
+                $order = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
+                if ($order->status === 'reservation_starting') {
+                    $order->update(['status' => 'awaiting_seller_payment', 'reservation_reference' => $result['id'], 'supplier_payable_observed_cents' => $result['supplierPayableObservedCents'] ?? null]);
+
+                    return;
+                }
                 // Recovery may have marked a slow request uncertain while it was
                 // still running. Preserve the validated response for review, but
                 // do not override the operational state or start another request.
-                PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'attention_required')
-                    ->where('attention_reason', 'supplier_outcome_unknown')->whereNull('reservation_reference')
-                    ->update(['reservation_reference' => $result['id'], 'supplier_payable_observed_cents' => $result['supplierPayableObservedCents'] ?? null]);
-            }
+                if ($order->status === 'attention_required' && $order->attention_reason === 'supplier_outcome_unknown' && $order->reservation_reference === null) {
+                    $order->update(['reservation_reference' => $result['id'], 'supplier_payable_observed_cents' => $result['supplierPayableObservedCents'] ?? null]);
+                }
+            });
         } catch (Throwable $exception) {
-            PartnerCheckoutOrder::query()->whereKey($id)->where('status', 'reservation_starting')->update(['status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown']);
+            DB::transaction(function () use ($id): void {
+                $order = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
+                if ($order->status === 'reservation_starting') {
+                    $order->update(['status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown']);
+                }
+            });
             throw $exception;
         }
     }

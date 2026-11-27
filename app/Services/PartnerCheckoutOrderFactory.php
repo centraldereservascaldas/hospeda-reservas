@@ -5,8 +5,9 @@ namespace App\Services;
 use App\Models\PartnerCheckoutOrder;
 use App\Rules\ValidCpf;
 use App\Services\Payments\CieloCardPricing;
-use Illuminate\Support\Str;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 class PartnerCheckoutOrderFactory
@@ -46,7 +47,10 @@ class PartnerCheckoutOrderFactory
         $fingerprint = hash_hmac('sha256', json_encode([$propertyId, $from, $to, $guests, $method, $installments, $input['acceptedBaseCents'] ?? null, trim($customer['fullName']), $customer['cpf'], $customer['phone']], JSON_THROW_ON_ERROR), config('app.key'));
         $existing = PartnerCheckoutOrder::query()->where('submission_key_hash', $keyHash)->first();
         if ($existing) {
-            if (! hash_equals((string) $existing->submission_fingerprint, $fingerprint)) throw new RuntimeException('Identificador já usado para outro pedido.');
+            if (! hash_equals((string) $existing->submission_fingerprint, $fingerprint)) {
+                throw new RuntimeException('Identificador já usado para outro pedido.');
+            }
+
             return $existing;
         }
         $offers = $this->offers->offers($from, $to, $guests, '', $propertyId);
@@ -57,10 +61,12 @@ class PartnerCheckoutOrderFactory
         $amount = $method === 'pix' ? $base : $this->pricing->calculate(number_format($base / 100, 2, '.', ''), is_int($installments) ? $installments : 0)['totalCents'];
 
         try {
-            return PartnerCheckoutOrder::create(['submission_key_hash' => $keyHash, 'submission_fingerprint' => $fingerprint, 'public_reference' => Str::random(40), 'supplier_property_id' => $propertyId, 'check_in' => $from, 'check_out' => $to, 'guests' => $guests, 'base_cents' => $base, 'payment_cents' => $amount, 'currency' => 'BRL', 'status' => 'quoted', 'merchant_order_id' => Str::random(25), 'payment_method' => $method, 'installments' => $method === 'card' ? $installments : null, 'reservation_idempotency_key' => Str::random(48), 'encrypted_customer' => ['fullName' => trim($customer['fullName']), 'cpf' => $customer['cpf'], 'phone' => $customer['phone']]]);
+            return DB::transaction(fn (): PartnerCheckoutOrder => PartnerCheckoutOrder::create(['submission_key_hash' => $keyHash, 'submission_fingerprint' => $fingerprint, 'public_reference' => Str::random(40), 'supplier_property_id' => $propertyId, 'check_in' => $from, 'check_out' => $to, 'guests' => $guests, 'base_cents' => $base, 'payment_cents' => $amount, 'currency' => 'BRL', 'status' => 'quoted', 'merchant_order_id' => Str::random(25), 'payment_method' => $method, 'installments' => $method === 'card' ? $installments : null, 'reservation_idempotency_key' => Str::random(48), 'encrypted_customer' => ['fullName' => trim($customer['fullName']), 'cpf' => $customer['cpf'], 'phone' => $customer['phone']]]));
         } catch (QueryException $exception) {
             $existing = PartnerCheckoutOrder::query()->where('submission_key_hash', $keyHash)->first();
-            if ($existing && hash_equals((string) $existing->submission_fingerprint, $fingerprint)) return $existing;
+            if ($existing && hash_equals((string) $existing->submission_fingerprint, $fingerprint)) {
+                return $existing;
+            }
             throw $exception;
         }
     }
