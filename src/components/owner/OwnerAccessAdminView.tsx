@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   AlertCircle,
   Check,
@@ -17,6 +17,8 @@ import {
   OwnerAccessRequest,
   StaysOwnerSummary,
 } from '../../services/crcnBackendApi';
+import { ConfirmationDialog } from '../ConfirmationDialog';
+import { InlineNotice } from '../InlineNotice';
 
 interface OwnerAccessAdminViewProps {
   accessToken: string;
@@ -40,6 +42,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
   accessToken,
   canManagePayments,
 }) => {
+  const dialogReturnFocusRef = useRef<HTMLElement>(null);
   const [requests, setRequests] = useState<OwnerAccessRequest[]>([]);
   const [operationsOrders, setOperationsOrders] = useState<DirectBookingOperationsOrder[]>([]);
   const [unmatchedWebhooks, setUnmatchedWebhooks] = useState<DirectBookingOperationsWebhook[]>([]);
@@ -126,7 +129,11 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
   const handleApproved = () => setRefreshKey((value) => value + 1);
 
   return (
-    <section className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <section
+      ref={dialogReturnFocusRef}
+      tabIndex={-1}
+      className="mx-auto w-full max-w-5xl px-4 py-8 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:px-6 lg:px-8"
+    >
       {canManagePayments && (
         <div className="mb-10">
           <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -156,12 +163,9 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
             </button>
           </div>
           {operationsError && (
-            <div
-              role="alert"
-              className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800"
-            >
+            <InlineNotice variant="error" role="alert" className="mb-4 font-semibold">
               {operationsError}
-            </div>
+            </InlineNotice>
           )}
           {operationsLoading ? (
             <div
@@ -250,6 +254,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
                         key={order.id}
                         order={order}
                         accessToken={accessToken}
+                        dialogReturnFocusRef={dialogReturnFocusRef}
                         onUpdated={() => setOperationsRefreshKey((value) => value + 1)}
                       />
                     ))}
@@ -316,12 +321,9 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
         </div>
 
         {error && (
-          <div
-            role="alert"
-            className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800"
-          >
+          <InlineNotice variant="error" role="alert" className="mb-4 font-semibold">
             {error}
-          </div>
+          </InlineNotice>
         )}
         {loading ? (
           <div className="flex items-center justify-center gap-2 rounded-3xl border border-white/80 bg-white/65 p-10 text-sm font-semibold text-neutral-600 backdrop-blur-xl">
@@ -338,6 +340,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
                 key={request.userId}
                 request={request}
                 accessToken={accessToken}
+                dialogReturnFocusRef={dialogReturnFocusRef}
                 onApproved={handleApproved}
               />
             ))}
@@ -473,9 +476,11 @@ const getSuggestedNextAction = (order: DirectBookingOperationsOrder): string | n
 const DirectBookingOperationsCard: React.FC<{
   order: DirectBookingOperationsOrder;
   accessToken: string;
+  dialogReturnFocusRef: RefObject<HTMLElement | null>;
   onUpdated: () => void;
-}> = ({ order, accessToken, onUpdated }) => {
+}> = ({ order, accessToken, dialogReturnFocusRef, onUpdated }) => {
   const [confirmingManualCancellation, setConfirmingManualCancellation] = useState(false);
+  const [confirmingResumeTokenRevocation, setConfirmingResumeTokenRevocation] = useState(false);
   const [startingManualCancellation, setStartingManualCancellation] = useState(false);
   const [manualCancellationError, setManualCancellationError] = useState('');
   const [verifyingStaysCancellation, setVerifyingStaysCancellation] = useState(false);
@@ -542,15 +547,11 @@ const DirectBookingOperationsCard: React.FC<{
   };
 
   const revokeResumeToken = async (): Promise<void> => {
-    const confirmed = window.confirm(
-      'Revogar o link invalida a retomada como visitante. O titular ainda poderá acessar o pedido depois de entrar com o e-mail confirmado correspondente. Esta ação não cancela reserva nem pagamento. Continuar?',
-    );
-    if (!confirmed) return;
-
     setRevokingResumeToken(true);
     setResumeTokenRevocationError('');
     try {
       await crcnBackendApi.revokeDirectBookingResumeToken(accessToken, order.publicReference);
+      setConfirmingResumeTokenRevocation(false);
       onUpdated();
     } catch (error) {
       setResumeTokenRevocationError(
@@ -620,7 +621,9 @@ const DirectBookingOperationsCard: React.FC<{
           aria-label="Alertas operacionais prioritários"
         >
           {order.existingDepositReviewRequired && (
-            <li role="alert">A entrada está em conferência. Verifique o pagamento e o lançamento na Stays.</li>
+            <li role="alert">
+              A entrada está em conferência. Verifique o pagamento e o lançamento na Stays.
+            </li>
           )}
           {order.paymentApprovedWithoutConfirmedReservation && (
             <li role="alert">
@@ -669,7 +672,7 @@ const DirectBookingOperationsCard: React.FC<{
               </p>
             )}
           </div>
-          {resumeTokenRevocationError && (
+          {resumeTokenRevocationError && !confirmingResumeTokenRevocation && (
             <p className="text-xs font-semibold text-rose-800" role="alert">
               {resumeTokenRevocationError}
             </p>
@@ -678,7 +681,10 @@ const DirectBookingOperationsCard: React.FC<{
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={() => void revokeResumeToken()}
+                onClick={() => {
+                  setResumeTokenRevocationError('');
+                  setConfirmingResumeTokenRevocation(true);
+                }}
                 disabled={revokingResumeToken}
                 className="min-h-11 rounded-xl border border-rose-300 px-3 py-2 text-xs font-bold text-rose-800 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-50"
               >
@@ -688,6 +694,20 @@ const DirectBookingOperationsCard: React.FC<{
           )}
         </section>
       )}
+      <ConfirmationDialog
+        isOpen={confirmingResumeTokenRevocation}
+        title="Revogar link de visitante?"
+        description="A revogação impede que este link retome o pedido como visitante. O titular ainda poderá acessá-lo depois de entrar com o e-mail confirmado correspondente. Esta ação não cancela a reserva nem o pagamento."
+        confirmLabel="Revogar link"
+        pendingLabel="Revogando link…"
+        isPending={revokingResumeToken}
+        error={resumeTokenRevocationError}
+        returnFocusRef={dialogReturnFocusRef}
+        onClose={() => {
+          if (!revokingResumeToken) setConfirmingResumeTokenRevocation(false);
+        }}
+        onConfirm={() => void revokeResumeToken()}
+      />
       <dl className="mt-4 grid gap-3 border-t border-neutral-200 pt-4 text-xs sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <dt className="font-bold uppercase tracking-wide text-neutral-500">Imóvel</dt>
@@ -1044,14 +1064,17 @@ const UnmatchedWebhookCard: React.FC<{
 const OwnerRequestCard: React.FC<{
   request: OwnerAccessRequest;
   accessToken: string;
+  dialogReturnFocusRef: RefObject<HTMLElement | null>;
   onApproved: () => void;
-}> = ({ request, accessToken, onApproved }) => {
+}> = ({ request, accessToken, dialogReturnFocusRef, onApproved }) => {
   const [query, setQuery] = useState('');
   const [owners, setOwners] = useState<StaysOwnerSummary[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState('');
   const [identityVerified, setIdentityVerified] = useState(false);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [confirmingRejection, setConfirmingRejection] = useState(false);
+  const [rejectionError, setRejectionError] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -1106,19 +1129,14 @@ const OwnerRequestCard: React.FC<{
   };
 
   const handleReject = async () => {
-    if (
-      !window.confirm(
-        `Recusar o acesso de ${request.fullName || request.email || 'este solicitante'}?`,
-      )
-    )
-      return;
     setSaving(true);
-    setError('');
+    setRejectionError('');
     try {
       await crcnBackendApi.rejectOwnerAccess(accessToken, request.userId);
+      setConfirmingRejection(false);
       onApproved();
     } catch (rejectError) {
-      setError(
+      setRejectionError(
         rejectError instanceof Error ? rejectError.message : 'Não foi possível recusar o acesso.',
       );
     } finally {
@@ -1231,7 +1249,10 @@ const OwnerRequestCard: React.FC<{
       <div className="mt-4 flex justify-end">
         <button
           type="button"
-          onClick={() => void handleReject()}
+          onClick={() => {
+            setRejectionError('');
+            setConfirmingRejection(true);
+          }}
           disabled={saving}
           className="mr-2 inline-flex min-h-11 items-center rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700 disabled:opacity-45"
         >
@@ -1251,6 +1272,20 @@ const OwnerRequestCard: React.FC<{
           Aprovar acesso
         </button>
       </div>
+      <ConfirmationDialog
+        isOpen={confirmingRejection}
+        title="Recusar acesso deste solicitante?"
+        description={`A solicitação de ${request.fullName || request.email || 'este solicitante'} será recusada.`}
+        confirmLabel="Recusar acesso"
+        pendingLabel="Recusando acesso…"
+        isPending={saving}
+        error={rejectionError}
+        returnFocusRef={dialogReturnFocusRef}
+        onClose={() => {
+          if (!saving) setConfirmingRejection(false);
+        }}
+        onConfirm={() => void handleReject()}
+      />
     </article>
   );
 };

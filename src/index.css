@@ -19,7 +19,9 @@
   --color-calendar-muted-foreground: #bdbdbd;
   --color-calendar-unavailable: #fff1f2;
   --color-calendar-unavailable-foreground: #be123c;
-  --color-focus-ring: #ea580c;
+  --color-focus-ring: var(--crcn-accent);
+  --color-focus-ring-soft: #ffedd5;
+  --color-focus-border: #fb923c;
   --color-page: #ffffff;
   --crcn-page-background: none;
   --color-glass-border: rgba(148, 163, 184, 0.3);

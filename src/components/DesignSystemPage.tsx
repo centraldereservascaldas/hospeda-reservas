@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   ArrowDownRight,
@@ -17,14 +17,21 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from './Button';
+import { EmptyState } from './EmptyState';
 import { FormField } from './FormField';
 import { InlineNotice } from './InlineNotice';
 import { StatusBadge } from './StatusBadge';
+import { InstallmentPicker } from './booking/InstallmentPicker';
 
 type CatalogDomain = {
   name: string;
   description: string;
-  components: { name: string; file: string; purpose: string }[];
+  components: {
+    name: string;
+    file: string;
+    purpose: string;
+    status?: 'observed' | 'proposed' | 'implemented' | 'validated' | 'deprecated';
+  }[];
 };
 
 const catalogDomains: CatalogDomain[] = [
@@ -36,21 +43,33 @@ const catalogDomains: CatalogDomain[] = [
         name: 'Botão',
         file: 'components/Button.tsx',
         purpose: 'Ações por botão com variantes, tamanho e feedback de carregamento.',
+        status: 'implemented',
       },
       {
         name: 'Campo de formulário',
         file: 'components/FormField.tsx',
-        purpose: 'Rótulo, obrigatoriedade, ajuda e erro associados a controles nativos.',
+        purpose:
+          'Rótulo, obrigatoriedade, ajuda e erro associados a controles nativos de conta e checkout.',
+        status: 'implemented',
       },
       {
         name: 'Aviso de estado',
         file: 'components/InlineNotice.tsx',
         purpose: 'Feedback inline com semântica e variantes de estado.',
+        status: 'implemented',
       },
       {
         name: 'Badge de status',
         file: 'components/StatusBadge.tsx',
-        purpose: 'Rótulos compactos de status com tons semânticos.',
+        purpose:
+          'Rótulos compactos de status, reutilizados nas reservas do usuário e do proprietário.',
+        status: 'implemented',
+      },
+      {
+        name: 'Estado vazio',
+        file: 'components/EmptyState.tsx',
+        purpose: 'Orientação quando uma lista ou área não tem conteúdo para mostrar.',
+        status: 'implemented',
       },
     ],
   },
@@ -516,6 +535,13 @@ const catalogDomains: CatalogDomain[] = [
         purpose: 'Gerenciamento de foco em diálogos.',
       },
       {
+        name: 'Confirmação de ação',
+        file: 'components/ConfirmationDialog.tsx',
+        purpose:
+          'Decisão modal para ações consequenciais, com foco, estados pendentes e recuperação de erro controlados pelo consumidor.',
+        status: 'implemented',
+      },
+      {
         name: 'Página não encontrada',
         file: 'components/NotFoundPage.tsx',
         purpose: 'Orientação para rota indisponível.',
@@ -651,6 +677,81 @@ function SpecimenCard({
   );
 }
 
+function TabsSpecimen() {
+  const id = useId();
+  const [activeTab, setActiveTab] = useState(0);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const tabs = [
+    { label: 'Destino', content: 'Escolha a cidade, região ou condomínio da hospedagem.' },
+    { label: 'Datas', content: 'Informe entrada e saída para consultar disponibilidade.' },
+    { label: 'Hóspedes', content: 'Defina adultos, crianças e demais ocupantes.' },
+  ];
+
+  const focusTab = (index: number) => {
+    setActiveTab(index);
+    tabRefs.current[index]?.focus();
+  };
+
+  return (
+    <div>
+      <div
+        role="tablist"
+        aria-label="Etapas da busca"
+        tabIndex={-1}
+        onKeyDown={(event) => {
+          const lastIndex = tabs.length - 1;
+          if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            focusTab((activeTab + 1) % tabs.length);
+          } else if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            focusTab((activeTab - 1 + tabs.length) % tabs.length);
+          } else if (event.key === 'Home') {
+            event.preventDefault();
+            focusTab(0);
+          } else if (event.key === 'End') {
+            event.preventDefault();
+            focusTab(lastIndex);
+          }
+        }}
+        className="flex gap-1 overflow-x-auto rounded-xl bg-neutral-100 p-1"
+      >
+        {tabs.map((tab, index) => (
+          <button
+            key={tab.label}
+            ref={(element) => {
+              tabRefs.current[index] = element;
+            }}
+            id={`${id}-tab-${index}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === index}
+            aria-controls={`${id}-panel`}
+            tabIndex={activeTab === index ? 0 : -1}
+            onClick={() => setActiveTab(index)}
+            className={`min-h-10 shrink-0 rounded-lg px-4 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 ${activeTab === index ? 'bg-white text-neutral-950 shadow-sm' : 'text-neutral-600 hover:text-neutral-900'}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <div
+        id={`${id}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${id}-tab-${activeTab}`}
+        tabIndex={0}
+        className="mt-3 min-h-20 rounded-xl border border-neutral-200 bg-white p-4 text-sm leading-6 text-neutral-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+      >
+        {tabs[activeTab].content}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-neutral-600">
+        Tabs trocam painéis relacionados. Use setas, Home e End para navegar; áreas principais do
+        painel do anfitrião são navegação de página e mantêm links/estado de página.
+      </p>
+    </div>
+  );
+}
+
 function TokenRow({ name, value, color }: { name: string; value: string; color?: string }) {
   return (
     <div className="flex min-w-0 items-center gap-3 rounded-xl border border-neutral-200 p-3">
@@ -669,14 +770,37 @@ function TokenRow({ name, value, color }: { name: string; value: string; color?:
   );
 }
 
-function ComponentEntry({ name, file, purpose }: CatalogDomain['components'][number]) {
+const lifecycleLabels = {
+  observed: 'Observado no código',
+  proposed: 'Proposto',
+  implemented: 'Implementado',
+  validated: 'Validado',
+  deprecated: 'Em descontinuação',
+} as const;
+
+function ComponentEntry({
+  name,
+  file,
+  purpose,
+  status = 'observed',
+}: CatalogDomain['components'][number]) {
+  const lifecycleStyles = {
+    observed: 'bg-neutral-100 text-neutral-700',
+    proposed: 'bg-violet-50 text-violet-800',
+    implemented: 'bg-blue-50 text-blue-800',
+    validated: 'bg-emerald-50 text-emerald-800',
+    deprecated: 'bg-amber-50 text-amber-900',
+  } as const;
+
   return (
     <article className="grid gap-2 border-t border-neutral-200 py-4 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.5fr)] sm:gap-5">
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <h4 className="text-sm font-bold text-neutral-900">{name}</h4>
-          <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-600">
-            Localizado no código
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${lifecycleStyles[status]}`}
+          >
+            {lifecycleLabels[status]}
           </span>
         </div>
         <code className="mt-1 block break-all text-[11px] text-neutral-500">{`src/${file}`}</code>
@@ -695,6 +819,7 @@ export function DesignSystemPage({
 }) {
   const [activeSection, setActiveSection] = useState('visao-geral');
   const [searchTerm, setSearchTerm] = useState('');
+  const [previewInstallments, setPreviewInstallments] = useState(3);
   const [motionDemoKey, setMotionDemoKey] = useState(0);
   const [isMotionDemoSelected, setIsMotionDemoSelected] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
@@ -925,8 +1050,18 @@ export function DesignSystemPage({
                   <TokenRow name="Acento CRCN" value="--crcn-accent · #ea580c" color="#ea580c" />
                   <TokenRow
                     name="Foco visível"
-                    value="--color-focus-ring · #ea580c"
+                    value="--color-focus-ring → --crcn-accent · #ea580c"
                     color="#ea580c"
+                  />
+                  <TokenRow
+                    name="Halo suave de foco"
+                    value="--color-focus-ring-soft · #ffedd5 · implementado"
+                    color="#ffedd5"
+                  />
+                  <TokenRow
+                    name="Borda de foco"
+                    value="--color-focus-border · #fb923c · implementado"
+                    color="#fb923c"
                   />
                   <TokenRow
                     name="Fundo da página"
@@ -1411,13 +1546,20 @@ export function DesignSystemPage({
                     />
                   </FormField>
                   <FormField label="Categoria · select nativo" id="design-system-category">
-                    <select
-                      defaultValue="apartamento"
-                      className="min-h-11 rounded-xl border border-neutral-300 bg-white px-3 text-sm font-normal outline-none transition-colors hover:border-neutral-400 focus:border-neutral-900"
-                    >
-                      <option value="apartamento">Apartamento</option>
-                      <option value="casa">Casa</option>
-                    </select>
+                    <div className="relative mt-1.5">
+                      <select
+                        defaultValue="apartamento"
+                        className="min-h-11 w-full appearance-none rounded-xl border border-neutral-300 bg-white px-3 pr-10 text-sm font-normal outline-none transition-colors hover:border-neutral-400 focus:border-orange-600 focus-visible:ring-2 focus-visible:ring-orange-600/20"
+                      >
+                        <option value="apartamento">Apartamento</option>
+                        <option value="casa">Casa</option>
+                      </select>
+                      <ChevronDown
+                        aria-hidden="true"
+                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
+                        size={17}
+                      />
+                    </div>
                   </FormField>
                   <label className="grid gap-1.5 text-sm font-semibold">
                     Destino
@@ -1443,36 +1585,88 @@ export function DesignSystemPage({
                 </div>
               </SpecimenCard>
               <SpecimenCard
-                title="Dropdown customizado · estado aberto"
+                title="Dropdown customizado · seleção de parcelas"
                 source="StaysSearchWidget · InstallmentPicker"
               >
-                <div className="max-w-md">
-                  <p className="mb-1.5 text-sm font-semibold">Condomínio</p>
-                  <div className="flex min-h-11 items-center justify-between rounded-xl border border-orange-400 bg-white px-3 text-sm font-semibold text-neutral-800 shadow-sm">
-                    Todos os condomínios
-                    <ChevronDown
-                      aria-hidden="true"
-                      className="rotate-180 text-orange-600"
-                      size={17}
-                    />
-                  </div>
-                  <div className="mt-2 rounded-xl border border-neutral-200 bg-white p-1.5 shadow-lg">
-                    <div className="flex min-h-11 items-center justify-between rounded-lg bg-orange-50 px-3 text-sm font-semibold text-orange-900">
-                      Todos os condomínios
-                      <Check aria-hidden="true" size={16} />
-                    </div>
-                    <div className="flex min-h-11 items-center rounded-lg px-3 text-sm text-neutral-700 hover:bg-neutral-50">
-                      Lago Azul
-                    </div>
-                    <div className="flex min-h-11 items-center rounded-lg px-3 text-sm text-neutral-700 hover:bg-neutral-50">
-                      Thermas Place
-                    </div>
+                <div className="mx-auto max-w-md rounded-2xl border border-neutral-200 bg-gradient-to-b from-white to-orange-50/30 p-4 sm:p-5">
+                  <span
+                    id="design-system-installments-label"
+                    className="block text-sm font-bold text-neutral-900"
+                  >
+                    Parcelas no cartão
+                  </span>
+                  <p className="mt-1 text-xs leading-5 text-neutral-600">
+                    Selecione uma opção para atualizar o valor antes de confirmar.
+                  </p>
+                  <InstallmentPicker
+                    labelledBy="design-system-installments-label"
+                    value={previewInstallments}
+                    onChange={setPreviewInstallments}
+                    options={[
+                      { installments: 1, label: 'À vista · R$ 1.040,00' },
+                      { installments: 3, label: '3× de R$ 346,67 · sem juros' },
+                      { installments: 6, label: '6× de R$ 173,33 · sem juros' },
+                    ]}
+                  />
+                  <div className="mt-3 flex items-center justify-between rounded-xl bg-white/80 px-3 py-2.5 text-xs ring-1 ring-neutral-200/80">
+                    <span className="text-neutral-600">Opção selecionada</span>
+                    <StatusBadge tone="info">{previewInstallments}×</StatusBadge>
                   </div>
                 </div>
                 <p className="mt-4 text-xs leading-5 text-neutral-600">
-                  Prévia estática do estado aberto. O controle real gerencia foco, Escape, busca,
-                  seleção e fechamento no componente de origem; esta composição não é um wrapper
-                  reutilizável.
+                  Esta amostra usa o seletor real do checkout: foco retorna ao acionador, Escape
+                  fecha o menu e setas/Home/End percorrem as opções. O filtro de condomínios é um
+                  combobox diferente, com busca e resultados próprios.
+                </p>
+              </SpecimenCard>
+              <SpecimenCard
+                title="Combobox pesquisável · condomínio"
+                source="StaysSearchWidget · prévia visual do padrão"
+              >
+                <div className="mx-auto max-w-md overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_16px_36px_-24px_rgba(15,23,42,0.35)]">
+                  <div className="flex min-h-12 items-center gap-3 border-b border-neutral-100 px-4">
+                    <Search aria-hidden="true" className="text-orange-700" size={17} />
+                    <span className="flex-1 text-sm font-semibold text-neutral-900">
+                      Caldas Novas
+                    </span>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className="rotate-180 text-orange-700"
+                      size={17}
+                    />
+                  </div>
+                  <div className="p-3">
+                    <div className="flex min-h-11 items-center gap-2 rounded-xl border border-orange-300 bg-orange-50/40 px-3 ring-2 ring-orange-600/10">
+                      <Search aria-hidden="true" className="text-neutral-500" size={16} />
+                      <span className="text-sm text-neutral-500">Buscar condomínio</span>
+                      <kbd className="ml-auto rounded-md border border-neutral-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-neutral-500">
+                        digite
+                      </kbd>
+                    </div>
+                    <div className="mt-2 space-y-1">
+                      <div className="flex min-h-11 items-center justify-between rounded-xl bg-orange-50 px-3 text-sm font-bold text-orange-950 ring-1 ring-inset ring-orange-200">
+                        <span className="flex items-center gap-2">
+                          <MapPin aria-hidden="true" size={15} /> Lago Azul
+                        </span>
+                        <Check aria-hidden="true" className="text-orange-800" size={16} />
+                      </div>
+                      <div className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-neutral-700">
+                        <MapPin aria-hidden="true" className="text-neutral-400" size={15} />
+                        Thermas Place
+                      </div>
+                      <div className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-neutral-700">
+                        <MapPin aria-hidden="true" className="text-neutral-400" size={15} />
+                        Riviera Park
+                      </div>
+                    </div>
+                    <p className="mt-2 border-t border-neutral-100 px-1 pt-2 text-xs text-neutral-500">
+                      3 opções · escolha uma para filtrar a busca
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs leading-5 text-neutral-600">
+                  Padrão de combobox pesquisável usado na busca. A amostra documenta aparência e
+                  hierarquia; a interação real, inclusive teclado e resultados, permanece no widget.
                 </p>
               </SpecimenCard>
               <SpecimenCard title="Estados de campo" source="global focus · validação local">
@@ -1665,15 +1859,21 @@ export function DesignSystemPage({
                       <div className="h-full w-2/3 rounded-full bg-orange-500" />
                     </div>
                   </div>
-                  <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                    <CircleHelp aria-hidden="true" className="mt-0.5 text-amber-800" size={18} />
-                    <div>
-                      <p className="font-semibold text-amber-950">Nenhum resultado disponível</p>
-                      <p className="mt-1 text-sm text-amber-900">
-                        Tente mudar as datas ou remover um filtro.
-                      </p>
-                    </div>
-                  </div>
+                  <EmptyState
+                    headingLevel="h4"
+                    density="compact"
+                    icon={<Search className="h-5 w-5" />}
+                    title="Nenhum resultado com estes filtros"
+                    description="Remova um filtro ou escolha outras datas para continuar explorando."
+                    action={
+                      <a
+                        href="#busca"
+                        className="inline-flex min-h-10 items-center justify-center rounded-full px-4 text-sm font-bold text-orange-800 underline decoration-orange-300 underline-offset-4 hover:text-orange-950 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                      >
+                        Rever busca e filtros
+                      </a>
+                    }
+                  />
                 </div>
               </SpecimenCard>
             </div>
@@ -1801,6 +2001,9 @@ export function DesignSystemPage({
                     2–5 dez · 2 hóspedes
                   </span>
                 </div>
+              </SpecimenCard>
+              <SpecimenCard title="Tabs com painel associado" source="SearchModal · tabs ARIA">
+                <TabsSpecimen />
               </SpecimenCard>
               <SpecimenCard
                 title="Resultados e carregar mais"
@@ -2083,7 +2286,7 @@ export function DesignSystemPage({
                 </div>
               </SpecimenCard>
               <SpecimenCard
-                title="Métodos e planos de pagamento"
+                title="Cartões de escolha · métodos de pagamento"
                 source="ExistingReservationPaymentChoices · InstallmentPicker"
               >
                 <fieldset className="space-y-3">
@@ -2114,17 +2317,29 @@ export function DesignSystemPage({
                     <span className="text-sm text-neutral-500">até 6×</span>
                   </label>
                 </fieldset>
-                <label className="mt-4 grid gap-1 text-sm font-semibold">
-                  Parcelas
-                  <select
-                    defaultValue="3"
-                    className="min-h-11 rounded-xl border border-neutral-300 bg-white px-3"
+                <p className="mt-3 text-xs leading-5 text-neutral-600">
+                  Para escolhas exclusivas, mantenha um grupo de rádios nativos com nome e
+                  descrição. Use <code>aria-pressed</code> em botões de alternância, não como
+                  substituto genérico para seleção de formulário.
+                </p>
+                <div className="mt-4">
+                  <span
+                    id="design-system-payment-installments"
+                    className="block text-sm font-semibold"
                   >
-                    <option value="1">À vista</option>
-                    <option value="3">3 × R$ 346,67</option>
-                    <option value="6">6 × R$ 173,33</option>
-                  </select>
-                </label>
+                    Parcelas
+                  </span>
+                  <InstallmentPicker
+                    labelledBy="design-system-payment-installments"
+                    value={previewInstallments}
+                    onChange={setPreviewInstallments}
+                    options={[
+                      { installments: 1, label: 'À vista · R$ 1.040,00' },
+                      { installments: 3, label: '3× de R$ 346,67' },
+                      { installments: 6, label: '6× de R$ 173,33' },
+                    ]}
+                  />
+                </div>
               </SpecimenCard>
               <SpecimenCard
                 title="Resumo, contrato e segurança"
@@ -2217,20 +2432,23 @@ export function DesignSystemPage({
                     </span>
                   </div>
                 </div>
-                <div className="mt-4 flex gap-2 overflow-x-auto border-b border-neutral-200 pb-2">
+                <nav
+                  aria-label="Seções do painel do anfitrião"
+                  className="mt-4 flex gap-2 overflow-x-auto border-b border-neutral-200 pb-2"
+                >
                   {['Visão geral', 'Propriedades', 'Reservas', 'Calendário', 'Contabilidade'].map(
-                    (tabName, index) => (
+                    (sectionName, index) => (
                       <button
-                        key={tabName}
+                        key={sectionName}
                         type="button"
-                        aria-pressed={index === 0}
+                        aria-current={index === 0 ? 'page' : undefined}
                         className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${index === 0 ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
                       >
-                        {tabName}
+                        {sectionName}
                       </button>
                     ),
                   )}
-                </div>
+                </nav>
               </SpecimenCard>
               <SpecimenCard
                 title="Tabela e filtro de propriedades"
@@ -2238,13 +2456,21 @@ export function DesignSystemPage({
               >
                 <label className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-neutral-50 p-3 text-sm">
                   <span className="font-semibold">Propriedade</span>
-                  <select
-                    defaultValue="all"
-                    className="min-h-10 rounded-lg border border-neutral-300 bg-white px-3"
-                  >
-                    <option value="all">Todas as propriedades</option>
-                    <option>Apartamento Lago Azul</option>
-                  </select>
+                  <span className="relative">
+                    <select
+                      defaultValue="all"
+                      aria-label="Filtrar por propriedade"
+                      className="min-h-10 appearance-none rounded-lg border border-neutral-300 bg-white py-2 pl-3 pr-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+                    >
+                      <option value="all">Todas as propriedades</option>
+                      <option>Apartamento Lago Azul</option>
+                    </select>
+                    <ChevronDown
+                      aria-hidden="true"
+                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
+                      size={16}
+                    />
+                  </span>
                 </label>
                 <div className="overflow-x-auto rounded-xl border border-neutral-200">
                   <table className="w-full min-w-[440px] border-collapse text-left text-sm">
@@ -2436,6 +2662,27 @@ export function DesignSystemPage({
                 <p className="mt-3 text-xs leading-5 text-neutral-500">
                   Diálogos verdadeiros também precisam controlar foco, retorno ao acionador, Escape
                   e interação com o fundo.
+                </p>
+              </SpecimenCard>
+              <SpecimenCard title="Confirmação consequencial" source="ConfirmationDialog">
+                <div className="rounded-3xl bg-neutral-800/90 p-4 sm:p-6">
+                  <div className="mx-auto max-w-lg rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl sm:p-6">
+                    <h3 className="text-lg font-extrabold text-neutral-950">
+                      Revogar link de visitante?
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-neutral-700">
+                      O link deixará de retomar o pedido como visitante. A reserva e o pagamento
+                      permanecem inalterados.
+                    </p>
+                    <div className="mt-6 flex flex-col-reverse justify-end gap-2 sm:flex-row">
+                      <Button variant="secondary">Cancelar</Button>
+                      <Button variant="danger">Revogar link</Button>
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-neutral-500">
+                  O consumidor fornece a consequência específica, bloqueia a repetição durante o
+                  envio e mantém o diálogo aberto se a ação falhar.
                 </p>
               </SpecimenCard>
               <SpecimenCard
@@ -2711,16 +2958,85 @@ export function DesignSystemPage({
                 <li>Confira teclado, foco visível, leitor de tela, zoom e conteúdo longo.</li>
                 <li>Compare touch e ponteiro; nenhuma ação depende só de hover ou tooltip.</li>
                 <li>Respeite movimento reduzido, alvos touch e reflow em telas estreitas.</li>
+                <li>
+                  Use estado vazio para ausência de conteúdo; loading e erro precisam de feedback
+                  próprio.
+                </li>
+                <li>
+                  Use radio para uma escolha exclusiva; tabs exigem painel associado e teclado de
+                  tabs.
+                </li>
+                <li>
+                  Áreas principais continuam navegação, com destino e estado atual identificáveis.
+                </li>
                 <li>Toast e tooltip neste catálogo são propostas, não componentes existentes.</li>
                 <li>Não chame uma amostra de validada sem conferir o consumidor no navegador.</li>
               </ul>
+            </div>
+            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+              <article className="rounded-2xl border border-neutral-200 bg-white p-5">
+                <h3 className="font-bold">Ciclo de vida e evidência</h3>
+                <p className="mt-2 text-sm leading-6 text-neutral-600">
+                  O status descreve o que foi verificado. Encontrar um padrão no código não prova
+                  que ele virou contrato compartilhado; implementar também não significa que todos
+                  os estados e consumidores foram validados.
+                </p>
+                <dl className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {[
+                    ['Observado', 'Encontrado em arquivo ou uso existente.'],
+                    ['Proposto', 'Recomendação que ainda aguarda decisão e adoção.'],
+                    [
+                      'Implementado',
+                      'Existe como código reutilizável; validação pode estar pendente.',
+                    ],
+                    [
+                      'Validado',
+                      'Estados e critérios nomeados foram conferidos, com ambiente e método.',
+                    ],
+                  ].map(([status, meaning]) => (
+                    <div key={status} className="rounded-xl bg-neutral-50 p-3">
+                      <dt className="text-xs font-bold text-neutral-900">{status}</dt>
+                      <dd className="mt-1 text-xs leading-5 text-neutral-600">{meaning}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </article>
+              <article className="rounded-2xl border border-neutral-200 bg-white p-5">
+                <h3 className="font-bold">Primitivas compartilhadas e consumidores</h3>
+                <ul className="mt-3 space-y-2 text-sm leading-6 text-neutral-600">
+                  <li>
+                    <code>Button</code>: catálogo, paginação, aviso de catálogo e viagens.
+                  </li>
+                  <li>
+                    <code>FormField</code>: conta/login e formulários de dados do hóspede no
+                    checkout.
+                  </li>
+                  <li>
+                    <code>InlineNotice</code>: catálogo e alertas de carregamento em painéis do
+                    proprietário/admin.
+                  </li>
+                  <li>
+                    <code>StatusBadge</code>: reservas do usuário e cartões/listas do painel do
+                    anfitrião.
+                  </li>
+                  <li>
+                    <code>EmptyState</code>: catálogo, viagens e painel do anfitrião.
+                  </li>
+                </ul>
+                <p className="mt-3 border-t border-neutral-100 pt-3 text-xs leading-5 text-neutral-500">
+                  Mapeamento conferido nos imports do frontend. A lista não representa adoção em
+                  toda a aplicação nem validação visual de cada consumidor.
+                </p>
+              </article>
             </div>
             <p className="mt-5 text-xs leading-5 text-neutral-500">
               Atualizado em 27/11/2026. Inventário do frontend React principal, construído a partir
               dos arquivos de <code>src/components</code>, folhas <code>src/index.css</code> e{' '}
               <code>public/brand-theme.css</code>. O blog Astro em <code>blog/</code> tem escopo
               visual próprio e não está incluído. Consulte{' '}
-              <code>docs/design-system-checklist.md</code> para pendências de consolidação.
+              <code>docs/design-system-deepening-checklist.md</code> para execução por painéis e
+              waves; o <code>docs/design-system-checklist.md</code> mantém o inventário geral e as
+              demais pendências.
             </p>
           </section>
           <footer className="mt-14 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 py-6 text-xs text-neutral-500">

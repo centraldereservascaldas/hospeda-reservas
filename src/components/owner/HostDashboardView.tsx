@@ -14,6 +14,8 @@ import {
 import { OwnerDashboardData } from '../../services/crcnBackendApi';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { getOwnerCalendarDaySegment } from '../../utils/ownerCalendar';
+import { EmptyState } from '../EmptyState';
+import { InlineNotice } from '../InlineNotice';
 import { StatusBadge, type StatusBadgeTone } from '../StatusBadge';
 import { OwnerAccountingTransactions } from './OwnerAccountingTransactions';
 
@@ -249,19 +251,18 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
       </nav>
 
       {error && (
-        <div
-          role="alert"
-          className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50/90 p-4 text-sm text-rose-900 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <span>{error}</span>
-          <button
-            type="button"
-            onClick={() => void loadDashboard()}
-            className="inline-flex items-center gap-2 self-start rounded-xl border border-rose-200 bg-white px-3 py-2 font-bold"
-          >
-            <RefreshCw className="h-4 w-4" /> Tentar novamente
-          </button>
-        </div>
+        <InlineNotice variant="error" role="alert" className="sm:items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => void loadDashboard()}
+              className="inline-flex min-h-10 items-center gap-2 self-start rounded-xl border border-rose-200 bg-white px-3 py-2 font-bold sm:self-auto"
+            >
+              <RefreshCw aria-hidden="true" className="h-4 w-4" /> Tentar novamente
+            </button>
+          </div>
+        </InlineNotice>
       )}
 
       {loading ? (
@@ -562,7 +563,12 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                   )}
                 </form>
                 {dashboard.properties.length === 0 && (
-                  <EmptyState message="Não há imóveis vinculados para bloquear datas." />
+                  <EmptyState
+                    headingLevel="h4"
+                    density="compact"
+                    title="Nenhum imóvel disponível"
+                    description="Não há imóveis vinculados para bloquear datas."
+                  />
                 )}
                 <ul
                   className="mb-3 flex flex-wrap gap-x-4 gap-y-2 text-xs font-semibold text-neutral-700"
@@ -705,7 +711,12 @@ const PropertyList: React.FC<{ rows: OwnerDashboardData['properties'] }> = ({ ro
       ))}
     </div>
   ) : (
-    <EmptyState message="Nenhuma propriedade foi retornada para este perfil neste período." />
+    <EmptyState
+      headingLevel="h4"
+      density="compact"
+      title="Nenhum imóvel neste período"
+      description="Nenhuma propriedade foi retornada para este perfil neste período."
+    />
   );
 
 const ReservationList: React.FC<{ rows: OwnerDashboardData['reservations'] }> = ({ rows }) =>
@@ -755,7 +766,12 @@ const ReservationList: React.FC<{ rows: OwnerDashboardData['reservations'] }> = 
       })}
     </div>
   ) : (
-    <EmptyState message="Nenhuma reserva foi retornada para este período." />
+    <EmptyState
+      headingLevel="h4"
+      density="compact"
+      title="Nenhuma reserva neste período"
+      description="Nenhuma reserva foi retornada para este período."
+    />
   );
 
 const AmountCard: React.FC<{
@@ -769,10 +785,4 @@ const AmountCard: React.FC<{
     <p className="text-xs font-semibold text-neutral-600">{label}</p>
     <p className="mt-1 text-lg font-black text-neutral-950">{value}</p>
   </div>
-);
-
-const EmptyState: React.FC<{ message: string }> = ({ message }) => (
-  <p className="rounded-2xl border border-dashed border-neutral-200 bg-white/50 p-5 text-center text-sm text-neutral-500">
-    {message}
-  </p>
 );

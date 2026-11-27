@@ -5,6 +5,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase, supabaseConfigured } from '../../services/supabase';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { useDialogFocus } from '../useDialogFocus';
+import { FormField } from '../FormField';
 
 interface GuestAccountModalProps {
   isOpen: boolean;
@@ -292,13 +293,12 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({
                 Digite sua nova senha para concluir a recuperação da conta.
               </p>
               {!recoveryComplete && (
-                <div>
-                  <label
-                    htmlFor="account-modal-password"
-                    className="mb-1.5 block text-sm font-semibold text-neutral-700"
-                  >
-                    Nova senha
-                  </label>
+                <FormField
+                  label="Nova senha"
+                  id="account-modal-password"
+                  required
+                  hint="Use pelo menos 8 caracteres."
+                >
                   <input
                     id="account-modal-password"
                     type="password"
@@ -307,10 +307,9 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({
                     minLength={8}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    className="w-full rounded-xl border border-white/90 bg-white/90 px-4 py-3 text-sm text-neutral-950 shadow-[inset_0_1px_3px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.05)] outline-none backdrop-blur-md transition placeholder:text-neutral-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/25"
+                    className="mt-1.5 w-full rounded-xl border border-white/90 bg-white/90 px-4 py-3 text-sm text-neutral-950 shadow-[inset_0_1px_3px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.05)] outline-none backdrop-blur-md transition placeholder:text-neutral-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/25"
                   />
-                  <p className="mt-1.5 text-xs text-neutral-500">Use pelo menos 8 caracteres.</p>
-                </div>
+                </FormField>
               )}
               {error && (
                 <p role="alert" className="text-sm font-semibold text-red-700">
@@ -420,13 +419,7 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({
               )}
               <form onSubmit={handleSubmit} className="space-y-4">
                 {mode === 'signup' && (
-                  <div>
-                    <label
-                      htmlFor="account-modal-name"
-                      className="mb-1.5 block text-sm font-semibold text-neutral-700"
-                    >
-                      Nome completo
-                    </label>
+                  <FormField label="Nome completo" id="account-modal-name" required>
                     <input
                       id="account-modal-name"
                       autoComplete="name"
@@ -434,17 +427,11 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({
                       minLength={3}
                       value={fullName}
                       onChange={(event) => setFullName(event.target.value)}
-                      className="w-full rounded-xl border border-white/90 bg-white/90 px-4 py-3 text-sm text-neutral-950 shadow-[inset_0_1px_3px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.05)] outline-none backdrop-blur-md transition placeholder:text-neutral-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/25"
+                      className="mt-1.5 w-full rounded-xl border border-white/90 bg-white/90 px-4 py-3 text-sm text-neutral-950 shadow-[inset_0_1px_3px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.05)] outline-none backdrop-blur-md transition placeholder:text-neutral-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/25"
                     />
-                  </div>
+                  </FormField>
                 )}
-                <div>
-                  <label
-                    htmlFor="account-modal-email"
-                    className="mb-1.5 block text-sm font-semibold text-neutral-700"
-                  >
-                    E-mail
-                  </label>
+                <FormField label="E-mail" id="account-modal-email" required>
                   <input
                     id="account-modal-email"
                     type="email"
@@ -452,17 +439,16 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({
                     required
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    className="w-full rounded-xl border border-white/90 bg-white/90 px-4 py-3 text-sm text-neutral-950 shadow-[inset_0_1px_3px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.05)] outline-none backdrop-blur-md transition placeholder:text-neutral-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/25"
+                    className="mt-1.5 w-full rounded-xl border border-white/90 bg-white/90 px-4 py-3 text-sm text-neutral-950 shadow-[inset_0_1px_3px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.05)] outline-none backdrop-blur-md transition placeholder:text-neutral-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/25"
                   />
-                </div>
+                </FormField>
                 {mode !== 'forgot' && (
-                  <div>
-                    <label
-                      htmlFor="account-modal-password"
-                      className="mb-1.5 block text-sm font-semibold text-neutral-700"
-                    >
-                      Senha
-                    </label>
+                  <FormField
+                    label="Senha"
+                    id="account-modal-password"
+                    required
+                    hint={mode === 'signup' ? 'Use pelo menos 8 caracteres.' : undefined}
+                  >
                     <input
                       id="account-modal-password"
                       type="password"
@@ -471,14 +457,9 @@ export const GuestAccountModal: React.FC<GuestAccountModalProps> = ({
                       minLength={mode === 'signup' ? 8 : 1}
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      className="w-full rounded-xl border border-white/90 bg-white/90 px-4 py-3 text-sm text-neutral-950 shadow-[inset_0_1px_3px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.05)] outline-none backdrop-blur-md transition placeholder:text-neutral-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/25"
+                      className="mt-1.5 w-full rounded-xl border border-white/90 bg-white/90 px-4 py-3 text-sm text-neutral-950 shadow-[inset_0_1px_3px_rgba(15,23,42,0.08),0_2px_8px_rgba(15,23,42,0.05)] outline-none backdrop-blur-md transition placeholder:text-neutral-500 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/25"
                     />
-                    {mode === 'signup' && (
-                      <p className="mt-1.5 text-xs text-neutral-500">
-                        Use pelo menos 8 caracteres.
-                      </p>
-                    )}
-                  </div>
+                  </FormField>
                 )}
                 {error && (
                   <p role="alert" className="text-sm font-semibold text-red-700">

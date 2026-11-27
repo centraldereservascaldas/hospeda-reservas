@@ -4,6 +4,8 @@
 
 Consolidar as decisões visuais e de interação já usadas pelo produto para que novas telas e ajustes evoluam com consistência. Este material é interno ao time do Hospeda Reservas e serve como fonte de referência para design e implementação; não é uma página pública nem uma proposta de rebranding.
 
+Para a execução profunda dos painéis do usuário, proprietário e administração, tokens, contratos de componentes e investigação do painel de afiliado, consulte o [checklist de aprofundamento do Design System](design-system-deepening-checklist.md). Ele complementa este inventário e não substitui as evidências específicas de cada wave.
+
 O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, tons quentes, superfícies claras e o tratamento glass já usado no produto — e reduz divergências conforme os componentes forem revisados. Exceções continuam possíveis quando necessárias ao contexto e documentadas.
 
 ## Skill e materiais locais
