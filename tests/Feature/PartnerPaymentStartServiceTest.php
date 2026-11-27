@@ -7,12 +7,40 @@ use App\Services\ImobSysSearchClient;
 use App\Services\PartnerPaymentStartService;
 use App\Services\Payments\CieloEcommerceClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Tests\TestCase;
 
 class PartnerPaymentStartServiceTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_gateway_observed_offer_never_starts_cielo_payment(): void
+    {
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'key', 'services.partner_api.search_fallback_enabled' => true]);
+        Http::preventStrayRequests();
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response(['success' => true, 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'observedAt' => now()->toIso8601String(), 'expiresAt' => now()->addMinute()->toIso8601String(), 'guestCountVerified' => false, 'offers' => [['id' => 'imobsys-crcn-2-663', 'capacity' => 5, 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'nights' => 2, 'totalCents' => 52300, 'currency' => 'BRL', 'status' => 'offer_observed', 'availabilityConfirmed' => false, 'additionalChargesKnown' => false, 'reservationGuaranteed' => false]], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false]])]);
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('C', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'quoted', 'merchant_order_id' => 'ORDERCONTRACT', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-contract', 'encrypted_customer' => ['fullName' => 'Teste']]);
+        $this->mock(CieloEcommerceClient::class)->shouldNotReceive('createPixPayment');
+        try {
+            app(PartnerPaymentStartService::class)->start($order->id);
+            $this->fail('Oferta observada não autoriza pagamento.');
+        } catch (RuntimeException) {
+            $this->assertSame('quote_unavailable', $order->fresh()->status);
+        }
+    }
+
+    public function test_explicitly_verified_gateway_quote_can_start_sandbox_payment(): void
+    {
+        config(['services.cielo.direct_environment' => 'sandbox', 'services.partner_checkout_sandbox.enabled' => true, 'services.partner_api.base_url' => 'https://api.example.test', 'services.partner_api.key' => 'key', 'services.partner_api.search_fallback_enabled' => true]);
+        Http::preventStrayRequests();
+        // This is a hypothetical contract fixture, not a claim that the supplier currently returns verified quotes.
+        Http::fake(['https://api.example.test/v1/offers*' => Http::response(['success' => true, 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'observedAt' => now()->toIso8601String(), 'expiresAt' => now()->addMinute()->toIso8601String(), 'guestCountVerified' => true, 'offers' => [['id' => 'imobsys-crcn-2-663', 'capacity' => 5, 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'nights' => 2, 'totalCents' => 52300, 'currency' => 'BRL', 'status' => 'offer_observed', 'availabilityConfirmed' => true, 'additionalChargesKnown' => true, 'reservationGuaranteed' => false]], 'pagination' => ['page' => 1, 'pageSize' => 50, 'hasMore' => false]])]);
+        $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('D', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'quoted', 'merchant_order_id' => 'ORDERCOMPLETE', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-complete', 'encrypted_customer' => ['fullName' => 'Teste', 'cpf' => '12345678901']]);
+        $this->mock(CieloEcommerceClient::class)->shouldReceive('createPixPayment')->once()->andReturn(['Payment' => ['PaymentId' => '11111111-1111-4111-8111-111111111111', 'Status' => 12, 'QrCodeString' => 'PIX-TESTE']]);
+        app(PartnerPaymentStartService::class)->start($order->id);
+        $this->assertSame('payment_pending', $order->fresh()->status);
+    }
 
     public function test_start_is_persisted_and_cannot_be_submitted_twice(): void
     {

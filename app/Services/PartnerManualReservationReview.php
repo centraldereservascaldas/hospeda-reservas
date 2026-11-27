@@ -22,11 +22,13 @@ class PartnerManualReservationReview
         }
         $supplier = $snapshot->supplier_operation_id ? $this->supplier->lookup($snapshot->supplier_operation_id) : $this->supplier->lookupByKey($snapshot->reservation_idempotency_key);
         $status = $supplier['partnerStatus'] ?? 'unknown';
+        $payable = $supplier['supplierPayableObservedCents'] ?? null;
         if (! in_array($supplier['state'] ?? null, ['created', 'unknown'], true) || ! in_array($status, ['unknown', 'confirmed'], true)
             || ($supplier['propertyId'] ?? null) !== $snapshot->supplier_property_id || ($supplier['from'] ?? null) !== $snapshot->check_in->format('Y-m-d')
             || ($supplier['to'] ?? null) !== $snapshot->check_out->format('Y-m-d') || ($supplier['guests'] ?? null) !== (int) $snapshot->guests
             || (isset($supplier['amountCents']) && $supplier['amountCents'] !== (int) $snapshot->base_cents)
             || ($supplier['reservationReference'] ?? null) !== ($observed['reference'] ?? null)
+            || ($payable !== null && (! is_int($payable) || $payable < 1 || ($snapshot->supplier_payable_observed_cents !== null && (int) $snapshot->supplier_payable_observed_cents !== $payable)))
             || ($supplier['propertyIdentityMatch'] ?? null) === false || ($supplier['stayDatesMatch'] ?? null) === false) {
             throw new RuntimeException('A operação do fornecedor precisa de conferência.');
         }
@@ -38,11 +40,11 @@ class PartnerManualReservationReview
         if ($status === 'confirmed' && (! is_string($supplier['partnerStatusObservedAt'] ?? null) || strtotime($supplier['partnerStatusObservedAt']) === false || abs(now()->timestamp - strtotime($supplier['partnerStatusObservedAt'])) >= 60)) {
             throw new RuntimeException('Situação do fornecedor inválida.');
         }
-        DB::transaction(function () use ($id, $operator, $observed, $snapshot): void {
+        DB::transaction(function () use ($id, $operator, $observed, $snapshot, $payable): void {
             $order = PartnerCheckoutOrder::query()->lockForUpdate()->findOrFail($id);
             $reference = $observed['reference'] ?? null;
             if ($order->status !== 'attention_required' || $order->attention_reason !== 'supplier_outcome_unknown' || ! $order->payment_id
-                || $order->payment_id !== $snapshot->payment_id || $order->reservation_idempotency_key !== $snapshot->reservation_idempotency_key || $order->supplier_operation_id !== $snapshot->supplier_operation_id
+                || $order->payment_id !== $snapshot->payment_id || $order->reservation_idempotency_key !== $snapshot->reservation_idempotency_key || $order->supplier_operation_id !== $snapshot->supplier_operation_id || $order->supplier_payable_observed_cents !== $snapshot->supplier_payable_observed_cents
                 || $order->supplier_property_id !== $snapshot->supplier_property_id || $order->check_in->format('Y-m-d') !== $snapshot->check_in->format('Y-m-d') || $order->check_out->format('Y-m-d') !== $snapshot->check_out->format('Y-m-d') || (int) $order->guests !== (int) $snapshot->guests || (int) $order->base_cents !== (int) $snapshot->base_cents
                 || ! is_string($reference) || ! preg_match('/\A[1-9]\d{0,11}\z/D', $reference)
                 || ($order->reservation_reference !== null && $order->reservation_reference !== $reference)
@@ -54,7 +56,7 @@ class PartnerManualReservationReview
                 || ($observed['confirmed'] ?? null) !== true) {
                 throw new RuntimeException('Dados da pré-reserva não conferem.');
             }
-            $order->update(['status' => 'awaiting_seller_payment', 'attention_reason' => null, 'reservation_reference' => $reference, 'supplier_reviewed_by' => trim($operator), 'supplier_reviewed_at' => now()]);
+            $order->update(['status' => 'awaiting_seller_payment', 'attention_reason' => null, 'reservation_reference' => $reference, 'supplier_payable_observed_cents' => $order->supplier_payable_observed_cents ?? $payable, 'supplier_reviewed_by' => trim($operator), 'supplier_reviewed_at' => now()]);
         });
     }
 }

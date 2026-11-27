@@ -122,7 +122,7 @@ class PartnerSandboxOperationsControllerTest extends TestCase
         $order = PartnerCheckoutOrder::create(['public_reference' => str_repeat('R', 40), 'supplier_property_id' => 'imobsys-crcn-2-663', 'check_in' => '2027-05-17', 'check_out' => '2027-05-19', 'guests' => 2, 'base_cents' => 52300, 'payment_cents' => 52300, 'currency' => 'BRL', 'status' => 'attention_required', 'attention_reason' => 'supplier_outcome_unknown', 'reservation_reference' => '1600', 'payment_id' => 'PAY1', 'merchant_order_id' => 'ORDERREVIEW', 'payment_method' => 'pix', 'reservation_idempotency_key' => 'partner-order-review', 'encrypted_customer' => ['fullName' => 'Teste']]);
         $url = '/api/owner/admin/partner-sandbox/orders/'.$order->id.'/supplier-review';
         $input = ['reference' => '1600', 'propertyId' => 'imobsys-crcn-2-663', 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'baseCents' => 52300, 'confirmed' => true];
-        $supplierResult = ['state' => 'unknown', 'partnerStatus' => 'unknown', 'propertyId' => 'imobsys-crcn-2-663', 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'reservationReference' => '1600'];
+        $supplierResult = ['state' => 'unknown', 'partnerStatus' => 'unknown', 'propertyId' => 'imobsys-crcn-2-663', 'from' => '2027-05-17', 'to' => '2027-05-19', 'guests' => 2, 'reservationReference' => '1600', 'supplierPayableObservedCents' => 41800];
         $unavailable = false;
         $changeDuringLookup = false;
         $this->mock(ImobSysPreReservationClient::class)->shouldReceive('lookupByKey')->zeroOrMoreTimes()->andReturnUsing(function () use (&$supplierResult, &$unavailable, &$changeDuringLookup, $order) {
@@ -145,7 +145,7 @@ class PartnerSandboxOperationsControllerTest extends TestCase
             $this->withToken('admin-token')->postJson($url, [...$input, ...$difference])->assertStatus(409);
             $this->assertSame('attention_required', $order->fresh()->status);
         }
-        foreach ([['partnerStatus' => 'cancelled'], ['state' => 'rejected'], ['propertyIdentityMatch' => false], ['stayDatesMatch' => false], ['reservationReference' => '1601'], ['propertyId' => 'imobsys-crcn-2-664'], ['amountCents' => 52301], ['propertyIdentityMatch' => true, 'propertyIdentityObservedAt' => '2020-01-01T00:00:00Z']] as $difference) {
+        foreach ([['partnerStatus' => 'cancelled'], ['state' => 'rejected'], ['propertyIdentityMatch' => false], ['stayDatesMatch' => false], ['reservationReference' => '1601'], ['propertyId' => 'imobsys-crcn-2-664'], ['amountCents' => 52301], ['supplierPayableObservedCents' => -1], ['propertyIdentityMatch' => true, 'propertyIdentityObservedAt' => '2020-01-01T00:00:00Z']] as $difference) {
             $original = $supplierResult;
             $supplierResult = [...$supplierResult, ...$difference];
             $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
@@ -167,7 +167,7 @@ class PartnerSandboxOperationsControllerTest extends TestCase
         $this->withToken('admin-token')->postJson($url, $input)->assertStatus(409);
         $this->withToken('admin-token')->getJson('/api/owner/admin/partner-sandbox/orders')->assertOk()->assertJsonPath('orders.0.id', $order->id)->assertJsonPath('orders.0.reservation_reference', '1600');
         $paymentUrl = '/api/owner/admin/partner-sandbox/orders/'.$order->id.'/manual-payment';
-        $order->update(['supplier_payable_observed_cents' => 41800]);
+        $this->assertSame(41800, (int) $order->fresh()->supplier_payable_observed_cents);
         $this->withToken('admin-token')->postJson($paymentUrl, ['amountCents' => 41800, 'reference' => 'MANUAL-TEST'])->assertOk();
         $this->assertSame('supplier_payment_recorded', $order->fresh()->status);
         $this->assertSame('admin@example.test', $order->fresh()->supplier_reviewed_by);
