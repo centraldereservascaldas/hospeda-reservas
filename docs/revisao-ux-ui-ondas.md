@@ -259,6 +259,8 @@ O destaque da parcela no catálogo e no cartão é intencional. O total parcelad
 
 **Impacto:** quem começa pelo teclado encontra um controle invisível em vez das ações de recuperação. **Ação:** escolher semântica compatível com a tela bloqueante, mover foco para a recuperação e impedir interação com o fundo enquanto estiver ativa; devolver foco ou navegar para um destino coerente. **Verificação:** percorrer Tab/Shift+Tab no carregamento e no erro, testar Escape e retorno, e confirmar isolamento do fundo com leitor de tela.
 
+**Implementação em revisão:** a recuperação agora é uma página própria enquanto o checkout é revalidado, sem renderizar catálogo, busca, cartões ou rodapé atrás dela. O título recebe foco inicial, e a mensagem de progresso/erro é anunciada como `status`. No erro, o primeiro Tab vai para “Tentar novamente”; o próximo controle é “Voltar”. Teste local da rota direta em 1440 × 900 e 375 × 812: foco inicial no título, conteúdo de catálogo ausente e sem rolagem horizontal/vertical excedente. Testes automatizados verificam a página, foco, ações e estado de carregamento. Leitor de tela não testado; Escape não se aplica porque esta tela é uma rota, não um diálogo. PR #84, base `codex/ux-search-flow`.
+
 ### F22 · P2 · Taxa local e formas de pagamento divergentes na descrição
 
 **Observado em produção:** a descrição do imóvel LI23J mencionava pulseira de R$ 10 por pessoa e apresentava formas de pagamento distintas em trechos diferentes: um incluía Pix, outro informava apenas cartão. O resumo do checkout mostrava R$ 231,00 sem linha separada para pulseira. Não foi confirmado se a taxa já estava incluída ou seria paga separadamente.
@@ -621,7 +623,7 @@ Em 26/11/2026, a conferência de rastreabilidade encontrou referências diretas 
 | Item | Evidência | Próximo passo de correção |
 | --- | --- | --- |
 | F01 · Calendário da busca | Reproduzido por teclado em produção. | Tornar dias navegáveis e testar seleção, meses e foco. |
-| F21 · Foco na recuperação | Reproduzido por teclado em produção. | Isolar o fundo e posicionar foco nas ações, coordenando com F23. |
+| F21 · Foco na recuperação | Reproduzido por teclado em produção; implementação e regressão local conferidas em desktop e mobile. | Em revisão no PR #84; leitor de tela não testado. |
 | F37 · Retorno do checkout direto | Reproduzido em produção. | Definir retorno ao imóvel com viagem preservada e testar histórico. |
 | F39 · Acompanhamento Pix | Reproduzido em teste local com consulta simulada. | Comunicar falha e recuperar consulta sem induzir novo pagamento. |
 | F41 · Tela vazia e 504 | Observados pontualmente em produção; causa desconhecida e resposta posterior bem-sucedida. | Investigar artefato, cache, deploy e origem antes de escolher a correção. |
@@ -650,7 +652,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 ### Onda 1 · Jornada bloqueada e integridade da busca
 
 - [ ] F01 implementado no desktop: dias disponíveis entram na ordem de Tab e setas movem o foco entre datas, incluindo virada de mês. Código inicial no commit `55bf827`; complemento de foco no commit `5771e0c`. Testes e navegador desktop passaram. Validação móvel, seleção por Enter e fechamento por Escape no calendário permanecem pendentes.
-- [ ] Corrigir foco e isolamento do fundo na tela de recuperação de checkout (F21).
+- [x] Separar recuperação do checkout da página de catálogo; focar o título e manter a navegação nas ações (F21). Teste automatizado e navegador local em 1440 × 900 e 375 × 812; leitor de tela não testado. PR #84.
 - [ ] Reproduzir F05 com bebês, crianças e pets; alinhar composição, URL e parâmetros de busca.
 - [ ] Alinhar os limites de pets da interface, URLs e validação de reserva após definir a regra de negócio (F28).
 - [ ] Identificar e comunicar preço expirado (F04), com atualização e estados de falha.
