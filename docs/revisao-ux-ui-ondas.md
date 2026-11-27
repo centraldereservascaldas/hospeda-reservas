@@ -561,6 +561,8 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 
 **Ação:** definir comportamento explícito para preço desconhecido em filtros, coerente com o rótulo e a ausência de cotação; não inventar preço nem ocultar essa limitação. **Verificação:** sem datas, preços desconhecidos e válidos com limites mínimo, máximo e ambos; com datas, cotação válida e expirada; conferir mensagens, contagem e retorno ao limpar filtros em interface e testes de domínio.
 
+**Implementação em revisão:** `codex/ux-f50-unknown-price`, commit `dfcbfbd`, PR #105 (empilhado sobre PR #83). Na busca sem datas, preço desconhecido não entra em uma faixa ativa; uma nota explica essa regra nos filtros ativos. Busca com datas mantém o comportamento anterior para cotações expiradas, coberto pelo teste existente. Testes de domínio e componente: 18/18 passaram; lint e build passaram. Prévia local com dados simulados confirmou que o imóvel com preço desconhecido sai dos resultados e o imóvel com diária conhecida de R$ 500 permanece sob teto de R$ 1.000, em 1280×800, 375×812 e 320×400 sem overflow horizontal. A nota pode exigir rolagem até os filtros ativos. A API Laravel local estava indisponível; a interface usou uma resposta simulada, sem chamada à Stays, reserva ou pagamento. PR aguarda revisão e checks remotos; não validado em produção.
+
 ### F51 · P1 · Política de privacidade proposta para o painel está indisponível
 
 **Confirmado em produção em 26/11/2026:** a rota pública `/privacidade` respondeu HTTP 404 e apresentou “Página indisponível”; a consulta a `/api/public/legal-pages/privacidade` também respondeu 404. O painel atual não oferece esse link, mas o usuário solicitou acesso à política no redesenho e o endereço havia sido proposto neste relatório. Não se conclui por essas respostas se há documento publicado em outro endereço, nem se a ausência é temporária ou intencional.
@@ -645,7 +647,7 @@ As prioridades indicam impacto potencial na tarefa, não frequência medida. F41
 
 | Sprint | Entrega verificável | Dependência principal |
 | --- | --- | --- |
-| 1 | Datas acessíveis, foco da recuperação, hóspedes consistentes, informação de cotação válida e recuperação de sugestões (F01, F04, F05, F16, F18, F19, F21, F28, F50) | Definir regra de contagem e apresentação da cotação expirada. |
+| 1 | Datas acessíveis, foco da recuperação, hóspedes consistentes, informação de cotação válida e recuperação de sugestões (F01, F04, F05, F16, F18, F19, F21, F28, F50) | Definir regra de contagem em Surpreenda-me (F05) e validar os fluxos restantes. |
 | 2 | Painéis não encobrem conteúdo nem sobrevivem a mudanças de contexto; transição de datas para hóspedes (F02, F03, F06, F07, F10, F17, F55) | Mapear foco, ancoragem, camadas e comportamento em rolagem antes de extrair código compartilhado. |
 | 3 | Imóvel e checkout preservam viagem, recuperam falhas e oferecem escolhas de medição claras (F09, F15, F20, F22–F27, F29–F37, F39–F47, F51) | Definir contrato de aceite, confirmar taxas locais, mapear destinos de medição e medir a jornada antes de alterar a arquitetura. |
 | 4 | Componentes, camadas e tokens extraídos conforme contratos comprovados | Inventariar repetição real e aproveitar o aprendizado das jornadas anteriores; executar gradualmente. |
@@ -663,8 +665,8 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [x] Separar recuperação do checkout da página de catálogo; focar o título e manter a navegação nas ações (F21). Teste automatizado e navegador local em 1440 × 900 e 375 × 812; leitor de tela não testado. PR #84.
 - [ ] Reproduzir F05 com bebês, crianças e pets; alinhar composição, URL e parâmetros de busca.
 - [ ] Alinhar os limites de pets da interface, URLs e validação de reserva após definir a regra de negócio (F28).
-- [ ] Identificar e comunicar preço expirado (F04), com atualização e estados de falha.
-- [ ] Definir e testar preço desconhecido no filtro de faixa e sua comunicação na lista (F50).
+- [x] Identificar e comunicar preço expirado (F04), com atualização e estados de falha. Implementação em PR #104, aguardando revisão; checks passaram. A API local estava indisponível e a interface foi validada com resposta simulada; sem validação produtiva.
+- [x] Definir e testar preço desconhecido no filtro de faixa e sua comunicação na lista (F50). Implementação em PR #105, aguardando revisão; testes, lint e build locais passaram; ver evidência e limites na seção F50.
 - [ ] Apresentar o ano de datas sazonais quando necessário (F16) e verificar expiração real antes de remover sugestões.
 - [ ] Tratar carregamento, falha repetida e recuperação no cartão de sugestão para pets (F18).
 - [ ] Revalidar sugestões ao retornar à aba após a expiração e encerrar corretamente consultas concluídas (F19).

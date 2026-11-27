@@ -48,7 +48,9 @@ export function filterPropertiesBySearchFilters(
       const hasSearchDates = Boolean(filters.checkIn && filters.checkOut);
       const confirmedNightlyPrice = hasSearchDates
         ? (getStoredPropertyQuote(property)?.dailyRate ?? null)
-        : property.pricePerNight;
+        : property.pricePerNight > 0
+          ? property.pricePerNight
+          : null;
       if (
         confirmedNightlyPrice === null ||
         confirmedNightlyPrice < filters.minPrice ||

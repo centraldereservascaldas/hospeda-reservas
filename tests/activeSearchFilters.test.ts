@@ -142,6 +142,24 @@ test('keeps active property filters compact on mobile while preserving full-size
   assert.ok(screen.getByRole('button', { name: 'Limpar filtros' }));
 });
 
+test('explains that no-date price filters exclude properties without a reported nightly rate', () => {
+  const defaultFilters = createDefaultSearchFilters();
+  render(
+    React.createElement(ActiveSearchFilters, {
+      filters: { ...defaultFilters, maxPrice: 1000 },
+      activeFilterCount: 1,
+      defaultFilters,
+      onChange: () => {},
+      onRemoveDestination: () => {},
+      onRemoveDates: () => {},
+      onRemoveGuests: () => {},
+      onClearFilters: () => {},
+    }),
+  );
+
+  assert.ok(screen.getByText('Imóveis sem diária informada não entram nesta faixa de preço.'));
+});
+
 test('shows removable date and guest chips even without property facets', () => {
   const defaultFilters = createDefaultSearchFilters();
   let dateRemovalCount = 0;
