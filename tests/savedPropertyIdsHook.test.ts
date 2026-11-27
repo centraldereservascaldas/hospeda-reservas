@@ -35,4 +35,13 @@ test('hydrates validated IDs and persists toggles', async () => {
 
   await act(async () => hook.result.current.toggleSavedProperty('JQ08G'));
   assert.deepEqual(hook.result.current.savedPropertyIds, ['custom-listing']);
+  assert.equal(localStorage.getItem('hospeda_wishlist'), '["custom-listing"]');
+
+  await act(async () => hook.result.current.toggleSavedProperty('custom-listing'));
+  assert.deepEqual(hook.result.current.savedPropertyIds, []);
+  assert.equal(localStorage.getItem('hospeda_wishlist'), '[]');
+
+  cleanup();
+  const reloadedHook = renderHook(() => useSavedPropertyIds());
+  assert.deepEqual(reloadedHook.result.current.savedPropertyIds, []);
 });
