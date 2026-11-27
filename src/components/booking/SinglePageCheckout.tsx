@@ -483,7 +483,9 @@ export function SinglePageCheckout({
                         : checkoutIssue && !pendingPix
                           ? 'Pagamento não iniciado'
                           : pendingPix
-                            ? 'Pague com Pix nesta página'
+                            ? statusUnavailable
+                              ? 'Não foi possível atualizar o Pix'
+                              : 'Pague com Pix nesta página'
                             : statusUnavailable
                               ? 'Estamos conferindo seu pedido'
                               : 'Acompanhando sua confirmação'}
@@ -496,7 +498,9 @@ export function SinglePageCheckout({
                       : checkoutIssue && !pendingPix
                         ? checkoutIssue
                         : pendingPix
-                          ? 'Escaneie o QR Code ou copie o código abaixo. A confirmação aparecerá aqui após a aprovação do pagamento.'
+                          ? statusUnavailable
+                            ? 'A consulta automática foi interrompida e não conseguimos atualizar o status agora. A última resposta informava pagamento pendente. Atualize a situação ou veja os detalhes do pedido antes de iniciar outro pagamento.'
+                            : 'Escaneie o QR Code ou copie o código abaixo. A confirmação aparecerá aqui após a aprovação do pagamento.'
                           : 'A reserva só estará confirmada após a verificação do pagamento e da hospedagem. Acompanhe aqui, sem repetir a compra.'}
                 </p>
                 {confirmed && result?.confirmation?.reservationCode && (

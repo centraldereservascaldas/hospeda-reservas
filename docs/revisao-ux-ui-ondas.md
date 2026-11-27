@@ -443,6 +443,8 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 
 **Ação:** comunicar indisponibilidade e última atualização confiável, oferecer nova consulta e avaliar retomada automática com limites e tratamento de credenciais, sem sugerir repetição do pagamento. **Verificação:** simular Pix pendente seguido de erro temporário, resposta não pronta, recuperação e confirmação; conferir anúncio acessível, ausência de duplicação de pagamento e consistência com a página de detalhes.
 
+**Implementação em revisão:** quando a consulta de pedido falha depois de um Pix pendente, a mensagem passa a dizer que a consulta automática foi interrompida, informa o último status recebido e direciona para atualização manual ou detalhes antes de iniciar outro pagamento. O QR/código existente e a ação “Atualizar situação” permanecem; o retry não inicia outro pagamento. O teste existente agora verifica a mensagem e confirma pelas chamadas simuladas que pedido e pagamento continuam únicos. Recuperação e confirmação permanecem exercitadas por respostas simuladas, sem transação real. PR #86, base `codex/ux-search-flow`.
+
 **Comparação com a retomada:** `CheckoutResumePage.tsx:335–377` também encerra o ciclo periódico quando `resumeCheckout` retorna estado diferente de `ready`. Para `unavailable`, porém, `:667–683` troca o conteúdo por um alerta explícito e oferece “Tentar novamente”; a tentativa é manual. `checkoutApi.ts:796–831` transforma falhas de rede e respostas inválidas em `unavailable`. Assim, a recuperação comunicada difere entre as duas telas, mas nenhuma das duas garante retomada automática após falha. Essa comparação é leitura de código e não verifica o comportamento do provedor em produção.
 
 ### F40 · P2 · Acesso ao pedido em outro navegador perde o contexto ao encaminhar para login
@@ -623,7 +625,7 @@ Em 26/11/2026, a conferência de rastreabilidade encontrou referências diretas 
 | F01 · Calendário da busca | Reproduzido por teclado em produção. | Tornar dias navegáveis e testar seleção, meses e foco. |
 | F21 · Foco na recuperação | Reproduzido por teclado em produção. | Isolar o fundo e posicionar foco nas ações, coordenando com F23. |
 | F37 · Retorno do checkout direto | Reproduzido em produção. | Definir retorno ao imóvel com viagem preservada e testar histórico. |
-| F39 · Acompanhamento Pix | Reproduzido em teste local com consulta simulada. | Comunicar falha e recuperar consulta sem induzir novo pagamento. |
+| F39 · Acompanhamento Pix | Reproduzido em teste local com consulta simulada; mensagem e retry seguro verificados por regressão automatizada. | Em revisão no PR #86; retomada automática e leitor de tela não testados. |
 | F41 · Tela vazia e 504 | Observados pontualmente em produção; causa desconhecida e resposta posterior bem-sucedida. | Investigar artefato, cache, deploy e origem antes de escolher a correção. |
 | F47 · Preferências e foco | Reproduzido em primeira visita isolada no checkout e no imóvel, e na reabertura sobre checkout. | Coordenar foco da camada de medição e validar teclado, retorno e tecnologia assistiva. |
 | F51 · Política de privacidade | Rota e API responderam 404 na amostra em produção. | Identificar documento correto e publicar destino acessível antes de vinculá-lo no painel. |
@@ -695,7 +697,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Alinhar mensagem e destino no retorno de checkout não recuperável, preservando o contexto quando possível (F20).
 - [ ] Corrigir retorno do checkout aberto diretamente e testar botão, Escape e histórico sem reabrir o diálogo (F37).
 - [ ] Corrigir sobreposição do indicador de seleção no método de pagamento em largura estreita (F46).
-- [ ] Sinalizar e recuperar interrupções no acompanhamento de pagamento pendente, sem induzir pagamento duplicado (F39).
+- [ ] Sinalizar quando o acompanhamento Pix automático for interrompido, informar o último status e oferecer consulta manual sem iniciar outro pagamento (F39). Teste simulado confirma falha, retry e chamada única de pagamento. PR #86; leitor de tela não testado.
 - [ ] Preservar o destino do pedido na passagem para autenticação e conferir alternativas seguras de recuperação entre dispositivos (F40).
 - [ ] Investigar falhas de asset e respostas 5xx observadas na rota de acompanhamento e validar publicação, cache e recuperação (F41).
 - [ ] Esclarecer taxa local e formas de pagamento nas regras e no checkout (F22).
