@@ -94,6 +94,12 @@ function setup(
   parkTicketsPreviewEnabled = false,
   checkoutPayment: CheckoutResumeResponse['payment'] = payment,
   withResumeRoute = false,
+  guestPrefill = {
+    fullName: 'Sandbox Guest',
+    email: 'guest@example.test',
+    phone: '11999999999',
+  },
+  isStandalonePage = false,
 ) {
   checkoutApi.getCheckoutTerms = async () => ({
     kind: 'ready',
@@ -115,14 +121,11 @@ function setup(
     },
   });
   const checkoutProps = {
-      bookingData,
-      guestPrefill: {
-        fullName: 'Sandbox Guest',
-        email: 'guest@example.test',
-        phone: '11999999999',
-      },
-      onClose() {},
-    };
+    bookingData,
+    guestPrefill,
+    onClose() {},
+    isStandalonePage,
+  };
   function RouteHarness() {
     const [path, setPath] = React.useState(window.location.pathname);
     React.useEffect(() => {
@@ -134,8 +137,36 @@ function setup(
       ? React.createElement(CheckoutResumePage, { reference })
       : React.createElement(SinglePageCheckout, checkoutProps);
   }
-  return render(withResumeRoute ? React.createElement(RouteHarness) : React.createElement(SinglePageCheckout, checkoutProps));
+  return render(
+    withResumeRoute
+      ? React.createElement(RouteHarness)
+      : React.createElement(SinglePageCheckout, checkoutProps),
+  );
 }
+
+test('standalone checkout focuses its heading and applies late account prefill without replacing edits', async () => {
+  const view = setup(false, payment, false, { fullName: '', email: '', phone: '' }, true);
+  await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Confirme e pague' })));
+  assert.equal(document.activeElement, view.getByRole('heading', { name: 'Confirme e pague' }));
+
+  fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Nome digitado' } });
+  view.rerender(
+    React.createElement(SinglePageCheckout, {
+      bookingData,
+      guestPrefill: {
+        fullName: 'Nome da conta',
+        email: 'conta@example.test',
+        phone: '11999999999',
+      },
+      onClose() {},
+      isStandalonePage: true,
+    }),
+  );
+
+  assert.equal((view.getByLabelText('Nome completo') as HTMLInputElement).value, 'Nome digitado');
+  assert.equal((view.getByLabelText('E-mail') as HTMLInputElement).value, 'conta@example.test');
+  assert.equal((view.getByLabelText('Telefone') as HTMLInputElement).value, '(11) 99999-9999');
+});
 
 async function fill(view: ReturnType<typeof setup>) {
   await waitFor(() =>
@@ -144,7 +175,9 @@ async function fill(view: ReturnType<typeof setup>) {
       false,
     ),
   );
-  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), { target: { value: '12345678909' } });
+  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), {
+    target: { value: '12345678909' },
+  });
   fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
   for (const [label, value] of [
     ['Número do cartão', '4111111111111111'],
@@ -250,20 +283,55 @@ test('a rejected new-reservation card payment navigates to the tracking page and
   let submissions = 0;
   checkoutApi.createCheckout = async () => {
     saveCheckoutResumeToken(reference, token, order.expiresAt!);
-    return { success: true, order, payment, idempotentReplay: false, resume: { reference, token, path: `/checkout/${reference}`, expiresAt: order.expiresAt! } };
+    return {
+      success: true,
+      order,
+      payment,
+      idempotentReplay: false,
+      resume: { reference, token, path: `/checkout/${reference}`, expiresAt: order.expiresAt! },
+    };
   };
-  checkoutApi.getCieloSopAccessToken = async () => ({ environment: 'sandbox', accessToken: 'sandbox-fixture' });
-  window.bpSop_silentOrderPost = (options) => options.onSuccess({ PaymentToken: '11111111-1111-4111-8111-111111111111' });
+  checkoutApi.getCieloSopAccessToken = async () => ({
+    environment: 'sandbox',
+    accessToken: 'sandbox-fixture',
+  });
+  window.bpSop_silentOrderPost = (options) =>
+    options.onSuccess({ PaymentToken: '11111111-1111-4111-8111-111111111111' });
   checkoutApi.createCheckoutPayment = async () => {
     submissions++;
-    return { kind: 'response', success: true, code: 'rejected', message: 'Não aprovado', replayed: false, payment: null };
+    return {
+      kind: 'response',
+      success: true,
+      code: 'rejected',
+      message: 'Não aprovado',
+      replayed: false,
+      payment: null,
+    };
   };
   checkoutApi.resumeCheckout = async () => ({
-    kind: 'ready', data: {
+    kind: 'ready',
+    data: {
       success: true,
-      order: { ...order, origin: 'website', status: 'pagamento_recusado', paymentStatus: 'rejected' },
+      order: {
+        ...order,
+        origin: 'website',
+        status: 'pagamento_recusado',
+        paymentStatus: 'rejected',
+      },
       confirmation: null,
-      payment: { ...payment, methods: ['pix', 'card'], attempt: { status: 'rejected', method: 'card', amount: '3192.24', currency: 'BRL', expiresAt: null, paidAt: null, pix: null } },
+      payment: {
+        ...payment,
+        methods: ['pix', 'card'],
+        attempt: {
+          status: 'rejected',
+          method: 'card',
+          amount: '3192.24',
+          currency: 'BRL',
+          expiresAt: null,
+          paidAt: null,
+          pix: null,
+        },
+      },
     },
   });
   const view = setup(false, payment, true);
@@ -359,7 +427,9 @@ test('reports Pix status lookup failure and allows a safe manual retry without a
     ),
   );
   fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
-  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), { target: { value: '12345678909' } });
+  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), {
+    target: { value: '12345678909' },
+  });
   fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), {
     target: { value: '12345678901' },
   });
@@ -420,7 +490,9 @@ test('Pix requires payer identity before reserving and an uncertain gateway resu
     ),
   );
   fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
-  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), { target: { value: '12345678909' } });
+  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), {
+    target: { value: '12345678909' },
+  });
   fireEvent.click(view.getByRole('checkbox', { name: /Li e aceito/ }));
   fireEvent.submit(view.container.querySelector('form')!);
   assert.equal(
@@ -481,7 +553,9 @@ test('a Stays reservation requiring review never presents tracking as a generate
     ),
   );
   fireEvent.click(view.getByRole('button', { name: 'Pix, aprovação rápida' }));
-  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), { target: { value: '12345678909' } });
+  fireEvent.change(view.getByLabelText(/CPF do responsável pela reserva/), {
+    target: { value: '12345678909' },
+  });
   fireEvent.change(view.getByLabelText(/CPF ou CNPJ de quem vai pagar o Pix/), {
     target: { value: '12345678901' },
   });

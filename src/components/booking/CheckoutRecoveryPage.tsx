@@ -11,7 +11,7 @@ export function CheckoutRecoveryPage({ status, onRetry, onBack }: CheckoutRecove
 
   useEffect(() => {
     headingRef.current?.focus();
-  }, []);
+  }, [status]);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-white px-6 py-12 text-neutral-900">
@@ -21,7 +21,7 @@ export function CheckoutRecoveryPage({ status, onRetry, onBack }: CheckoutRecove
           tabIndex={-1}
           className="text-2xl font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4"
         >
-          Recuperar checkout
+          {status === 'loading' ? 'Preparando checkout' : 'Recuperar checkout'}
         </h1>
         <p role="status" aria-live="polite" className="mt-4 text-neutral-700">
           {status === 'loading'

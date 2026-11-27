@@ -36,8 +36,8 @@ test('checkout recovery is a focused page without background content', () => {
   assert.equal(screen.getByRole('status').textContent?.startsWith('Não foi possível'), true);
 });
 
-test('checkout recovery loading state exposes back action and progress status', () => {
-  render(
+test('checkout loading state exposes progress and refocuses the page heading on retry failure', () => {
+  const view = render(
     React.createElement(CheckoutRecoveryPage, {
       status: 'loading',
       onRetry: () => {},
@@ -46,5 +46,18 @@ test('checkout recovery loading state exposes back action and progress status', 
   );
 
   assert.equal(screen.getAllByRole('button').length, 1);
+  assert.equal(
+    screen.getByRole('heading', { name: 'Preparando checkout' }).textContent,
+    'Preparando checkout',
+  );
   assert.equal(screen.getByRole('status').textContent, 'Conferindo disponibilidade e preço…');
+
+  view.rerender(
+    React.createElement(CheckoutRecoveryPage, {
+      status: 'error',
+      onRetry: () => {},
+      onBack: () => {},
+    }),
+  );
+  assert.equal(document.activeElement?.textContent, 'Recuperar checkout');
 });

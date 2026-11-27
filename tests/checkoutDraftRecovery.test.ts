@@ -18,11 +18,13 @@ Object.assign(globalThis, {
 const { cleanup, renderHook, waitFor } = await import('@testing-library/react');
 const { useCheckoutDraftRecovery } = await import('../src/hooks/useCheckoutDraftRecovery.ts');
 const originalProperty = crcnBackendApi.getAccommodationById;
+const originalCatalog = crcnBackendApi.getAccommodations;
 const originalCalendar = crcnBackendApi.getAccommodationCalendar;
 const originalPrice = crcnBackendApi.calculatePrice;
 afterEach(() => {
   cleanup();
   crcnBackendApi.getAccommodationById = originalProperty;
+  crcnBackendApi.getAccommodations = originalCatalog;
   crcnBackendApi.getAccommodationCalendar = originalCalendar;
   crcnBackendApi.calculatePrice = originalPrice;
   window.sessionStorage.clear();
@@ -68,12 +70,17 @@ test('reload revalidates calendar and price before restoring the checkout', asyn
     return quote;
   };
   let restored: unknown = null;
-  const properties = [property];
+  let propertyCalls = 0;
+  crcnBackendApi.getAccommodationById = async () => {
+    propertyCalls++;
+    return property;
+  };
   const setPayload = (payload: unknown) => {
     restored = payload;
   };
-  renderHook(() => useCheckoutDraftRecovery(properties, false, null, setPayload, 0));
+  renderHook(() => useCheckoutDraftRecovery(null, setPayload, 0));
   await waitFor(() => assert.ok(restored));
+  assert.equal(propertyCalls, 1);
   assert.equal(calendarCalls, 1);
   assert.equal(priceCalls, 1);
   assert.equal((restored as { totalAmount: number }).totalAmount, 200);
@@ -91,14 +98,12 @@ test('unavailable dates fail closed and do not restore checkout', async () => {
   );
   crcnBackendApi.getAccommodationCalendar = async () => [{ date: '2027-03-01', avail: 0 }];
   crcnBackendApi.calculatePrice = async () => quote;
+  crcnBackendApi.getAccommodationById = async () => property;
   let restored: unknown = null;
-  const properties = [property];
   const setPayload = (payload: unknown) => {
     restored = payload;
   };
-  const { result } = renderHook(() =>
-    useCheckoutDraftRecovery(properties, false, null, setPayload, 0),
-  );
+  const { result } = renderHook(() => useCheckoutDraftRecovery(null, setPayload, 0));
   await waitFor(() => assert.equal(result.current.status, 'error'));
   assert.equal(restored, null);
 });
@@ -121,11 +126,10 @@ test('fetches a property absent from the loaded catalog', async () => {
   crcnBackendApi.getAccommodationCalendar = async () => calendar;
   crcnBackendApi.calculatePrice = async () => quote;
   let restored: unknown = null;
-  const properties: (typeof property)[] = [];
   const setPayload = (payload: unknown) => {
     restored = payload;
   };
-  renderHook(() => useCheckoutDraftRecovery(properties, false, null, setPayload, 0));
+  renderHook(() => useCheckoutDraftRecovery(null, setPayload, 0));
   await waitFor(() => assert.ok(restored));
   assert.equal(requested, property.id);
 });
@@ -145,15 +149,42 @@ test('retry fetches the missing property again after a failed lookup', async () 
   crcnBackendApi.getAccommodationCalendar = async () => calendar;
   crcnBackendApi.calculatePrice = async () => quote;
   let restored: unknown = null;
-  const properties: (typeof property)[] = [];
   const setPayload = (payload: unknown) => {
     restored = payload;
   };
-  const { result } = renderHook(() =>
-    useCheckoutDraftRecovery(properties, false, null, setPayload, 0),
-  );
+  const { result } = renderHook(() => useCheckoutDraftRecovery(null, setPayload, 0));
   await waitFor(() => assert.equal(result.current.status, 'error'));
   result.current.retry();
   await waitFor(() => assert.ok(restored));
   assert.equal(calls, 2);
+});
+
+test('direct checkout starts property recovery without loading the catalog and accepts a trailing slash', async () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/checkout/?accommodation=${property.id}&checkin=2027-03-01&checkout=2027-03-03&adults=2`,
+  );
+  let propertyRequested = '';
+  let catalogCalls = 0;
+  crcnBackendApi.getAccommodationById = async (id) => {
+    propertyRequested = id;
+    return property;
+  };
+  crcnBackendApi.getAccommodations = async () => {
+    catalogCalls++;
+    throw new Error('O checkout direto não deve carregar o catálogo completo.');
+  };
+  crcnBackendApi.getAccommodationCalendar = async () => calendar;
+  crcnBackendApi.calculatePrice = async () => quote;
+  let restored: unknown = null;
+  const setPayload = (payload: unknown) => {
+    restored = payload;
+  };
+
+  const { result } = renderHook(() => useCheckoutDraftRecovery(null, setPayload, 0));
+  assert.equal(result.current.status, 'loading');
+  await waitFor(() => assert.ok(restored));
+  assert.equal(propertyRequested, property.id);
+  assert.equal(catalogCalls, 0);
 });
