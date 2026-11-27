@@ -17,6 +17,27 @@ const { render, fireEvent, cleanup } = await import('@testing-library/react');
 const { Header } = await import('../src/components/Header.tsx');
 const { readFileSync } = await import('node:fs');
 
+function renderHeader(overrides: Record<string, unknown> = {}) {
+  return render(
+    React.createElement(Header, {
+      onOpenSearch: () => {},
+      currentView: 'explore',
+      setCurrentView: () => {},
+      currency: 'BRL',
+      setCurrency: () => {},
+      tripsCount: 0,
+      isAccountConnected: false,
+      onOpenAccount: () => {},
+      onSignOut: async () => {},
+      ownerAccessStatus: 'none',
+      ownerRequestLoading: false,
+      onRequestOwnerAccess: async () => {},
+      isOwnerAdmin: false,
+      ...overrides,
+    }),
+  );
+}
+
 test('header compacts only on short mobile viewports while preserving its touch target sizing', () => {
   const { container } = render(
     React.createElement(Header, {
@@ -77,6 +98,100 @@ test('compact desktop search reserves space for the currency and account control
   assert.match(stylesheet, /--header-compact-search-width: 16rem/);
   assert.match(stylesheet, /--header-compact-search-width: 22rem/);
   assert.match(stylesheet, /calc\(100vw - var\(--header-edge-spacing\) \* 2 - 36rem\)/);
+});
+
+test('keyboard focus scrolls a clipped category fully into view', () => {
+  const { container } = renderHeader({
+    categories: [
+      { id: 'all', label: 'Todos os espaços', icon: 'Sparkles' },
+      { id: 'condos', label: 'Condomínios', icon: 'Building' },
+    ],
+    onSelectCategory: () => {},
+  });
+
+  const navigation = container.querySelector<HTMLElement>(
+    '[data-header-category-id]',
+  )?.parentElement;
+  const clippedCategory = container.querySelector<HTMLButtonElement>(
+    '[data-header-category-id="condos"]',
+  );
+  assert.ok(navigation);
+  assert.ok(clippedCategory);
+
+  navigation.scrollLeft = 0;
+  navigation.getBoundingClientRect = () =>
+    ({
+      left: 100,
+      right: 300,
+      top: 0,
+      bottom: 48,
+      width: 200,
+      height: 48,
+      x: 100,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  clippedCategory.getBoundingClientRect = () =>
+    ({
+      left: 290,
+      right: 410,
+      top: 0,
+      bottom: 48,
+      width: 120,
+      height: 48,
+      x: 290,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  fireEvent.focus(clippedCategory);
+
+  assert.equal(navigation.scrollLeft, 110);
+});
+
+test('keyboard focus does not move the category scroller when the category is visible', () => {
+  const { container } = renderHeader({
+    categories: [{ id: 'all', label: 'Todos os espaços', icon: 'Sparkles' }],
+    onSelectCategory: () => {},
+  });
+
+  const navigation = container.querySelector<HTMLElement>(
+    '[data-header-category-id]',
+  )?.parentElement;
+  const visibleCategory = container.querySelector<HTMLButtonElement>(
+    '[data-header-category-id="all"]',
+  );
+  assert.ok(navigation);
+  assert.ok(visibleCategory);
+  navigation.scrollLeft = 0;
+  navigation.getBoundingClientRect = () =>
+    ({
+      left: 100,
+      right: 300,
+      top: 0,
+      bottom: 48,
+      width: 200,
+      height: 48,
+      x: 100,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  visibleCategory.getBoundingClientRect = () =>
+    ({
+      left: 120,
+      right: 280,
+      top: 0,
+      bottom: 48,
+      width: 160,
+      height: 48,
+      x: 120,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+
+  fireEvent.focus(visibleCategory);
+
+  assert.equal(navigation.scrollLeft, 0);
 });
 
 test('mobile search prompt has a clear label and a minimal neutral search icon', () => {

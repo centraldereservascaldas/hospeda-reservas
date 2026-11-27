@@ -342,6 +342,18 @@ export const Header: React.FC<HeaderProps> = ({
                       type="button"
                       aria-pressed={selectedCategory === category.id}
                       onClick={() => onSelectCategory?.(category.id)}
+                      onFocus={(event) => {
+                        const navigation = categoryNavigationRef.current;
+                        if (!navigation) return;
+
+                        const buttonBounds = event.currentTarget.getBoundingClientRect();
+                        const navigationBounds = navigation.getBoundingClientRect();
+                        if (buttonBounds.left < navigationBounds.left) {
+                          navigation.scrollLeft -= navigationBounds.left - buttonBounds.left;
+                        } else if (buttonBounds.right > navigationBounds.right) {
+                          navigation.scrollLeft += buttonBounds.right - navigationBounds.right;
+                        }
+                      }}
                       className={`relative z-10 flex min-h-12 shrink-0 items-center gap-2 rounded-xl px-3 text-left text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-orange-600 ${selectedCategory === category.id ? 'text-orange-700' : 'text-neutral-600 hover:bg-white/70'}`}
                     >
                       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
