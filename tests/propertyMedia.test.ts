@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { STAYS_NET_APARTMENTS } from '../src/data/staysApartments.ts';
-import { isSafeMediaUrl, sanitizePropertyMedia } from '../src/utils/propertyMedia.ts';
+import { isImobSysPhotoUrl, isSafeMediaUrl, sanitizePropertyMedia } from '../src/utils/propertyMedia.ts';
+
+test('accepts partner images from the API binary cache with a content-hash URL', () => {
+  assert.equal(isImobSysPhotoUrl(`https://api-do-diogo.caldasindica.com/v1/media/${'a'.repeat(64)}.webp`), true);
+  assert.equal(isImobSysPhotoUrl('https://api-do-diogo.caldasindica.com/v1/media/not-a-hash.webp'), false);
+  assert.equal(isImobSysPhotoUrl('https://api-do-diogo.caldasindica.com/v1/media/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.svg'), false);
+  assert.equal(isImobSysPhotoUrl('https://evil.example/v1/media/'.concat('a'.repeat(64), '.jpg')), false);
+});
 
 test('accepts only absolute HTTP(S) media URLs without embedded credentials', () => {
   assert.equal(isSafeMediaUrl('https://cdn.stays.net/property.jpg'), true);

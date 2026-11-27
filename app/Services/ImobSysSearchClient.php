@@ -398,9 +398,14 @@ class ImobSysSearchClient
 
             $url = parse_url($image);
 
-            return ($url['scheme'] ?? null) === 'https'
-                && ($url['host'] ?? null) === 'reservascrcn.com.br'
-                && preg_match('~^/fotos/[^/]+/imoveis/[^/]+/fotos/~', $url['path'] ?? '') === 1;
+            if (($url['scheme'] ?? null) !== 'https') {
+                return false;
+            }
+
+            return (($url['host'] ?? null) === 'reservascrcn.com.br'
+                    && preg_match('~^/fotos/[^/]+/imoveis/[^/]+/fotos/~', $url['path'] ?? '') === 1)
+                || (($url['host'] ?? null) === 'api-do-diogo.caldasindica.com'
+                    && preg_match('~^/v1/media/[a-f0-9]{64}\.(?:jpg|png|webp)$~', $url['path'] ?? '') === 1);
         }));
     }
 }

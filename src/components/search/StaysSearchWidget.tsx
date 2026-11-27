@@ -15,6 +15,7 @@ import { SearchFilters } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { countOccupancyGuests } from '../../utils/guestCounts';
 import { emitFunnelEvent } from '../../utils/measurementEvents';
+import { formatCondominiumName } from '../../utils/condominiumCatalog';
 import { CalendarMonthGrid } from './CalendarMonthGrid';
 import { GuestCounterList, type GuestCounts } from './GuestCounterList';
 
@@ -1170,7 +1171,8 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       persons: guests ? countOccupancyGuests(guests) : personCount,
       guests,
       destination: surpriseMe ? '' : selectedResort,
-      propertyId: surpriseMe || selectedResortId.startsWith('imobsys-condo-') ? '' : selectedResortId,
+      propertyId:
+        surpriseMe || selectedResortId.startsWith('imobsys-condo-') ? '' : selectedResortId,
       surpriseMe,
     });
   };
@@ -1179,7 +1181,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     { value: '', label: 'Todos os condomínios' },
     ...resorts.map((resort) => ({
       value: resort.id,
-      label: resort.name.replace(/^CRCN\s*[-–]\s*/i, ''),
+      label: formatCondominiumName(resort.name),
     })),
   ];
   const guestOptions = [

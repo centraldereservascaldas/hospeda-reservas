@@ -19,10 +19,12 @@ export function isImobSysPhotoUrl(value: string): boolean {
     const url = new URL(value);
     return (
       url.protocol === 'https:' &&
-      url.hostname === 'reservascrcn.com.br' &&
       !url.username &&
       !url.password &&
-      /^\/fotos\/[^/]+\/imoveis\/[^/]+\/fotos\/[^/]+\.(?:jpe?g|png|webp)$/i.test(url.pathname)
+      ((url.hostname === 'reservascrcn.com.br' &&
+        /^\/fotos\/[^/]+\/imoveis\/[^/]+\/fotos\/[^/]+\.(?:jpe?g|png|webp)$/i.test(url.pathname)) ||
+        (url.hostname === 'api-do-diogo.caldasindica.com' &&
+          /^\/v1\/media\/[a-f0-9]{64}\.(?:jpg|png|webp)$/i.test(url.pathname)))
     );
   } catch {
     return false;

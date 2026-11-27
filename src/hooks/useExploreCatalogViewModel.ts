@@ -15,6 +15,7 @@ interface UseExploreCatalogViewModelOptions {
   catalogLoading: boolean;
   catalogLoadError: boolean;
   hasMoreSearchResults?: boolean;
+  partnerResorts?: Array<{ id: string; name: string }>;
 }
 
 export function useExploreCatalogViewModel({
@@ -24,6 +25,7 @@ export function useExploreCatalogViewModel({
   catalogLoading,
   catalogLoadError,
   hasMoreSearchResults = false,
+  partnerResorts = [],
 }: UseExploreCatalogViewModelOptions) {
   const filteredProperties = useMemo(
     () => filterPropertiesBySearchFilters(properties, filters),
@@ -44,8 +46,9 @@ export function useExploreCatalogViewModel({
   );
   const isCondominiumView = filters.category === 'condominiums';
   const condominiums = useMemo(
-    () => buildCondominiumCatalog(isCondominiumView ? filteredProperties : properties),
-    [filteredProperties, isCondominiumView, properties],
+    () =>
+      buildCondominiumCatalog(isCondominiumView ? filteredProperties : properties, partnerResorts),
+    [filteredProperties, isCondominiumView, partnerResorts, properties],
   );
   const catalogStatus: 'loading' | 'error' | 'stale' | 'ready' = catalogLoading
     ? properties.length === 0

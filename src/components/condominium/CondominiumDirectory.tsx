@@ -196,8 +196,9 @@ export const CondominiumDirectory: React.FC<CondominiumDirectoryProps> = ({
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full border border-orange-200/80 bg-orange-50/80 px-2.5 py-1 text-[11px] font-bold text-orange-800">
-                    {condominium.accommodationCount}{' '}
-                    {condominium.accommodationCount === 1 ? 'acomodação' : 'acomodações'}
+                    {condominium.source === 'imobsys'
+                      ? 'Rede parceira'
+                      : `${condominium.accommodationCount} ${condominium.accommodationCount === 1 ? 'acomodação' : 'acomodações'}`}
                   </span>
                 </div>
                 <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-neutral-700">
@@ -208,7 +209,9 @@ export const CondominiumDirectory: React.FC<CondominiumDirectoryProps> = ({
                     href={condominium.pageUrl}
                     className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-center text-sm font-bold text-orange-800 transition hover:border-orange-300 hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
                   >
-                    Ver condomínio e acomodações
+                    {condominium.source === 'imobsys'
+                      ? 'Consultar opções'
+                      : 'Ver condomínio e acomodações'}
                   </a>
                 ) : (
                   <button

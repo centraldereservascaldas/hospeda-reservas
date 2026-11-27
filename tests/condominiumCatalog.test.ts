@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Property } from '../src/types';
-import { buildCondominiumCatalog } from '../src/utils/condominiumCatalog';
+import { buildCondominiumCatalog, formatCondominiumName } from '../src/utils/condominiumCatalog';
 
 const listing = (overrides: Partial<Property> = {}) =>
   ({
@@ -71,4 +71,24 @@ test('uses the canonical condominium path and rejects external URLs', () => {
     '/condominios/jardim-das-aguas',
   );
   assert.equal(catalog.find(({ id }) => id === 'property-2')?.pageUrl, '/condominios/property-2');
+});
+
+test('formats uppercase partner condominium names for display and appends partner entries', () => {
+  assert.equal(formatCondominiumName('AGUAS DA FONTE'), 'Aguas da Fonte');
+  assert.equal(formatCondominiumName('LACQUA DIROMA'), 'Lacqua diRoma');
+  assert.equal(formatCondominiumName('ATRIUM THERMAS II'), 'Atrium Thermas II');
+  assert.equal(formatCondominiumName('Aguas da Fonte'), 'Aguas da Fonte');
+
+  const catalog = buildCondominiumCatalog(
+    [],
+    [
+      { id: 'imobsys-condo-1', name: 'AGUAS DA FONTE' },
+      { id: 'stays-1', name: 'CONDOMÍNIO NÃO PARCEIRO' },
+    ],
+  );
+  assert.equal(catalog.length, 1);
+  assert.equal(catalog[0].name, 'Aguas da Fonte');
+  assert.equal(catalog[0].source, 'imobsys');
+  assert.equal(catalog[0].accommodationCount, 0);
+  assert.match(catalog[0].pageUrl || '', /query=AGUAS%20DA%20FONTE/);
 });

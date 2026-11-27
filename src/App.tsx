@@ -54,6 +54,7 @@ import { NotFoundPage } from './components/NotFoundPage';
 import { isNewCheckoutPath, NEW_CHECKOUT_PATH } from './utils/checkoutDraft';
 import { CheckoutRecoveryPage } from './components/booking/CheckoutRecoveryPage';
 import { useCheckoutDraftRecovery } from './hooks/useCheckoutDraftRecovery';
+import { crcnBackendApi } from './services/crcnBackendApi';
 
 const CheckoutResumePage = lazy(() =>
   import('./components/booking/CheckoutResumePage').then(({ CheckoutResumePage }) => ({
@@ -268,6 +269,17 @@ function MarketplaceApp() {
       : initialFilters;
   });
   const defaultFilters = createDefaultSearchFilters();
+  const [partnerResorts, setPartnerResorts] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    if (filters.category !== 'condominiums') return;
+    let isCurrent = true;
+    void crcnBackendApi.getResorts().then((resorts) => {
+      if (isCurrent) setPartnerResorts(resorts);
+    });
+    return () => {
+      isCurrent = false;
+    };
+  }, [filters.category]);
   useSearchUrlSync(filters);
   useEffect(() => {
     const restoreFiltersFromLocation = () => {
@@ -332,6 +344,7 @@ function MarketplaceApp() {
     catalogLoading,
     catalogLoadError,
     hasMoreSearchResults: searchPagination.hasMore,
+    partnerResorts,
   });
 
   const handleRemoveDestinationFilter = () => {

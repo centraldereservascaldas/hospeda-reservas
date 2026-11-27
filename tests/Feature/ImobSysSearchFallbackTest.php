@@ -590,6 +590,7 @@ class ImobSysSearchFallbackTest extends TestCase
                     'description' => 'QUARTO: cama de casal',
                     'images' => [
                         'https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png',
+                        'https://api-do-diogo.caldasindica.com/v1/media/'.str_repeat('a', 64).'.webp',
                         'https://evil.example/fotos/tt/imoveis/086-10189/fotos/fake.png',
                         'https://reservascrcn.com.br/fotos/crcn/condominios/086/fotos/pool.png',
                     ],
@@ -609,8 +610,9 @@ class ImobSysSearchFallbackTest extends TestCase
             ->assertJsonPath('source', 'imobsys-live')
             ->assertJsonPath('data.propertyId', 'imobsys-crcn-2-663')
             ->assertJsonPath('data.description', 'QUARTO: cama de casal')
-            ->assertJsonCount(1, 'data.images')
-            ->assertJsonPath('data.images.0', 'https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png');
+            ->assertJsonCount(2, 'data.images')
+            ->assertJsonPath('data.images.0', 'https://reservascrcn.com.br/fotos/tt/imoveis/086-10189/fotos/unit.png')
+            ->assertJsonPath('data.images.1', 'https://api-do-diogo.caldasindica.com/v1/media/'.str_repeat('a', 64).'.webp');
 
         Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/v1/properties/imobsys-crcn-2-663')
             && $request->hasHeader('Authorization', 'Bearer test-api-key'));
