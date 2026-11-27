@@ -525,6 +525,8 @@ Definir unidade de contagem, janela temporal, responsáveis, destino de cada eve
 
 **Causa compatível no código local:** `MeasurementPreferences.tsx:52–64` tenta focar o título fora do checkout, enquanto `useDialogFocus.ts:94–96` redireciona foco externo ao diálogo ativo. O painel de medição não é identificado como portal pertencente a esse diálogo. Não se comprova por essa leitura a versão do código implantado. **Ação:** coordenar a camada ativa e seu foco com o checkout, preservando escolhas e retorno ao elemento adequado. **Verificação:** primeira visita e reabertura sobre checkout e outros diálogos, Tab/Shift+Tab, ativação das três opções planejadas, retorno de foco, rolagem e tecnologia assistiva; verificar que não haja consentimento implícito ou alteração de escolhas ao fechar.
 
+**Implementação em revisão:** o painel fixo agora é marcado como portal de foco, então o gerenciamento existente de checkout e detalhe o reconhece dentro da camada ativa; o painel de preferências embutido em páginas legais fica fora desse contrato. Testes verificam a marcação condicional e a navegação por teclado do mecanismo de portais já usado pelos diálogos. Não foi adicionada persistência nem mudança nas escolhas. Testes combinados de navegador, Escape/fechamento e leitor de tela ainda pendentes. PR #87, base `codex/ux-search-flow`.
+
 ### F48 · P2 · Detalhes do condomínio não oferecem caminho direto às acomodações
 
 **Observado em produção em 26/11/2026:** no diretório `/condominios`, abrir “Ver detalhes de Aquarius Flat” mostrou fotos e descrição em um diálogo, mas não apresentou ação para ver as acomodações associadas. O cartão de origem oferece o link “Ver condomínio e acomodações”, que fica atrás do diálogo; a pessoa precisa fechá-lo e escolher esse outro controle. Não foi medido se usuários encontram esse caminho ou se isso afeta conversão.
@@ -625,7 +627,7 @@ Em 26/11/2026, a conferência de rastreabilidade encontrou referências diretas 
 | F37 · Retorno do checkout direto | Reproduzido em produção. | Definir retorno ao imóvel com viagem preservada e testar histórico. |
 | F39 · Acompanhamento Pix | Reproduzido em teste local com consulta simulada. | Comunicar falha e recuperar consulta sem induzir novo pagamento. |
 | F41 · Tela vazia e 504 | Observados pontualmente em produção; causa desconhecida e resposta posterior bem-sucedida. | Investigar artefato, cache, deploy e origem antes de escolher a correção. |
-| F47 · Preferências e foco | Reproduzido em primeira visita isolada no checkout e no imóvel, e na reabertura sobre checkout. | Coordenar foco da camada de medição e validar teclado, retorno e tecnologia assistiva. |
+| F47 · Preferências e foco | Reproduzido em primeira visita isolada no checkout e no imóvel, e na reabertura sobre checkout; marcação de portal e contrato de navegação por teclado verificados em testes. | Em revisão no PR #87; fluxo combinado e leitor de tela pendentes. |
 | F51 · Política de privacidade | Rota e API responderam 404 na amostra em produção. | Identificar documento correto e publicar destino acessível antes de vinculá-lo no painel. |
 | F55 · Foco nos painéis da busca | Abertura por Enter e percurso de 100 Tabs não alcançaram os controles dos três painéis nas amostras em produção. | Garantir foco inicial e navegação coerente, testando abertura, troca e saída de cada painel. |
 
@@ -709,7 +711,7 @@ A ordem das sprints é uma proposta, não uma dependência rígida entre todas a
 - [ ] Preservar explicações de erros 422 e associar validações aos campos ou à etapa de correção (F30).
 - [ ] Redesenhar preferências de medição com recusa, personalização, aceite direto, link de privacidade e reabertura, validando responsividade, foco e escolhas (F31).
 - [ ] Identificar e disponibilizar a política de privacidade correta antes de incluí-la no painel (F51).
-- [ ] Corrigir o conflito de foco entre preferências, checkout e detalhe do imóvel; testar primeira visita e reabertura (F47).
+- [ ] Marcar as preferências fixas como portal de foco do diálogo ativo, sem aplicar isso ao texto embutido nas páginas legais (F47). Testes do contrato de portal e da marcação condicional passaram; fluxo combinado no navegador, Escape/fechamento e leitor de tela pendentes. PR #87.
 - [ ] Auditar destinos e eventos por categoria de consentimento e definir métricas de interação sem coletar dados indevidos (F32).
 - [ ] Alinhar evento de busca entre barra e modal, distinguindo envio, limpeza e restauração sem duplicidade (F42).
 - [ ] Definir e validar métricas distintas de clique, carregamento e retomada do checkout (F43).
