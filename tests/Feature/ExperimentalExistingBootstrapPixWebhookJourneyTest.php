@@ -21,6 +21,12 @@ class ExperimentalExistingBootstrapPixWebhookJourneyTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->useLegacyExistingReservationFixtures();
+    }
+
     public function test_bootstrap_pix_and_webhook_update_same_reservation_in_simulated_integrations(): void
     {
         $reservationId = str_repeat('c', 24);

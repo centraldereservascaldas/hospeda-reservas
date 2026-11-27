@@ -17,6 +17,12 @@ class ExistingCheckoutRecoveryRetentionTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->useLegacyExistingReservationFixtures();
+    }
+
     public function test_pruned_signed_credential_allows_restart_but_old_unsigned_time_credentials_fail_closed(): void
     {
         $this->withoutMiddleware(ThrottleRequests::class);

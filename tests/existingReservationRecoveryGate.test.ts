@@ -63,7 +63,7 @@ test('recovery gates checkout while pending and after an uncertain response, wit
     return new Response('{}', { status: 503 });
   };
   try {
-    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K' }));
+    const view = render(React.createElement(ExistingReservationCheckout, { code: 'ZY92K', accessToken: 'test-access-token' }));
     await waitFor(() => assert.ok(resolveRecovery));
     assert.match(view.container.textContent ?? '', /verificando se já existe/i);
     assert.equal(view.queryByText(/Dados do titular da reserva/i), null);

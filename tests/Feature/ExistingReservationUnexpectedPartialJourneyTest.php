@@ -22,6 +22,7 @@ class ExistingReservationUnexpectedPartialJourneyTest extends TestCase
         $this->assertSame('sqlite', DB::connection()->getDriverName());
         $this->assertSame(':memory:', config('database.connections.sqlite.database'));
         $this->artisan('migrate');
+        $this->useLegacyExistingReservationFixtures();
     }
 
     public function test_arbitrary_partial_payment_after_deposit_is_rejected(): void

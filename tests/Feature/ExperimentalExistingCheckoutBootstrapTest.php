@@ -19,6 +19,12 @@ class ExperimentalExistingCheckoutBootstrapTest extends TestCase
 
     private bool $stripMarker = false;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->useLegacyExistingReservationFixtures();
+    }
+
     public function test_unrecorded_balance_exposes_checkout_without_writing_before_capture(): void
     {
         $this->configure();

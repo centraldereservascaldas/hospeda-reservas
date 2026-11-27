@@ -225,6 +225,26 @@ class BookingApiTest extends TestCase
         $this->postJson('/api/sofia/chat', ['message' => 'Quero apartamentos para 4 pessoas com piscina'])->assertOk()->assertJsonPath('assistant', 'catalog')->assertJsonPath('totalFound', 19)->assertJsonCount(4, 'matchedProperties');
     }
 
+    public function test_sofia_rejects_histories_longer_than_the_processed_limit(): void
+    {
+        $history = array_fill(0, 11, ['role' => 'user', 'content' => 'Mensagem anterior']);
+
+        $this->postJson('/api/sofia/chat', ['message' => 'Olá', 'history' => $history])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('history');
+    }
+
+    public function test_sofia_chat_is_rate_limited_before_processing_each_request(): void
+    {
+        $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.21']);
+
+        for ($index = 0; $index < 20; $index++) {
+            $this->postJson('/api/sofia/chat', ['message' => str_repeat('x', 1501)])->assertUnprocessable();
+        }
+
+        $this->postJson('/api/sofia/chat', ['message' => 'Olá'])->assertTooManyRequests();
+    }
+
     public function test_checkout_returns_422_for_guest_request_without_an_idempotency_key(): void
     {
         Http::preventStrayRequests();

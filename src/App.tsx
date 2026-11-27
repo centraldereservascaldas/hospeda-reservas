@@ -145,6 +145,19 @@ function MarketplaceApp() {
     initialHash: window.location.hash,
     initialAuthCallbackError,
   });
+
+  useEffect(() => {
+    if (!accountSession?.user.email_confirmed_at) return;
+    const returnUrl = new URLSearchParams(window.location.search).get('retorno');
+    if (!returnUrl) return;
+
+    try {
+      const target = new URL(returnUrl, window.location.origin);
+      if (target.origin === window.location.origin) window.location.assign(target.toString());
+    } catch {
+      return;
+    }
+  }, [accountSession]);
   const {
     reservations,
     reservationsError,

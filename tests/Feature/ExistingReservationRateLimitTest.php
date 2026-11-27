@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ExistingReservationRateLimitTest extends TestCase
@@ -15,6 +16,15 @@ class ExistingReservationRateLimitTest extends TestCase
         parent::setUp();
         Cache::flush();
         config(['direct-booking.existing_reservation_checkout_enabled' => false]);
+        config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key']);
+        Http::fake(['*/auth/v1/user' => Http::response([
+            'id' => '575c8054-6646-443c-bf62-07945019a32f',
+            'email' => 'guest@example.test',
+            'email_confirmed_at' => '2026-01-01T00:00:00Z',
+            'user_metadata' => ['full_name' => 'Guest Example'],
+        ], 200)]);
+        $this->withToken('valid-access-token');
+        $this->useLegacyExistingReservationFixtures();
     }
 
     public function test_a_checkout_journey_has_separate_budgets_for_each_endpoint(): void

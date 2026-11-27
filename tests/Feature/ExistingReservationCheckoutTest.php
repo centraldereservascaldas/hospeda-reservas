@@ -29,6 +29,15 @@ class ExistingReservationCheckoutTest extends TestCase
     {
         parent::setUp();
         $this->travelTo(Carbon::parse('2026-11-03 12:00:00'));
+        config(['services.supabase.url' => 'https://auth.example.test', 'services.supabase.anon_key' => 'public-key']);
+        Http::fake(['*/auth/v1/user' => Http::response([
+            'id' => '575c8054-6646-443c-bf62-07945019a32f',
+            'email' => 'guest@example.test',
+            'email_confirmed_at' => '2026-01-01T00:00:00Z',
+            'user_metadata' => ['full_name' => 'Guest Example'],
+        ], 200)]);
+        $this->withToken('valid-access-token');
+        $this->useLegacyExistingReservationFixtures();
     }
 
     public function test_summary_is_not_accessible_or_looked_up_when_feature_is_disabled(): void

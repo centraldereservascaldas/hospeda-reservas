@@ -24,6 +24,7 @@ class ExistingReservationBootstrapDepositJourneyTest extends TestCase
         $this->assertSame('sqlite', DB::connection()->getDriverName());
         $this->assertSame(':memory:', config('database.connections.sqlite.database'));
         $this->artisan('migrate');
+        $this->useLegacyExistingReservationFixtures();
     }
 
     public function test_bootstrap_deposit_then_remaining_balance_are_settled_sequentially(): void

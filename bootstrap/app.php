@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\RedirectCanonicalHost;
+use App\Http\Middleware\RequireExistingReservationOwner;
 use App\Http\Middleware\RequireOwnerAdmin;
 use App\Http\Middleware\VerifySupabaseGuest;
 use Illuminate\Foundation\Application;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(RedirectCanonicalHost::class);
         $middleware->alias([
             'supabase.guest' => VerifySupabaseGuest::class,
+            'existing-reservation.owner' => RequireExistingReservationOwner::class,
             'owner.admin' => RequireOwnerAdmin::class,
         ]);
     })

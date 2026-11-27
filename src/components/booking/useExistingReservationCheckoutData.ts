@@ -13,6 +13,7 @@ export type ExistingReservationCheckoutDataState = 'loading' | 'ready' | 'error'
 interface UseExistingReservationCheckoutDataOptions {
   code: string;
   refreshKey: number;
+  accessToken: string | null;
 }
 
 interface ExistingReservationCheckoutData {
@@ -30,6 +31,7 @@ interface ExistingReservationCheckoutData {
 export function useExistingReservationCheckoutData({
   code,
   refreshKey,
+  accessToken,
 }: UseExistingReservationCheckoutDataOptions): ExistingReservationCheckoutData {
   const [summary, setSummary] = useState<ReservationSummary | null>(null);
   const [completed, setCompleted] = useState(false);
@@ -41,11 +43,16 @@ export function useExistingReservationCheckoutData({
 
   useEffect(() => {
     const controller = new AbortController();
+    if (!accessToken) {
+      setState('error');
+      return () => controller.abort();
+    }
     setState('loading');
     setCompleted(false);
     void apiFetch(`/api/existing-reservations/${encodeURIComponent(code)}/checkout-summary`, {
       signal: controller.signal,
       cache: 'no-store',
+      headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then(async (response) =>
         response.ok
@@ -88,7 +95,7 @@ export function useExistingReservationCheckoutData({
         if (!controller.signal.aborted) setState('error');
       });
     return () => controller.abort();
-  }, [code, refreshKey]);
+  }, [accessToken, code, refreshKey]);
 
   useEffect(() => {
     const controller = new AbortController();

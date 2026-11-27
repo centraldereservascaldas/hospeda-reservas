@@ -37,6 +37,8 @@ class AppServiceProvider extends ServiceProvider
             );
         }
 
+        RateLimiter::for('sofia-chat', fn (Request $request): Limit => Limit::perMinutes(10, 20)->by('sofia-chat:ip:'.(string) $request->ip()));
+
         RateLimiter::for('checkout-resume', function (Request $request): array {
             $ip = (string) $request->ip();
             $reference = (string) $request->route('publicReference');
