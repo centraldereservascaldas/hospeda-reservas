@@ -675,7 +675,8 @@ export function CieloSopCardForm({
               />
             ) : (
               <p className="text-sm font-normal text-neutral-600">
-                Cartão indisponível para este valor. Escolha Pix ou fale com o atendimento.
+                Cartão indisponível para este valor (parcela mínima no cartão: R$ 5,00). Escolha
+                Pix ou fale com o atendimento.
               </p>
             )}
             {selectedPricing && (

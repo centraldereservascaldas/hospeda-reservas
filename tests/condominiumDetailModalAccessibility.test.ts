@@ -60,8 +60,8 @@ test('condominium gallery supports directional touch swipes and keeps pinch zoom
   assert.equal(touchSurface.style.touchAction, 'pan-x pan-y pinch-zoom');
   assert.equal(gallery.querySelector('[aria-live="polite"]')?.getAttribute('aria-atomic'), 'true');
   assert.match(getByRole('button', { name: 'Fechar galeria' }).className, /h-11 w-11/);
-  assert.match(getByRole('button', { name: 'Foto anterior' }).className, /h-11 w-11/);
-  assert.match(getByRole('button', { name: 'Próxima foto' }).className, /h-11 w-11/);
+  assert.match(getByRole('button', { name: 'Foto anterior' }).className, /(?:h-11 w-11|size-11)/);
+  assert.match(getByRole('button', { name: 'Próxima foto' }).className, /(?:h-11 w-11|size-11)/);
 
   fireEvent.touchStart(touchSurface, {
     touches: [{ identifier: 1, clientX: 240, clientY: 140 }],

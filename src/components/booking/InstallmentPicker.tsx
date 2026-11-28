@@ -112,6 +112,7 @@ export function InstallmentPicker({
         type="button"
         className="flex min-h-12 w-full items-center justify-between gap-3 rounded-control border border-control-border bg-control-surface px-4 text-left text-base font-semibold text-control-foreground shadow-sm transition hover:border-control-border-hover focus-visible:border-focus-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         disabled={disabled}
+        aria-label={labelledBy ? undefined : 'Parcelamento'}
         aria-labelledby={labelledBy ? `${labelledBy} ${selectedLabelId}` : undefined}
         aria-haspopup="listbox"
         aria-expanded={menuOpen}

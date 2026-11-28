@@ -861,6 +861,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
         confirmLabel="Confirmar cancelamento"
         pendingLabel="Enviando pedido…"
         cancelLabel="Manter viagem"
+        cancelButtonClassName="min-h-11"
         confirmVariant="primary"
         size="medium"
         isPending={isSubmittingCancellation}

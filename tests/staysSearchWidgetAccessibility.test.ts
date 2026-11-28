@@ -434,7 +434,7 @@ test('searchable guest and resort menus keep their list within short landscape s
 
     fireEvent.click(resortTrigger);
     const menu = getByRole('dialog', { name: 'Escolher condomínio' });
-    const listbox = getByRole('listbox', { name: 'Opções disponíveis' });
+    const listbox = getByRole('listbox', { name: /Buscar condomínio/ });
 
     await waitFor(() => assert.equal(menu.style.height, '296px'));
     assert.match(listbox.className, /overflow-y-auto/);

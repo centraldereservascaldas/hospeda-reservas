@@ -706,7 +706,7 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
             <div
               id={listboxId}
               role="listbox"
-              aria-label={searchable ? undefined : 'Opções disponíveis'}
+              aria-label="Opções disponíveis"
               aria-labelledby={searchable ? searchInputId : undefined}
               className="overflow-y-auto overscroll-contain"
               style={{ maxHeight: Math.max(0, position.maxHeight - (searchable ? 68 : 16)) }}

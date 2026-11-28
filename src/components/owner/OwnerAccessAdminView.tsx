@@ -1234,7 +1234,7 @@ const OwnerRequestCard: React.FC<{
               <label
                 key={owner.id}
                 htmlFor={`stays-owner-match-${request.userId}-${owner.id}`}
-                className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-orange-600 ${selectedOwnerId === owner.id ? 'bg-orange-50 ring-1 ring-orange-300' : 'hover:bg-neutral-50'}`}
+                className={`flex min-h-11 w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-orange-600 ${selectedOwnerId === owner.id ? 'bg-orange-50 ring-1 ring-orange-300' : 'hover:bg-neutral-50'}`}
               >
                 <RadioInput
                   id={`stays-owner-match-${request.userId}-${owner.id}`}
@@ -1242,7 +1242,7 @@ const OwnerRequestCard: React.FC<{
                   value={owner.id}
                   checked={selectedOwnerId === owner.id}
                   onChange={() => setSelectedOwnerId(owner.id)}
-                  aria-label={`${owner.name}, ID ${owner.id}`}
+                  className="h-5 w-5 shrink-0 accent-orange-600"
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-neutral-800">

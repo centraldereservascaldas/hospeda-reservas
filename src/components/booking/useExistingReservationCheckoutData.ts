@@ -78,11 +78,11 @@ export function useExistingReservationCheckoutData({
         setCompleted(false);
         setCompletedSummary(null);
         setSummary(data.reservation);
-        const initialPlan = data.reservation.paymentMethods.length > 0 ? 'full' : 'deposit';
-        const initialMethods =
-          initialPlan === 'full'
-            ? data.reservation.paymentMethods
-            : (data.reservation.paymentPlans?.deposit.methods ?? []);
+        const fullMethods = data.reservation.paymentMethods;
+        const depositMethods = data.reservation.paymentPlans?.deposit.methods ?? [];
+        const initialPlan =
+          fullMethods.length > 0 ? 'full' : depositMethods.length > 0 ? 'deposit' : 'full';
+        const initialMethods = initialPlan === 'full' ? fullMethods : depositMethods;
         setPlan(initialPlan);
         setMethod(initialMethods.includes('pix') ? 'pix' : 'card');
         window.history.replaceState(

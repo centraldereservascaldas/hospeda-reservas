@@ -76,7 +76,7 @@ test('a R$ 2 booking clearly disables card while normal amounts offer installmen
     }),
   );
   assert.match(view.getByText(/parcela mínima no cartão/).textContent ?? '', /R\$ 5,00/);
-  assert.equal((view.getByLabelText(/Parcelamento/) as HTMLSelectElement).disabled, true);
+  assert.equal(view.queryByRole('button', { name: /Parcelamento/ }), null);
   assert.equal(
     (view.getByRole('button', { name: /Pagar com cartão/ }) as HTMLButtonElement).disabled,
     true,
@@ -92,11 +92,11 @@ test('a R$ 2 booking clearly disables card while normal amounts offer installmen
       },
     }),
   );
-  const select = view.getByLabelText(/Parcelamento/) as HTMLSelectElement;
+  const select = view.getByRole('button', { name: /Parcelamento/ }) as HTMLButtonElement;
   assert.equal(select.disabled, false);
-  assert.equal(select.options.length, 6);
-  fireEvent.change(select, { target: { value: '6' } });
-  assert.equal(select.value, '6');
+  fireEvent.click(select);
+  fireEvent.click(view.getByRole('option', { name: /^6x/ }));
+  assert.match(select.textContent ?? '', /^6x/);
   fireEvent.change(view.getByLabelText('Validade (MM/AA)'), { target: { value: '1230' } });
   assert.equal((view.getByLabelText('Validade (MM/AA)') as HTMLInputElement).value, '12/30');
   fireEvent.change(view.getByLabelText('CPF ou CNPJ do titular'), {
@@ -209,7 +209,8 @@ test('Cielo tokenization sends only the temporary token and cardholder data to t
     fireEvent.change(getByLabelText('CPF ou CNPJ do titular'), {
       target: { value: '123.456.789-01' },
     });
-    fireEvent.change(getByLabelText(/^Parcelamento/), { target: { value: '6' } });
+    fireEvent.click(getByRole('button', { name: /^Parcelamento/ }));
+    fireEvent.click(getByRole('option', { name: /^6x/ }));
     submitCardForm(container.querySelector('form')!);
 
     assert.equal(capturedSop.options?.environment, 'sandbox');

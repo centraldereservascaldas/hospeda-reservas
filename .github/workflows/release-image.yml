@@ -372,6 +372,13 @@ jobs:
             --header "Authorization: Bearer $COOLIFY_TOKEN" \
             "$application_url/envs")
 
+          runtime_env_enabled() {
+            local key="$1"
+            jq --exit-status --arg key "$key" \
+              'any(.[]; .key == $key and .is_preview == false and ((.value | tostring | ascii_downcase) == "true"))' \
+              <<< "$application_envs" >/dev/null
+          }
+
           upsert_runtime_env() {
             local key="$1" value="$2" method payload
             if jq --exit-status --arg key "$key" \
@@ -394,8 +401,10 @@ jobs:
               --output /dev/null
           }
 
-          upsert_runtime_env STAYS_HOSTED_CHECKOUT_ENABLED false
-          upsert_runtime_env STAYS_HOSTED_CHECKOUT_ALLOWED_HOSTS 'www.centraldereservascaldas.com.br,centraldereservascaldas.com.br'
+          upsert_runtime_env DIRECT_BOOKING_EXISTING_RESERVATION_CHECKOUT_ENABLED true
+          upsert_runtime_env DIRECT_BOOKING_EXPERIMENTAL_EXISTING_LEDGER_AUDIT_ENABLED true
+          upsert_runtime_env DIRECT_BOOKING_EXPERIMENTAL_EXISTING_CYCLE_SETTLEMENT_ENABLED true
+          upsert_runtime_env DIRECT_BOOKING_EXPERIMENTAL_EXISTING_DEPOSIT_ENABLED true
           upsert_runtime_env PARK_TICKETS_PREVIEW_ENABLED false
 
           curl --fail-with-body --silent --show-error \
@@ -474,20 +483,24 @@ jobs:
             health=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/health" || true)
             stays=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/stays/status" || true)
             checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/stays-checkout/readiness" || true)
-            direct_checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/checkout/readiness/LG02J" || true)
+            direct_checkout=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/existing-reservations/RO21J/checkout-summary" || true)
 
             direct_checkout_matches_expected=false
             if [ "$DIRECT_CHECKOUT_EXPECTED_ENABLED" = 'true' ]; then
-              if jq --exit-status '.ready == true and .checkoutEnabled == true and .singlePageCheckoutEnabled == true and .payment.enabled == true and (.payment.methods | index("card")) != null and (.payment.methods | index("pix")) != null' <<< "$direct_checkout" >/dev/null 2>&1; then
+              if jq --exit-status '.success == true and .reservation.status == "reserved" and .reservation.paymentEnabled == true and ((.reservation.paymentPlans.full.methods | index("pix")) != null or (.reservation.paymentPlans.deposit.methods | index("pix")) != null)' <<< "$direct_checkout" >/dev/null 2>&1; then
                 direct_checkout_matches_expected=true
               fi
-            elif jq --exit-status '.success == true and .ready == false and .checkoutEnabled == false and .singlePageCheckoutEnabled == false and .payment.enabled == false' <<< "$direct_checkout" >/dev/null 2>&1; then
+            elif jq --exit-status '.success == false and .message == "Reserva não encontrada."' <<< "$direct_checkout" >/dev/null 2>&1; then
               direct_checkout_matches_expected=true
             fi
 
             if jq --exit-status '.success == true' <<< "$health" >/dev/null 2>&1 \
               && jq --exit-status '.connected == true and .hasCredentials == true and .environment == "production"' <<< "$stays" >/dev/null 2>&1 \
               && jq --exit-status '.ready == false and .code == "checkout_disabled"' <<< "$checkout" >/dev/null 2>&1 \
+              && runtime_env_enabled DIRECT_BOOKING_EXISTING_RESERVATION_CHECKOUT_ENABLED \
+              && runtime_env_enabled DIRECT_BOOKING_EXPERIMENTAL_EXISTING_LEDGER_AUDIT_ENABLED \
+              && runtime_env_enabled DIRECT_BOOKING_EXPERIMENTAL_EXISTING_CYCLE_SETTLEMENT_ENABLED \
+              && runtime_env_enabled DIRECT_BOOKING_EXPERIMENTAL_EXISTING_DEPOSIT_ENABLED \
               && [ "$direct_checkout_matches_expected" = true ]; then
               curl --fail --silent --show-error --max-time 15 \
                 --dump-header /tmp/hospeda-public-headers.txt \

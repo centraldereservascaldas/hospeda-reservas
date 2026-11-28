@@ -1424,6 +1424,7 @@ test('a server-authorized deposit shows Pix and requires a valid reservation hol
       }),
     );
     await waitFor(() => assert.ok(view.getByText('Entrada de 50%')));
+    assert.equal((view.getByRole('radio', { name: /Entrada de 50%/i }) as HTMLInputElement).checked, true);
     assert.equal(view.queryByLabelText(/Cartão em/), null);
     assert.ok(view.getByText(/saldo restante.*até um dia antes do check-in/i));
     const cpf = view.getByLabelText('CPF do titular da reserva') as HTMLInputElement;

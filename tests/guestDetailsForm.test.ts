@@ -36,11 +36,13 @@ test('guest form sends to the reservation with its credential and shows success 
         credentials: { type: 'resume-token', resumeToken: token },
       }),
     );
-    fireEvent.change(view.getByLabelText('Nome completo'), { target: { value: 'Pessoa Teste' } });
+    fireEvent.change(view.getByLabelText(/Nome completo/, { selector: 'input' }), {
+      target: { value: 'Pessoa Teste' },
+    });
     fireEvent.change(view.getByLabelText(/CPF ou outro documento/), {
       target: { value: '12345678909' },
     });
-    fireEvent.change(view.getByLabelText('Telefone'), { target: { value: '11999999999' } });
+    fireEvent.change(view.getByLabelText(/Telefone/, { selector: 'input' }), { target: { value: '11999999999' } });
     fireEvent.click(view.getByRole('button', { name: 'Enviar dados dos hóspedes' }));
     await waitFor(() => assert.ok(view.getByText('Dados registrados na reserva.')));
     assert.equal(call?.url, `/api/checkout/${reference}/guests`);

@@ -44,26 +44,26 @@ test('listing form exposes a named modal and touch-sized inputs, photo choices, 
   assert.ok(screen.getByRole('button', { name: 'Fechar formulário de anúncio' }));
 
   const controls = [
-    screen.getByLabelText('Título atrativo do anúncio *'),
+    screen.getByLabelText(/Título atrativo do anúncio/),
     screen.getByLabelText('Categoria'),
-    screen.getByLabelText('Cidade'),
-    screen.getByLabelText('Estado'),
-    screen.getByLabelText('Preço por noite (BRL)'),
-    screen.getByLabelText('Taxa de limpeza (BRL)'),
+    screen.getByLabelText(/Cidade/, { selector: 'input' }),
+    screen.getByLabelText(/Estado/, { selector: 'input' }),
+    screen.getByLabelText(/Preço por noite \(BRL\)/),
+    screen.getByLabelText(/Taxa de limpeza \(BRL\)/),
     screen.getByLabelText(/QUARTOS/i),
     screen.getByLabelText(/CAMAS/i),
     screen.getByLabelText(/BANHOS/i),
     screen.getByLabelText(/HÓSPEDES/i),
-    screen.getByLabelText('URL da foto principal personalizada'),
+    screen.getByLabelText(/URL da foto principal/),
     screen.getByLabelText('Descrição do espaço'),
   ];
   for (const control of controls) {
-    assert.match(control.className, /min-h-11/);
+    assert.match(control.className, /min-h-(?:11|control-comfortable)/);
   }
 
-  const photoButtons = screen.getAllByRole('button', { name: /^Selecionar foto:/ });
+  const photoButtons = screen.getAllByRole('radio', { name: /como foto principal/ });
   assert.equal(photoButtons.length, 5);
-  assert.ok(photoButtons.every((button) => button.className.includes('min-h-11')));
+  assert.ok(photoButtons.every((button) => button.parentElement?.className.includes('min-h-11')));
   assert.ok(screen.getByRole('button', { name: 'Cancelar' }));
   assert.ok(screen.getByRole('button', { name: 'Publicar Anúncio' }));
 });
