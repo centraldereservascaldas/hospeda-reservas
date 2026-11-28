@@ -62,7 +62,7 @@ test('bloqueio fecha o menu aberto e impede alterar a parcela', () => {
     },
   };
   const view = render(React.createElement(InstallmentPicker, props));
-  const trigger = view.getByRole('button', { name: '1x de R$ 100,00' });
+  const trigger = view.getByRole('button', { name: 'Parcelamento 1x de R$ 100,00' });
   fireEvent.click(trigger);
   const option = view.getByRole('option', { name: '2x de R$ 55,00' });
 
