@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\DirectBookingOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RecoverExistingReservationCheckoutRequest;
 use App\Http\Requests\StoreExistingReservationCheckoutRequest;
 use App\Http\Resources\DirectBookingOrderResource;
+use App\Models\DirectBookingOrder;
 use App\Services\ExistingCheckoutRecoveryCredential;
 use App\Services\ExistingReservationBalance;
 use App\Services\ExistingReservationBootstrapOrigin;
@@ -16,11 +18,13 @@ use App\Services\ExistingReservationLedgerAudit;
 use App\Services\ExistingReservationPaymentChannels;
 use App\Services\ExistingReservationPaymentPlanPolicy;
 use App\Services\ExistingReservationPropertySummary;
+use App\Services\ExperimentalExistingCycleSettlement;
 use App\Services\MoneyAmount;
 use App\Services\Payments\CieloDirectConfiguration;
 use App\Services\Payments\DirectCheckoutPaymentService;
 use App\Services\StaysExternalApiClient;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 
 class ExistingReservationCheckoutController extends Controller
 {
@@ -68,7 +72,29 @@ class ExistingReservationCheckoutController extends Controller
         if (! is_array($reservation)) {
             return response()->json(['success' => false, 'message' => 'Não foi possível consultar esta reserva agora.'], 503, $headers);
         }
-        if (($reservation['id'] ?? null) !== $code || ! in_array($reservation['type'] ?? null, ['reserved', 'booked'], true)) {
+        if (($reservation['id'] ?? null) !== $code) {
+            return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404, $headers);
+        }
+        if (($reservation['type'] ?? null) !== 'reserved') {
+            if (($reservation['type'] ?? null) === 'booked') {
+                $price = $reservation['price'] ?? null;
+                $reservationTotal = is_array($price) && ($price['currency'] ?? null) === 'BRL'
+                    ? MoneyAmount::toCents($price['_f_total'] ?? null)
+                    : null;
+                $reportedPaid = $balance->reportedPaid($reservation);
+                if (is_int($reservationTotal) && $reservationTotal > 0
+                    && ($reportedPaid['present'] ?? false) === true
+                    && is_int($reportedPaid['cents'] ?? null)
+                    && $reportedPaid['cents'] >= $reservationTotal) {
+                    return response()->json([
+                        'success' => true,
+                        'reservation' => ['code' => $code, 'state' => 'completed'],
+                    ], 200, $headers);
+                }
+
+                return $this->settledCheckoutSummary($code, $reservation, $stays, $headers);
+            }
+
             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404, $headers);
         }
         $price = $reservation['price'] ?? null;
@@ -76,14 +102,6 @@ class ExistingReservationCheckoutController extends Controller
             ? MoneyAmount::toCents($price['_f_total'] ?? null)
             : null;
         $reportedPaid = $balance->reportedPaid($reservation);
-        if (($reservation['type'] ?? null) === 'booked' && is_int($reservationTotal) && $reservationTotal > 0
-            && ($reportedPaid['present'] ?? false) === true && is_int($reportedPaid['cents'] ?? null)
-            && $reportedPaid['cents'] >= $reservationTotal) {
-            return response()->json([
-                'success' => true,
-                'reservation' => ['code' => $code, 'state' => 'completed'],
-            ], 200, $headers);
-        }
         if (($reservation['type'] ?? null) === 'reserved' && is_int($reservationTotal) && $reservationTotal > 0
             && ($reportedPaid['present'] ?? false) === true && is_int($reportedPaid['cents'] ?? null)
             && $reportedPaid['cents'] >= $reservationTotal) {
@@ -146,7 +164,6 @@ class ExistingReservationCheckoutController extends Controller
                 'status' => $reservation['type'],
                 'listingId' => is_string($listingId) ? $listingId : null,
                 'property' => is_array($property) ? ($property['title'] ?? null) : null,
-                'partnerCode' => is_string($reservation['partner']['name'] ?? null) && mb_strtolower(trim($reservation['partner']['name'])) === 'api booking.com' && is_string($reservation['partnerCode'] ?? null) ? mb_substr($reservation['partnerCode'], 0, 100) : null,
                 'propertyDetails' => is_array($property) ? array_intersect_key($property, array_flip(['images', 'description', 'condoTitle', 'condoDescription', 'condoImages'])) : null,
                 'image' => is_array($property) ? ($property['images'][0] ?? null) : null,
                 'checkIn' => $reservation['checkInDate'] ?? null,
@@ -169,6 +186,51 @@ class ExistingReservationCheckoutController extends Controller
                 'cardInstallments' => $available['card_installments'],
             ],
         ], 200, $headers);
+    }
+
+    /** @param array<string, mixed> $reservation
+     * @param  array<string, string>  $headers
+     */
+    private function settledCheckoutSummary(string $code, array $reservation, StaysExternalApiClient $stays, array $headers): JsonResponse
+    {
+        $id = $reservation['_id'] ?? null;
+        if (! is_string($id) || ! preg_match('/^[a-f0-9]{24}$/iD', $id)) {
+            return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404, $headers);
+        }
+
+        $orders = DirectBookingOrder::query()
+            ->where('origin', 'stays_existing')
+            ->whereRaw('LOWER(stays_reservation_id) = ?', [strtolower($id)])
+            ->where('status', DirectBookingOrderStatus::EntradaConciliada)
+            ->where('payment_status', 'approved')
+            ->latest('created_at')
+            ->get();
+        foreach ($orders as $order) {
+            $snapshot = $order->quote_snapshot['existing_reservation'] ?? null;
+            if (! is_array($snapshot) || ($snapshot['reservation_code'] ?? null) !== $code
+                || ($snapshot['payment_plan'] ?? null) !== 'deposit'
+                || $order->reservation_status !== 'booked') {
+                continue;
+            }
+            $cycle = DB::table('existing_reservation_payment_cycles')
+                ->where('direct_booking_order_id', $order->id)->where('state', 'settled')->first();
+            $audit = $cycle ? app(ExperimentalExistingCycleSettlement::class)->revalidateHistorical($cycle) : null;
+            if (! is_array($audit) || ($audit['total_cents'] ?? null) !== ($snapshot['reservation_total_cents'] ?? null)
+                || ! is_int($audit['balance_cents'] ?? null) || $audit['balance_cents'] <= 0) {
+                continue;
+            }
+
+            return response()->json(['success' => true, 'reservation' => [
+                'code' => $code,
+                'state' => 'completed',
+                'status' => 'booked',
+                'totalCents' => $audit['total_cents'],
+                'outstandingBalanceCents' => $audit['balance_cents'],
+                'paidCents' => $audit['paid_cents'],
+            ]], 200, $headers);
+        }
+
+        return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404, $headers);
     }
 
     public function store(StoreExistingReservationCheckoutRequest $request, string $code, ExistingReservationCheckoutService $checkout, DirectCheckoutPaymentService $gateway): JsonResponse

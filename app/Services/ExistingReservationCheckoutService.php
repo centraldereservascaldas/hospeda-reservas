@@ -111,7 +111,7 @@ class ExistingReservationCheckoutService
 
         $reservation = $this->stays->get('/booking/reservations/'.$code);
         $payments = $this->stays->get('/booking/reservations/'.$code.'/payments');
-        if (! is_array($reservation) || ! is_array($payments)) {
+        if (! is_array($reservation) || ! is_array($payments) || ($reservation['type'] ?? null) !== 'reserved') {
             return $this->result(null, 'existing_reservation_unavailable', 503);
         }
         $candidate = $this->balance->inspect($reservation, $payments);

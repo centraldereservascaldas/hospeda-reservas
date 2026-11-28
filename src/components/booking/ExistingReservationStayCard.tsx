@@ -86,21 +86,10 @@ export function ExistingReservationStayCard({ summary }: { summary: ReservationS
           </button>
         )}
         <div className="p-5 sm:p-7">
-          {summary.partnerCode && (
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-orange-800">
-              Reserva realizada pela Booking.com
-            </p>
-          )}
           <h2 className="text-xl font-extrabold text-slate-900 sm:text-2xl">
             {summary.property || 'Sua hospedagem'}
           </h2>
           <dl className="mt-4 grid gap-2 rounded-xl bg-slate-50 p-3 text-xs sm:grid-cols-2">
-            {summary.partnerCode && (
-              <div>
-                <dt className="font-semibold text-slate-500">Número da reserva na Booking.com</dt>
-                <dd className="break-all font-medium text-slate-800">{summary.partnerCode}</dd>
-              </div>
-            )}
             <div>
               <dt className="font-semibold text-slate-500">Número da reserva CRCN</dt>
               <dd className="font-medium text-slate-800">{summary.code}</dd>

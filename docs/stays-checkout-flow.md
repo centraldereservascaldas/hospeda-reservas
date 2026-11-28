@@ -4,6 +4,10 @@
 
 Na API de reservas existentes, `reserved` é exposto como `pending`; não representa confirmação, não recebe método de pagamento presumido e não libera voucher. A nova rotina de checkout pode cancelar uma pré-reserva própria após expiração, mas isso depende de uma retenção Stays aprovada e configurada.
 
+## Checkout de reserva existente sem conta
+
+O endereço `/checkout/{codigoDaReserva}` abre diretamente sem conta ou login. Iniciar cobrança exige que o código corresponda e `type=reserved`. Não há envio de e-mail. Total, saldo e canais são validados no servidor. Sem pagamento/recebível anterior, oferece quitação de 100% ou entrada Pix de 50%. A entrada registra o valor pago sem alterar o total; após a Stays confirmar a conciliação, o link pode mostrar somente o total e saldo residual verificados, sem outra cobrança. Reserva `booked` sem essa conciliação não dá acesso ao checkout. Consulte o [ADR 0002](adr/0002-checkout-de-reserva-existente-sem-login.md).
+
 ## Authoritative pricing
 
 `POST /api/price` obtains a fresh Stays `booking/calculate-price` quote and normalizes it in `src/utils/staysPricing.ts`. Search results use the same normalizer. When Stays says `feesIncluded: true`, the nightly display is the full PMS total divided by nights; cleaning is shown only as an informational included amount. When fees are not included, non-cleaning charges (including the account-specific counter fee) are folded into the displayed nightly rate, while cleaning stays separate. The PMS final total remains authoritative in both cases. Fee labels other than cleaning are not exposed as separate rows. The live quote check on 2026-10-01 returned `feesIncluded: true` and a `Tarifa Balcão` fee for listing `LH20J`; the normalizer includes that amount in the displayed nightly rate without exposing its fee row.

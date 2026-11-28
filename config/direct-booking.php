@@ -2,7 +2,7 @@
 
 return [
     'checkout_ui_enabled' => (bool) env('DIRECT_BOOKING_CHECKOUT_UI_ENABLED', false),
-    'existing_reservation_checkout_enabled' => (bool) env('DIRECT_BOOKING_EXISTING_RESERVATION_CHECKOUT_ENABLED', false),
+    'existing_reservation_checkout_enabled' => (bool) env('DIRECT_BOOKING_EXISTING_RESERVATION_CHECKOUT_ENABLED', true),
     'experimental_existing_order_history_enabled' => false,
     // Research adapter: no production setting or application flow enables it.
     'experimental_existing_accounting_settlement_enabled' => false,

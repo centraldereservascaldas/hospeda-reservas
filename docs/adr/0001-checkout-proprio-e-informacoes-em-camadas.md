@@ -1,6 +1,6 @@
 # ADR 0001 — Checkout próprio e informações em camadas
 
-**Estado:** aceito para orientar o desenho; detalhes comerciais e jurídicos pendentes. **Data:** 13/10/2026. **Escopo:** venda direta de reservas no site CRCN. **PRD:** [reserva e pagamento](../prd-vendas-diretas.md).
+**Estado:** aceito para orientar o desenho; detalhes comerciais e jurídicos pendentes. **Data:** 13/10/2026. **Escopo:** venda direta de reservas no site CRCN. **PRD:** [reserva e pagamento](../prd-vendas-diretas.md). **Acesso a reservas existentes:** [ADR 0002](0002-checkout-de-reserva-existente-sem-login.md).
 
 ## Contexto
 

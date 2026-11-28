@@ -15,8 +15,16 @@ class RequireExistingReservationOwner
         $guest = $request->attributes->get('verified_guest');
         $code = (string) $request->route('code');
 
-        if (! $guest instanceof VerifiedGuest || ! preg_match('/^[A-Z0-9]{5}$/D', $code)) {
+        if (! preg_match('/^[A-Z0-9]{5}$/D', $code)) {
             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
+        }
+
+        if (! $guest instanceof VerifiedGuest) {
+            if (! config('direct-booking.existing_reservation_checkout_enabled', false)) {
+                return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
+            }
+
+            return $next($request);
         }
 
         $stays = app(StaysExternalApiClient::class);
@@ -25,8 +33,12 @@ class RequireExistingReservationOwner
             return response()->json(['success' => false, 'message' => 'Não foi possível consultar esta reserva agora.'], 503);
         }
 
+        if (($reservation['id'] ?? null) !== $code) {
+            return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
+        }
+
         $clientId = $reservation['_idclient'] ?? null;
-        if (($reservation['id'] ?? null) !== $code || ! is_string($clientId) || $clientId === '') {
+        if (! is_string($clientId) || $clientId === '') {
             return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404);
         }
 

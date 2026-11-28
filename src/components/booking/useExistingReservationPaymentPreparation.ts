@@ -25,7 +25,6 @@ interface CheckoutContract {
 
 interface UseExistingReservationPaymentPreparationOptions {
   code: string;
-  accessToken: string | null;
   renewalGeneration: string | null;
   recoveryState: 'checking' | 'clear' | 'error';
   summary: ReservationSummary | null;
@@ -44,7 +43,6 @@ interface UseExistingReservationPaymentPreparationOptions {
 
 export function useExistingReservationPaymentPreparation({
   code,
-  accessToken,
   renewalGeneration,
   recoveryState,
   summary,
@@ -70,7 +68,6 @@ export function useExistingReservationPaymentPreparation({
     if (contextRef.current) return contextRef.current;
     if (
       recoveryState !== 'clear' ||
-      !accessToken ||
       !summary ||
       !contract ||
       !canPay ||
@@ -110,7 +107,7 @@ export function useExistingReservationPaymentPreparation({
     );
     let response: Response;
     let data: unknown;
-    const recoverySecret = await getOrCreateExistingCheckoutRecoverySecret(code, renewalGeneration, accessToken!);
+    const recoverySecret = await getOrCreateExistingCheckoutRecoverySecret(code, renewalGeneration);
     try {
       response = await apiFetch(`/api/existing-reservations/${encodeURIComponent(code)}/checkout`, {
         method: 'POST',
@@ -119,7 +116,6 @@ export function useExistingReservationPaymentPreparation({
           'Content-Type': 'application/json',
           'Idempotency-Key': idempotencyKey,
           'X-Checkout-Recovery-Secret': recoverySecret,
-          Authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           expectedBalanceCents: summary.candidateBalanceCents,
