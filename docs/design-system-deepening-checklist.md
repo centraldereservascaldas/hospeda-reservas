@@ -84,7 +84,7 @@ Este é um mapa estático de pontos de entrada/estrutura de código, não uma va
 - [x] Consultar o checklist e o inventário de motion/layout existentes antes de propor tokens.
 - [x] Extrair do squad Design Markman os checklists de auditoria (`ds-pattern-audit-checklist.md`), mapeamento de tokens (`token-mapping-checklist.md`), qualidade de componentes (`ds-component-quality-checklist.md`), migração (`ds-migration-readiness-checklist.md`), gate de acessibilidade (`ds-a11y-release-gate-checklist.md`) e protocolo de governança/execução; registrar origem e adaptações.
 - [x] Conferir no código a composição, os gates e a dependência de token dos painéis de proprietário/admin; não alterar permissões.
-- [ ] Revisar telas e estados renderizados representativos por painel; registrar viewport, ambiente, caminho e estados não alcançados.
+- [~] Revisar telas e estados renderizados representativos por painel. `/` e as views de viagens/favoritos foram inspecionadas sem login em desktop e 390×844 px; estados autenticados de usuário, proprietário, admin e afiliado permanecem pendentes e as falhas CORS impedem conteúdo real do catálogo.
 - [x] Distinguir padrão repetido, variação intencional e exceção local em um piloto: apresentação do badge se repete entre jornadas, mas a semântica/tom permanece definida por cada domínio.
 
 ## Wave 1 — mapa de tokens e fundamentos
@@ -353,11 +353,12 @@ Primitivas já identificadas no catálogo, cuja adoção e validação devem ser
 
 ### Usuário
 
-- [ ] Mapear conta/login/recuperação, favoritos/listas, viagens/reservas, detalhes, cancelamento e retorno à descoberta.
-- [ ] Comparar controles e padrões de estado com as primitivas existentes antes de abstrair.
+- [~] Mapear conta/login/recuperação, favoritos/listas, viagens/reservas, detalhes, cancelamento e retorno à descoberta. Em `http://127.0.0.1:3001/`, sem autenticação, browser confirmou estado vazio de favoritos e gate de login em viagens; catálogo não carregou por CORS, portanto favoritos populados, detalhes, cancelamento e jornadas autenticadas continuam sem validação.
+- [~] Comparar controles e padrões de estado com as primitivas existentes antes de abstrair. Campos de login/cadastro/recuperação já usam `FormField`; amostra de reservas mostrou ações de login/cadastro, mas submissão e validação não foram executadas.
 - [x] Adotar `Button` em ações de voucher e cancelamento da viagem; estados reais de reserva e foco em sessão autenticada continuam pendentes de walkthrough.
 - [x] Pilotar `FormField` nos campos de login/cadastro/recuperação e `StatusBadge` nas reservas de usuário usando primitivas existentes, preservando estado/regra de domínio.
 - [x] Pilotar mudanças de apresentação sem modificar regras de cancelamento, sessão, reserva ou checkout.
+- **Validação renderizada parcial:** a 390×844 px, o estado vazio de favoritos não causou overflow e as ações mediram 44 px de altura. O diálogo “Minha conta” abriu a partir de “Entrar”; Escape fechou e devolveu foco ao acionador. Não foram testados login, cadastro, recuperação, dados privados, reservas reais ou cancelamento.
 
 ### Proprietário
 
