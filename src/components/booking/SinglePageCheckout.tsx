@@ -575,6 +575,7 @@ export function SinglePageCheckout({
                 disabled={!ready || !accepted}
                 paymentMethod={paymentMethod}
                 onPricingChange={setCardPricing}
+                onInstallmentsChange={() => setAccepted(false)}
                 failureContent={supportLink}
                 onAlternativeSubmit={startCieloPix}
                 alternativeContent={

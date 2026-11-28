@@ -174,6 +174,27 @@ test('parcelamento destaca a parcela e mantém o total final para conferência',
   assert.match(view.getByLabelText('Resumo da compra').textContent!, /6x de até R\$/);
 });
 
+test('changing card installments clears the acceptance of the displayed charge', async () => {
+  const view = setup();
+  const acceptance = view.getByRole('checkbox', { name: /Li e aceito/ }) as HTMLInputElement;
+  const submit = view.getByRole('button', { name: /Confirmar e pagar/ }) as HTMLButtonElement;
+  const installments = view.getByLabelText(/^Parcelamento/);
+
+  await waitFor(() => assert.equal(acceptance.disabled, false));
+  fireEvent.click(acceptance);
+  assert.equal(acceptance.checked, true);
+  assert.equal(submit.disabled, false);
+
+  fireEvent.change(installments, { target: { value: '6' } });
+  assert.equal(acceptance.checked, false);
+  assert.equal(submit.disabled, true);
+  assert.match(view.getByLabelText('Resumo da compra').textContent!, /6x de até R\$/);
+
+  fireEvent.change(installments, { target: { value: '1' } });
+  assert.equal(acceptance.checked, false);
+  assert.equal(submit.disabled, true);
+});
+
 test('one submit prepares the reservation then tokenizes and pays without leaving the page or duplicating submission', async () => {
   const calls: string[] = [];
   let options: CieloSopOptions | undefined;
