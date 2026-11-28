@@ -45,6 +45,7 @@ interface CieloSopCardFormProps {
   validateCardNumber?: boolean;
   validatePayerDocument?: boolean;
   existingReservationHolderCpf?: string;
+  errorResetKey?: number;
 }
 
 export interface CieloPaymentContext {
@@ -143,6 +144,7 @@ export function CieloSopCardForm({
   validateCardNumber = false,
   validatePayerDocument = false,
   existingReservationHolderCpf,
+  errorResetKey,
 }: CieloSopCardFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const accessTokenRef = useRef<string | null>(null);
@@ -163,6 +165,10 @@ export function CieloSopCardForm({
   const [payerDocument, setPayerDocument] = useState('');
   const [useHolderCpf, setUseHolderCpf] = useState(false);
   const existingCardLayout = existingReservationHolderCpf !== undefined;
+
+  useEffect(() => {
+    setError(null);
+  }, [errorResetKey]);
 
   useEffect(() => {
     if (useHolderCpf) setPayerDocument(formatBrazilianDocument(existingReservationHolderCpf ?? ''));
