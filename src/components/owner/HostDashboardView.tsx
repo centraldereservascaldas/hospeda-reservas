@@ -16,6 +16,7 @@ import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { getOwnerCalendarDaySegment } from '../../utils/ownerCalendar';
 import { EmptyState } from '../EmptyState';
 import { InlineNotice } from '../InlineNotice';
+import { LoadingStatus } from '../LoadingStatus';
 import { StatusBadge, type StatusBadgeTone } from '../StatusBadge';
 import { OwnerAccountingTransactions } from './OwnerAccountingTransactions';
 
@@ -267,12 +268,15 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
 
       {loading ? (
         <div
-          role="status"
-          aria-live="polite"
-          className="flex min-h-64 items-center justify-center rounded-3xl border border-white/70 bg-white/55 text-sm font-semibold text-neutral-600 backdrop-blur-xl"
+          aria-busy="true"
+          className="flex min-h-64 items-center justify-center rounded-3xl border border-white/70 bg-white/55 backdrop-blur-xl"
         >
-          <LoaderCircle aria-hidden="true" className="mr-2 h-5 w-5 animate-spin text-orange-600" />
-          Carregando dados da Stays…
+          <LoadingStatus
+            iconClassName="h-5 w-5 text-orange-600"
+            className="font-semibold"
+          >
+            Carregando dados da Stays…
+          </LoadingStatus>
         </div>
       ) : (
         dashboard && (

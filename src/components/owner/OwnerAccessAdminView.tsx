@@ -2,8 +2,6 @@ import React, { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   AlertCircle,
   Check,
-  ChevronLeft,
-  ChevronRight,
   LoaderCircle,
   RefreshCw,
   Search,
@@ -19,6 +17,8 @@ import {
 } from '../../services/crcnBackendApi';
 import { ConfirmationDialog } from '../ConfirmationDialog';
 import { InlineNotice } from '../InlineNotice';
+import { LoadingStatus } from '../LoadingStatus';
+import { PagePagination } from '../PagePagination';
 
 interface OwnerAccessAdminViewProps {
   accessToken: string;
@@ -169,11 +169,10 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
           )}
           {operationsLoading ? (
             <div
-              className="flex items-center justify-center gap-2 rounded-3xl border border-white/80 bg-white/65 p-8 text-sm font-semibold text-neutral-600 backdrop-blur-xl"
-              role="status"
+              aria-busy="true"
+              className="flex items-center justify-center rounded-3xl border border-white/80 bg-white/65 p-8 backdrop-blur-xl"
             >
-              <LoaderCircle className="h-5 w-5 animate-spin" aria-hidden="true" /> Carregando
-              pedidos…
+              <LoadingStatus className="font-semibold">Carregando pedidos…</LoadingStatus>
             </div>
           ) : !operationsError && operationsOrders.length === 0 && unmatchedWebhookTotal === 0 ? (
             <div className="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-8 text-center text-sm font-semibold text-emerald-900">
@@ -212,35 +211,14 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
                       />
                     ))}
                   </div>
-                  <nav
-                    aria-label="Paginação das notificações sem pedido vinculado"
-                    className="flex flex-wrap items-center justify-between gap-3"
-                  >
-                    <p className="text-xs text-neutral-600">
-                      {unmatchedWebhookTotal} notificação(ões) · página {webhookPage} de{' '}
-                      {Math.max(webhookLastPage, 1)}
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setWebhookPage((page) => Math.max(1, page - 1))}
-                        disabled={operationsLoading || webhookPage <= 1}
-                        className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Anterior
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setWebhookPage((page) => Math.min(webhookLastPage, page + 1))
-                        }
-                        disabled={operationsLoading || webhookPage >= webhookLastPage}
-                        className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Próxima <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </nav>
+                  <PagePagination
+                    ariaLabel="Paginação das notificações sem pedido vinculado"
+                    countLabel={`${unmatchedWebhookTotal} notificação(ões)`}
+                    currentPage={webhookPage}
+                    totalPages={webhookLastPage}
+                    isBusy={operationsLoading}
+                    onPageChange={setWebhookPage}
+                  />
                 </section>
               )}
               {operationsOrders.length > 0 && (
@@ -259,35 +237,15 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
                       />
                     ))}
                   </div>
-                  <nav
-                    aria-label="Paginação dos pedidos em conferência"
-                    className="mt-4 flex flex-wrap items-center justify-between gap-3"
-                  >
-                    <p className="text-xs text-neutral-600">
-                      {operationsTotal} pedido(s) · página {operationsPage} de{' '}
-                      {Math.max(operationsLastPage, 1)}
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setOperationsPage((page) => Math.max(1, page - 1))}
-                        disabled={operationsLoading || operationsPage <= 1}
-                        className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Anterior
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setOperationsPage((page) => Math.min(operationsLastPage, page + 1))
-                        }
-                        disabled={operationsLoading || operationsPage >= operationsLastPage}
-                        className="inline-flex min-h-11 items-center gap-1 rounded-xl border border-neutral-300 bg-white px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Próxima <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    </div>
-                  </nav>
+                  <PagePagination
+                    ariaLabel="Paginação dos pedidos em conferência"
+                    countLabel={`${operationsTotal} pedido(s)`}
+                    currentPage={operationsPage}
+                    totalPages={operationsLastPage}
+                    isBusy={operationsLoading}
+                    className="mt-4"
+                    onPageChange={setOperationsPage}
+                  />
                 </>
               )}
             </>
@@ -326,8 +284,11 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
           </InlineNotice>
         )}
         {loading ? (
-          <div className="flex items-center justify-center gap-2 rounded-3xl border border-white/80 bg-white/65 p-10 text-sm font-semibold text-neutral-600 backdrop-blur-xl">
-            <LoaderCircle className="h-5 w-5 animate-spin" /> Carregando solicitações…
+          <div
+            aria-busy="true"
+            className="flex items-center justify-center rounded-3xl border border-white/80 bg-white/65 p-10 backdrop-blur-xl"
+          >
+            <LoadingStatus className="font-semibold">Carregando solicitações…</LoadingStatus>
           </div>
         ) : requests.length === 0 ? (
           <div className="rounded-3xl border border-white/80 bg-white/65 p-10 text-center text-sm text-neutral-600 backdrop-blur-xl">

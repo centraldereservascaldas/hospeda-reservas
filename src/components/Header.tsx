@@ -430,7 +430,6 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => setIsCurrencyMenuOpen(!isCurrencyMenuOpen)}
                 className="flex min-h-11 items-center gap-1 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-semibold text-neutral-700 hover:text-neutral-900 liquid-glass-button border border-neutral-200/90 rounded-full transition-all cursor-pointer"
                 aria-label={`Moeda de exibição ${currency}. Conversões em USD e EUR são aproximadas.`}
-                aria-haspopup="true"
                 aria-expanded={isCurrencyMenuOpen}
                 aria-controls="currency-menu-panel"
                 title="Alterar moeda de exibição"
@@ -466,6 +465,8 @@ export const Header: React.FC<HeaderProps> = ({
                     ].map((item) => (
                       <button
                         key={item.code}
+                        type="button"
+                        aria-pressed={currency === item.code}
                         onClick={() => {
                           setCurrency(item.code as Currency);
                           setIsCurrencyMenuOpen(false);
@@ -497,7 +498,6 @@ export const Header: React.FC<HeaderProps> = ({
                 }`}
                 title="Minha Conta"
                 aria-label="Minha Conta"
-                aria-haspopup="true"
                 aria-expanded={isUserMenuOpen}
                 aria-controls="account-menu-panel"
               >

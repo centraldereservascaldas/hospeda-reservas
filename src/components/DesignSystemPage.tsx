@@ -3,12 +3,13 @@ import type { ReactNode } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
+  CalendarDays,
   Check,
   ChevronDown,
   CircleHelp,
+  CircleDollarSign,
   Heart,
   House,
-  LoaderCircle,
   MapPin,
   Search,
   SlidersHorizontal,
@@ -20,6 +21,8 @@ import { Button } from './Button';
 import { EmptyState } from './EmptyState';
 import { FormField } from './FormField';
 import { InlineNotice } from './InlineNotice';
+import { LoadingStatus } from './LoadingStatus';
+import { PagePagination } from './PagePagination';
 import { StatusBadge } from './StatusBadge';
 import { InstallmentPicker } from './booking/InstallmentPicker';
 
@@ -56,6 +59,13 @@ const catalogDomains: CatalogDomain[] = [
         name: 'Aviso de estado',
         file: 'components/InlineNotice.tsx',
         purpose: 'Feedback inline com semântica e variantes de estado.',
+        status: 'implemented',
+      },
+      {
+        name: 'Status de carregamento',
+        file: 'components/LoadingStatus.tsx',
+        purpose:
+          'Anúncio acessível de progresso assíncrono; a região consumidora controla aria-busy e a apresentação do layout.',
         status: 'implemented',
       },
       {
@@ -489,6 +499,19 @@ const catalogDomains: CatalogDomain[] = [
     description: 'Área do anfitrião e ferramentas administrativas existentes.',
     components: [
       {
+        name: 'Indicador do painel',
+        file: 'components/owner/HostDashboardView.tsx',
+        purpose:
+          'Resumo operacional composto localmente por rótulo, valor e ícone, usado na visão geral do proprietário.',
+        status: 'observed',
+      },
+      {
+        name: 'Resumo financeiro por tom',
+        file: 'components/owner/HostDashboardView.tsx',
+        purpose: 'Valor agregado de créditos, débitos ou saldo no painel do proprietário.',
+        status: 'observed',
+      },
+      {
         name: 'Painel do anfitrião',
         file: 'components/owner/HostDashboardView.tsx',
         purpose: 'Resumo operacional do proprietário.',
@@ -502,6 +525,13 @@ const catalogDomains: CatalogDomain[] = [
         name: 'Transações',
         file: 'components/owner/OwnerAccountingTransactions.tsx',
         purpose: 'Consulta de transações e conciliação.',
+      },
+      {
+        name: 'Paginação de lista',
+        file: 'components/PagePagination.tsx',
+        purpose:
+          'Navegação anterior/próxima em coleções paginadas no servidor com rótulo da coleção e página atual.',
+        status: 'implemented',
       },
       {
         name: 'Criar anúncio',
@@ -820,6 +850,7 @@ export function DesignSystemPage({
   const [activeSection, setActiveSection] = useState('visao-geral');
   const [searchTerm, setSearchTerm] = useState('');
   const [previewInstallments, setPreviewInstallments] = useState(3);
+  const [paginationPreviewPage, setPaginationPreviewPage] = useState(1);
   const [motionDemoKey, setMotionDemoKey] = useState(0);
   const [isMotionDemoSelected, setIsMotionDemoSelected] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
@@ -1209,19 +1240,17 @@ export function DesignSystemPage({
                   ação seguem disponíveis sem animação.
                 </p>
               </SpecimenCard>
-              <SpecimenCard title="Estado de carregamento" source="Tailwind · animate-spin">
+              <SpecimenCard title="Estado de carregamento" source="components/LoadingStatus.tsx">
                 <div className="flex min-h-32 items-center justify-center rounded-xl bg-neutral-100 p-4">
-                  <div role="status" className="flex items-center gap-3 text-sm font-semibold">
-                    <LoaderCircle
-                      aria-hidden="true"
-                      className="h-5 w-5 animate-spin text-orange-700"
-                    />
-                    Carregando resultados
+                  <div aria-busy="true">
+                    <LoadingStatus className="font-semibold text-neutral-700">
+                      Carregando resultados
+                    </LoadingStatus>
                   </div>
                 </div>
                 <p className="mt-3 text-xs leading-5 text-neutral-600">
-                  Feedback enquanto a tarefa está pendente. O texto preserva o estado quando a
-                  rotação do ícone é desativada por movimento reduzido.
+                  A região consumidora indica o estado ocupado; o componente anuncia o progresso. A
+                  mensagem permanece quando movimento reduzido desativa a rotação.
                 </p>
               </SpecimenCard>
               <SpecimenCard
@@ -1668,6 +1697,80 @@ export function DesignSystemPage({
                   Padrão de combobox pesquisável usado na busca. A amostra documenta aparência e
                   hierarquia; a interação real, inclusive teclado e resultados, permanece no widget.
                 </p>
+              </SpecimenCard>
+              <SpecimenCard
+                title="Inventário de seleção e dropdowns"
+                source="Auditoria do frontend Laravel · 27 nov 2026"
+              >
+                <div className="space-y-5 text-sm">
+                  <div>
+                    <h3 className="font-bold text-neutral-900">
+                      Seletores nativos · 12 instâncias
+                    </h3>
+                    <p className="mt-1 text-xs leading-5 text-neutral-600">
+                      Mantemos o select do navegador em filtros, formulários e integrações de
+                      pagamento, onde seleção finita e teclado nativo atendem ao fluxo.
+                    </p>
+                    <ul className="mt-2 grid gap-1.5 text-xs text-neutral-700 sm:grid-cols-2">
+                      <li>
+                        <code>MercadoPagoCardForm.tsx</code> · banco, parcelas e documento
+                      </li>
+                      <li>
+                        <code>CieloSopCardForm.tsx</code> · parcelas no checkout
+                      </li>
+                      <li>
+                        <code>CreateListingModal.tsx</code> · categoria
+                      </li>
+                      <li>
+                        <code>HostDashboardView.tsx</code> · imóvel e filtros
+                      </li>
+                      <li>
+                        <code>OwnerAccountingTransactions.tsx</code> · imóvel
+                      </li>
+                      <li>
+                        <code>ParkTicketSelector.tsx</code> · data de visita
+                      </li>
+                      <li>
+                        <code>PartnerSandboxCheckout.tsx</code> · sandbox
+                      </li>
+                      <li>
+                        <code>DesignSystemPage.tsx</code> · espécimes
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="border-t border-neutral-200 pt-4">
+                    <h3 className="font-bold text-neutral-900">
+                      Seletores customizados e painéis de opções
+                    </h3>
+                    <ul className="mt-2 space-y-2 text-xs leading-5 text-neutral-700">
+                      <li>
+                        <strong>Condomínio e hóspedes:</strong> <code>LiquidSelect</code> em{' '}
+                        <code>StaysSearchWidget.tsx</code>, com popover pesquisável e painel
+                        compartilhado no hero.
+                      </li>
+                      <li>
+                        <strong>Parcelas:</strong> <code>InstallmentPicker.tsx</code>, listbox de
+                        seleção única usado em Cielo e pagamento de reserva existente.
+                      </li>
+                      <li>
+                        <strong>Moeda e conta:</strong> painéis de opções com botões comuns em{' '}
+                        <code>Header.tsx</code>; permanecem grupos de ações/seleção, sem semântica
+                        ARIA de menu.
+                      </li>
+                      <li>
+                        <strong>Não são dropdowns de opção:</strong> calendário de datas, contador
+                        de hóspedes, disclosures e diálogos de data/ocupação têm contratos
+                        separados.
+                      </li>
+                    </ul>
+                  </div>
+                  <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+                    Auditoria: o painel compartilhado do condomínio agora associa busca e listbox,
+                    suporta setas, Home/End, Escape e feedback de resultado vazio. Moeda anuncia a
+                    opção ativa com <code>aria-pressed</code>. Rever integrações de pagamento com
+                    opções injetadas pelo provedor ao atualizar seus SDKs.
+                  </p>
+                </div>
               </SpecimenCard>
               <SpecimenCard title="Estados de campo" source="global focus · validação local">
                 <div className="grid gap-4">
@@ -2410,27 +2513,41 @@ export function DesignSystemPage({
             />
             <div className="grid gap-5 xl:grid-cols-2">
               <SpecimenCard
-                title="Indicadores do anfitrião"
-                source="HostDashboardView · AmountCard"
+                title="Métricas operacionais do anfitrião"
+                source="HostDashboardView · Metric"
               >
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-2xl border border-white/80 bg-white/75 p-4 shadow-sm">
-                    <span className="text-xs font-semibold text-neutral-500">Reservas</span>
-                    <strong className="mt-2 block text-2xl">12</strong>
-                    <span className="mt-1 block text-xs text-emerald-700">3 neste mês</span>
-                  </div>
-                  <div className="rounded-2xl border border-white/80 bg-white/75 p-4 shadow-sm">
-                    <span className="text-xs font-semibold text-neutral-500">Receita prevista</span>
-                    <strong className="mt-2 block text-2xl">R$ 8.420</strong>
-                    <span className="mt-1 block text-xs text-neutral-500">Período selecionado</span>
-                  </div>
-                  <div className="rounded-2xl border border-white/80 bg-white/75 p-4 shadow-sm">
-                    <span className="text-xs font-semibold text-neutral-500">Anúncios</span>
-                    <strong className="mt-2 block text-2xl">4</strong>
-                    <span className="mt-1 block text-xs text-neutral-500">
-                      1 precisa de atenção
-                    </span>
-                  </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    { label: 'Propriedades vinculadas', value: '4', icon: <House /> },
+                    {
+                      label: 'Reservas confirmadas no período',
+                      value: '12',
+                      icon: <CalendarDays />,
+                    },
+                    {
+                      label: 'Créditos no período',
+                      value: 'R$ 8.420',
+                      icon: <CircleDollarSign />,
+                    },
+                    {
+                      label: 'Débitos no período',
+                      value: 'R$ 1.320',
+                      icon: <CircleDollarSign />,
+                    },
+                  ].map(({ label, value, icon }) => (
+                    <div
+                      key={label}
+                      className="rounded-3xl border border-white/80 bg-white/65 p-5 shadow-sm backdrop-blur-xl"
+                    >
+                      <div className="mb-3 flex items-center justify-between text-neutral-500">
+                        <span className="text-xs font-bold">{label}</span>
+                        <span className="text-orange-600" aria-hidden="true">
+                          {icon}
+                        </span>
+                      </div>
+                      <p className="break-words text-2xl font-black text-neutral-950">{value}</p>
+                    </div>
+                  ))}
                 </div>
                 <nav
                   aria-label="Seções do painel do anfitrião"
@@ -2449,6 +2566,29 @@ export function DesignSystemPage({
                     ),
                   )}
                 </nav>
+              </SpecimenCard>
+              <SpecimenCard
+                title="Resumo financeiro por tom"
+                source="HostDashboardView · AmountCard"
+              >
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+                    <p className="text-xs font-semibold text-neutral-600">Créditos</p>
+                    <p className="mt-1 text-lg font-black text-neutral-950">R$ 8.420</p>
+                  </div>
+                  <div className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4">
+                    <p className="text-xs font-semibold text-neutral-600">Débitos</p>
+                    <p className="mt-1 text-lg font-black text-neutral-950">R$ 1.320</p>
+                  </div>
+                  <div className="rounded-2xl border border-neutral-200 bg-white/80 p-4">
+                    <p className="text-xs font-semibold text-neutral-600">Saldo</p>
+                    <p className="mt-1 text-lg font-black text-neutral-950">R$ 7.100</p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-neutral-500">
+                  Tom e significado pertencem ao valor financeiro; não são tendência nem status de
+                  reserva.
+                </p>
               </SpecimenCard>
               <SpecimenCard
                 title="Tabela e filtro de propriedades"
@@ -2506,27 +2646,17 @@ export function DesignSystemPage({
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-600">
-                  <span>2 registros · ordenação e seleção dependem do contexto.</span>
-                  <nav aria-label="Paginação de exemplo" className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      disabled
-                      className="min-h-10 rounded-lg border border-neutral-200 px-3 text-neutral-400"
-                    >
-                      Anterior
-                    </button>
-                    <span aria-current="page" className="font-semibold text-neutral-900">
-                      Página 1
-                    </span>
-                    <button
-                      type="button"
-                      className="min-h-10 rounded-lg border border-neutral-200 px-3 font-semibold text-neutral-700 hover:bg-neutral-50"
-                    >
-                      Próxima
-                    </button>
-                  </nav>
-                </div>
+                <p className="mt-3 text-xs text-neutral-600">
+                  42 registros · ordenação e seleção dependem do contexto.
+                </p>
+                <PagePagination
+                  ariaLabel="Paginação ilustrativa dos lançamentos"
+                  countLabel="42 lançamentos"
+                  currentPage={paginationPreviewPage}
+                  totalPages={4}
+                  className="mt-3"
+                  onPageChange={setPaginationPreviewPage}
+                />
                 <p className="mt-3 text-xs leading-5 text-neutral-500">
                   Exemplo de tabela semântica com rolagem horizontal. Não é um grid ARIA; paginação
                   e ações de linha devem indicar escopo e estado atual.

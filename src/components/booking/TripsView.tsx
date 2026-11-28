@@ -11,6 +11,7 @@ import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { useDialogFocus } from '../useDialogFocus';
 import { Button } from '../Button';
 import { EmptyState } from '../EmptyState';
+import { LoadingStatus } from '../LoadingStatus';
 import { StatusBadge } from '../StatusBadge';
 import {
   Calendar,
@@ -249,9 +250,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
       )}
 
       {reservationsLoading && reservations.length > 0 && (
-        <p role="status" aria-live="polite" className="mt-4 text-sm text-neutral-600">
-          Atualizando suas reservas…
-        </p>
+        <LoadingStatus className="mt-4">Atualizando suas reservas…</LoadingStatus>
       )}
 
       {(visibleDirectBookingOrders.length > 0 ||
@@ -266,9 +265,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
             pedido.
           </p>
           {directBookingOrdersLoading && (
-            <p role="status" aria-live="polite" className="mb-3 text-sm text-neutral-600">
-              Carregando suas compras feitas no site…
-            </p>
+            <LoadingStatus className="mb-3">Carregando suas compras feitas no site…</LoadingStatus>
           )}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {visibleDirectBookingOrders.map((order) => (
@@ -473,11 +470,14 @@ export const TripsView: React.FC<TripsViewProps> = ({
           directBookingOrdersLoading ||
           reservationsError ||
           directBookingOrdersError) ? (
-        <div className="mx-auto max-w-lg space-y-4 py-16 text-center" aria-live="polite">
+        <div
+          className="mx-auto max-w-lg space-y-4 py-16 text-center"
+          aria-busy={reservationsLoading || directBookingOrdersLoading || undefined}
+        >
           {reservationsLoading || directBookingOrdersLoading ? (
-            <p role="status" className="text-sm font-semibold text-neutral-700">
+            <LoadingStatus className="justify-center font-semibold text-neutral-700">
               Carregando suas viagens e compras…
-            </p>
+            </LoadingStatus>
           ) : (
             <>
               <p className="text-sm text-neutral-700">

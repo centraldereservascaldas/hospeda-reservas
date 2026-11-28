@@ -1,8 +1,9 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, LoaderCircle, Printer, X } from 'lucide-react';
+import { Download, Printer, X } from 'lucide-react';
 import type { OwnerAccountingDetails, OwnerDashboardData } from '../../services/crcnBackendApi';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { LoadingStatus } from '../LoadingStatus';
 import { useDialogFocus } from '../useDialogFocus';
 
 type Entry = OwnerDashboardData['entries'][number];
@@ -329,10 +330,7 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
               </header>
               <div className="space-y-6 px-5 py-5">
                 {detailLoading && (
-                  <p role="status" className="flex items-center gap-2 text-sm text-neutral-600">
-                    <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
-                    Consultando detalhes na Stays…
-                  </p>
+                  <LoadingStatus>Consultando detalhes na Stays…</LoadingStatus>
                 )}
                 {detailError && (
                   <p

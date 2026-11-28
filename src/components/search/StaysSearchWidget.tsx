@@ -597,9 +597,10 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
       <button
         ref={triggerRef}
         type="button"
-        aria-haspopup="listbox"
+        aria-haspopup={sharedPanel ? 'dialog' : 'listbox'}
+        data-search-resort-trigger={sharedPanel ? labelId.replace(/-resort-label$/, '') : undefined}
         aria-labelledby={`${labelId} ${labelId}-value`}
-        aria-controls={`${labelId}-listbox`}
+        aria-controls={sharedPanel ? `${labelId}-dialog` : `${labelId}-listbox`}
         aria-expanded={isOpen}
         onClick={() => onOpen()}
         className="flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-2xl border border-white/85 bg-white/55 py-3 pl-10 pr-3 text-left text-xs font-bold text-neutral-900 shadow-[inset_0_1px_2px_rgba(255,255,255,0.85),0_3px_10px_rgba(15,23,42,0.04)] backdrop-blur-xl transition hover:bg-white/70 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 sm:text-sm"
@@ -935,6 +936,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   });
   const [sharedPanelVisible, setSharedPanelVisible] = useState(false);
   const [sharedResortQuery, setSharedResortQuery] = useState('');
+  const sharedResortOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const sharedPanelRef = useRef<HTMLDivElement>(null);
   const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
   const [isLoadingResorts, setIsLoadingResorts] = useState(true);
@@ -1170,7 +1172,8 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       persons: guests ? countOccupancyGuests(guests) : personCount,
       guests,
       destination: surpriseMe ? '' : selectedResort,
-      propertyId: surpriseMe || selectedResortId.startsWith('imobsys-condo-') ? '' : selectedResortId,
+      propertyId:
+        surpriseMe || selectedResortId.startsWith('imobsys-condo-') ? '' : selectedResortId,
       surpriseMe,
     });
   };
@@ -1182,6 +1185,17 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       label: resort.name.replace(/^CRCN\s*[-–]\s*/i, ''),
     })),
   ];
+  const normalizedResortQuery = sharedResortQuery
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR');
+  const sharedResortOptions = resortOptions.filter((option) =>
+    option.label
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLocaleLowerCase('pt-BR')
+      .includes(normalizedResortQuery),
+  );
   const guestOptions = [
     { value: '', label: 'Hóspedes' },
     ...Array.from({ length: 17 }, (_, index) => ({
@@ -1599,6 +1613,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
           createPortal(
             <div
               ref={sharedPanelRef}
+              id={`${fieldId}-resort-label-dialog`}
               data-dialog-focus-portal
               aria-hidden={!activeDropdown && !activeDatePicker}
               inert={!activeDropdown && !activeDatePicker}
@@ -1628,48 +1643,86 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     id={`${fieldId}-resorts-query`}
                     aria-label="Buscar condomínio"
                     value={sharedResortQuery}
+                    aria-controls={`${fieldId}-resort-label-shared-listbox`}
                     onChange={(event) => setSharedResortQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowDown' && sharedResortOptions.length > 0) {
+                        event.preventDefault();
+                        sharedResortOptionRefs.current[0]?.focus();
+                      } else if (event.key === 'Escape') {
+                        event.preventDefault();
+                        setSharedResortQuery('');
+                        setActiveDropdown(null);
+                        document
+                          .querySelector<HTMLButtonElement>(
+                            `[data-search-resort-trigger="${fieldId}"]`,
+                          )
+                          ?.focus();
+                      }
+                    }}
                     placeholder="Buscar condomínio..."
                     className="mb-2 min-h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none focus:border-orange-500"
                   />
                   <div
+                    id={`${fieldId}-resort-label-shared-listbox`}
                     role="listbox"
                     aria-label="Opções disponíveis"
                     className="max-h-[calc(100%-3.5rem)] overflow-y-auto"
                   >
-                    {resortOptions
-                      .filter(
-                        (option) =>
-                          !sharedResortQuery ||
-                          option.label
-                            .normalize('NFD')
-                            .replace(/[\u0300-\u036f]/g, '')
-                            .toLocaleLowerCase('pt-BR')
-                            .includes(
-                              sharedResortQuery
-                                .normalize('NFD')
-                                .replace(/[\u0300-\u036f]/g, '')
-                                .toLocaleLowerCase('pt-BR'),
-                            ),
-                      )
-                      .map((option) => (
-                        <button
-                          key={option.value || 'all'}
-                          type="button"
-                          role="option"
-                          aria-selected={selectedResortId === option.value}
-                          onClick={() => {
-                            setSelectedResortId(option.value);
-                            setSelectedResort(option.value ? option.label : '');
+                    {sharedResortOptions.map((option, index) => (
+                      <button
+                        ref={(element) => {
+                          sharedResortOptionRefs.current[index] = element;
+                        }}
+                        key={option.value || 'all'}
+                        type="button"
+                        role="option"
+                        aria-selected={selectedResortId === option.value}
+                        tabIndex={selectedResortId === option.value ? 0 : -1}
+                        onKeyDown={(event) => {
+                          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                            event.preventDefault();
+                            const direction = event.key === 'ArrowDown' ? 1 : -1;
+                            const nextIndex = Math.min(
+                              Math.max(index + direction, 0),
+                              sharedResortOptions.length - 1,
+                            );
+                            sharedResortOptionRefs.current[nextIndex]?.focus();
+                          } else if (event.key === 'Home' || event.key === 'End') {
+                            event.preventDefault();
+                            const edgeIndex =
+                              event.key === 'Home' ? 0 : sharedResortOptions.length - 1;
+                            sharedResortOptionRefs.current[edgeIndex]?.focus();
+                          } else if (event.key === 'Escape') {
+                            event.preventDefault();
                             setSharedResortQuery('');
                             setActiveDropdown(null);
-                            setActiveDatePicker('checkIn');
-                          }}
-                          className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm hover:bg-orange-50"
-                        >
-                          {option.label}
-                        </button>
-                      ))}
+                            document
+                              .querySelector<HTMLButtonElement>(
+                                `[data-search-resort-trigger="${fieldId}"]`,
+                              )
+                              ?.focus();
+                          }
+                        }}
+                        onClick={() => {
+                          setSelectedResortId(option.value);
+                          setSelectedResort(option.value ? option.label : '');
+                          setSharedResortQuery('');
+                          setActiveDropdown(null);
+                          setActiveDatePicker('checkIn');
+                        }}
+                        className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm hover:bg-orange-50"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                    {sharedResortOptions.length === 0 && (
+                      <p role="status" className="px-3 py-4 text-center text-sm text-neutral-600">
+                        {isLoadingResorts
+                          ? 'Carregando condomínios...'
+                          : 'Nenhum condomínio encontrado.'}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
