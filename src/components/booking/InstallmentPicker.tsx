@@ -50,6 +50,7 @@ export function InstallmentPicker({
     const closeOnOutsideClick = (event: MouseEvent) => {
       if (event.target instanceof Node && !rootRef.current?.contains(event.target)) {
         setIsOpen(false);
+        triggerRef.current?.focus();
       }
     };
     document.addEventListener('mousedown', closeOnOutsideClick);
@@ -109,7 +110,7 @@ export function InstallmentPicker({
       <button
         ref={triggerRef}
         type="button"
-        className="flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border border-neutral-300 bg-white px-4 text-left text-base font-semibold text-slate-900 shadow-sm transition hover:border-orange-300 hover:bg-orange-50/30 focus-visible:border-orange-700 focus-visible:ring-2 focus-visible:ring-orange-700/20"
+        className="flex min-h-12 w-full items-center justify-between gap-3 rounded-control border border-control-border bg-control-surface px-4 text-left text-base font-semibold text-control-foreground shadow-sm transition hover:border-control-border-hover focus-visible:border-focus-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         disabled={disabled}
         aria-labelledby={labelledBy ? `${labelledBy} ${selectedLabelId}` : undefined}
         aria-haspopup="listbox"
@@ -117,6 +118,12 @@ export function InstallmentPicker({
         aria-controls={listboxId}
         onClick={() => (isOpen ? setIsOpen(false) : openAt(selectedIndex))}
         onKeyDown={(event) => {
+          if (event.key === 'Escape' && menuOpen) {
+            event.preventDefault();
+            setIsOpen(false);
+            triggerRef.current?.focus();
+            return;
+          }
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
             const direction = event.key === 'ArrowDown' ? 1 : -1;
@@ -136,7 +143,7 @@ export function InstallmentPicker({
           id={listboxId}
           role="listbox"
           aria-label="Escolha o número de parcelas"
-          className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-30 max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_45px_-18px_rgba(15,23,42,0.38)] ring-1 ring-black/5"
+          className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-30 max-h-72 overflow-y-auto rounded-2xl border border-control-border bg-control-surface p-1.5 shadow-[0_18px_45px_-18px_rgba(15,23,42,0.38)] ring-1 ring-black/5"
         >
           {options.map((option, index) => {
             const isSelected = option.installments === value;
@@ -153,7 +160,7 @@ export function InstallmentPicker({
                 onFocus={() => setActiveIndex(index)}
                 onKeyDown={(event) => handleOptionKeyDown(event, index)}
                 onClick={() => choose(option)}
-                className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-xl px-3.5 text-left text-sm transition ${isSelected ? 'bg-orange-50 font-bold text-orange-950' : 'font-medium text-slate-700 hover:bg-slate-50'} focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-orange-700`}
+                className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-control px-3.5 text-left text-sm transition ${isSelected ? 'bg-[var(--color-focus-ring-soft)] font-bold text-[var(--color-calendar-range-foreground)]' : 'font-medium text-control-foreground hover:bg-neutral-50'} focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring`}
               >
                 <span>{option.label}</span>
                 {isSelected && (

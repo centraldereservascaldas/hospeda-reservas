@@ -13,6 +13,7 @@
 }
 
 @theme {
+  --spacing-control-comfortable: 2.75rem;
   --color-calendar-range: #ffedd5;
   --color-calendar-range-foreground: #7c2d12;
   --color-calendar-muted: rgb(245 245 245 / 0.7);
@@ -34,14 +35,21 @@
 }
 
 @theme inline {
+  --radius-control: var(--radius-xl);
+  --color-control-surface: var(--color-white);
+  --color-control-foreground: var(--color-neutral-800);
+  --color-control-border: var(--color-neutral-300);
+  --color-control-border-hover: var(--color-neutral-400);
+  --color-state-disabled-surface: var(--color-neutral-100);
+  --color-state-disabled-foreground: var(--color-neutral-500);
   --color-action-primary: var(--color-orange-600);
   --color-action-primary-hover: var(--color-orange-700);
   --color-action-primary-disabled: var(--color-orange-300);
   --color-action-primary-foreground: var(--color-white);
   --color-action-secondary: var(--color-white);
   --color-action-secondary-hover: var(--color-neutral-100);
-  --color-action-secondary-disabled: var(--color-neutral-100);
-  --color-action-secondary-border: var(--color-neutral-300);
+  --color-action-secondary-disabled: var(--color-state-disabled-surface);
+  --color-action-secondary-border: var(--color-control-border);
   --color-action-secondary-foreground: var(--color-neutral-900);
   --color-action-quiet-hover: var(--color-neutral-100);
   --color-action-quiet-foreground: var(--color-neutral-800);
@@ -158,32 +166,6 @@
   display: flex;
   justify-content: space-between;
   margin-bottom: 0.75rem;
-}
-
-.search-date-calendar__navigation button {
-  display: flex;
-  width: 2.75rem;
-  height: 2.75rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgb(229 229 229);
-  border-radius: 9999px;
-  color: rgb(38 38 38);
-  transition: background-color 150ms ease;
-}
-
-.search-date-calendar__navigation button:hover:not(:disabled) {
-  background-color: rgb(245 245 245);
-}
-
-.search-date-calendar__navigation button:disabled {
-  cursor: not-allowed;
-  opacity: 0.35;
-}
-
-.search-date-calendar__navigation svg {
-  width: 1rem;
-  height: 1rem;
 }
 
 .search-date-calendar__months {

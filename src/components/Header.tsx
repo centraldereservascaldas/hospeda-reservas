@@ -211,6 +211,16 @@ export const Header: React.FC<HeaderProps> = ({
     setIsUserMenuOpen(true);
   };
 
+  useEffect(() => {
+    if (!isUserMenuOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      accountMenuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [isUserMenuOpen, accountTriggerRef]);
+
   // Close menus on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -447,8 +457,6 @@ export const Header: React.FC<HeaderProps> = ({
                   />
                   <div
                     id="currency-menu-panel"
-                    role="group"
-                    aria-label="Opções de moeda"
                     className="absolute right-0 mt-2 w-48 bg-white/96 backdrop-blur-3xl rounded-2xl shadow-2xl border border-neutral-200/90 py-2 z-50 animate-in fade-in zoom-in-95 duration-100"
                   >
                     <div className="px-3 py-1.5 text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
@@ -458,30 +466,62 @@ export const Header: React.FC<HeaderProps> = ({
                       Conversões em USD e EUR são aproximadas. O pagamento é processado em reais
                       (BRL).
                     </p>
-                    {[
-                      { code: 'BRL', label: 'Real Brasileiro (R$)' },
-                      { code: 'USD', label: 'Dólar Americano ($)' },
-                      { code: 'EUR', label: 'Euro (€)' },
-                    ].map((item) => (
-                      <button
-                        key={item.code}
-                        type="button"
-                        aria-pressed={currency === item.code}
-                        onClick={() => {
-                          setCurrency(item.code as Currency);
-                          setIsCurrencyMenuOpen(false);
-                          currencyTriggerRef.current?.focus();
-                        }}
-                        className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
-                      >
-                        <span className={currency === item.code ? 'font-bold text-orange-600' : ''}>
-                          {item.label}
-                        </span>
-                        {currency === item.code && (
-                          <Check className="w-3.5 h-3.5 text-orange-600" />
-                        )}
-                      </button>
-                    ))}
+                    <div role="radiogroup" aria-label="Moeda de exibição">
+                      {[
+                        { code: 'BRL', label: 'Real Brasileiro (R$)' },
+                        { code: 'USD', label: 'Dólar Americano ($)' },
+                        { code: 'EUR', label: 'Euro (€)' },
+                      ].map((item) => (
+                        <button
+                          key={item.code}
+                          type="button"
+                          role="radio"
+                          aria-checked={currency === item.code}
+                          tabIndex={currency === item.code ? 0 : -1}
+                          onKeyDown={(event) => {
+                            if (
+                              !['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(
+                                event.key,
+                              )
+                            ) {
+                              return;
+                            }
+                            event.preventDefault();
+                            const currencies: Currency[] = ['BRL', 'USD', 'EUR'];
+                            const currentIndex = currencies.indexOf(item.code as Currency);
+                            const direction = ['ArrowDown', 'ArrowRight'].includes(event.key)
+                              ? 1
+                              : -1;
+                            const nextCurrency =
+                              currencies[
+                                (currentIndex + direction + currencies.length) % currencies.length
+                              ];
+                            setCurrency(nextCurrency);
+                            event.currentTarget.parentElement
+                              ?.querySelector<HTMLButtonElement>(
+                                `[data-currency-option="${nextCurrency}"]`,
+                              )
+                              ?.focus();
+                          }}
+                          data-currency-option={item.code}
+                          onClick={() => {
+                            setCurrency(item.code as Currency);
+                            setIsCurrencyMenuOpen(false);
+                            currencyTriggerRef.current?.focus();
+                          }}
+                          className="flex min-h-11 w-full items-center justify-between px-3 py-2 text-left text-xs font-medium text-neutral-800 transition-colors hover:bg-neutral-100"
+                        >
+                          <span
+                            className={currency === item.code ? 'font-bold text-orange-600' : ''}
+                          >
+                            {item.label}
+                          </span>
+                          {currency === item.code && (
+                            <Check className="w-3.5 h-3.5 text-orange-600" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </>
               )}
@@ -530,8 +570,17 @@ export const Header: React.FC<HeaderProps> = ({
                     <div
                       id="account-menu-panel"
                       ref={accountMenuRef}
-                      role="group"
-                      aria-label="Opções da conta"
+                      aria-label="Navegação e ações da conta"
+                      onBlur={(event) => {
+                        const nextTarget = event.relatedTarget;
+                        if (
+                          !(nextTarget instanceof Node) ||
+                          (!event.currentTarget.contains(nextTarget) &&
+                            !accountTriggerRef.current?.contains(nextTarget))
+                        ) {
+                          setIsUserMenuOpen(false);
+                        }
+                      }}
                       style={{ top: accountMenuPosition.top, right: accountMenuPosition.right }}
                       className="fixed w-72 max-w-[calc(100vw-1.5rem)] max-h-[min(75vh,36rem)] overflow-y-auto overscroll-contain bg-white/96 backdrop-blur-3xl rounded-2xl shadow-2xl border border-neutral-200/90 py-2.5 z-[9999] text-xs animate-in fade-in zoom-in-95 duration-150 ring-1 ring-black/10"
                     >

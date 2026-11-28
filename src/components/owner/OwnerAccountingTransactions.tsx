@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Download, Printer, X } from 'lucide-react';
 import type { OwnerAccountingDetails, OwnerDashboardData } from '../../services/crcnBackendApi';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
+import { IconButton } from '../IconButton';
 import { LoadingStatus } from '../LoadingStatus';
 import { NativeSelect } from '../NativeSelect';
 import { EmptyState } from '../EmptyState';
@@ -169,14 +170,15 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
               <Printer aria-hidden="true" className="h-4 w-4" />
               Relatório completo
             </button>
-            <button
-              type="button"
+            <IconButton
               onClick={downloadCsv}
               aria-label="Baixar lançamentos em CSV"
-              className="inline-flex min-h-10 items-center justify-center rounded-xl border border-neutral-200 bg-white/80 px-3 text-neutral-700 hover:bg-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-200"
+              size="compact"
+              variant="outlined"
+              shape="rounded"
             >
               <Download aria-hidden="true" className="h-4 w-4" />
-            </button>
+            </IconButton>
           </div>
         </header>
         <div className="grid gap-4 border-b border-neutral-200/80 px-4 py-4 sm:grid-cols-2">

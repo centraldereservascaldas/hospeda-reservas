@@ -254,22 +254,20 @@ export const TripsView: React.FC<TripsViewProps> = ({
       )}
 
       {(reservationsError || directBookingOrdersError) && (
-        <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <p role="alert" className="text-sm text-amber-950">
-            Não foi possível carregar todas as informações da sua conta.
-            {reservationsError && ` Reservas: ${reservationsError}`}
-            {directBookingOrdersError && ` Compras: ${directBookingOrdersError}`}
-          </p>
-          {onRetryAccountData && (
-            <button
-              type="button"
-              onClick={onRetryAccountData}
-              className="shrink-0 rounded-full border border-amber-800 px-4 py-2 text-sm font-bold text-amber-950 hover:bg-amber-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-            >
-              Tentar novamente
-            </button>
-          )}
-        </div>
+        <InlineNotice variant="warning" role="alert" className="mt-5 sm:items-center">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Não foi possível carregar todas as informações da sua conta.
+              {reservationsError && ` Reservas: ${reservationsError}`}
+              {directBookingOrdersError && ` Compras: ${directBookingOrdersError}`}
+            </span>
+            {onRetryAccountData && (
+              <Button variant="secondary" onClick={onRetryAccountData} className="shrink-0">
+                Tentar novamente
+              </Button>
+            )}
+          </div>
+        </InlineNotice>
       )}
 
       {reservationsLoading && reservations.length > 0 && (

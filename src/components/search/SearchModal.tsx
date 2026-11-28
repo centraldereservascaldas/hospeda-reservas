@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { X, Search, MapPin, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Search, MapPin, Sparkles } from 'lucide-react';
 import { SearchFilters } from '../../types';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { StaysSearchWidget, toBrDate } from './StaysSearchWidget';
@@ -8,6 +8,7 @@ import { countOccupancyGuests } from '../../utils/guestCounts';
 import { matchesMediaQuery } from '../../utils/motion';
 import { GuestCounterList } from './GuestCounterList';
 import { CalendarMonthGrid } from './CalendarMonthGrid';
+import { IconButton } from '../IconButton';
 
 function toLocalIsoDate(date: Date): string {
   const year = date.getFullYear();
@@ -58,7 +59,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const mobileCalendarSentinelRef = useRef<HTMLDivElement>(null);
   const dialogRef = useDialogFocus(isOpen, onClose, { initialFocusRef: closeButtonRef });
   const focusRing =
-    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600';
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring';
   const [activeTab, setActiveTab] = useState<'destination' | 'dates' | 'guests' | 'stays_engine'>(
     'destination',
   );
@@ -362,6 +363,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       event.preventDefault();
       setIsDestinationSuggestionsOpen(false);
       setActiveDestinationIndex(-1);
+      destinationInputRef.current?.focus();
     }
   };
 
@@ -425,17 +427,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
       className={`grid items-start gap-2 sm:gap-3 ${mobile ? 'grid-cols-1' : 'grid-cols-[2.75rem_minmax(0,1fr)_2.75rem]'}`}
     >
       {!mobile && (
-        <button
-          type="button"
+        <IconButton
           aria-label="Mês anterior"
           onClick={() =>
             setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() - 1, 1))
           }
           disabled={visibleMonth <= currentMonth}
-          className="mt-8 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 disabled:cursor-not-allowed disabled:opacity-40"
+          variant="outlined-neutral"
+          className="mt-8"
         >
-          <span aria-hidden="true">‹</span>
-        </button>
+          <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+        </IconButton>
       )}
       <div
         ref={mobile ? mobileCalendarScrollRef : undefined}
@@ -472,17 +474,17 @@ export const SearchModal: React.FC<SearchModalProps> = ({
         )}
       </div>
       {!mobile && (
-        <button
-          type="button"
+        <IconButton
           aria-label="Próximo mês"
           onClick={() =>
             setVisibleMonth((month) => new Date(month.getFullYear(), month.getMonth() + 1, 1))
           }
           disabled={monthOffsetFromCurrent >= MAX_SEARCH_CALENDAR_MONTHS - 1}
-          className="mt-8 flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 disabled:cursor-not-allowed disabled:opacity-40"
+          variant="outlined-neutral"
+          className="mt-8"
         >
-          <span aria-hidden="true">›</span>
-        </button>
+          <ChevronRight aria-hidden="true" className="h-4 w-4" />
+        </IconButton>
       )}
     </div>
   );
@@ -576,12 +578,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                         }}
                         onKeyDown={handleDestinationKeyDown}
                         placeholder="Buscar condomínio ou destino"
-                        className="min-h-14 w-full rounded-xl border border-neutral-300 px-4 text-sm focus-visible:outline-2 focus-visible:outline-orange-600"
+                        className="min-h-14 w-full rounded-xl border border-control-border bg-control-surface px-4 text-sm text-control-foreground outline-none hover:border-control-border-hover focus-visible:border-focus-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                       />
                       <button
                         type="button"
                         onClick={selectAllDestinations}
-                        className="flex min-h-14 w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-orange-600"
+                        className="flex min-h-14 w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring"
                       >
                         <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                           <MapPin className="h-5 w-5" />
@@ -619,7 +621,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                               tabIndex={-1}
                               onMouseMove={() => setActiveDestinationIndex(index)}
                               onClick={() => selectDestinationSuggestion(item)}
-                              className={`flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50 ${activeDestinationIndex === index ? 'bg-neutral-100' : ''}`}
+                              className={`flex min-h-12 w-full items-center gap-3 rounded-xl p-3 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring ${activeDestinationIndex === index ? 'bg-neutral-100' : 'hover:bg-neutral-50'}`}
                             >
                               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                                 <MapPin className="h-5 w-5" />
@@ -923,7 +925,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       }}
                       onKeyDown={handleDestinationKeyDown}
                       placeholder="Ex: Trancoso, Rio de Janeiro, Campos do Jordão..."
-                      className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-neutral-300 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none transition-all"
+                      className="w-full rounded-2xl border border-control-border bg-control-surface py-3.5 pr-12 pl-12 text-sm text-control-foreground outline-none transition-all hover:border-control-border-hover focus-visible:border-focus-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                     />
                     {destination && (
                       <button
@@ -970,7 +972,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                           tabIndex={-1}
                           onMouseMove={() => setActiveDestinationIndex(index)}
                           onClick={() => selectDestinationSuggestion(dest)}
-                          className={`flex items-center gap-3 rounded-2xl border border-neutral-100 p-3 text-left transition-all hover:border-neutral-300 hover:bg-neutral-50 group ${focusRing} ${activeDestinationIndex === index ? 'bg-neutral-100' : ''}`}
+                          className={`group flex min-h-12 items-center gap-3 rounded-2xl border border-control-border p-3 text-left transition-colors hover:border-control-border-hover hover:bg-neutral-50 ${focusRing} ${activeDestinationIndex === index ? 'bg-neutral-100' : ''}`}
                         >
                           <div className="w-10 h-10 rounded-xl bg-orange-50 group-hover:bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 transition-colors">
                             <MapPin className="w-5 h-5" />

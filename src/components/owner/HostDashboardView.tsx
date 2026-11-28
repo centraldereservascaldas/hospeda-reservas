@@ -15,10 +15,11 @@ import { OwnerDashboardData } from '../../services/crcnBackendApi';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { getOwnerCalendarDaySegment } from '../../utils/ownerCalendar';
 import { EmptyState } from '../EmptyState';
+import { FormField } from '../FormField';
+import { IconButton } from '../IconButton';
 import { InlineNotice } from '../InlineNotice';
 import { LoadingStatus } from '../LoadingStatus';
 import { NativeSelect } from '../NativeSelect';
-import { FormField } from '../FormField';
 import { TextInput } from '../TextInput';
 import { OwnerDashboardSkeleton } from './OwnerPanelSkeletons';
 import { StatusBadge, type StatusBadgeTone } from '../StatusBadge';
@@ -214,25 +215,27 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
             </label>
           )}
           <div className="flex items-center gap-2 rounded-2xl border border-white/80 bg-white/75 p-1.5 shadow-sm backdrop-blur-xl">
-            <button
-              type="button"
+            <IconButton
               onClick={() => changeMonth(-1)}
               aria-label="Mês anterior"
-              className="rounded-xl p-2 hover:bg-white"
+              size="compact"
+              variant="quiet"
+              shape="rounded"
             >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
+              <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+            </IconButton>
             <span className="min-w-36 text-center text-sm font-bold capitalize text-neutral-800">
               {monthTitle}
             </span>
-            <button
-              type="button"
+            <IconButton
               onClick={() => changeMonth(1)}
               aria-label="Próximo mês"
-              className="rounded-xl p-2 hover:bg-white"
+              size="compact"
+              variant="quiet"
+              shape="rounded"
             >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+              <ChevronRight aria-hidden="true" className="h-4 w-4" />
+            </IconButton>
           </div>
         </div>
       </header>
@@ -245,7 +248,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
           <button
             key={tab.id}
             type="button"
-            aria-current={section === tab.id ? 'page' : undefined}
+            aria-pressed={section === tab.id}
             onClick={() => setSection(tab.id)}
             className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-center text-xs font-bold leading-tight transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 sm:min-h-11 sm:shrink-0 sm:flex-row sm:gap-2 sm:whitespace-nowrap sm:px-3 sm:py-2.5 sm:text-sm ${section === tab.id ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20' : 'text-neutral-700 hover:bg-white/90'}`}
           >

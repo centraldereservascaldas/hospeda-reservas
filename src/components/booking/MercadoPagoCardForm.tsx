@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { NativeSelect } from '../NativeSelect';
 import { checkoutApi } from '../../services/checkoutApi';
 import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
 import {
@@ -321,32 +322,27 @@ export function MercadoPagoCardForm({
           <label htmlFor={cardFormFields.issuer.id} className="block text-xs font-bold">
             Banco emissor
           </label>
-          <select
-            id={cardFormFields.issuer.id}
-            required
-            defaultValue=""
-            className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-          >
+          <NativeSelect id={cardFormFields.issuer.id} required defaultValue="" className="w-full">
             <option value="" disabled>
               Selecione o banco
             </option>
-          </select>
+          </NativeSelect>
         </div>
 
         <div className="space-y-1.5">
           <label htmlFor={cardFormFields.installments.id} className="block text-xs font-bold">
             Parcelas
           </label>
-          <select
+          <NativeSelect
             id={cardFormFields.installments.id}
             required
             defaultValue=""
-            className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+            className="w-full"
           >
             <option value="" disabled>
               Selecione as parcelas
             </option>
-          </select>
+          </NativeSelect>
           {installmentSummary && (
             <p className="text-xs text-neutral-600" aria-live="polite">
               {installmentSummary}
@@ -369,16 +365,16 @@ export function MercadoPagoCardForm({
             >
               Documento
             </label>
-            <select
+            <NativeSelect
               id={cardFormFields.identificationType.id}
               required
               defaultValue=""
-              className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm text-neutral-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+              className="w-full"
             >
               <option value="" disabled>
                 Tipo
               </option>
-            </select>
+            </NativeSelect>
           </div>
           <div className="space-y-1.5">
             <label

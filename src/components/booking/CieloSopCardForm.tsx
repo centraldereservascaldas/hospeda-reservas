@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -9,7 +10,6 @@ import {
 } from 'react';
 import { checkoutApi } from '../../services/checkoutApi';
 import { InstallmentPicker } from './InstallmentPicker';
-import { NativeSelect } from '../NativeSelect';
 import { isValidBrazilianTaxId } from '../../utils/cpf';
 import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
 import { loadCieloSopSdk } from '../../services/cieloSopSdk';
@@ -161,6 +161,7 @@ export function CieloSopCardForm({
   const [cardNumberHasEnoughDigits, setCardNumberHasEnoughDigits] = useState(false);
   const [cardNumberIsValid, setCardNumberIsValid] = useState(false);
   const [installments, setInstallments] = useState(1);
+  const installmentLabelId = useId();
   const [payerDocument, setPayerDocument] = useState('');
   const [useHolderCpf, setUseHolderCpf] = useState(false);
   const existingCardLayout = existingReservationHolderCpf !== undefined;
@@ -659,70 +660,39 @@ export function CieloSopCardForm({
               />
             </label>
           )}
-          {existingCardLayout ? (
-            <div className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
-              <span id="existing-card-installments-label">Parcelamento</span>
-              {installmentOptions.length > 0 ? (
-                <InstallmentPicker
-                  options={installmentOptions.map((option) => ({
-                    installments: option.installments,
-                    label: option.label,
-                  }))}
-                  value={selectedPricing?.installments ?? installments}
-                  onChange={setInstallments}
-                  disabled={lockInstallments || isSubmitting}
-                  labelledBy="existing-card-installments-label"
-                />
-              ) : (
-                <p className="text-sm text-neutral-600">
-                  Cartão indisponível para este valor. Escolha Pix ou fale com o atendimento.
-                </p>
-              )}
-              {selectedPricing && (
-                <p className="pt-2 text-sm font-normal text-neutral-500">
-                  Total no cartão: {moneyFormatter.format(selectedPricing.totalCents / 100)}
-                </p>
-              )}
-            </div>
-          ) : (
-            <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
-              Parcelamento
-              <NativeSelect
-                name="installments"
-                required
-                disabled={lockInstallments || installmentOptions.length === 0}
+          <div className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
+            <span id={installmentLabelId}>Parcelamento</span>
+            {installmentOptions.length > 0 ? (
+              <InstallmentPicker
+                options={installmentOptions.map((option) => ({
+                  installments: option.installments,
+                  label: option.label,
+                }))}
                 value={selectedPricing?.installments ?? installments}
-                onChange={(event) => setInstallments(Number(event.target.value))}
-                className="w-full font-normal"
-              >
-                {installmentOptions.length === 0 && (
-                  <option value={1}>Cartão indisponível para este valor</option>
-                )}
-                {installmentOptions.map((option) => (
-                  <option key={option.installments} value={option.installments}>
-                    {option.label}
-                  </option>
-                ))}
-              </NativeSelect>
-              <span className="block text-xs font-normal leading-5 text-neutral-600">
-                {installmentOptions.length === 0 ? (
-                  'A parcela mínima no cartão é de R$ 5,00. Escolha Pix ou fale com o atendimento.'
+                onChange={setInstallments}
+                disabled={lockInstallments || isSubmitting}
+                labelledBy={installmentLabelId}
+              />
+            ) : (
+              <p className="text-sm font-normal text-neutral-600">
+                Cartão indisponível para este valor. Escolha Pix ou fale com o atendimento.
+              </p>
+            )}
+            {selectedPricing && (
+              <p className="pt-2 text-xs font-normal leading-5 text-neutral-600">
+                {existingCardLayout ? (
+                  <>Total no cartão: {moneyFormatter.format(selectedPricing.totalCents / 100)}.</>
                 ) : (
                   <>
                     Hospedagem {moneyFormatter.format(Number(amount))} + acréscimo do cartão{' '}
-                    {selectedPricing
-                      ? `${moneyFormatter.format(selectedPricing.feeCents / 100)} (${selectedPricing.ratePercent.toLocaleString('pt-BR')}%)`
-                      : 'indisponível'}
-                    . Total final{' '}
-                    {selectedPricing
-                      ? moneyFormatter.format(selectedPricing.totalCents / 100)
-                      : 'indisponível'}
-                    .
+                    {moneyFormatter.format(selectedPricing.feeCents / 100)} (
+                    {selectedPricing.ratePercent.toLocaleString('pt-BR')}%). Total final{' '}
+                    {moneyFormatter.format(selectedPricing.totalCents / 100)}.
                   </>
                 )}
-              </span>
-            </label>
-          )}
+              </p>
+            )}
+          </div>
         </fieldset>
       ) : (
         alternativeContent

@@ -688,14 +688,14 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
                   } else if (event.key === 'End' && visibleOptions.length > 0) {
                     event.preventDefault();
                     moveActiveOption(visibleOptions.length - 1);
-                  } else if (event.key === 'Enter' && visibleOptions.length > 0) {
-                    event.preventDefault();
-                    selectOption(visibleOptions[activeOptionIndex]);
-                  }
-                  if (event.key === 'Escape') {
+                  } else if (event.key === 'Escape') {
                     event.preventDefault();
                     onClose();
                     triggerRef.current?.focus();
+                  } else if (event.key === 'Enter' && visibleOptions.length > 0) {
+                    event.preventDefault();
+                    const activeOption = visibleOptions[activeOptionIndex];
+                    if (activeOption) selectOption(activeOption);
                   }
                 }}
                 aria-label="Buscar condomínio"
@@ -1057,6 +1057,9 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       .then((items) => {
         if (active) setResorts(items);
       })
+      .catch(() => {
+        if (active) setResorts([]);
+      })
       .finally(() => {
         if (active) setIsLoadingResorts(false);
       });
@@ -1257,7 +1260,29 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       .toLocaleLowerCase('pt-BR')
       .includes(normalizedResortQuery),
   );
+  const safeSharedActiveResortIndex = Math.min(
+    Math.max(sharedActiveResortIndex, 0),
+    Math.max(sharedResortOptions.length - 1, 0),
+  );
   const sharedResortListboxId = `${fieldId}-resort-label-shared-listbox`;
+
+  useEffect(() => {
+    if (sharedResortOptions.length === 0) {
+      if (sharedActiveResortIndex !== 0) setSharedActiveResortIndex(0);
+      return;
+    }
+
+    if (sharedActiveResortIndex >= sharedResortOptions.length) {
+      setSharedActiveResortIndex(sharedResortOptions.length - 1);
+    }
+  }, [sharedActiveResortIndex, sharedResortOptions.length]);
+
+  useEffect(() => {
+    if (activeDropdown !== 'resort' || sharedResortOptions.length === 0) return;
+    sharedResortOptionRefs.current[safeSharedActiveResortIndex]?.scrollIntoView({
+      block: 'nearest',
+    });
+  }, [activeDropdown, safeSharedActiveResortIndex, sharedResortOptions.length]);
 
   const guestOptions = [
     { value: '', label: 'Hóspedes' },
@@ -1720,7 +1745,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     aria-autocomplete="list"
                     aria-activedescendant={
                       sharedResortOptions.length > 0
-                        ? `${sharedResortListboxId}-option-${sharedActiveResortIndex}`
+                        ? `${sharedResortListboxId}-option-${safeSharedActiveResortIndex}`
                         : undefined
                     }
                     onChange={(event) => {
@@ -1758,7 +1783,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                         });
                       } else if (event.key === 'Enter' && sharedResortOptions.length > 0) {
                         event.preventDefault();
-                        const option = sharedResortOptions[sharedActiveResortIndex];
+                        const option = sharedResortOptions[safeSharedActiveResortIndex];
                         setSelectedResortId(option.value);
                         setSelectedResort(option.value ? option.label : '');
                         setSharedResortQuery('');
@@ -1803,7 +1828,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                           setActiveDropdown(null);
                           setActiveDatePicker('checkIn');
                         }}
-                        className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm ${selectedResortId === option.value ? 'bg-orange-50 font-bold text-orange-950' : index === sharedActiveResortIndex ? 'bg-neutral-50 text-neutral-900' : 'text-neutral-700 hover:bg-orange-50'}`}
+                        className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus-ring ${selectedResortId === option.value ? 'bg-orange-50 font-bold text-orange-950' : index === safeSharedActiveResortIndex ? 'bg-neutral-50 text-neutral-900' : 'text-neutral-700 hover:bg-orange-50'}`}
                       >
                         {option.label}
                       </button>

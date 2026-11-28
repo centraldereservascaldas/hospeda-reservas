@@ -1,13 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { Plus, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
 import { FormField } from '../FormField';
+import { TextInput } from '../TextInput';
 import { apiFetch } from '../../services/apiFetch';
 import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
 import { isCpfDocument, isValidCpf } from '../../utils/cpf';
 
 type Person = { name: string; document: string };
-const inputClass =
-  'mt-2 min-h-12 w-full rounded-xl border border-neutral-300 bg-white px-4 text-base text-neutral-950 outline-none focus:border-orange-600 focus:ring-4 focus:ring-orange-600/10';
 const labelClass = 'block text-sm font-semibold text-neutral-800';
 
 export function GuestDetailsForm({
@@ -123,8 +122,10 @@ export function GuestDetailsForm({
         <fieldset disabled={state === 'sending'} className="space-y-4">
           <legend className="mb-3 font-bold">Titular da hospedagem</legend>
           <FormField label="Nome completo" id="guest-holder-name" required>
-            <input
-              className={inputClass}
+            <TextInput
+              controlSize="large"
+              className="mt-2 w-full"
+              type="text"
               required
               maxLength={180}
               autoComplete="name"
@@ -133,8 +134,9 @@ export function GuestDetailsForm({
             />
           </FormField>
           <FormField label="E-mail" id="guest-holder-email">
-            <input
-              className={inputClass}
+            <TextInput
+              controlSize="large"
+              className="mt-2 w-full"
               type="email"
               maxLength={254}
               autoComplete="email"
@@ -150,8 +152,10 @@ export function GuestDetailsForm({
               hint="Se informar CPF, verificaremos se ele é válido."
               error={documentError || undefined}
             >
-              <input
-                className={inputClass}
+              <TextInput
+                controlSize="large"
+                className="mt-2 w-full"
+                type="text"
                 required
                 maxLength={30}
                 value={holder.document}
@@ -162,8 +166,9 @@ export function GuestDetailsForm({
               />
             </FormField>
             <FormField label="Telefone" id="guest-holder-phone" required>
-              <input
-                className={inputClass}
+              <TextInput
+                controlSize="large"
+                className="mt-2 w-full"
                 type="tel"
                 required
                 maxLength={30}
@@ -193,10 +198,13 @@ export function GuestDetailsForm({
                   <Trash2 size={18} />
                 </button>
               </div>
-              <label className={labelClass}>
+              <label htmlFor={`companion-name-${index}`} className={labelClass}>
                 Nome completo
-                <input
-                  className={inputClass}
+                <TextInput
+                  id={`companion-name-${index}`}
+                  controlSize="large"
+                  className="mt-2 w-full"
+                  type="text"
                   required
                   maxLength={180}
                   value={person.name}
@@ -209,10 +217,13 @@ export function GuestDetailsForm({
                   }
                 />
               </label>
-              <label className={labelClass}>
+              <label htmlFor={`companion-document-${index}`} className={labelClass}>
                 Documento
-                <input
-                  className={inputClass}
+                <TextInput
+                  id={`companion-document-${index}`}
+                  controlSize="large"
+                  className="mt-2 w-full"
+                  type="text"
                   required
                   maxLength={30}
                   value={person.document}

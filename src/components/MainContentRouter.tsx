@@ -259,7 +259,7 @@ export function MainContentRouter({
       )}
 
       {propertyRouteStatus === 'idle' && currentView === 'explore' && (
-        <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-7 sm:py-8 lg:px-10 [@media(max-height:400px)]:py-0 [@media(max-width:639px)_and_(max-height:400px)]:px-2">
+        <div className="mx-auto max-w-[1440px] px-(--layout-page-gutter) py-6 sm:py-8 [@media(max-height:400px)]:py-0 [@media(max-width:639px)_and_(max-height:400px)]:px-2">
           {filteredProperties.some((property) => property.simulatedData) && (
             <p
               role="status"

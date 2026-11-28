@@ -17,7 +17,12 @@ export function CatalogLoadNotice({ status, isRefreshing, onRetry }: CatalogLoad
     return (
       <InlineNotice
         variant="loading"
-        icon={<LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin text-orange-700" />}
+        icon={
+          <LoaderCircle
+            aria-hidden="true"
+            className="h-5 w-5 motion-safe:animate-spin text-orange-700"
+          />
+        }
         className="items-center justify-center border-transparent bg-transparent py-16 text-sm font-semibold"
       >
         Carregando acomodações…
@@ -60,7 +65,10 @@ export function CatalogLoadNotice({ status, isRefreshing, onRetry }: CatalogLoad
       className="mb-6 flex-wrap items-center justify-between gap-3 px-5 py-4"
       icon={
         isRefreshing ? (
-          <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin text-amber-700" />
+          <LoaderCircle
+            aria-hidden="true"
+            className="h-4 w-4 motion-safe:animate-spin text-amber-700"
+          />
         ) : (
           <TriangleAlert aria-hidden="true" className="h-4 w-4 text-amber-700" />
         )

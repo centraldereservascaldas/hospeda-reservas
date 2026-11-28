@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useDialogFocus } from '../useDialogFocus';
+import { IconButton } from '../IconButton';
 import { formatPropertyDescription } from './formatPropertyDescription';
 import type { ReservationSummary } from './existingReservationSummary';
 import { getCheckoutSupportUrl } from '../../utils/checkoutSupport';
@@ -203,22 +204,24 @@ export function ExistingReservationStayCard({ summary }: { summary: ReservationS
                     />
                     {photos.length > 1 && (
                       <>
-                        <button
-                          type="button"
+                        <IconButton
                           aria-label="Foto anterior"
                           onClick={() => setPhoto((photo - 1 + photos.length) % photos.length)}
-                          className="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/95 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                          size="compact"
+                          variant="custom"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/95 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
                         >
                           <ChevronLeft size={20} aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
+                        </IconButton>
+                        <IconButton
                           aria-label="Próxima foto"
                           onClick={() => setPhoto((photo + 1) % photos.length)}
-                          className="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/95 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+                          size="compact"
+                          variant="custom"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/95 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
                         >
                           <ChevronRight size={20} aria-hidden="true" />
-                        </button>
+                        </IconButton>
                       </>
                     )}
                   </div>

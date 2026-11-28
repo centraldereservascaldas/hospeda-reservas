@@ -15,10 +15,13 @@ import {
   StaysOwnerSummary,
 } from '../../services/crcnBackendApi';
 import { ConfirmationDialog } from '../ConfirmationDialog';
+import { EmptyState } from '../EmptyState';
 import { InlineNotice } from '../InlineNotice';
 import { CheckboxInput } from '../CheckboxInput';
+import { RadioInput } from '../RadioInput';
 import { LoadingStatus } from '../LoadingStatus';
 import { PagePagination } from '../PagePagination';
+import { StatusBadge, type StatusBadgeTone } from '../StatusBadge';
 import { OwnerAdminQueueSkeleton } from './OwnerPanelSkeletons';
 
 interface OwnerAccessAdminViewProps {
@@ -323,11 +326,17 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
             <LoadingStatus className="font-semibold">Carregando solicitações…</LoadingStatus>
             <OwnerAdminQueueSkeleton variant="access" count={3} />
           </div>
-        ) : requests.length === 0 ? (
-          <div className="rounded-3xl border border-white/80 bg-white/65 p-10 text-center text-sm text-neutral-600 backdrop-blur-xl">
-            Não há solicitações pendentes no momento.
+        ) : requests.length === 0 && !error ? (
+          <div role="status">
+            <EmptyState
+              headingLevel={canManagePayments ? 'h3' : 'h2'}
+              density="compact"
+              title="Nenhuma solicitação pendente"
+              description="As novas solicitações aparecerão aqui para conferência."
+              className="border-white/80 bg-white/65 backdrop-blur-xl"
+            />
           </div>
-        ) : (
+        ) : requests.length > 0 ? (
           <div className="space-y-4">
             {requests.map((request) => (
               <OwnerRequestCard
@@ -340,7 +349,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
               />
             ))}
           </div>
-        )}
+        ) : null}
       </div>
     </section>
   );
@@ -397,6 +406,13 @@ const webhookStatusLabels: Record<DirectBookingOperationsWebhook['status'], stri
   failed: 'Falha',
   queued: 'Na fila',
   processing: 'Em processamento',
+};
+const webhookStatusTones: Record<DirectBookingOperationsWebhook['status'], StatusBadgeTone> = {
+  received: 'info',
+  retrying: 'warning',
+  failed: 'danger',
+  queued: 'neutral',
+  processing: 'info',
 };
 
 const getSuggestedNextAction = (order: DirectBookingOperationsOrder): string | null => {
@@ -1004,9 +1020,9 @@ const UnmatchedWebhookCard: React.FC<{
             ID do pagamento: {webhook.gatewayPaymentId}
           </p>
         </div>
-        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-900">
+        <StatusBadge tone={webhookStatusTones[webhook.status]} className="text-[11px]">
           {webhookStatusLabels[webhook.status]}
-        </span>
+        </StatusBadge>
       </div>
       <dl className="mt-4 grid gap-3 border-t border-neutral-200 pt-4 text-xs sm:grid-cols-3">
         <div>
@@ -1217,16 +1233,16 @@ const OwnerRequestCard: React.FC<{
             {owners.map((owner) => (
               <label
                 key={owner.id}
+                htmlFor={`stays-owner-match-${request.userId}-${owner.id}`}
                 className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-orange-600 ${selectedOwnerId === owner.id ? 'bg-orange-50 ring-1 ring-orange-300' : 'hover:bg-neutral-50'}`}
               >
-                <input
-                  type="radio"
+                <RadioInput
+                  id={`stays-owner-match-${request.userId}-${owner.id}`}
                   name={`stays-owner-match-${request.userId}`}
                   value={owner.id}
                   checked={selectedOwnerId === owner.id}
                   onChange={() => setSelectedOwnerId(owner.id)}
                   aria-label={`${owner.name}, ID ${owner.id}`}
-                  className="h-4 w-4 shrink-0 accent-orange-600"
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-neutral-800">

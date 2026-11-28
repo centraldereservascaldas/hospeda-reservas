@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
   CircleHelp,
   CircleDollarSign,
   Heart,
@@ -19,13 +20,15 @@ import {
 } from 'lucide-react';
 import { Button } from './Button';
 import { CheckboxInput } from './CheckboxInput';
+import { RadioInput } from './RadioInput';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { EmptyState } from './EmptyState';
 import { FormField } from './FormField';
-import { NativeSelect } from './NativeSelect';
-import { TextInput } from './TextInput';
+import { IconButton } from './IconButton';
 import { InlineNotice } from './InlineNotice';
 import { LoadingStatus } from './LoadingStatus';
+import { NativeSelect } from './NativeSelect';
+import { TextInput } from './TextInput';
 import { PagePagination } from './PagePagination';
 import { Skeleton } from './Skeleton';
 import { StatusBadge } from './StatusBadge';
@@ -47,12 +50,19 @@ type CatalogDomain = {
 const catalogDomains: CatalogDomain[] = [
   {
     name: 'Primitivas compartilhadas',
-    description: 'Controles e estados comuns adotados em mais de um domínio.',
+    description: 'Fundações e controles reutilizáveis; cada adoção é registrada por consumidor.',
     components: [
       {
         name: 'Botão',
         file: 'components/Button.tsx',
         purpose: 'Ações por botão com variantes, tamanho e feedback de carregamento.',
+        status: 'implemented',
+      },
+      {
+        name: 'Botão de ícone',
+        file: 'components/IconButton.tsx',
+        purpose:
+          'Ação somente com ícone, com nome acessível obrigatório, tamanho e superfície por contexto.',
         status: 'implemented',
       },
       {
@@ -66,7 +76,7 @@ const catalogDomains: CatalogDomain[] = [
         name: 'Entrada de texto nativa',
         file: 'components/TextInput.tsx',
         purpose:
-          'Altura, borda, foco visível, placeholder e disabled consistentes para entradas nativas de texto e data.',
+          'Entradas nativas de texto e data: variante confortável de 44 px e ampliada de 48 px, com borda, foco visível, placeholder e disabled consistentes.',
         status: 'implemented',
       },
       {
@@ -81,6 +91,13 @@ const catalogDomains: CatalogDomain[] = [
         file: 'components/CheckboxInput.tsx',
         purpose:
           'Estilo semântico e foco visível para escolhas independentes, mantendo o input nativo e a composição da label no consumidor.',
+        status: 'implemented',
+      },
+      {
+        name: 'Radio nativo',
+        file: 'components/RadioInput.tsx',
+        purpose:
+          'Estilo semântico e foco visível para escolhas exclusivas, mantendo o input nativo e o grupo/label no consumidor.',
         status: 'implemented',
       },
       {
@@ -101,7 +118,7 @@ const catalogDomains: CatalogDomain[] = [
         name: 'Badge de status',
         file: 'components/StatusBadge.tsx',
         purpose:
-          'Rótulos compactos de status, reutilizados nas reservas do usuário e do proprietário.',
+          'Rótulos compactos de status em viagens do usuário, reservas do proprietário e estados de webhook na operação administrativa.',
         status: 'implemented',
       },
       {
@@ -915,6 +932,7 @@ export function DesignSystemPage({
   const [searchTerm, setSearchTerm] = useState('');
   const [previewInstallments, setPreviewInstallments] = useState(3);
   const [paginationPreviewPage, setPaginationPreviewPage] = useState(1);
+  const [isPropertyFavoritePreview, setIsPropertyFavoritePreview] = useState(false);
   const [isConfirmationPreviewOpen, setIsConfirmationPreviewOpen] = useState(false);
   const confirmationPreviewTriggerRef = useRef<HTMLButtonElement>(null);
   const [confirmationPreviewMessage, setConfirmationPreviewMessage] = useState('');
@@ -1195,6 +1213,48 @@ export function DesignSystemPage({
                 </div>
               </SpecimenCard>
               <SpecimenCard
+                title="Papéis semânticos de controles"
+                source="TextInput · NativeSelect · Button · @theme inline"
+              >
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <TokenRow
+                    name="Superfície do controle"
+                    value="--color-control-surface · white"
+                    color="#ffffff"
+                  />
+                  <TokenRow
+                    name="Texto do controle"
+                    value="--color-control-foreground · neutral-800"
+                    color="#262626"
+                  />
+                  <TokenRow
+                    name="Borda do controle"
+                    value="--color-control-border · neutral-300"
+                    color="#d4d4d4"
+                  />
+                  <TokenRow
+                    name="Borda em hover"
+                    value="--color-control-border-hover · neutral-400"
+                    color="#a3a3a3"
+                  />
+                  <TokenRow
+                    name="Superfície desabilitada"
+                    value="--color-state-disabled-surface · neutral-100"
+                    color="#f5f5f5"
+                  />
+                  <TokenRow
+                    name="Texto desabilitado"
+                    value="--color-state-disabled-foreground · neutral-500"
+                    color="#737373"
+                  />
+                </div>
+                <p className="mt-3 text-xs leading-5 text-neutral-600">
+                  <code>TextInput</code> e <code>NativeSelect</code> compartilham a superfície,
+                  borda, texto e cores desabilitadas. O botão secundário referencia a mesma borda e
+                  superfície desabilitada. Foco e hover permanecem papéis separados.
+                </p>
+              </SpecimenCard>
+              <SpecimenCard
                 title="Papéis semânticos de status"
                 source="StatusBadge · InlineNotice · @theme inline"
               >
@@ -1473,6 +1533,12 @@ export function DesignSystemPage({
                   As utilities do tema cobrem os raios recorrentes; valores arbitrários permanecem
                   candidatos a revisão, não a substituição automática.
                 </p>
+                <div className="mt-3">
+                  <TokenRow
+                    name="Raio semântico de controle"
+                    value="--radius-control · 12 px · alias de --radius-xl · TextInput, NativeSelect e InstallmentPicker"
+                  />
+                </div>
               </SpecimenCard>
               <SpecimenCard
                 title="Variáveis semânticas de layout"
@@ -1481,7 +1547,11 @@ export function DesignSystemPage({
                 <div className="grid gap-2">
                   <TokenRow
                     name="Gutter de página"
-                    value="--layout-page-gutter · 16 px / 24 px / 32 px (base / ≥640 / ≥1024) · conferido no browser"
+                    value="--layout-page-gutter · 16 px / 24 px / 32 px (base / ≥640 / ≥1024) · 8 containers gerais"
+                  />
+                  <TokenRow
+                    name="Altura mínima confortável de controle"
+                    value="--spacing-control-comfortable · 44 px · Button médio, TextInput e NativeSelect"
                   />
                   <TokenRow name="Gutter do header" value="12 px base · 32 px ≥640 · 48 px ≥1440" />
                   <TokenRow
@@ -1575,13 +1645,34 @@ export function DesignSystemPage({
                 source="CategoryBar · PropertyCard · calendários"
               >
                 <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
+                  <IconButton
                     aria-label="Salvar imóvel"
-                    className="liquid-glass-button flex h-11 w-11 items-center justify-center rounded-full text-neutral-800 hover:text-orange-700"
+                    variant="quiet"
+                    className="liquid-glass-button text-neutral-800 hover:text-orange-700"
                   >
                     <Heart aria-hidden="true" size={19} />
-                  </button>
+                  </IconButton>
+                  <IconButton
+                    aria-label="Fechar"
+                    size="compact"
+                    shape="rounded"
+                    variant="outlined-neutral"
+                  >
+                    <X aria-hidden="true" size={16} />
+                  </IconButton>
+                  <IconButton aria-label="Abrir ajuda" variant="outlined">
+                    <CircleHelp aria-hidden="true" size={17} />
+                  </IconButton>
+                  <IconButton
+                    aria-label="Foto anterior"
+                    variant="custom"
+                    className="bg-white/90 text-neutral-900 shadow-md ring-1 ring-black/10 hover:bg-white"
+                  >
+                    <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+                  </IconButton>
+                  <IconButton aria-label="Mais opções" size="large" variant="surface">
+                    <ChevronDown aria-hidden="true" size={17} />
+                  </IconButton>
                   <button
                     type="button"
                     aria-pressed="true"
@@ -1600,17 +1691,10 @@ export function DesignSystemPage({
                       2
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    aria-label="Próximo mês"
-                    className="flex h-11 w-11 items-center justify-center rounded-full border border-neutral-200 bg-white"
-                  >
-                    <ChevronDown aria-hidden="true" className="-rotate-90" size={17} />
-                  </button>
                 </div>
                 <p className="mt-5 text-xs text-neutral-500">
-                  Botões somente com ícone precisam de nome acessível e alvo de interação adequado
-                  ao contexto.
+                  O nome acessível é obrigatório na API. Tamanho, forma e superfície variam por
+                  contexto; controles sobre fotos e overlays continuam composições de domínio.
                 </p>
               </SpecimenCard>
               <SpecimenCard
@@ -1674,7 +1758,7 @@ export function DesignSystemPage({
             <div className="grid gap-5 xl:grid-cols-2">
               <SpecimenCard
                 title="Texto, seleção e busca"
-                source="CreateListingModal · SearchModal"
+                source="CreateListingModal · GuestDetailsForm · SearchModal"
               >
                 <div className="grid gap-4">
                   <FormField
@@ -1687,6 +1771,17 @@ export function DesignSystemPage({
                       type="text"
                       required
                       defaultValue="Apartamento com piscina"
+                      className="font-normal"
+                    />
+                  </FormField>
+                  <FormField
+                    label="Nome do hóspede · campo ampliado"
+                    id="design-system-guest-name"
+                    hint="Variante grande: altura mínima de 48 px e texto de 16 px."
+                  >
+                    <TextInput
+                      controlSize="large"
+                      defaultValue="Maria da Silva"
                       className="font-normal"
                     />
                   </FormField>
@@ -1807,22 +1902,19 @@ export function DesignSystemPage({
               </SpecimenCard>
               <SpecimenCard
                 title="Inventário de seleção e dropdowns"
-                source="Auditoria do frontend Laravel · 27 nov 2026"
+                source="Auditoria do frontend Laravel · 28 nov 2026"
               >
                 <div className="space-y-5 text-sm">
                   <div>
                     <h3 className="font-bold text-neutral-900">
-                      Select nativo · 8 usos controlados pelo app
+                      Select nativo · 10 usos com NativeSelect
                     </h3>
                     <p className="mt-1 text-xs leading-5 text-neutral-600">
-                      São 6 instâncias em telas de produto e 2 espécimes desta página. Outros 4
-                      controles encontrados não pertencem a essa primitiva: 3 selects criados pelo
-                      SDK Mercado Pago e 1 select do sandbox.
+                      São 5 instâncias de produto com opções definidas pelo app, 3 campos de
+                      pagamento cujas opções e valores são geridos pelo SDK Mercado Pago, e 2
+                      espécimes desta página. O select do sandbox permanece fora do wrapper.
                     </p>
                     <ul className="mt-2 grid gap-1.5 text-xs text-neutral-700 sm:grid-cols-2">
-                      <li>
-                        <code>CieloSopCardForm.tsx</code> · estado sem parcela disponível
-                      </li>
                       <li>
                         <code>CreateListingModal.tsx</code> · categoria
                       </li>
@@ -1836,13 +1928,17 @@ export function DesignSystemPage({
                         <code>ParkTicketSelector.tsx</code> · data de visita
                       </li>
                       <li>
+                        <code>MercadoPagoCardForm.tsx</code> · emissor, parcelas e documento
+                      </li>
+                      <li>
                         <code>DesignSystemPage.tsx</code> · 2 espécimes nativos
                       </li>
                     </ul>
                     <p className="mt-2 text-xs leading-5 text-neutral-600">
-                      Exceções fora do wrapper: 3 controles do SDK em{' '}
-                      <code>MercadoPagoCardForm.tsx</code> e 1 select no sandbox em{' '}
-                      <code>PartnerSandboxCheckout.tsx</code>.
+                      Exceção fora do wrapper: 1 select no sandbox em{' '}
+                      <code>PartnerSandboxCheckout.tsx</code>. O SDK continua dono das opções,
+                      valores e callbacks dos três campos Mercado Pago; <code>NativeSelect</code>{' '}
+                      padroniza apenas o elemento visual nativo.
                     </p>
                   </div>
                   <div className="border-t border-neutral-200 pt-4">
@@ -1868,18 +1964,18 @@ export function DesignSystemPage({
                       </li>
                       <li>
                         <strong>Parcelas:</strong> <code>InstallmentPicker.tsx</code>, listbox de
-                        seleção única usado no checkout Cielo. As duas ocorrências desta página são
-                        apenas espécimes interativos.
+                        seleção única compartilhado pelas composições do checkout Cielo. As duas
+                        ocorrências desta página são apenas espécimes interativos.
                       </li>
                       <li>
-                        <strong>Moeda:</strong> grupo de botões de seleção única em{' '}
-                        <code>Header.tsx</code>, com <code>aria-pressed</code>, Escape e foco de
-                        retorno.
+                        <strong>Moeda:</strong> grupo de radios de seleção única em{' '}
+                        <code>Header.tsx</code>, com navegação por setas, Escape e foco de retorno.
                       </li>
                       <li>
                         <strong>Conta:</strong> painel de navegação e ações em{' '}
-                        <code>Header.tsx</code>, anunciado como grupo. Não é um menu ARIA; aceita
-                        navegação Tab normal.
+                        <code>Header.tsx</code>, como navegação e ações de documento. Não é um menu
+                        ARIA; ao abrir, o foco vai para a primeira ação, Tab percorre os controles e
+                        o painel fecha quando o foco sai.
                       </li>
                       <li>
                         <strong>Associação de hospedagem:</strong> opções exclusivas com radios
@@ -1903,10 +1999,10 @@ export function DesignSystemPage({
                     SDKs.
                   </p>
                   <p className="rounded-xl bg-blue-50 p-3 text-xs leading-5 text-blue-950">
-                    <code>NativeSelect</code> padroniza as 8 instâncias controladas pelo app: altura
-                    mínima de 44 px, foco visível e estado desabilitado. Continua sendo um{' '}
-                    <code>&lt;select&gt;</code> nativo; campos que um SDK de pagamento gerencia
-                    permanecem fora desse wrapper.
+                    <code>NativeSelect</code> padroniza 10 instâncias, inclusive os selects nativos
+                    cuja lista de opções é gerida pelo SDK de pagamento. Altura mínima de 44 px,
+                    foco visível e estado desabilitado permanecem no wrapper; lógica, opções e valor
+                    continuam com cada consumidor. O sandbox preserva seu controle isolado.
                   </p>
                 </div>
               </SpecimenCard>
@@ -1975,6 +2071,47 @@ export function DesignSystemPage({
                     <CheckboxInput id="design-system-checkbox-disabled" disabled />
                     Opção indisponível
                   </label>
+                  <fieldset className="grid gap-2 rounded-xl border border-neutral-200 p-3">
+                    <legend className="px-1 text-sm font-semibold text-neutral-800">
+                      Forma de contato · escolha uma
+                    </legend>
+                    <label
+                      htmlFor="design-system-radio-email"
+                      className="flex min-h-11 items-center gap-3 text-sm text-neutral-700"
+                    >
+                      <RadioInput
+                        id="design-system-radio-email"
+                        name="design-system-contact-method"
+                        value="email"
+                        defaultChecked
+                      />
+                      Email
+                    </label>
+                    <label
+                      htmlFor="design-system-radio-phone"
+                      className="flex min-h-11 items-center gap-3 text-sm text-neutral-700"
+                    >
+                      <RadioInput
+                        id="design-system-radio-phone"
+                        name="design-system-contact-method"
+                        value="phone"
+                        size="large"
+                      />
+                      Telefone · alvo amplo
+                    </label>
+                    <label
+                      htmlFor="design-system-radio-unavailable"
+                      className="flex min-h-11 items-center gap-3 text-sm text-neutral-500"
+                    >
+                      <RadioInput
+                        id="design-system-radio-unavailable"
+                        name="design-system-contact-method"
+                        value="unavailable"
+                        disabled
+                      />
+                      Opção indisponível
+                    </label>
+                  </fieldset>
                   <p role="status" aria-live="polite" className="text-xs text-neutral-600">
                     Salvando alterações… Preserve o valor e comunique o resultado sem mover o foco.
                   </p>
@@ -1999,13 +2136,24 @@ export function DesignSystemPage({
                     <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-neutral-700">
                       Piscina · Caldas Novas
                     </span>
-                    <button
+                    <IconButton
                       type="button"
-                      aria-label="Salvar Apartamento Lago Azul"
-                      className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-neutral-800"
+                      size="comfortable"
+                      variant="custom"
+                      aria-label={
+                        isPropertyFavoritePreview
+                          ? 'Remover Apartamento Lago Azul dos favoritos'
+                          : 'Salvar Apartamento Lago Azul nos favoritos'
+                      }
+                      aria-pressed={isPropertyFavoritePreview}
+                      onClick={() => setIsPropertyFavoritePreview((saved) => !saved)}
+                      className="absolute right-3 top-3 rounded-full bg-white/90 text-neutral-800 shadow-sm transition-colors hover:bg-white focus-visible:outline-orange-600"
                     >
-                      <Heart aria-hidden="true" size={18} />
-                    </button>
+                      <Heart
+                        aria-hidden="true"
+                        className={`h-5 w-5 transition-colors ${isPropertyFavoritePreview ? 'fill-orange-500 text-orange-500' : ''}`}
+                      />
+                    </IconButton>
                   </div>
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -2027,6 +2175,10 @@ export function DesignSystemPage({
                     </p>
                   </div>
                 </div>
+                <p className="mt-3 text-xs leading-5 text-neutral-600">
+                  O coração demonstra o tamanho e o estado acessível de <code>IconButton</code>;
+                  este espécime alterna estado local e não salva dados do produto.
+                </p>
               </SpecimenCard>
               <SpecimenCard
                 title="Badges, filtros e estados"
@@ -2715,7 +2867,7 @@ export function DesignSystemPage({
                   ))}
                 </div>
                 <nav
-                  aria-label="Seções do painel do anfitrião"
+                  aria-label="Exemplo de seletor de seção do painel do proprietário"
                   className="mt-4 flex gap-2 overflow-x-auto border-b border-neutral-200 pb-2"
                 >
                   {['Visão geral', 'Propriedades', 'Reservas', 'Calendário', 'Contabilidade'].map(
@@ -2723,8 +2875,8 @@ export function DesignSystemPage({
                       <button
                         key={sectionName}
                         type="button"
-                        aria-current={index === 0 ? 'page' : undefined}
-                        className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${index === 0 ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
+                        aria-pressed={index === 0}
+                        className={`flex min-h-11 shrink-0 items-center rounded-full px-3 py-2 text-xs font-semibold ${index === 0 ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
                       >
                         {sectionName}
                       </button>
@@ -3045,6 +3197,14 @@ export function DesignSystemPage({
                     <strong>Solicitação enviada.</strong> Você receberá uma atualização sobre o
                     acesso.
                   </InlineNotice>
+                  <InlineNotice
+                    variant="warning"
+                    role="group"
+                    icon={<CircleHelp aria-hidden="true" size={18} />}
+                  >
+                    <strong>Atualização parcial.</strong> Algumas informações podem estar
+                    indisponíveis; tente atualizar novamente.
+                  </InlineNotice>
                   <InlineNotice variant="success" role="status" density="compact">
                     Bloqueio de calendário registrado.
                   </InlineNotice>
@@ -3344,12 +3504,17 @@ export function DesignSystemPage({
                     em viagens.
                   </li>
                   <li>
+                    <code>IconButton</code>: calendário, favoritos, navegação de fotos e exportação
+                    CSV; cada consumidor mantém o estado de domínio e os indicadores de foto seguem
+                    como composição própria.
+                  </li>
+                  <li>
                     <code>FormField</code>: conta/login, dados do hóspede, cadastro de anúncio e
                     bloqueio de datas do proprietário.
                   </li>
                   <li>
-                    <code>TextInput</code>: cadastro de anúncio, calendário do proprietário e
-                    espécime do catálogo.
+                    <code>TextInput</code>: cadastro de anúncio, calendário do proprietário,
+                    formulário de dados dos hóspedes e espécimes do catálogo.
                   </li>
                   <li>
                     <code>NativeSelect</code>: filtros de painel, formulário de anúncio, ingresso e
@@ -3360,16 +3525,22 @@ export function DesignSystemPage({
                     confirmação de identidade e seleção opcional de ingressos.
                   </li>
                   <li>
-                    <code>InlineNotice</code>: catálogo e alertas de carregamento em painéis do
-                    proprietário/admin.
+                    <code>RadioInput</code>: seleção de correspondência de cadastro na operação
+                    administrativa; cartões de pagamento e de foto continuam com composições de
+                    domínio.
                   </li>
                   <li>
-                    <code>StatusBadge</code>: reservas do usuário e cartões/listas do painel do
-                    anfitrião.
+                    <code>InlineNotice</code>: catálogo, atualização parcial em viagens, falhas e
+                    sucesso em painéis do proprietário/admin.
                   </li>
                   <li>
-                    <code>EmptyState</code>: catálogo, viagens, painel do anfitrião e filtro
-                    contábil.
+                    <code>StatusBadge</code>: viagens do usuário, cartões/listas do painel do
+                    anfitrião e estados de webhook na operação administrativa.
+                  </li>
+                  <li>
+                    <code>EmptyState</code>: catálogo, viagens, acessos administrativos, painel do
+                    anfitrião e filtro contábil. Favoritos conserva um layout compacto próprio para
+                    telas baixas; fila operacional sem pendências conserva o estado de sucesso.
                   </li>
                 </ul>
                 <p className="mt-3 border-t border-neutral-100 pt-3 text-xs leading-5 text-neutral-500">
@@ -3379,7 +3550,7 @@ export function DesignSystemPage({
               </article>
             </div>
             <p className="mt-5 text-xs leading-5 text-neutral-500">
-              Atualizado em 27/11/2026. Inventário do frontend React principal, construído a partir
+              Atualizado em 28/11/2026. Inventário do frontend React principal, construído a partir
               dos arquivos de <code>src/components</code>, folhas <code>src/index.css</code> e{' '}
               <code>public/brand-theme.css</code>. O blog Astro em <code>blog/</code> tem escopo
               visual próprio e não está incluído. Consulte{' '}

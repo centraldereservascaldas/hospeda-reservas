@@ -5,7 +5,7 @@ type NativeSelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
 };
 
 const baseClasses =
-  'min-h-11 rounded-xl border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-800 outline-none transition-colors focus-visible:border-orange-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-neutral-500';
+  'min-h-control-comfortable rounded-control border border-control-border bg-control-surface px-3 text-sm font-medium text-control-foreground outline-none transition-colors focus-visible:border-orange-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:bg-state-disabled-surface disabled:text-state-disabled-foreground';
 
 export function NativeSelect({ className = '', children, ...props }: NativeSelectProps) {
   return (

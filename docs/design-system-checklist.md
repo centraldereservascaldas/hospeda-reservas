@@ -23,6 +23,9 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 - [ ] Escala tipográfica ainda precisa ser consolidada: há valores arbitrários em dezenas de componentes e permanecem usos abaixo de 11 px em conteúdo da interface.
 - [ ] Escala e regras de tamanho de ícones precisam ser inventariadas; a biblioteca é consistente, mas os tamanhos são definidos por componente.
 - [ ] Tokens semânticos de cor, raio, sombra, camada e dimensões responsivas precisam ser definidos ou validados contra os usos atuais; a auditoria espacial inicial está registrada separadamente.
+- [~] Altura mínima confortável de 44 px foi nomeada como `--spacing-control-comfortable` e adotada por `Button` médio, `TextInput` e `NativeSelect`; falta validar alinhamento e interação nos consumidores autenticados antes de ampliar a migração.
+- [~] `TextInput` mantém 44 px como padrão e oferece variante grande de 48 px/16 px adotada nos seis campos de hóspedes; preserva-se o alvo ampliado do checkout, com validação visual autenticada pendente.
+- [~] Papéis de cor compartilhados para controles foram ligados a `TextInput`, `NativeSelect` e borda/superfície disabled do `Button` secundário. A validação de estilos computados, hover, disabled e contraste por jornada segue pendente.
 - [ ] Componentes compartilhados e componentes de domínio precisam ser inventariados por papel e estados antes de decidir novas abstrações.
 - [ ] Contraste, zoom, aumento de texto, safe areas, estados completos e consistência visual precisam de validação por fluxo e breakpoint.
 
@@ -63,12 +66,13 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 - [ ] Definir tamanhos por função (metadado, ícone junto a texto, ação compacta, navegação e destaque), incluindo mobile e desktop.
 - [ ] Padronizar traço, alinhamento ótico, cor, preenchimento e espaçamento entre ícone e rótulo.
 - [ ] Separar tamanho visual do ícone do alvo touch; ações móveis continuam fáceis de tocar sem ampliar demais o desenho.
-- [ ] Exigir nome acessível para botão somente com ícone; ícones decorativos ficam ocultos da árvore de acessibilidade.
+- [~] `IconButton` exige nome acessível e os espécimes/consumidores iniciais ocultam SVGs decorativos; revisar ainda os botões especializados restantes.
 - [ ] Conferir ícones em botões, navegação inferior, categorias, estados vazios, filtros, calendário e mapa nos breakpoints definidos.
 
 ### Espaçamento, layout e responsividade
 
 - [x] Inventariar inicialmente utilities de spacing, raios e variáveis semânticas em [auditoria de espaçamento e layout](design-system-layout-audit.md), com escopo e limites da busca estática.
+- [x] Nomear o papel compartilhado de altura mínima confortável sem redefinir a escala primitiva `--spacing` do Tailwind.
 - [ ] Validar layouts renderizados e decidir se os usos recorrentes pedem tokens semânticos além da escala-base existente do Tailwind.
 - [ ] Registrar medidas arbitrárias, margens, padding e exceções por contexto antes de migrar consumidores.
 - [ ] Definir breakpoints e mudanças de composição com base no conteúdo, evitando exceções sem justificativa.
@@ -82,6 +86,7 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 ### Forma, profundidade e camadas
 
 - [ ] Definir raios por papel: cartões, campos, badges, menus e modais.
+- [~] Nomear raio compartilhado de controle (`--radius-control` / `rounded-control`, 12 px) em `TextInput`, `NativeSelect` e `InstallmentPicker`; faltam validação visual nos consumidores e decisões para os demais papéis.
 - [ ] Definir níveis de sombra/elevação que funcionem em superfícies claras e glass.
 - [ ] Centralizar níveis de empilhamento de conteúdo, menus, diálogos, navegação fixa e notificações.
 - [ ] Definir bordas, divisores e estados hover, pressed, selected, disabled e focus-visible.
@@ -112,11 +117,13 @@ O sistema parte da identidade existente — hospedagem e lazer em Caldas Novas, 
 - [ ] Para cada componente candidato ao sistema, registrar propósito, API/props, conteúdo, variações, composição e limites de uso.
 - [ ] Definir estados comuns: padrão, hover, foco, pressionado, selecionado, desabilitado, loading, vazio, erro e sucesso, conforme aplicável.
 - [x] Ampliar o catálogo Laravel/React com exemplos de hover em botão, link, card e campo, e distinguir foco visível, pressionado, seleção persistente e desabilitado.
-- [x] Registrar dropdown nativo, localizar os seletores customizados de busca e parcelamento e mostrar uma prévia estática do estado aberto; interação real permanece nos componentes de origem.
+- [~] Revisar dropdowns/seletors nativos, comboboxes de busca, parcelas e painéis relacionados: inventário e contratos atualizados; comportamento de moeda corrigido para radio group. Seleção de resorts, pagamento real, sessões autenticadas e leitor de tela seguem pendentes conforme checklist aprofundado.
+- [x] Definir `CheckboxInput` e `RadioInput` para inputs nativos independentes e exclusivos, mantendo grupos, labels e variações de domínio nos consumidores; o catálogo mostra seleção, tamanhos e disabled, e o radio mantém foco visível por teclado.
 - [x] Exemplificar estados de campo preenchido, erro associado, sucesso, desabilitado e feedback de salvamento.
 - [x] Exibir tabela semântica, paginação e orientação para não aplicar comportamento de grid ARIA sem necessidade.
 - [x] Diferenciar feedback e componentes observados de propostas de toast e tooltip, sem declarar essas propostas como implementações existentes.
 - [x] Criar primitivas compartilhadas `Button`, `FormField`, `InlineNotice` e `StatusBadge`, com exemplos no catálogo e adoção inicial em busca, catálogo, checkout e painel do proprietário.
+- [~] Criar `IconButton` com `aria-label` obrigatório, três tamanhos, duas formas, quatro variantes visuais e composição `custom`; adotado em calendários, favorito de imóvel, galerias de fotos e exportação. O estado `aria-pressed` do favorito permanece com o consumidor; indicadores de foto mantêm composição própria.
 - [ ] Migrar outros consumidores por domínio após revisar seus contratos e estados; esta primeira adoção não torna todos os padrões do produto validados.
 - [ ] Revisar botões e links: hierarquia, largura, ícones, loading, disabled e nomes acessíveis.
 - [ ] Revisar campos: label associado, descrição, obrigatório, erro, foco, teclado móvel e valor longo.

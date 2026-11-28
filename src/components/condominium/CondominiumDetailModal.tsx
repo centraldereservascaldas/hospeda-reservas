@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Building, ChevronLeft, ChevronRight, Images, MapPin, X } from 'lucide-react';
 import type { CondominiumSummary } from '../../utils/condominiumCatalog';
+import { IconButton } from '../IconButton';
 import { useDialogFocus } from '../useDialogFocus';
 
 interface CondominiumDetailModalProps {
@@ -243,22 +244,22 @@ export const CondominiumDetailModal: React.FC<CondominiumDetailModalProps> = ({
               />
               {imageCount > 1 && (
                 <>
-                  <button
-                    type="button"
+                  <IconButton
                     onClick={() => movePhoto(-1)}
                     aria-label="Foto anterior"
-                    className="absolute left-1 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25 sm:left-4"
+                    variant="custom"
+                    className="absolute left-1 top-1/2 -translate-y-1/2 bg-white/15 text-white transition hover:bg-white/25 sm:left-4"
                   >
-                    <ChevronLeft className="h-6 w-6" />
-                  </button>
-                  <button
-                    type="button"
+                    <ChevronLeft aria-hidden="true" className="h-6 w-6" />
+                  </IconButton>
+                  <IconButton
                     onClick={() => movePhoto(1)}
                     aria-label="Próxima foto"
-                    className="absolute right-1 flex h-11 w-11 items-center justify-center rounded-full bg-white/15 transition hover:bg-white/25 sm:right-4"
+                    variant="custom"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 bg-white/15 text-white transition hover:bg-white/25 sm:right-4"
                   >
-                    <ChevronRight className="h-6 w-6" />
-                  </button>
+                    <ChevronRight aria-hidden="true" className="h-6 w-6" />
+                  </IconButton>
                 </>
               )}
             </div>

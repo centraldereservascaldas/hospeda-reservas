@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { IconButton } from '../IconButton';
 import { CalendarMonthGrid } from './CalendarMonthGrid';
 import { matchesMediaQuery } from '../../utils/motion';
 
@@ -128,25 +129,25 @@ export function SearchDateCalendar({
     <div className="search-date-calendar">
       {!isMobileLayout && (
         <div className="search-date-calendar__navigation">
-          <button
-            type="button"
+          <IconButton
             aria-label="Mês anterior"
             onClick={() =>
               setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))
             }
             disabled={visibleMonth <= new Date(new Date().getFullYear(), new Date().getMonth(), 1)}
+            variant="outlined-neutral"
           >
-            <ChevronLeft aria-hidden="true" />
-          </button>
-          <button
-            type="button"
+            <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+          </IconButton>
+          <IconButton
             aria-label="Próximo mês"
             onClick={() =>
               setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))
             }
+            variant="outlined-neutral"
           >
-            <ChevronRight aria-hidden="true" />
-          </button>
+            <ChevronRight aria-hidden="true" className="h-4 w-4" />
+          </IconButton>
         </div>
       )}
       <div

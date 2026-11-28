@@ -10,6 +10,7 @@ import {
 import { getPropertyCardImageSources, CATALOG_IMAGE_SIZES } from '../../utils/propertyImageSources';
 import { accommodationPagePath } from '../../utils/accommodationPageUrl';
 import { loadImobSysCardImages } from '../../services/imobSysCardMedia';
+import { IconButton } from '../IconButton';
 
 interface PropertyCardProps {
   property: Property;
@@ -217,25 +218,27 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           )}
 
           {/* Favorite Heart Button */}
-          <button
+          <IconButton
             onClick={handleFavoriteClick}
-            type="button"
+            size="comfortable"
+            variant="custom"
             aria-label={
               isSaved
                 ? `Remover ${displayTitle} dos favoritos`
                 : `Salvar ${displayTitle} nos favoritos`
             }
             aria-pressed={isSaved}
-            className="pointer-events-auto absolute right-3 top-3 z-20 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-neutral-900 shadow-sm transition-all hover:scale-105 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+            className="pointer-events-auto absolute right-3 top-3 z-20 rounded-full bg-white/95 text-neutral-900 shadow-sm transition-all hover:scale-105 hover:bg-white active:scale-95 focus-visible:outline-orange-600"
           >
             <Heart
+              aria-hidden="true"
               className={`h-5 w-5 transition-colors duration-200 stroke-[2.2] ${
                 isSaved
                   ? 'fill-orange-500 text-orange-500 stroke-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]'
                   : 'stroke-neutral-900 hover:stroke-orange-700'
               }`}
             />
-          </button>
+          </IconButton>
 
           {/* Host badge */}
           <div className="absolute top-3 left-3 z-10 max-w-[calc(100%-3.75rem)] pointer-events-none">
@@ -252,24 +255,24 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({
           {images.length > 1 && (
             <div className="opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
               {currentImageIndex > 0 && (
-                <button
+                <IconButton
                   onClick={prevImage}
-                  type="button"
                   aria-label="Foto anterior"
-                  className="pointer-events-auto absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full liquid-glass-button border border-white/90 text-neutral-900 shadow-lg transition-all hover:scale-110 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+                  variant="custom"
+                  className="pointer-events-auto absolute left-2 top-1/2 z-10 -translate-y-1/2 liquid-glass-button border border-white/90 text-neutral-900 shadow-lg transition-all hover:scale-110 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
                 >
-                  <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
-                </button>
+                  <ChevronLeft aria-hidden="true" className="w-4 h-4 stroke-[2.5]" />
+                </IconButton>
               )}
               {currentImageIndex < imageCount - 1 && (
-                <button
+                <IconButton
                   onClick={nextImage}
-                  type="button"
                   aria-label="Próxima foto"
-                  className="pointer-events-auto absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full liquid-glass-button border border-white/90 text-neutral-900 shadow-lg transition-all hover:scale-110 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+                  variant="custom"
+                  className="pointer-events-auto absolute right-2 top-1/2 z-10 -translate-y-1/2 liquid-glass-button border border-white/90 text-neutral-900 shadow-lg transition-all hover:scale-110 hover:bg-white active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
                 >
-                  <ChevronRight className="w-4 h-4 stroke-[2.5]" />
-                </button>
+                  <ChevronRight aria-hidden="true" className="w-4 h-4 stroke-[2.5]" />
+                </IconButton>
               )}
             </div>
           )}

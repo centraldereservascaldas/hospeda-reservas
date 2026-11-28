@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Building, ChevronLeft, ChevronRight, Images, MapPin } from 'lucide-react';
+import { IconButton } from '../IconButton';
 import type { CondominiumSummary } from '../../utils/condominiumCatalog';
 
 interface CondominiumDirectoryProps {
@@ -138,8 +139,7 @@ export const CondominiumDirectory: React.FC<CondominiumDirectoryProps> = ({
                 )}
                 {condominium.images.length > 1 && (
                   <>
-                    <button
-                      type="button"
+                    <IconButton
                       aria-label={`Foto anterior de ${condominium.name}`}
                       onClick={() =>
                         setPhotoIndexes((current) => ({
@@ -149,12 +149,12 @@ export const CondominiumDirectory: React.FC<CondominiumDirectoryProps> = ({
                             condominium.images.length,
                         }))
                       }
-                      className="absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/75 text-neutral-800 shadow-lg backdrop-blur-md transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+                      variant="custom"
+                      className="absolute left-2 top-1/2 z-10 -translate-y-1/2 border border-white/70 bg-white/75 text-neutral-800 shadow-lg backdrop-blur-md transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
                     >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <button
-                      type="button"
+                      <ChevronLeft aria-hidden="true" className="h-5 w-5" />
+                    </IconButton>
+                    <IconButton
                       aria-label={`Próxima foto de ${condominium.name}`}
                       onClick={() =>
                         setPhotoIndexes((current) => ({
@@ -162,10 +162,11 @@ export const CondominiumDirectory: React.FC<CondominiumDirectoryProps> = ({
                           [condominium.id]: (photoIndex + 1) % condominium.images.length,
                         }))
                       }
-                      className="absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/70 bg-white/75 text-neutral-800 shadow-lg backdrop-blur-md transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+                      variant="custom"
+                      className="absolute right-2 top-1/2 z-10 -translate-y-1/2 border border-white/70 bg-white/75 text-neutral-800 shadow-lg backdrop-blur-md transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
                     >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
+                      <ChevronRight aria-hidden="true" className="h-5 w-5" />
+                    </IconButton>
                     <span
                       aria-live="polite"
                       aria-atomic="true"

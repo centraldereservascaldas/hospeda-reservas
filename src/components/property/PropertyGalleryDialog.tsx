@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { IconButton } from '../IconButton';
 import { useDialogFocus } from '../useDialogFocus';
 
 interface PropertyGalleryDialogProps {
@@ -71,15 +72,15 @@ export const PropertyGalleryDialog: React.FC<PropertyGalleryDialogProps> = ({
             {activePhotoIndex + 1} de {images.length} fotos
           </p>
         </div>
-        <button
+        <IconButton
           ref={closeButtonRef}
-          type="button"
           onClick={onClose}
           aria-label="Fechar galeria"
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/90 text-neutral-900 shadow-md ring-1 ring-black/10 transition hover:bg-white"
+          variant="custom"
+          className="bg-white/90 text-neutral-900 shadow-md ring-1 ring-black/10 transition hover:bg-white"
         >
-          <X className="h-5 w-5" />
-        </button>
+          <X aria-hidden="true" className="h-5 w-5" />
+        </IconButton>
       </div>
 
       <div className="relative flex h-full w-full max-w-6xl items-center justify-center pb-20 pt-16">
@@ -116,24 +117,24 @@ export const PropertyGalleryDialog: React.FC<PropertyGalleryDialogProps> = ({
           />
           {images.length > 1 && (
             <>
-              <button
-                type="button"
+              <IconButton
                 aria-label="Foto anterior"
                 onClick={() =>
                   setActivePhotoIndex((index) => (index - 1 + images.length) % images.length)
                 }
-                className="absolute left-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-900 shadow-md ring-1 ring-black/10 transition hover:bg-white sm:left-5 sm:h-12 sm:w-12"
+                variant="custom"
+                className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/90 text-neutral-900 shadow-md ring-1 ring-black/10 transition hover:bg-white sm:left-5 sm:size-12"
               >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-              <button
-                type="button"
+                <ChevronLeft aria-hidden="true" className="h-6 w-6" />
+              </IconButton>
+              <IconButton
                 aria-label="Próxima foto"
                 onClick={() => setActivePhotoIndex((index) => (index + 1) % images.length)}
-                className="absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-neutral-900 shadow-md ring-1 ring-black/10 transition hover:bg-white sm:right-5 sm:h-12 sm:w-12"
+                variant="custom"
+                className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 text-neutral-900 shadow-md ring-1 ring-black/10 transition hover:bg-white sm:right-5 sm:size-12"
               >
-                <ChevronRight className="h-6 w-6" />
-              </button>
+                <ChevronRight aria-hidden="true" className="h-6 w-6" />
+              </IconButton>
             </>
           )}
         </div>
