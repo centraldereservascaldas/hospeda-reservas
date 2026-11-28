@@ -321,9 +321,9 @@ test('shows an explicit fallback when an owner summary has no property count', a
     );
     const search = await screen.findByLabelText('Localizar cadastro na Stays');
     fireEvent.change(search, { target: { value: 'Maria' } });
-    await waitFor(() => assert.ok(screen.getByRole('button', { name: /Maria da Silva/ })));
+    await waitFor(() => assert.ok(screen.getByRole('radio', { name: /Maria da Silva/ })));
     assert.match(
-      screen.getByRole('button', { name: /Maria da Silva/ }).textContent || '',
+      screen.getByRole('radio', { name: /Maria da Silva/ }).parentElement?.textContent || '',
       /Quantidade de imóveis indisponível/,
     );
   } finally {

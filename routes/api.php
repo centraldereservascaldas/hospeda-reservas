@@ -48,7 +48,7 @@ Route::get('/accommodations/{id}', [AccommodationController::class, 'show']);
 Route::post('/search', [AccommodationController::class, 'search']);
 Route::get('/accommodations/{id}/calendar', [AccommodationController::class, 'calendar']);
 Route::post('/price', [BookingController::class, 'price']);
-Route::middleware(['supabase.guest', 'existing-reservation.owner', 'throttle:existing-reservation-global'])->group(function (): void {
+Route::middleware(['existing-reservation.owner', 'throttle:existing-reservation-global'])->group(function (): void {
     Route::get('/existing-reservations/{code}/checkout-summary', [ExistingReservationCheckoutController::class, 'show'])->middleware('throttle:existing-reservation-summary');
     Route::post('/existing-reservations/{code}/checkout', [ExistingReservationCheckoutController::class, 'store'])->middleware('throttle:existing-reservation-checkout');
     Route::post('/existing-reservations/{code}/recover', [ExistingReservationCheckoutController::class, 'recover'])->middleware('throttle:existing-reservation-recover');

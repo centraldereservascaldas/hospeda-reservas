@@ -47,7 +47,7 @@ test('directory keeps descriptive text readable and photo/detail controls touch 
   assert.match(detailButton.className, /text-sm/);
 
   const nextPhoto = screen.getByRole('button', { name: 'Próxima foto de Residencial Lago Azul' });
-  assert.match(nextPhoto.className, /h-11 w-11/);
+  assert.match(nextPhoto.className, /(?:h-11 w-11|size-11)/);
   fireEvent.click(nextPhoto);
   assert.ok(screen.getByText('2 / 2'));
   assert.equal(container.querySelector('img')?.getAttribute('src'), condominium.images[1]);

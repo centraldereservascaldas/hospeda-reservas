@@ -213,11 +213,19 @@ export const Header: React.FC<HeaderProps> = ({
 
   useEffect(() => {
     if (!isUserMenuOpen) return;
-    const frame = window.requestAnimationFrame(() => {
+    const focusFirstAction = () => {
       accountMenuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
-    });
+    };
+    const frame =
+      typeof window.requestAnimationFrame === 'function'
+        ? window.requestAnimationFrame(focusFirstAction)
+        : window.setTimeout(focusFirstAction, 0);
     return () => {
-      window.cancelAnimationFrame(frame);
+      if (typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(frame);
+      } else {
+        window.clearTimeout(frame);
+      }
     };
   }, [isUserMenuOpen, accountTriggerRef]);
 
@@ -466,7 +474,7 @@ export const Header: React.FC<HeaderProps> = ({
                       Conversões em USD e EUR são aproximadas. O pagamento é processado em reais
                       (BRL).
                     </p>
-                    <div role="radiogroup" aria-label="Moeda de exibição">
+                    <div role="group" aria-label="Opções de moeda">
                       {[
                         { code: 'BRL', label: 'Real Brasileiro (R$)' },
                         { code: 'USD', label: 'Dólar Americano ($)' },
@@ -570,7 +578,8 @@ export const Header: React.FC<HeaderProps> = ({
                     <div
                       id="account-menu-panel"
                       ref={accountMenuRef}
-                      aria-label="Navegação e ações da conta"
+                      role="group"
+                      aria-label="Opções da conta"
                       onBlur={(event) => {
                         const nextTarget = event.relatedTarget;
                         if (

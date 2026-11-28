@@ -55,13 +55,13 @@ test('owner dashboard exposes the selected section and announces loading', () =>
       assert.match(sectionButton.className, /min-w-0/);
       assert.match(sectionButton.className, /sm:min-h-11/);
     }
-    assert.equal(overview.getAttribute('aria-current'), 'page');
+    assert.equal(overview.getAttribute('aria-pressed'), 'true');
     assert.equal(loading.textContent, 'Carregando dados da Stays…');
     assert.equal(loading.getAttribute('aria-live'), 'polite');
 
     fireEvent.click(calendar);
-    assert.equal(calendar.getAttribute('aria-current'), 'page');
-    assert.equal(overview.hasAttribute('aria-current'), false);
+    assert.equal(calendar.getAttribute('aria-pressed'), 'true');
+    assert.equal(overview.getAttribute('aria-pressed'), 'false');
   } finally {
     crcnBackendApi.getOwnerDashboard = originalGetOwnerDashboard;
   }
@@ -183,7 +183,7 @@ test('owner reviewer sees approval queue without loading payment operations', as
         canManagePayments: false,
       }),
     );
-    await waitFor(() => assert.ok(getByText('Não há solicitações pendentes no momento.')));
+    await waitFor(() => assert.ok(getByText('Nenhuma solicitação pendente')));
     assert.equal(operationCalls, 0);
     assert.equal(queryByText('Itens que precisam de ação'), null);
   } finally {
@@ -397,14 +397,14 @@ test('owner access search exposes touch-sized, announced selections without appr
     assert.match(search.className, /min-h-11/);
     fireEvent.change(search, { target: { value: 'qa' } });
 
-    const ownerOption = await findByRole('button', { name: /Proprietário de teste/ });
-    assert.equal(ownerOption.getAttribute('aria-pressed'), 'false');
-    assert.match(ownerOption.className, /min-h-11/);
-    assert.match(ownerOption.className, /focus-visible:outline/);
-    assert.ok(ownerOption.textContent?.includes('2 imóvel(is)'));
+    const ownerOption = await findByRole('radio', { name: /Proprietário de teste/ });
+    assert.equal((ownerOption as HTMLInputElement).checked, false);
+    assert.match(ownerOption.parentElement?.className || '', /min-h-11/);
+    assert.match(ownerOption.parentElement?.className || '', /focus-within:outline/);
+    assert.ok(ownerOption.parentElement?.textContent?.includes('2 imóvel(is)'));
 
     fireEvent.click(ownerOption);
-    assert.equal(ownerOption.getAttribute('aria-pressed'), 'true');
+    assert.equal((ownerOption as HTMLInputElement).checked, true);
 
     const identityConfirmation = getByRole('checkbox');
     assert.match(identityConfirmation.className, /h-5 w-5/);

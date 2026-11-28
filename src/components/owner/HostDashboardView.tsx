@@ -181,7 +181,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
     [];
 
   return (
-    <div className="mx-auto min-h-[75vh] max-w-7xl space-y-6 px-(--layout-page-gutter) py-8">
+    <main className="mx-auto min-h-[75vh] max-w-7xl space-y-6 px-(--layout-page-gutter) py-8">
       <header className="flex flex-col justify-between gap-4 border-b border-white/70 pb-5 sm:flex-row sm:items-end">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1 text-xs font-bold text-emerald-800">
@@ -673,7 +673,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
           </>
         )
       )}
-    </div>
+    </main>
   );
 };
 

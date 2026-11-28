@@ -3,6 +3,11 @@ import test, { afterEach } from 'node:test';
 import { JSDOM } from 'jsdom';
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
+Object.assign(dom.window, {
+  requestAnimationFrame: (callback: (timestamp: number) => void) =>
+    setTimeout(() => callback(Date.now()), 0),
+  cancelAnimationFrame: (handle: number) => clearTimeout(handle),
+});
 Object.assign(globalThis, {
   window: dom.window,
   document: dom.window.document,
@@ -139,6 +144,11 @@ test('account menu exposes expanded state and Escape restores focus to its trigg
   const trigger = getByRole('button', { name: 'Minha Conta' });
   trigger.focus();
   assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+  const focusFrame = window.requestAnimationFrame;
+  window.requestAnimationFrame = (callback) => {
+    callback(0);
+    return 0;
+  };
   fireEvent.click(trigger);
 
   assert.equal(trigger.getAttribute('aria-expanded'), 'true');
@@ -146,6 +156,7 @@ test('account menu exposes expanded state and Escape restores focus to its trigg
   assert.match(getByRole('button', { name: 'Entrar' }).className, /min-h-11/);
   assert.match(getByRole('button', { name: 'Criar conta' }).className, /min-h-11/);
   fireEvent.keyDown(document, { key: 'Escape' });
+  window.requestAnimationFrame = focusFrame;
 
   assert.equal(trigger.getAttribute('aria-expanded'), 'false');
   assert.equal(queryByRole('group', { name: 'Opções da conta' }), null);

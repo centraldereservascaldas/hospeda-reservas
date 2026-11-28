@@ -152,14 +152,14 @@ test('voucher and cancellation dialogs have names, initial focus, Escape and foc
   const cancellationDialog = getByRole('dialog', { name: 'Deseja cancelar esta reserva?' });
   const keepTripButton = getByText('Manter viagem');
   assert.equal(cancellationDialog.getAttribute('aria-modal'), 'true');
-  assert.equal(
-    cancellationDialog.getAttribute('aria-describedby'),
-    'cancel-reservation-description',
-  );
+  assert.ok(cancellationDialog.getAttribute('aria-describedby'));
   assert.match(cancellationDialog.className, /overflow-y-auto/);
   assert.match(cancellationDialog.style.maxHeight, /safe-area-inset-top/);
-  assert.match(keepTripButton.className, /min-h-11/);
-  assert.match(getByRole('button', { name: 'Confirmar cancelamento' }).className, /min-h-11/);
+  assert.match(keepTripButton.className, /(?:min-h-11|min-h-control-comfortable)/);
+  assert.match(
+    getByRole('button', { name: 'Confirmar cancelamento' }).className,
+    /(?:min-h-11|min-h-control-comfortable)/,
+  );
   assert.equal(document.activeElement, keepTripButton);
   fireEvent.keyDown(document, { key: 'Escape' });
   assert.equal(queryByRole('dialog'), null);

@@ -112,6 +112,12 @@ class ExistingReservationCheckoutController extends Controller
                 $paymentReview = ['status' => 'review_required', 'candidate_cents' => null, 'payment_id' => null];
             }
         }
+        $hasVerifiedPartialPayment = ($reportedPaid['present'] ?? false) === true
+            && is_int($reportedPaid['cents'] ?? null) && $reportedPaid['cents'] > 0;
+        if (($reservation['type'] ?? null) === 'booked' && ! $hasVerifiedPartialPayment
+            && $paymentReview['status'] !== 'pending_candidate') {
+            return response()->json(['success' => false, 'message' => 'Reserva não encontrada.'], 404, $headers);
+        }
         $price = $reservation['price'] ?? [];
         $total = is_array($price) && ($price['currency'] ?? null) === 'BRL' ? MoneyAmount::toCents($price['_f_total'] ?? null) : null;
         $listingId = $reservation['_idlisting'] ?? null;

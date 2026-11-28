@@ -4,6 +4,7 @@ import { isLegalPage, type LegalPage } from '../../utils/legalPages';
 import { existingReservationUrl } from '../../utils/checkoutUrl';
 import {
   isCompletedSummary,
+  type CompletedReservationSummary,
   isSummary,
   type ReservationSummary,
 } from './existingReservationSummary';
@@ -13,11 +14,11 @@ export type ExistingReservationCheckoutDataState = 'loading' | 'ready' | 'error'
 interface UseExistingReservationCheckoutDataOptions {
   code: string;
   refreshKey: number;
-  accessToken: string | null;
 }
 
 interface ExistingReservationCheckoutData {
   summary: ReservationSummary | null;
+  completedSummary: CompletedReservationSummary | null;
   completed: boolean;
   state: ExistingReservationCheckoutDataState;
   contractLoading: boolean;
@@ -31,9 +32,11 @@ interface ExistingReservationCheckoutData {
 export function useExistingReservationCheckoutData({
   code,
   refreshKey,
-  accessToken,
 }: UseExistingReservationCheckoutDataOptions): ExistingReservationCheckoutData {
   const [summary, setSummary] = useState<ReservationSummary | null>(null);
+  const [completedSummary, setCompletedSummary] = useState<CompletedReservationSummary | null>(
+    null,
+  );
   const [completed, setCompleted] = useState(false);
   const [state, setState] = useState<ExistingReservationCheckoutDataState>('loading');
   const [contractLoading, setContractLoading] = useState(true);
@@ -43,16 +46,12 @@ export function useExistingReservationCheckoutData({
 
   useEffect(() => {
     const controller = new AbortController();
-    if (!accessToken) {
-      setState('error');
-      return () => controller.abort();
-    }
     setState('loading');
     setCompleted(false);
+    setCompletedSummary(null);
     void apiFetch(`/api/existing-reservations/${encodeURIComponent(code)}/checkout-summary`, {
       signal: controller.signal,
       cache: 'no-store',
-      headers: { Authorization: `Bearer ${accessToken}` },
     })
       .then(async (response) =>
         response.ok
@@ -67,6 +66,7 @@ export function useExistingReservationCheckoutData({
         }
         if (isCompletedSummary(data.reservation, code)) {
           setSummary(null);
+          setCompletedSummary(data.reservation);
           setCompleted(true);
           setState('ready');
           return;
@@ -76,12 +76,13 @@ export function useExistingReservationCheckoutData({
           return;
         }
         setCompleted(false);
+        setCompletedSummary(null);
         setSummary(data.reservation);
-        const initialPlan = data.reservation.paymentMethods.length > 0 ? 'full' : 'deposit';
-        const initialMethods =
-          initialPlan === 'full'
-            ? data.reservation.paymentMethods
-            : (data.reservation.paymentPlans?.deposit.methods ?? []);
+        const fullMethods = data.reservation.paymentMethods;
+        const depositMethods = data.reservation.paymentPlans?.deposit.methods ?? [];
+        const initialPlan =
+          fullMethods.length > 0 ? 'full' : depositMethods.length > 0 ? 'deposit' : 'full';
+        const initialMethods = initialPlan === 'full' ? fullMethods : depositMethods;
         setPlan(initialPlan);
         setMethod(initialMethods.includes('pix') ? 'pix' : 'card');
         window.history.replaceState(
@@ -95,7 +96,7 @@ export function useExistingReservationCheckoutData({
         if (!controller.signal.aborted) setState('error');
       });
     return () => controller.abort();
-  }, [accessToken, code, refreshKey]);
+  }, [code, refreshKey]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -124,5 +125,16 @@ export function useExistingReservationCheckoutData({
     return () => controller.abort();
   }, []);
 
-  return { summary, completed, state, contractLoading, contract, plan, setPlan, method, setMethod };
+  return {
+    summary,
+    completedSummary,
+    completed,
+    state,
+    contractLoading,
+    contract,
+    plan,
+    setPlan,
+    method,
+    setMethod,
+  };
 }

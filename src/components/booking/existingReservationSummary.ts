@@ -1,7 +1,7 @@
 export interface ReservationSummary {
   code: string;
-  listingId: string | null;
   partnerCode?: string | null;
+  listingId: string | null;
   propertyDetails?: {
     images: string[];
     description: string;
@@ -33,6 +33,10 @@ export interface ReservationSummary {
 export interface CompletedReservationSummary {
   code: string;
   state: 'completed';
+  status?: 'booked';
+  totalCents?: number;
+  outstandingBalanceCents?: number;
+  paidCents?: number;
 }
 
 export function isCompletedSummary(
@@ -41,11 +45,34 @@ export function isCompletedSummary(
 ): value is CompletedReservationSummary {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
+  if (
+    item.code !== code ||
+    item.state !== 'completed' ||
+    Object.keys(item).some(
+      (key) =>
+        !['code', 'state', 'status', 'totalCents', 'outstandingBalanceCents', 'paidCents'].includes(
+          key,
+        ),
+    ) ||
+    (item.status !== undefined && item.status !== 'booked')
+  ) {
+    return false;
+  }
+
+  const hasSettlementDetails =
+    item.totalCents !== undefined ||
+    item.outstandingBalanceCents !== undefined ||
+    item.paidCents !== undefined;
+  if (!hasSettlementDetails) return true;
+
   return (
-    item.code === code &&
-    item.state === 'completed' &&
-    Object.keys(item).length === 2 &&
-    Object.keys(item).every((key) => ['code', 'state'].includes(key))
+    nullableInteger(item.totalCents) &&
+    nullableInteger(item.outstandingBalanceCents) &&
+    nullableInteger(item.paidCents) &&
+    typeof item.totalCents === 'number' &&
+    typeof item.outstandingBalanceCents === 'number' &&
+    typeof item.paidCents === 'number' &&
+    item.totalCents === item.outstandingBalanceCents + item.paidCents
   );
 }
 
@@ -157,8 +184,8 @@ export function isSummary(value: unknown, code: string): value is ReservationSum
   const item = value as Record<string, unknown>;
   return (
     item.code === code &&
-    nullableString(item.listingId) &&
     (item.partnerCode === undefined || nullableString(item.partnerCode)) &&
+    nullableString(item.listingId) &&
     validPropertyDetails(item.propertyDetails) &&
     nullableString(item.property) &&
     nullableString(item.image) &&

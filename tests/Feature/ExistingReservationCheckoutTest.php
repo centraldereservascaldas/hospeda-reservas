@@ -63,7 +63,7 @@ class ExistingReservationCheckoutTest extends TestCase
                 ['_id' => str_repeat('a', 24), 'type' => 'credit', 'status' => 'pending', '_f_val' => 197.50, 'name' => 'Pagamento da reserva'],
             ])
             : Http::response([
-                'id' => 'ZY92K', '_id' => str_repeat('c', 24), 'type' => 'booked', '_idlisting' => 'unknown', '_idclient' => 'private-client',
+                'id' => 'ZY92K', '_id' => str_repeat('c', 24), 'type' => 'reserved', '_idlisting' => 'unknown', '_idclient' => 'private-client',
                 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4,
                 'guestsDetails' => ['adults' => 4, 'list' => [['name' => 'private-name', 'email' => 'private@example.test']]],
                 'price' => ['currency' => 'BRL', '_f_total' => 395], 'partner' => ['name' => 'API booking.com'],
@@ -325,7 +325,7 @@ class ExistingReservationCheckoutTest extends TestCase
             ->assertJsonPath('payment.enabled', true)->assertJsonStructure(['resume' => ['reference', 'token', 'path']]);
         $this->withHeader('Idempotency-Key', $key)->postJson('/api/existing-reservations/ZY92K/checkout', $payload)->assertOk()->assertJsonPath('success', true);
         $this->assertDatabaseCount('direct_booking_orders', 1);
-        $this->assertDatabaseHas('direct_booking_orders', ['origin' => 'stays_existing', 'stays_reservation_id' => str_repeat('c', 24), 'reservation_status' => 'booked']);
+        $this->assertDatabaseHas('direct_booking_orders', ['origin' => 'stays_existing', 'stays_reservation_id' => str_repeat('c', 24), 'reservation_status' => 'reserved']);
         Http::assertNotSent(fn (Request $request) => $request->method() !== 'GET');
     }
 
@@ -675,7 +675,7 @@ class ExistingReservationCheckoutTest extends TestCase
     {
         $this->withoutMiddleware(ThrottleRequests::class);
         $this->configureCheckout(withFake: false);
-        $reservation = ['id' => 'ZY92K', '_id' => str_repeat('c', 24), '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24), 'type' => 'booked', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'partner' => ['name' => 'API booking.com']];
+        $reservation = ['id' => 'ZY92K', '_id' => str_repeat('c', 24), '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24), 'type' => 'reserved', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'partner' => ['name' => 'API booking.com']];
         Http::fake(function (Request $request) use (&$reservation) {
             if (str_contains($request->url(), '/finance/payment-providers/')) {
                 return Http::response(['_id' => str_repeat('f', 24), 'status' => 'active', 'internalName' => 'Cielo Site Externo']);
@@ -1065,7 +1065,7 @@ class ExistingReservationCheckoutTest extends TestCase
         Http::fake(fn (Request $request) => match (true) {
             str_contains($request->url(), '/finance/payment-providers/') => Http::response(['_id' => str_repeat('f', 24), 'status' => 'active', 'internalName' => 'Cielo Site Externo']),
             str_ends_with($request->url(), '/payments') => Http::response([['_idpaymentProvider' => $pendingProvider, '_id' => str_repeat('a', 24), 'type' => 'credit', 'status' => 'pending', '_f_val' => 197.50, 'name' => 'Pagamento da reserva']]),
-            default => Http::response(['id' => 'ZY92K', '_id' => str_repeat('c', 24), '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24), 'type' => 'booked', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'stats' => ['_f_totalPaid' => 197.50], 'partner' => ['name' => 'API booking.com']]),
+            default => Http::response(['id' => 'ZY92K', '_id' => str_repeat('c', 24), '_idclient' => str_repeat('d', 24), '_idlisting' => str_repeat('e', 24), 'type' => 'reserved', 'checkInDate' => '2026-11-13', 'checkOutDate' => '2026-11-16', 'guests' => 4, 'guestsDetails' => ['adults' => 4, 'children' => 0, 'infants' => 0], 'price' => ['currency' => 'BRL', '_f_total' => 395], 'stats' => ['_f_totalPaid' => 197.50], 'partner' => ['name' => 'API booking.com']]),
         });
     }
 

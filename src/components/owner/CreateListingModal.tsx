@@ -200,7 +200,11 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
           <form onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-8">
             {/* Title */}
-            <FormField label="Título atrativo do anúncio" id={`${fieldId}-listing-title`} required>
+            <FormField
+              label="Título atrativo do anúncio"
+              id={`${fieldId}-listing-title`}
+              required
+            >
               <TextInput
                 ref={titleRef}
                 type="text"

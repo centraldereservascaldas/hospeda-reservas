@@ -111,7 +111,8 @@ class ExistingReservationCheckoutService
 
         $reservation = $this->stays->get('/booking/reservations/'.$code);
         $payments = $this->stays->get('/booking/reservations/'.$code.'/payments');
-        if (! is_array($reservation) || ! is_array($payments)) {
+        if (! is_array($reservation) || ! is_array($payments)
+            || ! in_array($reservation['type'] ?? null, ['reserved', 'booked'], true)) {
             return $this->result(null, 'existing_reservation_unavailable', 503);
         }
         $candidate = $this->balance->inspect($reservation, $payments);
@@ -121,6 +122,12 @@ class ExistingReservationCheckoutService
         }
         $bootstrap = $candidate['status'] === 'unrecorded_candidate';
         $reportedPaid = $this->balance->reportedPaid($reservation);
+        $hasVerifiedPartialPayment = ($reportedPaid['present'] ?? false) === true
+            && is_int($reportedPaid['cents'] ?? null) && $reportedPaid['cents'] > 0;
+        if (($reservation['type'] ?? null) === 'booked' && ! $hasVerifiedPartialPayment
+            && $candidate['status'] !== 'pending_candidate') {
+            return $this->result(null, 'existing_reservation_unavailable', 503);
+        }
         if ($bootstrap && ($reportedPaid === null || ! $reportedPaid['present'] || ! is_int($reportedPaid['cents']))) {
             return $this->result(null, 'existing_balance_unverified', 409);
         }

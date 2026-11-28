@@ -26,6 +26,10 @@ O núcleo foi integrado na branch `main` pelo commit `7855ffb`; os ajustes de re
 
 ## 3. Fontes de verdade e identificadores
 
+### Checkout de reserva existente na Stays
+
+O checkout compartilhável `/checkout/{codigoStays}` é separado da compra de novas reservas e abre sem conta/e-mail. Iniciar cobrança exige que a Stays retorne `reserved`. Para saldo positivo sem valor pago ou recebível, oferece quitação de 100% ou entrada Pix de 50%. A entrada não altera o total: registra o valor capturado, confere o ledger e confirma o saldo remanescente na Stays. Após conciliação de entrada deste checkout, o link pode exibir apenas os valores verificados, sem iniciar nova cobrança; outros estados não conciliados não liberam checkout. Ver [ADR 0002](adr/0002-checkout-de-reserva-existente-sem-login.md).
+
 | Informação | Fonte autoritativa | Cópia local necessária |
 | --- | --- | --- |
 | Inventário, regras de ocupação, cotação e reserva | Stays | ID do anúncio/reserva, cotação e resposta reduzida para auditoria. |
@@ -69,6 +73,10 @@ Usar dois momentos distintos. **Antes de existir pedido**, a URL pode preservar 
 Ao editar datas/hóspedes depois do pedido, não reutilizar a mesma cobrança ou a mesma oferta congelada: criar uma nova revisão/pedido conforme o estado atual e invalidar ou resolver a pré-reserva anterior antes de prosseguir. Links de campanha levam à seleção; links transacionais de e-mail levam a uma retomada protegida. Rotas de checkout e retorno devem evitar indexação, limpar parâmetros desnecessários do histórico quando apropriado e configurar política de `Referrer-Policy` compatível com os recursos externos. Nunca registrar URL completa contendo credenciais ou dados pessoais.
 
 O caminho pré-pedido `/reservar/{listingId}` abre o anúncio e pré-preenche filtros de datas e hóspedes; a cotação e a criação do pedido continuam sendo validadas no servidor. A retomada `/checkout/{referenciaPublica}` aceita o token no header para visitantes. Para uma conta autenticada e com e-mail confirmado correspondente ao pedido, rotas protegidas consultam e iniciam pagamento sem devolver o token permanente na lista de pedidos; essa retomada está implementada localmente, mas ainda precisa de validação ponta a ponta. O token de visitante fica em `sessionStorage` no navegador original com a data de expiração e é cifrado pelo cast `encrypted` do modelo Laravel. `DIRECT_BOOKING_RESUME_TOKEN_TTL_DAYS` usa 30 dias por padrão; um valor configurado precisa ser inteiro positivo. Se for sobrescrito com valor vazio ou inválido, a criação de pedidos fica bloqueada e os métodos de pagamento indisponíveis. A API rejeita tokens expirados, e o navegador os remove do `sessionStorage` ao consultá-los. Um comando diário apaga até 10 mil tokens cifrados já expirados por execução e preserva a data de expiração para a fila operacional distinguir expiração de revogação manual; se houver mais pendentes, o comando informa que continuarão na próxima execução. O painel administrativo permite revogar a credencial; o servidor a limpa e registra o ID do revisor e o horário no histórico do pedido. A confirmação informa que o titular ainda pode retomar após entrar com o e-mail confirmado correspondente e que a revogação não altera reserva nem pagamento. A resposta inclui o estado resumido da última tentativa; QR e copia e cola Pix só aparecem enquanto a tentativa estiver pendente/em análise e dentro da validade, sem iniciar uma nova cobrança.
+
+### Pagamento de reserva existente sem login
+
+`/checkout/{codigoDaReserva}` abre sem conta ou e-mail, somente quando o backend confirmar que a reserva da Stays está em `reserved`. Consulta de saldo e criação de cobrança são limitadas e revalidadas no servidor. O código curto não permite acessar reservas em outros estados. Para reserva sem pagamento e sem recebível registrado, o titular pode quitar 100% ou pagar 50% de entrada por Pix. A baixa da entrada deve preservar o total e registrar somente o valor recebido. A implementação segue o [ADR 0002](adr/0002-checkout-de-reserva-existente-sem-login.md).
 
 ## 5. Sequência transacional
 

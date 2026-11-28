@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../../services/supabase';
+import { useState } from 'react';
 import { checkoutPathWithStayQuery } from '../../utils/checkoutUrl';
 import {
   CieloSopCardForm,
@@ -13,6 +12,7 @@ import { CheckoutFooter } from './CheckoutFooter';
 import { CheckoutContractLink } from './CheckoutContractLink';
 import { ExistingReservationConditions } from './ExistingReservationConditions';
 import { CheckoutLoadingSkeleton } from './CheckoutLoadingSkeleton';
+import { isCompletedSummary } from './existingReservationSummary';
 import { ExistingReservationStayCard } from './ExistingReservationStayCard';
 import { ExistingReservationGuestFields } from './ExistingReservationGuestFields';
 import { ExistingReservationPaymentChoices } from './ExistingReservationPaymentChoices';
@@ -24,17 +24,7 @@ import { LockKeyhole, QrCode } from 'lucide-react';
 
 const money = (cents: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
-export function ExistingReservationCheckout({
-  code,
-  accessToken: suppliedAccessToken,
-}: {
-  code: string;
-  accessToken?: string;
-}) {
-  const [accessToken, setAccessToken] = useState<string | null>(suppliedAccessToken ?? null);
-  const [authState, setAuthState] = useState<'loading' | 'signed-out' | 'ready'>(
-    suppliedAccessToken ? 'ready' : 'loading',
-  );
+export function ExistingReservationCheckout({ code }: { code: string }) {
   const [guest, setGuest] = useState({ fullName: '', cpf: '', email: '', phone: '' });
   const [accepted, setAccepted] = useState(false);
   const [acceptanceError, setAcceptanceError] = useState(false);
@@ -48,33 +38,6 @@ export function ExistingReservationCheckout({
       ? generation
       : null;
   });
-
-  useEffect(() => {
-    if (suppliedAccessToken) {
-      setAccessToken(suppliedAccessToken);
-      setAuthState('ready');
-      return;
-    }
-    const client = supabase;
-    if (!client) {
-      setAuthState('signed-out');
-      return;
-    }
-
-    let active = true;
-    const applySession = (session: Awaited<ReturnType<typeof client.auth.getSession>>['data']['session']) => {
-      if (!active) return;
-      setAccessToken(session?.access_token ?? null);
-      setAuthState(session?.user.email_confirmed_at ? 'ready' : 'signed-out');
-    };
-    void client.auth.getSession().then(({ data }) => applySession(data.session));
-    const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => applySession(session));
-
-    return () => {
-      active = false;
-      subscription.unsubscribe();
-    };
-  }, [suppliedAccessToken]);
   const {
     previousReference,
     previousReferenceBlocksPayment,
@@ -85,9 +48,10 @@ export function ExistingReservationCheckout({
     recoveredReference,
     summaryRetry,
     retrySummary,
-  } = useExistingReservationCheckoutRecovery({ code, renewalGeneration, accessToken });
+  } = useExistingReservationCheckoutRecovery({ code, renewalGeneration });
   const {
     summary,
+    completedSummary,
     completed,
     state,
     contractLoading,
@@ -96,7 +60,7 @@ export function ExistingReservationCheckout({
     setPlan,
     method,
     setMethod,
-  } = useExistingReservationCheckoutData({ code, refreshKey: summaryRetry, accessToken });
+  } = useExistingReservationCheckoutData({ code, refreshKey: summaryRetry });
 
   const planMethods =
     plan === 'full'
@@ -108,8 +72,16 @@ export function ExistingReservationCheckout({
       : summary.paymentPlans[plan].amountCents;
   const outstandingBalanceCents =
     summary?.outstandingBalanceCents ?? summary?.candidateBalanceCents ?? null;
-  const canPay = planMethods.length > 0 && selectedAmountCents !== null && selectedAmountCents > 0;
-  const showCompleted = state === 'ready' && completed;
+  const canPay =
+    !previousReferenceBlocksPayment &&
+    planMethods.length > 0 &&
+    selectedAmountCents !== null &&
+    selectedAmountCents > 0;
+  const showCompleted =
+    state === 'ready' &&
+    completed &&
+    completedSummary !== null &&
+    isCompletedSummary(completedSummary, code);
   const {
     activeReference,
     paymentReviewRequired,
@@ -119,7 +91,6 @@ export function ExistingReservationCheckout({
     startPix,
   } = useExistingReservationPaymentPreparation({
     code,
-    accessToken,
     renewalGeneration,
     recoveryState,
     summary,
@@ -167,16 +138,6 @@ export function ExistingReservationCheckout({
         </div>
       </header>
       <div className="mx-auto w-full max-w-6xl flex-1 px-5 pt-7 sm:px-8 sm:pt-10">
-        {authState !== 'ready' && (
-          <section className="mx-auto max-w-xl rounded-2xl border border-orange-200 bg-white p-6 shadow-sm" role="status">
-            <h1 className="text-xl font-bold">{authState === 'loading' ? 'Verificando sua sessão' : 'Entre na sua conta para continuar'}</h1>
-            <p className="mt-2 text-sm text-neutral-600">A reserva só pode ser acessada pela conta confirmada com o mesmo e-mail do titular.</p>
-            {authState === 'signed-out' && (
-              <a href={`/?conta=entrar&retorno=${encodeURIComponent(window.location.href)}`} className="mt-4 inline-flex rounded-xl bg-orange-700 px-4 py-3 font-semibold text-white">Entrar com a conta do titular</a>
-            )}
-          </section>
-        )}
-        <div hidden={authState !== 'ready'}>
         {!showCompleted && (
           <div className="mb-6">
             <h1 className="mt-1 text-3xl font-black">Confirme e pague</h1>
@@ -185,6 +146,9 @@ export function ExistingReservationCheckout({
               pagar.
             </p>
           </div>
+        )}
+        {!showCompleted && state === 'loading' && (
+          <CheckoutLoadingSkeleton label="Consultando os dados da reserva" />
         )}
         {!showCompleted && previousReferenceBlocksPayment && previousReference && (
           <div
@@ -197,12 +161,10 @@ export function ExistingReservationCheckout({
                 : 'Você já iniciou um pagamento para esta reserva neste navegador.'}
             </p>
             <p className="text-sm text-neutral-700">
-              {previousReferenceCheckState === 'unavailable'
-                ? 'Não conseguimos confirmar o resultado agora. Acompanhe o pedido antes de iniciar outra cobrança.'
-                : 'Acompanhe a tentativa antes de iniciar outra cobrança.'}
+              Acompanhe a tentativa antes de iniciar outra cobrança.
             </p>
             <a
-              className="inline-flex min-h-11 items-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+              className="inline-flex min-h-11 items-center rounded-xl bg-neutral-950 px-4 py-3 text-sm font-semibold text-white"
               href={checkoutPathWithStayQuery(
                 `/checkout/${previousReference}`,
                 window.location.search,
@@ -212,7 +174,7 @@ export function ExistingReservationCheckout({
             </a>
             <button
               type="button"
-              className="inline-flex min-h-11 items-center rounded-xl border border-neutral-400 px-4 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-orange-700"
+              className="inline-flex min-h-11 items-center rounded-xl border border-neutral-400 px-4 py-2 text-sm font-semibold"
               onClick={retryPreviousReferenceCheck}
             >
               Verificar novamente
@@ -235,7 +197,7 @@ export function ExistingReservationCheckout({
             </p>
             <button
               type="button"
-              className="min-h-11 rounded-xl border border-neutral-400 px-4 font-semibold"
+              className="inline-flex min-h-11 items-center rounded-xl border border-neutral-400 px-4 font-semibold"
               onClick={retryRecovery}
             >
               Verificar novamente
@@ -243,8 +205,7 @@ export function ExistingReservationCheckout({
             <CheckoutSupportLink details={{ reservationCode: code }} />
           </div>
         )}
-        {state === 'loading' && <CheckoutLoadingSkeleton label="Consultando os dados da reserva" />}
-        {state === 'error' && (
+        {!showCompleted && state === 'error' && (
           <div className="checkout-purchase-form liquid-glass-card space-y-3 rounded-3xl p-6">
             <p role="alert">
               Não foi possível consultar esta reserva. Confira o código ou fale com nosso
@@ -260,7 +221,7 @@ export function ExistingReservationCheckout({
             <CheckoutSupportLink details={{ reservationCode: code }} />
           </div>
         )}
-        {showCompleted && (
+        {showCompleted && completedSummary && (
           <section className="checkout-purchase-form liquid-glass-card mx-auto max-w-2xl rounded-3xl p-6 text-center sm:p-10">
             <div
               className="mx-auto grid size-14 place-items-center rounded-full bg-emerald-100 text-emerald-800"
@@ -269,23 +230,27 @@ export function ExistingReservationCheckout({
               <span className="text-2xl font-bold">✓</span>
             </div>
             <h1 className="mt-5 text-2xl font-black text-slate-900 sm:text-3xl">
-              Sua reserva está confirmada e 100% paga
+              Pagamento registrado
             </h1>
             <p className="mt-3 text-sm text-slate-600">
-              Se precisar de ajuda, fale com nosso atendimento.
+              {completedSummary?.outstandingBalanceCents !== undefined
+                ? `A entrada foi registrada sem alterar o valor total de ${money(completedSummary.totalCents ?? 0)}. Saldo atual em aberto: ${money(completedSummary.outstandingBalanceCents)}.`
+                : 'O pagamento foi registrado e o saldo da reserva foi atualizado na Stays.'}
             </p>
             <CheckoutSupportLink
               details={{
                 message:
-                  'Olá! Gostaria de falar com o atendimento sobre uma reserva já confirmada.',
+                  completedSummary.outstandingBalanceCents !== undefined
+                    ? `Olá! Gostaria de confirmar o saldo restante da reserva ${code}.`
+                    : 'Olá! Gostaria de falar com o atendimento sobre uma reserva já confirmada.',
               }}
             />
           </section>
         )}
-        {state === 'ready' && summary && recoveryState === 'clear' && (
+        {!showCompleted && state === 'ready' && summary && recoveryState === 'clear' && (
           <>
             <ExistingReservationStayCard key={summary.code} summary={summary} />
-            {(!canPay || previousReferenceBlocksPayment) && (
+            {!canPay && (
               <aside
                 className="checkout-summary-card mb-6 rounded-3xl p-5"
                 aria-label="Resumo da reserva"
@@ -312,18 +277,16 @@ export function ExistingReservationCheckout({
                 className="checkout-purchase-form liquid-glass-card min-w-0 rounded-3xl p-5 sm:p-7"
                 aria-label="Dados e pagamento da reserva"
               >
-                {canPay &&
-                  summary.balanceStatus === 'unrecorded_candidate' &&
-                  !previousReferenceBlocksPayment && (
-                    <p
-                      role="status"
-                      className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-950"
-                    >
-                      Este valor está em aberto. O pagamento será confirmado depois que a Cielo
-                      confirmar a transação.
-                    </p>
-                  )}
-                {!previousReferenceBlocksPayment && canPay && selectedAmountCents !== null ? (
+                {canPay && summary.balanceStatus === 'unrecorded_candidate' && (
+                  <p
+                    role="status"
+                    className="mb-6 rounded-xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-950"
+                  >
+                    Este valor está em aberto. O pagamento será confirmado depois que a Cielo
+                    confirmar a transação.
+                  </p>
+                )}
+                {canPay && selectedAmountCents !== null ? (
                   <CieloSopCardForm
                     cardNumberLabel="Número do cartão"
                     existingReservationHolderCpf={guest.cpf}
@@ -535,18 +498,16 @@ export function ExistingReservationCheckout({
                     )}
                   </CieloSopCardForm>
                 ) : (
-                  !previousReferenceBlocksPayment && (
-                    <div
-                      className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
-                      role="status"
-                    >
-                      <p className="font-semibold">Saldo em aberto</p>
-                      <p className="mt-1">
-                        O checkout não conseguiu liberar uma forma de pagamento agora. Fale com
-                        nosso atendimento para concluir a reserva.
-                      </p>
-                    </div>
-                  )
+                  <div
+                    className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+                    role="status"
+                  >
+                    <p className="font-semibold">Saldo em aberto</p>
+                    <p className="mt-1">
+                      O checkout não conseguiu liberar uma forma de pagamento agora. Fale com nosso
+                      atendimento para concluir a reserva.
+                    </p>
+                  </div>
                 )}
                 <div className="mt-5">
                   <CheckoutSupportLink
@@ -560,16 +521,11 @@ export function ExistingReservationCheckout({
                         outstandingBalanceCents !== null
                           ? outstandingBalanceCents / 100
                           : undefined,
-                      paymentMethod: canPay && !previousReferenceBlocksPayment ? method : undefined,
+                      paymentMethod: canPay ? method : undefined,
                       installments:
-                        canPay && !previousReferenceBlocksPayment && method === 'card'
-                          ? cardPricing?.installments
-                          : undefined,
+                        canPay && method === 'card' ? cardPricing?.installments : undefined,
                       total:
-                        canPay &&
-                        !previousReferenceBlocksPayment &&
-                        method === 'card' &&
-                        cardPricing
+                        canPay && method === 'card' && cardPricing
                           ? cardPricing.totalCents / 100
                           : undefined,
                     }}
@@ -579,7 +535,6 @@ export function ExistingReservationCheckout({
             </div>
           </>
         )}
-        </div>
       </div>
       {!showCompleted && <CheckoutFooter hideContractLink />}
     </main>

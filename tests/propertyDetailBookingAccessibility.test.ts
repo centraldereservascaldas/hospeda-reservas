@@ -388,7 +388,7 @@ test('calendar day buttons keep a 44px minimum touch height', () => {
   assert.match(calendarDialog.querySelector('[role="grid"]')?.className || '', /w-full/);
   assert.match(calendarDialog.querySelector('.overflow-y-auto')?.className || '', /-mx-3/);
   for (const button of dayButtons) {
-    assert.match(button.className, /h-11/);
+    assert.match(button.className, /(?:h-11|size-11)/);
   }
   for (const week of calendarDialog.querySelectorAll<HTMLElement>(
     '[role="row"]:has([data-calendar-date])',
@@ -398,8 +398,8 @@ test('calendar day buttons keep a 44px minimum touch height', () => {
   for (const dateField of ['Check-in', 'Check-out']) {
     assert.match(getByRole('button', { name: new RegExp(dateField) }).className, /min-h-11/);
   }
-  assert.match(getByRole('button', { name: 'Mês anterior' }).className, /h-11/);
-  assert.match(getByRole('button', { name: 'Próximo mês' }).className, /h-11/);
+  assert.match(getByRole('button', { name: 'Mês anterior' }).className, /(?:h-11|size-11)/);
+  assert.match(getByRole('button', { name: 'Próximo mês' }).className, /(?:h-11|size-11)/);
 });
 
 test('touch drag ignores a delayed synthetic click and accepts the next deliberate tap', async () => {

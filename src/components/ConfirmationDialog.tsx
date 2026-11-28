@@ -22,6 +22,7 @@ export interface ConfirmationDialogProps {
   confirmLabel: string;
   pendingLabel?: string;
   cancelLabel?: string;
+  cancelButtonClassName?: string;
   isPending?: boolean;
   error?: string;
   confirmVariant?: ButtonVariant;
@@ -40,6 +41,7 @@ export function ConfirmationDialog({
   confirmLabel,
   pendingLabel,
   cancelLabel = 'Cancelar',
+  cancelButtonClassName = '',
   isPending = false,
   error,
   confirmVariant = 'danger',
@@ -90,7 +92,12 @@ export function ConfirmationDialog({
           </p>
         )}
         <div className="mt-6 flex flex-col-reverse justify-end gap-2 sm:flex-row">
-          <Button variant="secondary" onClick={onClose} disabled={isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isPending}
+            className={cancelButtonClassName}
+          >
             {cancelLabel}
           </Button>
           <Button

@@ -158,8 +158,9 @@ async function fill(view: ReturnType<typeof setup>) {
 
 test('parcelamento destaca a parcela e mantém o total final para conferência', async () => {
   const view = setup();
-  await waitFor(() => assert.ok(view.getByLabelText(/^Parcelamento/)));
-  fireEvent.change(view.getByLabelText(/^Parcelamento/), { target: { value: '6' } });
+  await waitFor(() => assert.ok(view.getByRole('button', { name: /Parcelamento/ })));
+  fireEvent.click(view.getByRole('button', { name: /Parcelamento/ }));
+  fireEvent.click(view.getByRole('option', { name: /^6x/ }));
 
   assert.match(
     view.getByRole('button', { name: /Confirmar e pagar/ }).textContent!,

@@ -50,6 +50,7 @@ export function Button({
       type={type}
       disabled={isDisabled}
       aria-busy={loading || undefined}
+      aria-disabled={loading || undefined}
       className={`inline-flex items-center justify-center font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-not-allowed disabled:opacity-70 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
     >
       {loading && <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />}

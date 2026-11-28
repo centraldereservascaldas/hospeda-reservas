@@ -89,6 +89,8 @@ O estado atual do Coolify e do banco precisa ser confirmado no ambiente: verifiq
 
 Leia [`AGENTS.md`](AGENTS.md) antes de trabalhar. As instruções reutilizáveis do repositório ficam em `.agents/skills/` e a skill de operação Stays fica em `.codex/skills/stays-api/`. Abra o `SKILL.md` pertinente antes de começar; ele define quando usar o fluxo e aponta regras e referências complementares. As skills guiam a execução, mas não substituem os contratos e evidências do código e da documentação. Não trate uma skill como autorização para publicar, mudar produção ou operar dados externos.
 
+Antes de qualquer modificação de produto, fluxo ou integração, devs e agentes devem ler os ADRs aplicáveis em `docs/adr/` e usá-los como guia obrigatório. Em particular, o checkout de reservas Stays existentes deve permanecer ativado para acesso pelo código curto, sem login ou envio de e-mail, exclusivamente enquanto a reserva estiver `reserved`, com saldo e pagamentos validados no backend. Não desligar essa jornada nem reintroduzir autenticação para ela em alterações futuras; qualquer mudança exige atualizar o ADR correspondente e obter decisão explícita do responsável pelo produto. Isso não liga por si só vendas novas nem cobranças reais globais.
+
 | Necessidade                                             | Skill inicial                                                                                            |
 | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | Entender arquitetura e localizar fluxos no código       | [hospeda-reservas](.agents/skills/hospeda-reservas/SKILL.md)                                             |
@@ -108,6 +110,7 @@ Leia [`AGENTS.md`](AGENTS.md) antes de trabalhar. As instruções reutilizáveis
 - [Fluxo de checkout e Stays](docs/stays-checkout-flow.md): comportamento e integrações atuais da jornada, com limites do que foi verificado.
 - [Especificação do checkout e pagamentos](docs/especificacao-checkout-pagamentos-proprios.md): estado de implementação, fontes de verdade, estados e pendências de validação ponta a ponta.
 - [ADR 0001](docs/adr/0001-checkout-proprio-e-informacoes-em-camadas.md): decisões de produto/arquitetura e questões comerciais/jurídicas em aberto.
+- [ADR 0002](docs/adr/0002-checkout-de-reserva-existente-sem-login.md): acesso e pagamento de reserva Stays existente pelo código curto, válido somente no estado `reserved`.
 - [PRD](docs/prd-vendas-diretas.md), [MVP](docs/mvp-vendas-diretas.md) e [roadmap](docs/roadmap-vendas-diretas.md): objetivo, escopo e entregas planejadas; são planos, não evidência de operação habilitada.
 - [Checklist operacional Coolify](docs/checklist-implementacao-coolify-hospeda-reservas.md): fatos históricos e lista de revalidação para deploy.
 - [Plano de qualidade do frontend](docs/frontend-quality-plan.md): critérios de acessibilidade, interação e revisão visual.
@@ -126,9 +129,13 @@ Para outro computador, obtenha as credenciais desse projeto de teste, configure 
 
 A API mantém os contratos consumidos em `src/services/crcnBackendApi.ts` e os aliases `/external/v1` usados pela interface de integração. Reservas e disponibilidade permanecem autoritativas na Stays. O redirecionamento para o checkout hospedado Stays foi desativado. A implementação local inclui criação idempotente de pedido, pré-reserva `reserved`, retomada protegida, tentativa de pagamento Mercado Pago e reconciliação; ela ainda não foi validada ponta a ponta. As flags `DIRECT_BOOKING_ENABLED`, `DIRECT_BOOKING_PAYMENTS_ENABLED` e `DIRECT_BOOKING_CONFIRMATION_ENABLED` permanecem desligadas, assim como `DIRECT_BOOKING_LIVE_PAYMENTS_ENABLED`. Em `APP_ENV=production`, essa autorização separada é obrigatória para iniciar cobranças reais. O catálogo também não tem condições comerciais aprovadas; por isso a interface mantém a compra desabilitada e a API não inicia pedido ou cobrança. A proposta de compra como visitante não depende de sessão autenticada.
 
+O checkout de uma reserva existente abre diretamente por `/checkout/{codigoStays}`, sem login e sem envio de e-mail. O sistema exibe o link para reservas `reserved`; depois de uma entrada conciliada, o endereço já compartilhado pode continuar a cobrança somente do saldo confirmado pela Stays. Para reserva sem pagamento anterior, são oferecidas quitação integral e entrada Pix de 50%. Cada pagamento soma o valor recebido sem alterar o total original. Consulte o [ADR 0002](docs/adr/0002-checkout-de-reserva-existente-sem-login.md). As flags de cobrança e pagamentos reais continuam independentes.
+
 ## Checkout próprio em implementação
 
 A jornada de venda direta e o sistema de pagamento estão detalhados na [especificação do checkout](docs/especificacao-checkout-pagamentos-proprios.md), com [decisão de arquitetura](docs/adr/0001-checkout-proprio-e-informacoes-em-camadas.md) e [ordem de execução](docs/roadmap-vendas-diretas.md). Mercado Pago com Pix e cartão é a primeira integração planejada; a CRCN recebe o valor integral e registra reserva/pagamento na Stays. A integração e a interface ainda não foram validadas ponta a ponta nem habilitadas para compra.
+
+Para pagamentos de reservas existentes sem conta, consulte também a [decisão do checkout pelo código Stays](docs/adr/0002-checkout-de-reserva-existente-sem-login.md). Ela não habilita a venda de novas reservas nem substitui a validação operacional da Cielo.
 
 A rota `/checkout/{referenciaPublica}` já retoma o pedido, exigindo `X-Checkout-Resume-Token`; a credencial fica guardada no navegador que iniciou a compra e não deve ser enviada em query string. O alias `/reservar/{listingId}` abre o anúncio e pré-preenche datas e hóspedes pelos parâmetros permitidos, sem criar pedido; a cotação e a compra continuam dependendo de validação no servidor e de condições aprovadas. Dados pessoais, tokens, segredos e valor final não devem ser colocados na query string.
 
