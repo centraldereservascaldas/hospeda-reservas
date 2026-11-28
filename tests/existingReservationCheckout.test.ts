@@ -49,7 +49,6 @@ test('recovers a lost checkout response without the reservation summary', async 
     render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.equal(getCheckoutResumeToken(reference), token));
@@ -114,7 +113,6 @@ test('existing reservation displays server data without enabling payment', async
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByText('Apartamento Exemplo')));
@@ -162,7 +160,6 @@ test('an unrecorded candidate is shown for review without offering payment', asy
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZX91K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getAllByText('Em aberto').length > 0));
@@ -207,7 +204,6 @@ test('checkout identifies Pix accessibly and does not imply unavailable card ins
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pague com Pix' })));
@@ -271,7 +267,6 @@ test('accessible reservation details and card pricing follow the chosen installm
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZX91K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() =>
@@ -420,7 +415,6 @@ test('experimental unrecorded balance starts a pending Pix only after explicit c
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZX91K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getAllByText('Em aberto').length > 0));
@@ -556,7 +550,6 @@ test('experimental unrecorded balance shows selected card price and submits only
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZX91K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
@@ -631,7 +624,6 @@ test('reservation lookup failure provides retry and a support link without a fic
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZX91K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByRole('alert')));
@@ -699,8 +691,7 @@ for (const [code, message] of [
       const view = render(
         React.createElement(ExistingReservationCheckout, {
           code: 'ZX91K',
-          accessToken: 'test-access-token',
-        }),
+          }),
       );
       await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
       fireEvent.change(view.getByLabelText('CPF do titular da reserva'), {
@@ -787,7 +778,6 @@ test('an interrupted checkout preparation retries with the same idempotency key 
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZX91K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
@@ -888,7 +878,6 @@ test('a prepared card order keeps its payment method and installments fixed afte
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
@@ -1021,7 +1010,6 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
@@ -1064,7 +1052,6 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     const reopened = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     const link = reopened.getByRole('link', { name: 'Acompanhar pagamento' }) as HTMLAnchorElement;
@@ -1077,7 +1064,6 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     const retryView = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(retryView.getByLabelText('Nome completo')));
@@ -1124,7 +1110,6 @@ test('Pix form creates a checkout and submits payment using only the resume toke
     const secondRenewalView = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(secondRenewalView.getByLabelText('Nome completo')));
@@ -1229,7 +1214,6 @@ test('a prepared order with payment disabled never starts a Pix attempt', async 
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
@@ -1355,7 +1339,6 @@ test('card form sends the Cielo token and installments, not card details, to the
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByLabelText('Nome completo')));
@@ -1438,7 +1421,6 @@ test('a server-authorized deposit shows Pix and requires a valid reservation hol
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByText('Entrada de 50%')));
@@ -1493,7 +1475,6 @@ test('shows distinct server amounts for full and deposit plans', async () => {
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByText(/Entrada de 50%/i)));
@@ -1544,7 +1525,6 @@ test('reopening after a deposit offers only the remaining balance', async () => 
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByText('Quitar saldo restante agora')));
@@ -1644,7 +1624,6 @@ test('same-browser checkout resumes after the deposit was reconciled and offers 
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() =>
@@ -1749,7 +1728,6 @@ test('same-browser checkout stays blocked when deposit review status is missing'
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByRole('link', { name: 'Acompanhar pagamento' })));
@@ -1781,7 +1759,6 @@ test('fully paid reservation shows only confirmation and generic WhatsApp suppor
     const view = render(
       React.createElement(ExistingReservationCheckout, {
         code: 'ZY92K',
-        accessToken: 'test-access-token',
       }),
     );
     await waitFor(() => assert.ok(view.getByRole('heading', { name: 'Pagamento registrado' })));

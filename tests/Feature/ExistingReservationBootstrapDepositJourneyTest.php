@@ -27,7 +27,7 @@ class ExistingReservationBootstrapDepositJourneyTest extends TestCase
         $this->useLegacyExistingReservationFixtures();
     }
 
-    public function test_bootstrap_deposit_updates_paid_balance_without_changing_total_and_blocks_booked_checkout(): void
+    public function test_bootstrap_deposit_then_remaining_balance_are_settled_sequentially(): void
     {
         $this->withoutExceptionHandling();
         config([
@@ -44,7 +44,7 @@ class ExistingReservationBootstrapDepositJourneyTest extends TestCase
         ]);
         $reservationId = str_repeat('c', 24);
         $provider = str_repeat('f', 24);
-        $amounts = [10];
+        $amounts = [10, 10];
         $index = 0;
         $paid = 0;
         $completed = [];
@@ -261,35 +261,16 @@ class ExistingReservationBootstrapDepositJourneyTest extends TestCase
                 $this->assertTrue($result['ready'], json_encode($result));
             }
         }
-        $residualSummary = $this->getJson('/api/existing-reservations/ZY92K/checkout-summary')
-            ->assertOk()
-            ->assertJsonPath('reservation.state', 'completed')
-            ->assertJsonPath('reservation.totalCents', 2000)
-            ->assertJsonPath('reservation.paidCents', 1000)
-            ->assertJsonPath('reservation.outstandingBalanceCents', 1000);
-        $this->assertTrue($residualSummary->json('success'));
-        $this->withHeader('Idempotency-Key', 'booked-reservation-checkout-blocked')
-            ->postJson('/api/existing-reservations/ZY92K/checkout', [
-                'expectedBalanceCents' => 1000,
-                'paymentMethod' => 'pix',
-                'paymentPlan' => 'full',
-                'guest' => ['fullName' => 'Test Guest', 'email' => 'guest@example.test', 'phone' => '64999999999', 'cpf' => '52998224725'],
-                'acceptedPayment' => true,
-                ...$this->contractAcceptance(),
-            ])
-            ->assertStatus(503)
-            ->assertJsonPath('code', 'existing_reservation_unavailable');
-
         $posts = Http::recorded(fn (Request $request): bool => $request->method() === 'POST'
             && str_contains($request->url(), 'stays.test') && str_ends_with($request->url(), '/payments'));
-        $this->assertCount(1, $posts);
-        $this->assertSame([10.0], $posts->map(fn ($pair) => (float) $pair[0]['_f_val'])->values()->all());
-        $this->assertEquals(10, $paid);
+        $this->assertCount(2, $posts);
+        $this->assertSame([10.0, 10.0], $posts->map(fn ($pair) => (float) $pair[0]['_f_val'])->values()->all());
+        $this->assertEquals(20, $paid);
         $this->assertSame('booked', $reservationType);
-        $this->assertCount(1, $completed);
-        $this->assertDatabaseCount('direct_booking_orders', 1);
-        $this->assertDatabaseCount('direct_booking_payment_attempts', 1);
-        $this->assertSame(1, DB::table('existing_reservation_payment_cycles')->where('state', 'settled')->count());
+        $this->assertCount(2, $completed);
+        $this->assertDatabaseCount('direct_booking_orders', 2);
+        $this->assertDatabaseCount('direct_booking_payment_attempts', 2);
+        $this->assertSame(2, DB::table('existing_reservation_payment_cycles')->where('state', 'settled')->count());
         $settledDeposit = DirectBookingOrder::query()->where('status', 'entrada_conciliada')->firstOrFail();
         $replayedAfterFullPayment = app(DirectStaysPaymentService::class)->confirmPaidReservation($settledDeposit);
         $this->assertTrue($replayedAfterFullPayment['ready']);

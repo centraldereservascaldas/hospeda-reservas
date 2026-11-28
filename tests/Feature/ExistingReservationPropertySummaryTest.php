@@ -17,7 +17,7 @@ class ExistingReservationPropertySummaryTest extends TestCase
         $this->useLegacyExistingReservationFixtures();
     }
 
-    public function test_summary_includes_only_public_property_details_and_booking_code(): void
+    public function test_summary_includes_only_public_property_details_and_short_reservation_code(): void
     {
         config(['direct-booking.existing_reservation_checkout_enabled' => true, 'services.stays.client_id' => 'test', 'services.stays.client_secret' => 'test']);
         Http::preventStrayRequests();
@@ -40,7 +40,7 @@ class ExistingReservationPropertySummaryTest extends TestCase
         });
 
         $this->getJson('/api/existing-reservations/ZX91K/checkout-summary')->assertOk()
-            ->assertJsonPath('reservation.partnerCode', '123456789')
+            ->assertJsonMissingPath('reservation.partnerCode')
             ->assertJsonPath('reservation.propertyDetails.images', ['https://example.test/main.jpg', 'https://example.test/second.jpg'])
             ->assertJsonPath('reservation.propertyDetails.description', "Sala\nCozinha")
             ->assertJsonPath('reservation.propertyDetails.condoTitle', 'Condomínio')

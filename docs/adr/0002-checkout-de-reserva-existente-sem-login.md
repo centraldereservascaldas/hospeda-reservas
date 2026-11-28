@@ -9,10 +9,10 @@ O titular compartilha `/checkout/{codigoDaReserva}` para pagar uma reserva da St
 ## Decisão
 
 1. `/checkout/{codigoDaReserva}` abre diretamente, sem login e sem registro, usando somente o código curto de cinco caracteres da Stays.
-2. O backend consulta a Stays em cada resumo e criação de checkout. Iniciar cobrança exige que o código corresponda à reserva e `type` seja exatamente `reserved`. Depois de uma entrada deste checkout ser registrada e reconciliada, pode ser exibido somente o saldo residual daquele pedido, ainda que a Stays tenha promovido a reserva a `booked`; isso não abre outra cobrança. Reserva `booked` sem conciliação de entrada por este fluxo, cancelada ou em outro estado não libera checkout.
-3. O checkout mostra apenas o necessário para pagar. A consulta de saldo usa total e pagamentos registrados na Stays; se o total for positivo, o pago for zero e não existir crédito/recebível, oferece quitação de 100% ou entrada Pix de 50%.
-4. A entrada deve criar/conciliar somente o valor capturado como pagamento na Stays. O total da reserva permanece inalterado, e o saldo restante é recalculado pela Stays após a conferência do pagamento.
-5. O código curto é uma decisão explícita de acesso ao checkout, restrita por estado `reserved`, limites de requisição, ausência de cache e validação do saldo no servidor. Respostas não devem incluir dados de contato do hóspede ou código do parceiro.
+2. O sistema exibe o link curto para novas pré-reservas (`type=reserved`). O backend consulta a Stays em cada resumo e criação de checkout. Um link já compartilhado pode continuar o pagamento quando a Stays promover a reserva a `booked`, desde que exista saldo positivo confirmado e verificável. Reservas pagas, canceladas ou em outro estado não liberam cobrança.
+3. O checkout mostra apenas o necessário para pagar. A consulta de saldo usa total e pagamentos registrados na Stays; se o total for positivo, o pago for zero e não existir crédito/recebível, oferece quitação de 100% ou entrada Pix de 50%. Depois de uma entrada conciliada, o mesmo link pode oferecer apenas o saldo restante verificado.
+4. Cada pagamento deve lançar/conciliar somente o valor capturado como pagamento na Stays. O total da reserva permanece inalterado, o valor pago é acumulado e o saldo restante é recalculado pela Stays após a conferência do pagamento.
+5. O código curto é uma decisão explícita de acesso ao checkout, com link exibido para estado `reserved` e pagamentos subsequentes condicionados ao saldo verificado, limites de requisição e ausência de cache. Respostas não devem incluir dados de contato do hóspede ou código do parceiro.
 6. A ativação dessas rotas e do plano de entrada é independente da criação de novas reservas e das flags de cobrança real em produção. Este ADR não declara credenciais Cielo, configuração Stays ou ambiente de produção prontos.
 
 ## Consequências
@@ -28,12 +28,12 @@ O titular compartilha `/checkout/{codigoDaReserva}` para pagar uma reserva da St
 | --- | --- |
 | Exigir conta Supabase e login do titular | Rejeitada para esta jornada. Impedia o pagamento pelo link enviado ao cliente. |
 | Enviar link adicional por e-mail | Rejeitada. O cliente deve receber e usar somente o código curto da reserva. |
-| Abrir por código curto apenas quando Stays retorna `reserved` | Escolhida pelo usuário. O servidor revalida saldo e estado antes de cada operação. |
+| Exigir reserva `reserved` para cada pagamento pelo mesmo link | Rejeitada porque a Stays pode promover a reserva a `booked` após uma entrada conciliada, antes da quitação do saldo. |
 
 ## Critérios para considerar a decisão implementada
 
-- Abrir `/checkout/RO21J` sem sessão apresenta checkout se a consulta Stays retornar a reserva `RO21J` como `reserved`; após entrada conciliada, o mesmo link pode mostrar somente o valor pago e o saldo residual verificados.
-- Estados diferentes de `reserved`, código inexistente ou saldo não verificável não iniciam cobrança.
+- Abrir `/checkout/RO21J` sem sessão apresenta checkout se a consulta Stays retornar a reserva `RO21J` como `reserved`; após entrada conciliada, o mesmo link pode oferecer somente o saldo residual verificado.
+- Código inexistente, reserva cancelada ou saldo não verificável não inicia cobrança. Uma reserva `booked` sem valor pago confirmado também não libera uma cobrança inicial.
 - Com total positivo, pago zero e nenhum recebível existente, são mostradas opções de 100% e entrada Pix de 50%.
-- Após pagar a entrada, o total Stays continua igual; somente o valor pago é lançado e o saldo restante fica em aberto.
+- Após pagar a entrada, o total Stays continua igual; o valor pago é acumulado e o saldo restante pode ser pago pelo mesmo link.
 - Revisar limites de requisição, idempotência, valores e logs antes da ativação de produção.
