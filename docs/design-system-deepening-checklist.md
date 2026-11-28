@@ -74,6 +74,7 @@ Este é um mapa estático de pontos de entrada/estrutura de código, não uma va
 - **Decisão de sistema:** manter navegação global, navegação mobile, seções do proprietário e filas administrativas como composições distintas. Evidência estática não sustenta um `DashboardShell` ou `Tabs` universal. O catálogo documenta a navegação de seções do proprietário como padrão observado, ainda sem validação completa de estados/teclado.
 - **Afiliado:** segue desconhecido; nenhum shell, navegação, comissão, saldo ou ação administrativa será inferido a partir de `partnerCode` ou sandbox.
 - **Validação pendente:** walkthrough renderizado por permissão e viewport; verificar orientação ao navegar/retornar, foco após troca de seção, zoom/reflow e acesso administrativo em viewport estreito. A inspeção atual é estática e não prova tarefa concluída ou validação com usuários.
+- **Evidência de implementação:** o heading condicional foi ajustado em `OwnerAccessAdminView.tsx`; ESLint e TypeScript passaram. Não foi possível conferir a hierarquia renderizada nos dois níveis de autorização nesta sessão, porque a visão exige sessão administrativa.
 
 ## Wave 0 — enquadrar e auditar
 
@@ -88,12 +89,12 @@ Este é um mapa estático de pontos de entrada/estrutura de código, não uma va
 
 ## Wave 1 — mapa de tokens e fundamentos
 
-- [ ] Inventariar valores globais e consumidores em `src/index.css`, `public/brand-theme.css` e nos painéis em escopo.
-- [ ] Mapear primitivas existentes separadas de papéis semânticos: cores, tipografia, espaçamento/layout, dimensões de controles, raios/bordas, superfícies/sombras/camadas, ícones, movimento e breakpoints relevantes.
-- [ ] Para cada token candidato, registrar nome, significado, valor/fonte, plataforma/tema, consumidores encontrados, estado do ciclo de vida, contraste/restrições e nota de migração.
-- [ ] Conferir o papel semântico em estados reais: padrão, foco, selecionado, desabilitado, carregando, erro e sucesso, quando aplicáveis.
-- [ ] Evitar consolidar valores numericamente próximos com papéis diferentes; não sobrescrever a escala-base do Tailwind sem evidência e piloto.
-- [ ] Manter explícitos os itens observados, candidatos propostos, decisões aprovadas, código implementado e estados validados.
+- [~] Inventariar valores globais e consumidores em `src/index.css`, `public/brand-theme.css` e nos painéis em escopo. A extração inicial de fundamentos, layout e motion está nos audits citados; falta conferir adoção completa nos consumidores por painel.
+- [~] Mapear primitivas separadas de papéis semânticos. Há valores observados para cor/foco/status, tipografia de títulos, espaço/layout, raios, dimensões de busca e motion; ícones, sombras/camadas e breakpoints ainda precisam de mapa com consumidores.
+- [~] Para tokens candidatos, registrar nome, significado, valor/fonte, consumidores, ciclo de vida e limites. A tabela inicial contém fontes e decisões em aberto, mas nem todo candidato inclui contraste medido, tema, migração e todos os consumidores.
+- [~] Conferir papéis em estados reais: botão, badge/aviso e foco foram comparados no browser em estados limitados; checkbox teve espécime de foco/seleção. Selecionado, disabled, loading, erro/sucesso e combinações de superfície seguem pendentes por token/contexto.
+- [x] Não consolidar valores próximos com papéis diferentes nem sobrescrever a escala Tailwind sem evidência; a decisão está registrada nos audits de layout e token.
+- [x] Distinguir observado, proposto, implementado, validado e em descontinuação na convenção do checklist e no status do catálogo. Cada registro novo deve continuar apresentando limites da evidência.
 - [~] Pilotar uma família antes de ampliar: `--layout-page-gutter` foi implementado nos containers de usuário, proprietário, administração, detalhe da propriedade, rodapé e catálogo. A validação visual pareada desses consumidores ainda está pendente.
 
 ### Evidência inicial de tokens observados
@@ -123,13 +124,13 @@ Leitura estática de `src/index.css`, `public/brand-theme.css`, `public/discover
 
 Para cada candidato compartilhado ou de domínio:
 
-- [ ] Registrar ID, tarefa, painel/rota, arquivo de origem, consumidores e evidência.
-- [~] Definir propósito, anatomia, conteúdo, props/slots, variantes, composição e limites de uso. `FormField` agora oferece densidades regular/compacta; `TextInput` padroniza altura, borda e foco visível em input nativo. A adoção está em um formulário do painel do proprietário e no espécime de formulário; mapear consumidores antes de ampliar.
-- [ ] Dizer se a semântica, teclado, validação e adaptação responsiva pertencem ao componente ou ao consumidor.
-- [ ] Cobrir estados relevantes: inicial, loading, vazio, erro, sucesso, disabled, focus, permissão, redução de movimento e recuperação.
-- [ ] Definir uso adequado, uso a evitar, alternativas nativas, diferenças legítimas e eventual migração/depreciação.
-- [ ] Verificar semântica HTML, nomes/labels, teclado, foco, contraste contextual, zoom/reflow, touch, localização e conteúdo longo.
-- [ ] Mapear componente visual/documentado à implementação, tokens, props, estados e consumidores reais; registrar lacunas e diferenças intencionais.
+- [~] Registrar identidade, tarefa, painel/rota, fonte, consumidores e evidência. O mapa de painéis e as seções de `NativeSelect`, `CheckboxInput`, dropdowns e paginação dão exemplos; ainda não existe ficha completa para cada família relevante.
+- [~] Definir propósito, anatomia, conteúdo, props, composição e limites de uso. Contratos de `NativeSelect` e `CheckboxInput` estão registrados; `FormField` e `TextInput` têm documentação parcial e adoção limitada.
+- [~] Declarar propriedade da semântica, teclado, validação e reflow. Os contratos nativos preservam semântica no input e responsabilidade de layout/validação no consumidor; demais famílias precisam de registro equivalente.
+- [~] Cobrir estados alcançáveis e pertinentes. Seletores, formulários, avisos, skeletons, empty state e diálogos documentam parte dos estados; falta auditoria ponta a ponta em consumidores autenticados.
+- [~] Definir bom uso, alternativas nativas, exceções e migração. O inventário de dropdowns e checkboxes documenta exceções; não há mapa de migração/depreciação consolidado para todo o catálogo.
+- [~] Verificar semântica, labels, teclado, foco, contraste, zoom/reflow, toque e conteúdo longo. Há verificações específicas no browser, mas não cobertura equivalente por consumidor/viewport e tecnologia assistiva.
+- [~] Mapear a documentação do catálogo aos artefatos reais. Primitivas recentes e padrões observados incluem links de arquivo e status; contratos, props, estados e consumidores ainda não estão completos para todas as entradas.
 
 ### Prioridade de trabalho acordada
 
