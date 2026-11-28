@@ -469,6 +469,8 @@ jobs:
       - name: Verify the public checkout deployment
         env:
           DIRECT_CHECKOUT_EXPECTED_ENABLED: ${{ vars.DIRECT_CHECKOUT_EXPECTED_ENABLED || 'false' }}
+          COOLIFY_APPLICATION_UUID: ${{ vars.COOLIFY_APPLICATION_UUID }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -478,6 +480,17 @@ jobs:
           fi
 
           base_url='https://crcn.caldasindica.com'
+          application_envs=$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            "https://cy.caldasindica.com/api/v1/applications/$COOLIFY_APPLICATION_UUID/envs")
+
+          runtime_env_enabled() {
+            local key="$1"
+            jq --exit-status --arg key "$key" \
+              'any(.[]; .key == $key and .is_preview == false and ((.value | tostring | ascii_downcase) == "true"))' \
+              <<< "$application_envs" >/dev/null
+          }
+
           deadline=$((SECONDS + 300))
           while [ "$SECONDS" -lt "$deadline" ]; do
             health=$(curl --fail --silent --show-error --max-time 15 "$base_url/api/health" || true)
