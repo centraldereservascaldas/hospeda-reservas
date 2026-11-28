@@ -56,6 +56,14 @@ type SinglePageCheckoutProps = Pick<
 };
 const fieldClass =
   'mt-1.5 min-h-12 w-full rounded-xl border border-neutral-400/70 bg-white px-3 text-base text-neutral-950 outline-none focus-visible:border-orange-700 focus-visible:ring-2 focus-visible:ring-orange-700/20 disabled:bg-neutral-100';
+const checkoutFieldControls: Record<string, string> = {
+  'guest.fullName': '[name="guestName"]',
+  'guest.email': '[name="guestEmail"]',
+  'guest.phone': '[name="guestPhone"]',
+  'guest.cpf': '[name="guestCpf"]',
+  acceptedTerms: 'input[type="checkbox"][required]',
+  acceptedTermsVersion: 'input[type="checkbox"][required]',
+};
 const formatDate = (value: string) =>
   new Date(`${value}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
 
@@ -92,6 +100,7 @@ export function SinglePageCheckout({
     null,
   );
   const [checkoutIssue, setCheckoutIssue] = useState<string | null>(null);
+  const [checkoutFieldErrors, setCheckoutFieldErrors] = useState<Record<string, string[]>>({});
   const [statusUnavailable, setStatusUnavailable] = useState(false);
   const [statusRetry, setStatusRetry] = useState(0);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -165,6 +174,18 @@ export function SinglePageCheckout({
   }, [bookingData, previewOnly, retry]);
 
   useEffect(() => {
+    const selector = Object.keys(checkoutFieldErrors)
+      .map((field) => checkoutFieldControls[field])
+      .find((fieldSelector) => fieldSelector && document.querySelector(fieldSelector));
+    if (!selector) return;
+
+    const focusTimer = window.setTimeout(() => {
+      document.querySelector<HTMLElement>(selector)?.focus();
+    }, 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [checkoutFieldErrors]);
+
+  useEffect(() => {
     if (!attemptFinished || !preparedRef.current) return;
     const context = preparedRef.current;
     let active = true;
@@ -233,6 +254,23 @@ export function SinglePageCheckout({
   const paymentTotal =
     paymentMethod === 'card' && cardPricing ? cardPricing.totalCents / 100 : total;
   const cardPaymentLabel = cardPricing ? formatCieloCardPayment(cardPricing) : money(paymentTotal);
+  const fieldError = (name: string): string | undefined => checkoutFieldErrors[name]?.[0];
+  const clearFieldError = (name: string): void => {
+    setCheckoutFieldErrors((current) => {
+      if (!current[name]) return current;
+      const next = { ...current };
+      delete next[name];
+      return next;
+    });
+  };
+  const renderFieldError = (name: string, id: string) => {
+    const message = fieldError(name);
+    return message ? (
+      <span id={id} className="mt-1 block text-sm text-rose-800">
+        {message}
+      </span>
+    ) : null;
+  };
   const supportLink = (
     <CheckoutSupportLink
       details={{
@@ -271,6 +309,17 @@ export function SinglePageCheckout({
     };
     const idempotencyKey = await getOrCreateCheckoutSubmissionKey(submission);
     const response = await checkoutApi.createCheckout({ ...submission, idempotencyKey });
+    if (response?.fieldErrors) {
+      setCheckoutFieldErrors(response.fieldErrors);
+      if (!Object.keys(response.fieldErrors).some((field) => checkoutFieldControls[field])) {
+        document.querySelector<HTMLButtonElement>('[aria-label="Voltar para acomodação"]')?.focus();
+      }
+    } else {
+      setCheckoutFieldErrors({});
+      if (response?.code === 'invalid_guest_count') {
+        document.querySelector<HTMLButtonElement>('[aria-label="Voltar para acomodação"]')?.focus();
+      }
+    }
     if (response?.resume && response.order) {
       // Keep a safe recovery URL without navigating away or exposing access credentials.
       const context: CieloPaymentContext = {
@@ -622,12 +671,18 @@ export function SinglePageCheckout({
                         name="guestName"
                         autoComplete="name"
                         value={guest.fullName}
-                        onChange={(event) =>
-                          updateGuest({ ...guest, fullName: event.target.value })
+                        aria-invalid={Boolean(fieldError('guest.fullName'))}
+                        aria-describedby={
+                          fieldError('guest.fullName') ? 'checkout-error-guest-name' : undefined
                         }
+                        onChange={(event) => {
+                          clearFieldError('guest.fullName');
+                          updateGuest({ ...guest, fullName: event.target.value });
+                        }}
                         className={fieldClass}
                       />
                     </label>
+                    {renderFieldError('guest.fullName', 'checkout-error-guest-name')}
                     <label className="text-sm font-medium">
                       E-mail
                       <input
@@ -636,10 +691,18 @@ export function SinglePageCheckout({
                         type="email"
                         autoComplete="email"
                         value={guest.email}
-                        onChange={(event) => updateGuest({ ...guest, email: event.target.value })}
+                        aria-invalid={Boolean(fieldError('guest.email'))}
+                        aria-describedby={
+                          fieldError('guest.email') ? 'checkout-error-guest-email' : undefined
+                        }
+                        onChange={(event) => {
+                          clearFieldError('guest.email');
+                          updateGuest({ ...guest, email: event.target.value });
+                        }}
                         className={fieldClass}
                       />
                     </label>
+                    {renderFieldError('guest.email', 'checkout-error-guest-email')}
                     <label className="text-sm font-medium">
                       Telefone
                       <input
@@ -648,15 +711,21 @@ export function SinglePageCheckout({
                         type="tel"
                         autoComplete="tel"
                         value={formatBrazilianPhone(guest.phone)}
-                        onChange={(event) =>
+                        aria-invalid={Boolean(fieldError('guest.phone'))}
+                        aria-describedby={
+                          fieldError('guest.phone') ? 'checkout-error-guest-phone' : undefined
+                        }
+                        onChange={(event) => {
+                          clearFieldError('guest.phone');
                           updateGuest({
                             ...guest,
                             phone: event.target.value.replace(/\D/g, '').slice(0, 11),
-                          })
-                        }
+                          });
+                        }}
                         className={fieldClass}
                       />
                     </label>
+                    {renderFieldError('guest.phone', 'checkout-error-guest-phone')}
                     <label className="text-sm font-medium sm:col-span-2">
                       CPF do responsável pela reserva
                       <input
@@ -667,7 +736,12 @@ export function SinglePageCheckout({
                         pattern="[0-9]{11}"
                         maxLength={11}
                         value={guestCpf}
+                        aria-invalid={Boolean(fieldError('guest.cpf'))}
+                        aria-describedby={
+                          fieldError('guest.cpf') ? 'checkout-error-guest-cpf' : undefined
+                        }
                         onChange={(event) => {
+                          clearFieldError('guest.cpf');
                           const cpf = event.target.value.replace(/\D/g, '').slice(0, 11);
                           setGuestCpf(cpf);
                           event.currentTarget.setCustomValidity(
@@ -684,6 +758,7 @@ export function SinglePageCheckout({
                         pagamento.
                       </span>
                     </label>
+                    {renderFieldError('guest.cpf', 'checkout-error-guest-cpf')}
                   </div>
                 </fieldset>
                 <fieldset disabled={prepared} className="mb-7 border-b border-neutral-300/80 pb-7">
@@ -817,8 +892,20 @@ export function SinglePageCheckout({
                       type="checkbox"
                       required
                       checked={accepted}
+                      aria-invalid={Boolean(
+                        fieldError('acceptedTerms') ?? fieldError('acceptedTermsVersion'),
+                      )}
+                      aria-describedby={
+                        fieldError('acceptedTerms') || fieldError('acceptedTermsVersion')
+                          ? 'checkout-error-accepted-terms'
+                          : undefined
+                      }
                       disabled={!ready || prepared}
-                      onChange={(event) => setAccepted(event.target.checked)}
+                      onChange={(event) => {
+                        clearFieldError('acceptedTerms');
+                        clearFieldError('acceptedTermsVersion');
+                        setAccepted(event.target.checked);
+                      }}
                       className="mt-1 h-4 w-4 accent-orange-800"
                     />
                     <span>
@@ -826,6 +913,14 @@ export function SinglePageCheckout({
                       <strong>{money(paymentTotal)}</strong>.
                     </span>
                   </label>
+                  {(fieldError('acceptedTerms') || fieldError('acceptedTermsVersion')) && (
+                    <span
+                      id="checkout-error-accepted-terms"
+                      className="mt-1 block text-sm text-rose-800"
+                    >
+                      {fieldError('acceptedTerms') || fieldError('acceptedTermsVersion')}
+                    </span>
+                  )}
                   {!ready && (
                     <div role="status" className="mt-3 text-sm text-amber-900">
                       {loading

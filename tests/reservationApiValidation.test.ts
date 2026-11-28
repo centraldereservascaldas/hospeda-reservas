@@ -414,6 +414,52 @@ test('validates the remaining backend response boundaries', async () => {
   }
 });
 
+test('preserves the known guest-capacity failure and safely handles other checkout 422 errors', async () => {
+  const originalFetch = globalThis.fetch;
+  const respond = (payload: unknown) => {
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify(payload), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      });
+  };
+
+  try {
+    respond({
+      success: false,
+      code: 'invalid_guest_count',
+      message: 'Server capacity explanation.',
+      payment: { enabled: false, methods: [], publicKey: null, provider: 'unavailable' },
+      idempotentReplay: false,
+    });
+    const capacityError = await checkoutApi.createCheckout(directCheckoutRequest);
+    assert.equal(capacityError?.code, 'invalid_guest_count');
+    assert.match(capacityError?.message ?? '', /Volte à acomodação e ajuste o grupo/);
+    assert.match(capacityError?.message ?? '', /Nenhum pedido, reserva ou cobrança foi iniciado/);
+
+    respond({
+      success: false,
+      code: 'unrecognized_private_error',
+      message: 'Do not show this server response.',
+      errors: {
+        'guest.email': ['Informe um e-mail válido.'],
+        'guest.password': ['must not be exposed'],
+      },
+    });
+    const validationError = await checkoutApi.createCheckout(directCheckoutRequest);
+    assert.equal(validationError?.code, 'invalid_checkout_request');
+    assert.equal(
+      validationError?.message,
+      'Confira os dados destacados antes de continuar. Para ajustar hóspedes ou datas, volte à acomodação.',
+    );
+    assert.deepEqual(validationError?.fieldErrors, {
+      'guest.email': ['Informe um e-mail válido.'],
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('checkout validates the created order and resumes it with a protected token', async () => {
   const originalFetch = globalThis.fetch;
 
