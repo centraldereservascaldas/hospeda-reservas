@@ -111,6 +111,13 @@ function MarketplaceApp() {
 
   const { savedPropertyIds, toggleSavedProperty } = useSavedPropertyIds();
 
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const preview = new URLSearchParams(window.location.search).get('preview');
+    if (preview === 'guest') setCurrentView('trips');
+    if (preview === 'owner') setCurrentView('host');
+  }, []);
+
   // Currency & Display preferences
   const [currency, setCurrency] = useState<Currency>('BRL');
   const showTotalWithTaxes = true;
@@ -728,7 +735,13 @@ export default function App() {
   const checkoutPreviewAllowed =
     import.meta.env.DEV || ['127.0.0.1', 'localhost'].includes(window.location.hostname);
 
-  if (normalizedPathname === '/afiliados') return <AffiliatePortal />;
+  const localAffiliatePreview =
+    import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'affiliate';
+
+  if (normalizedPathname === '/afiliados') return <AffiliatePortal localPreview={localAffiliatePreview} />;
+  if (normalizedPathname === '/' && localAffiliatePreview) {
+    return <AffiliatePortal localPreview />;
+  }
 
   if (checkoutPreviewAllowed && pathname === '/checkout-preview/pagamento-confirmado') {
     return (

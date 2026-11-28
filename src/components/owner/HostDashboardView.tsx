@@ -20,7 +20,26 @@ type DashboardSection = 'overview' | 'properties' | 'reservations' | 'calendar' 
 
 interface HostDashboardViewProps {
   accessToken: string;
+  localPreview?: boolean;
 }
+
+const localPreviewDashboard: OwnerDashboardData = {
+  period: { from: '2026-11-01', to: '2026-11-30' },
+  ownerName: 'Proprietário Demonstração',
+  totals: { debit: 850, credit: 4250 },
+  properties: [
+    { staysListingId: 'PREVIEW-OWNER-101', title: 'Flat demonstração · Centro', image: '', debit: 350, credit: 2200 },
+    { staysListingId: 'PREVIEW-OWNER-202', title: 'Apartamento demonstração · Parque', image: '', debit: 500, credit: 2050 },
+  ],
+  reservations: [
+    { id: 'preview-reservation-1', code: 'DEMO-001', listingId: 'PREVIEW-OWNER-101', propertyTitle: 'Flat demonstração · Centro', propertyImage: '', guestName: 'Reserva demonstração', checkIn: '2026-11-28', checkOut: '2026-11-30', status: 'confirmed', paymentStatus: 'paid', total: 2200, currency: 'BRL', nights: 2 },
+    { id: 'preview-reservation-2', code: 'DEMO-002', listingId: 'PREVIEW-OWNER-202', propertyTitle: 'Apartamento demonstração · Parque', propertyImage: '', guestName: 'Reserva demonstração', checkIn: '2026-11-29', checkOut: '2026-12-02', status: 'confirmed', paymentStatus: 'partial', total: 2050, currency: 'BRL', nights: 3 },
+  ],
+  entries: [
+    { id: 'preview-entry-1', date: '2026-11-12', listingId: 'PREVIEW-OWNER-101', propertyTitle: 'Flat demonstração · Centro', reservationId: 'preview-reservation-1', reservationCode: 'DEMO-001', description: 'Repasse demonstrativo', publicNote: 'Dado fictício para prévia', type: 'credit', status: 'preview', amount: 2200 },
+    { id: 'preview-entry-2', date: '2026-11-13', listingId: 'PREVIEW-OWNER-202', propertyTitle: 'Apartamento demonstração · Parque', reservationId: 'preview-reservation-2', reservationCode: 'DEMO-002', description: 'Taxa demonstrativa', publicNote: 'Dado fictício para prévia', type: 'debit', status: 'preview', amount: 850 },
+  ],
+};
 
 const currencyText = (value: number, currency: string) =>
   new Intl.NumberFormat('pt-BR', {
@@ -66,7 +85,7 @@ const calendarEntryClass = (reservation: OwnerDashboardData['reservations'][numb
   return 'bg-neutral-100 text-neutral-700';
 };
 
-export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToken }) => {
+export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToken, localPreview = false }) => {
   const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [section, setSection] = useState<DashboardSection>('overview');
   const [dashboard, setDashboard] = useState<OwnerDashboardData | null>(null);
@@ -84,6 +103,12 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
   const [blockSuccess, setBlockSuccess] = useState('');
 
   const loadDashboard = useCallback(async () => {
+    if (localPreview) {
+      setDashboard(localPreviewDashboard);
+      setLoading(false);
+      setError('');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -100,7 +125,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
     } finally {
       setLoading(false);
     }
-  }, [accessToken, month]);
+  }, [accessToken, localPreview, month]);
 
   useEffect(() => {
     void loadDashboard();
@@ -228,6 +253,12 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
           </div>
         </div>
       </header>
+
+      {localPreview && (
+        <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+          Prévia local. Imóveis, reservas e valores são fictícios; ações de calendário e contabilidade estão desativadas.
+        </div>
+      )}
 
       <nav
         className="grid grid-cols-2 gap-2 rounded-2xl border border-white/80 bg-white/55 p-2 backdrop-blur-xl sm:flex sm:overflow-x-auto"
@@ -426,12 +457,14 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                     </tbody>
                   </table>
                 </div>
-                <OwnerAccountingTransactions
-                  accessToken={accessToken}
-                  entries={entries}
-                  properties={filteredProperties}
-                  period={dashboard.period}
-                />
+                {!localPreview && (
+                  <OwnerAccountingTransactions
+                    accessToken={accessToken}
+                    entries={entries}
+                    properties={filteredProperties}
+                    period={dashboard.period}
+                  />
+                )}
               </SectionCard>
             )}
 
@@ -526,9 +559,9 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                     />
                   </label>
                   <div className="flex items-end sm:col-span-2 lg:col-span-1">
-                    <button
+              <button
                       type="submit"
-                      disabled={blockSaving || dashboard.properties.length === 0}
+                disabled={localPreview || blockSaving || dashboard.properties.length === 0}
                       className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 px-4 text-sm font-extrabold text-white shadow-md shadow-orange-500/20 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {blockSaving ? (

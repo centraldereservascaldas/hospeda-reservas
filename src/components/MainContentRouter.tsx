@@ -446,10 +446,13 @@ export function MainContentRouter({
 
       {!selectedProperty &&
         currentView === 'host' &&
-        ownerAccessStatus === 'approved' &&
-        accessToken && (
+        ((ownerAccessStatus === 'approved' && accessToken) ||
+          (import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'owner')) && (
           <LazyFeatureBoundary>
-            <HostDashboardView accessToken={accessToken} />
+            <HostDashboardView
+              accessToken={accessToken ?? 'owner-preview-local-only'}
+              localPreview={import.meta.env.DEV && new URLSearchParams(window.location.search).get('preview') === 'owner'}
+            />
           </LazyFeatureBoundary>
         )}
 

@@ -5,15 +5,15 @@ namespace App\Http\Controllers\Api;
 use App\Data\VerifiedGuest;
 use App\Enums\AffiliateCommissionStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AffiliateDashboardRequest;
 use App\Models\AffiliateAccount;
 use App\Services\AffiliateCommissionEligibility;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AffiliateDashboardController extends Controller
 {
-    public function index(Request $request, AffiliateCommissionEligibility $eligibility): JsonResponse
+    public function index(AffiliateDashboardRequest $request, AffiliateCommissionEligibility $eligibility): JsonResponse
     {
         $guest = $request->attributes->get('verified_guest');
         if (! $guest instanceof VerifiedGuest) {
@@ -24,11 +24,48 @@ class AffiliateDashboardController extends Controller
             return response()->json(['success' => false, 'code' => 'affiliate_not_approved'], 403);
         }
 
-        $page = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:100000']])['page'] ?? 1;
-        $results = DB::table('affiliate_conversions as conversion')
+        $filters = $request->validated();
+        $page = $filters['page'] ?? 1;
+        $query = DB::table('affiliate_conversions as conversion')
             ->join('direct_booking_orders as booking', 'booking.id', '=', 'conversion.direct_booking_order_id')
-            ->where('conversion.affiliate_user_id', $guest->id)
-            ->orderByDesc('conversion.created_at')
+            ->where('conversion.affiliate_user_id', $guest->id);
+
+        if (isset($filters['listingId'])) {
+            $query->where('booking.listing_id', $filters['listingId']);
+        }
+
+        if (isset($filters['from'])) {
+            $query->whereDate('booking.check_in', '>=', $filters['from']);
+        }
+
+        if (isset($filters['to'])) {
+            $query->whereDate('booking.check_in', '<=', $filters['to']);
+        }
+
+        if (($filters['commissionStatus'] ?? null) === 'review') {
+            $query->whereIn('conversion.status', [AffiliateCommissionStatus::Approved->value, AffiliateCommissionStatus::Paid->value])
+                ->where(function ($evidenceQuery): void {
+                    $evidenceQuery->where('booking.status', '!=', 'concluido')
+                        ->orWhereNull('booking.status')
+                        ->orWhereNull('booking.check_out')
+                        ->orWhereDate('booking.check_out', '>=', now()->toDateString())
+                        ->orWhere('booking.payment_status', '!=', 'approved')
+                        ->orWhereNull('booking.payment_status')
+                        ->orWhere('booking.reservation_status', '!=', 'booked')
+                        ->orWhereNull('booking.reservation_status');
+                });
+        } elseif (isset($filters['commissionStatus'])) {
+            $query->where('conversion.status', $filters['commissionStatus']);
+            if (in_array($filters['commissionStatus'], [AffiliateCommissionStatus::Approved->value, AffiliateCommissionStatus::Paid->value], true)) {
+                $query->where('booking.status', 'concluido')
+                    ->whereNotNull('booking.check_out')
+                    ->whereDate('booking.check_out', '<', now()->toDateString())
+                    ->where('booking.payment_status', 'approved')
+                    ->where('booking.reservation_status', 'booked');
+            }
+        }
+
+        $results = $query->orderByDesc('conversion.created_at')
             ->orderByDesc('conversion.id')
             ->simplePaginate(50, ['booking.listing_id', 'booking.check_in', 'booking.check_out', 'booking.status as booking_status',
                 'booking.reservation_status', 'booking.payment_status', 'booking.currency', 'booking.quote_total',
