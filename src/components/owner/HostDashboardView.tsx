@@ -17,6 +17,10 @@ import { getOwnerCalendarDaySegment } from '../../utils/ownerCalendar';
 import { EmptyState } from '../EmptyState';
 import { InlineNotice } from '../InlineNotice';
 import { LoadingStatus } from '../LoadingStatus';
+import { NativeSelect } from '../NativeSelect';
+import { FormField } from '../FormField';
+import { TextInput } from '../TextInput';
+import { OwnerDashboardSkeleton } from './OwnerPanelSkeletons';
 import { StatusBadge, type StatusBadgeTone } from '../StatusBadge';
 import { OwnerAccountingTransactions } from './OwnerAccountingTransactions';
 
@@ -176,13 +180,13 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
     [];
 
   return (
-    <div className="mx-auto min-h-[75vh] max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto min-h-[75vh] max-w-7xl space-y-6 px-(--layout-page-gutter) py-8">
       <header className="flex flex-col justify-between gap-4 border-b border-white/70 pb-5 sm:flex-row sm:items-end">
         <div>
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/80 px-3 py-1 text-xs font-bold text-emerald-800">
             <ShieldCheck aria-hidden="true" className="h-4 w-4" /> Acesso de proprietário aprovado
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">
+          <h1 className="text-page-title font-black tracking-tight text-neutral-950 sm:text-page-title-wide">
             Painel do proprietário
           </h1>
           <p className="mt-1 text-sm text-neutral-600">
@@ -194,11 +198,11 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
           {dashboard && dashboard.properties.length > 1 && showPropertyFilter && (
             <label className="flex items-center gap-2 rounded-2xl border border-white/80 bg-white/75 px-3 py-1.5 text-xs font-bold text-neutral-700 shadow-sm backdrop-blur-xl">
               <span>Propriedade</span>
-              <select
+              <NativeSelect
                 aria-label="Filtrar propriedades"
                 value={activeListingId}
                 onChange={(event) => setSelectedListingId(event.target.value)}
-                className="min-h-9 min-w-36 rounded-xl border border-white/80 bg-white/80 px-2 text-sm font-semibold text-neutral-800 outline-none focus-visible:ring-4 focus-visible:ring-orange-200"
+                className="min-w-36"
               >
                 <option value="all">Todas</option>
                 {dashboard.properties.map((property) => (
@@ -206,7 +210,7 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                     {property.title}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           )}
           <div className="flex items-center gap-2 rounded-2xl border border-white/80 bg-white/75 p-1.5 shadow-sm backdrop-blur-xl">
@@ -267,16 +271,11 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
       )}
 
       {loading ? (
-        <div
-          aria-busy="true"
-          className="flex min-h-64 items-center justify-center rounded-3xl border border-white/70 bg-white/55 backdrop-blur-xl"
-        >
-          <LoadingStatus
-            iconClassName="h-5 w-5 text-orange-600"
-            className="font-semibold"
-          >
+        <div aria-busy="true" className="space-y-4">
+          <LoadingStatus iconClassName="h-5 w-5 text-orange-600" className="font-semibold">
             Carregando dados da Stays…
           </LoadingStatus>
+          <OwnerDashboardSkeleton section={section} />
         </div>
       ) : (
         dashboard && (
@@ -479,58 +478,63 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                     }
                   }}
                 >
-                  <label className="grid gap-1 text-xs font-bold text-neutral-700 sm:col-span-2 lg:col-span-1">
-                    Propriedade
-                    <select
+                  <FormField
+                    label="Propriedade"
+                    density="compact"
+                    className="grid gap-1 sm:col-span-2 lg:col-span-1"
+                  >
+                    <NativeSelect
                       value={calendarListingId}
                       onChange={(event) => setBlockListingId(event.target.value)}
                       required
                       disabled={dashboard.properties.length === 0 || blockSaving}
-                      className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
+                      className="w-full"
                     >
                       {dashboard.properties.map((property) => (
                         <option key={property.staysListingId} value={property.staysListingId}>
                           {property.title}
                         </option>
                       ))}
-                    </select>
-                  </label>
-                  <label className="grid gap-1 text-xs font-bold text-neutral-700">
-                    Primeira data bloqueada
-                    <input
+                    </NativeSelect>
+                  </FormField>
+                  <FormField
+                    label="Primeira data bloqueada"
+                    density="compact"
+                    className="grid gap-1"
+                  >
+                    <TextInput
                       type="date"
                       value={blockFrom}
                       min={new Date().toISOString().slice(0, 10)}
                       onChange={(event) => setBlockFrom(event.target.value)}
                       required
                       disabled={blockSaving}
-                      className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     />
-                  </label>
-                  <label className="grid gap-1 text-xs font-bold text-neutral-700">
-                    Data de liberação
-                    <input
+                  </FormField>
+                  <FormField label="Data de liberação" density="compact" className="grid gap-1">
+                    <TextInput
                       type="date"
                       value={blockTo}
                       min={blockFrom}
                       onChange={(event) => setBlockTo(event.target.value)}
                       required
                       disabled={blockSaving}
-                      className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     />
-                  </label>
-                  <label className="grid gap-1 text-xs font-bold text-neutral-700 sm:col-span-2 lg:col-span-1">
-                    Motivo (opcional)
-                    <input
+                  </FormField>
+                  <FormField
+                    label="Motivo (opcional)"
+                    density="compact"
+                    className="grid gap-1 sm:col-span-2 lg:col-span-1"
+                  >
+                    <TextInput
                       type="text"
                       value={blockReason}
                       maxLength={140}
                       onChange={(event) => setBlockReason(event.target.value)}
                       placeholder="Ex.: uso pessoal ou manutenção"
                       disabled={blockSaving}
-                      className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium outline-none placeholder:font-normal focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
                     />
-                  </label>
+                  </FormField>
                   <div className="flex items-end sm:col-span-2 lg:col-span-1">
                     <button
                       type="submit"
@@ -550,20 +554,24 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ accessToke
                     data de liberação funciona como checkout: ela não fica bloqueada.
                   </p>
                   {blockError && (
-                    <p
+                    <InlineNotice
+                      variant="error"
                       role="alert"
-                      className="text-xs font-semibold text-rose-700 sm:col-span-2 lg:col-span-5"
+                      density="compact"
+                      className="font-semibold sm:col-span-2 lg:col-span-5"
                     >
                       {blockError}
-                    </p>
+                    </InlineNotice>
                   )}
                   {blockSuccess && (
-                    <p
+                    <InlineNotice
+                      variant="success"
                       role="status"
-                      className="text-xs font-semibold text-emerald-700 sm:col-span-2 lg:col-span-5"
+                      density="compact"
+                      className="font-semibold sm:col-span-2 lg:col-span-5"
                     >
                       {blockSuccess}
-                    </p>
+                    </InlineNotice>
                   )}
                 </form>
                 {dashboard.properties.length === 0 && (

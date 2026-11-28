@@ -49,6 +49,9 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const tabListRef = useRef<HTMLDivElement>(null);
   const tabPanelRef = useRef<HTMLDivElement>(null);
+  const destinationInputRef = useRef<HTMLInputElement>(null);
+  const destinationOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const mobileDateHeadingRef = useRef<HTMLHeadingElement>(null);
   const dateButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const shouldFocusDateRef = useRef(false);
   const mobileCalendarScrollRef = useRef<HTMLDivElement>(null);
@@ -61,16 +64,25 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   );
   const [displayedTab, setDisplayedTab] = useState(activeTab);
   const [destination, setDestination] = useState(filters.destination);
+  const [activeDestinationIndex, setActiveDestinationIndex] = useState(-1);
+  const [isDestinationSuggestionsOpen, setIsDestinationSuggestionsOpen] = useState(true);
   const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
+  const [isLoadingResorts, setIsLoadingResorts] = useState(false);
   useEffect(() => {
     if (!isOpen) return;
     let active = true;
+    setIsLoadingResorts(true);
     crcnBackendApi
       .getResorts()
       .then((items) => {
         if (active) setResorts(items);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (active) setResorts([]);
+      })
+      .finally(() => {
+        if (active) setIsLoadingResorts(false);
+      });
     return () => {
       active = false;
     };
@@ -193,6 +205,10 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const transitionToTab = (nextTab: typeof activeTab) => {
     setActiveTab(nextTab);
     setDisplayedTab(nextTab);
+    if (nextTab === 'destination') {
+      setActiveDestinationIndex(-1);
+      setIsDestinationSuggestionsOpen(true);
+    }
   };
 
   useEffect(() => {
@@ -203,6 +219,8 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     setVisibleMonth(new Date(firstVisibleDate.getFullYear(), firstVisibleDate.getMonth(), 1));
     setMobileMonthCount(2);
     setDestination(filters.destination);
+    setActiveDestinationIndex(-1);
+    setIsDestinationSuggestionsOpen(true);
     setCheckIn(filters.checkIn);
     setCheckOut(filters.checkOut);
     setFocusDate(filters.checkIn >= todayIso ? filters.checkIn : todayIso);
@@ -251,7 +269,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   const popularDestinations = resorts
     .map((resort) => {
       const name = resort.name.replace(/^CRCN\s*[-–]\s*/i, '');
-      return { name, subtitle: 'Condomínio', query: resort.name };
+      return { id: resort.id, name, subtitle: 'Condomínio', query: resort.name };
     })
     .filter((item) => {
       const normalizedName = item.name
@@ -271,6 +289,81 @@ export const SearchModal: React.FC<SearchModalProps> = ({
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }))
     .slice(0, 8);
+  const destinationListboxId = `${fieldId}-destination-options`;
+
+  const focusDatesAfterTransition = (): void => {
+    window.requestAnimationFrame(() => {
+      if (mobile) {
+        mobileDateHeadingRef.current?.focus();
+      } else {
+        tabListRef.current?.querySelector<HTMLButtonElement>('[data-search-tab="dates"]')?.focus();
+      }
+    });
+  };
+
+  const selectDestinationSuggestion = (suggestion: (typeof popularDestinations)[number]): void => {
+    setDestination(suggestion.query);
+    setActiveDestinationIndex(-1);
+    setIsDestinationSuggestionsOpen(false);
+    transitionToTab('dates');
+    focusDatesAfterTransition();
+  };
+
+  const selectAllDestinations = (): void => {
+    setDestination('');
+    setActiveDestinationIndex(-1);
+    setIsDestinationSuggestionsOpen(false);
+    transitionToTab('dates');
+    focusDatesAfterTransition();
+  };
+
+  const moveActiveDestination = (index: number): void => {
+    const nextIndex = Math.min(Math.max(index, 0), popularDestinations.length - 1);
+    setActiveDestinationIndex(nextIndex);
+    window.requestAnimationFrame(() => {
+      destinationOptionRefs.current[nextIndex]?.scrollIntoView({ block: 'nearest' });
+    });
+  };
+
+  const handleDestinationKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === 'ArrowDown' && popularDestinations.length > 0) {
+      event.preventDefault();
+      setIsDestinationSuggestionsOpen(true);
+      moveActiveDestination(activeDestinationIndex + 1);
+    } else if (event.key === 'ArrowUp' && popularDestinations.length > 0) {
+      event.preventDefault();
+      setIsDestinationSuggestionsOpen(true);
+      moveActiveDestination(
+        activeDestinationIndex < 0 ? popularDestinations.length - 1 : activeDestinationIndex - 1,
+      );
+    } else if (
+      event.key === 'Home' &&
+      isDestinationSuggestionsOpen &&
+      popularDestinations.length > 0
+    ) {
+      event.preventDefault();
+      moveActiveDestination(0);
+    } else if (
+      event.key === 'End' &&
+      isDestinationSuggestionsOpen &&
+      popularDestinations.length > 0
+    ) {
+      event.preventDefault();
+      moveActiveDestination(popularDestinations.length - 1);
+    } else if (
+      event.key === 'Enter' &&
+      isDestinationSuggestionsOpen &&
+      activeDestinationIndex >= 0 &&
+      popularDestinations[activeDestinationIndex]
+    ) {
+      event.preventDefault();
+      selectDestinationSuggestion(popularDestinations[activeDestinationIndex]);
+    } else if (event.key === 'Escape' && isDestinationSuggestionsOpen) {
+      event.preventDefault();
+      setIsDestinationSuggestionsOpen(false);
+      setActiveDestinationIndex(-1);
+    }
+  };
 
   const handleApply = () => {
     const hasPartialDateRange = Boolean(checkIn) !== Boolean(checkOut);
@@ -441,7 +534,13 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                   key={step.id}
                   className="min-h-0 shrink-0 rounded-3xl bg-white p-6 shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200"
                 >
-                  <h3 className="mb-5 text-2xl font-bold">{step.label}?</h3>
+                  <h3
+                    ref={step.id === 'dates' ? mobileDateHeadingRef : undefined}
+                    tabIndex={step.id === 'dates' ? -1 : undefined}
+                    className="mb-5 text-2xl font-bold"
+                  >
+                    {step.label}?
+                  </h3>
                   {step.id === 'destination' && (
                     <div className="space-y-4">
                       <label className="sr-only" htmlFor={`${fieldId}-mobile-destination`}>
@@ -449,17 +548,39 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       </label>
                       <input
                         id={`${fieldId}-mobile-destination`}
+                        ref={destinationInputRef}
+                        role="combobox"
+                        aria-autocomplete="list"
+                        aria-haspopup="listbox"
+                        aria-expanded={
+                          isDestinationSuggestionsOpen && popularDestinations.length > 0
+                        }
+                        aria-controls={
+                          isDestinationSuggestionsOpen && popularDestinations.length > 0
+                            ? destinationListboxId
+                            : undefined
+                        }
+                        aria-activedescendant={
+                          isDestinationSuggestionsOpen &&
+                          activeDestinationIndex >= 0 &&
+                          activeDestinationIndex < popularDestinations.length
+                            ? `${destinationListboxId}-option-${activeDestinationIndex}`
+                            : undefined
+                        }
                         value={destination}
-                        onChange={(event) => setDestination(event.target.value)}
+                        onFocus={() => setIsDestinationSuggestionsOpen(true)}
+                        onChange={(event) => {
+                          setDestination(event.target.value);
+                          setActiveDestinationIndex(-1);
+                          setIsDestinationSuggestionsOpen(true);
+                        }}
+                        onKeyDown={handleDestinationKeyDown}
                         placeholder="Buscar condomínio ou destino"
                         className="min-h-14 w-full rounded-xl border border-neutral-300 px-4 text-sm focus-visible:outline-2 focus-visible:outline-orange-600"
                       />
                       <button
                         type="button"
-                        onClick={() => {
-                          setDestination('');
-                          transitionToTab('dates');
-                        }}
+                        onClick={selectAllDestinations}
                         className="flex min-h-14 w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-orange-600"
                       >
                         <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
@@ -472,20 +593,33 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                           </span>
                         </span>
                       </button>
-                      <p className="text-sm font-semibold">
+                      <p
+                        id={`${fieldId}-destination-suggestions-heading`}
+                        className="text-sm font-semibold"
+                      >
                         {normalizedQuery ? 'Resultados da busca' : 'Destinos sugeridos'}
                       </p>
-                      <div className="space-y-1">
-                        {popularDestinations.length > 0 ? (
-                          popularDestinations.map((item) => (
+                      {isDestinationSuggestionsOpen && popularDestinations.length > 0 && (
+                        <div
+                          id={destinationListboxId}
+                          role="listbox"
+                          aria-labelledby={`${fieldId}-destination-suggestions-heading`}
+                          className="space-y-1"
+                        >
+                          {popularDestinations.map((item, index) => (
                             <button
-                              key={item.name}
-                              type="button"
-                              onClick={() => {
-                                setDestination(item.query);
-                                transitionToTab('dates');
+                              id={`${destinationListboxId}-option-${index}`}
+                              ref={(element) => {
+                                destinationOptionRefs.current[index] = element;
                               }}
-                              className="flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50"
+                              key={item.id}
+                              type="button"
+                              role="option"
+                              aria-selected={destination === item.query}
+                              tabIndex={-1}
+                              onMouseMove={() => setActiveDestinationIndex(index)}
+                              onClick={() => selectDestinationSuggestion(item)}
+                              className={`flex w-full items-center gap-3 rounded-xl p-3 text-left hover:bg-neutral-50 ${activeDestinationIndex === index ? 'bg-neutral-100' : ''}`}
                             >
                               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                                 <MapPin className="h-5 w-5" />
@@ -497,13 +631,23 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                                 </span>
                               </span>
                             </button>
-                          ))
-                        ) : normalizedQuery && resorts.length > 0 ? (
-                          <p className="px-3 py-2 text-sm text-neutral-500">
-                            Nenhum condomínio encontrado. Tente outro nome.
-                          </p>
-                        ) : null}
-                      </div>
+                          ))}
+                        </div>
+                      )}
+                      {popularDestinations.length === 0 && isLoadingResorts ? (
+                        <p role="status" className="px-3 py-2 text-sm text-neutral-600">
+                          Carregando destinos...
+                        </p>
+                      ) : popularDestinations.length === 0 && resorts.length === 0 ? (
+                        <p role="status" className="px-3 py-2 text-sm text-neutral-600">
+                          Nenhuma sugestão disponível agora. Você pode buscar em todos os
+                          empreendimentos.
+                        </p>
+                      ) : popularDestinations.length === 0 && normalizedQuery ? (
+                        <p role="status" className="px-3 py-2 text-sm text-neutral-600">
+                          Nenhum condomínio encontrado. Tente outro nome.
+                        </p>
+                      ) : null}
                     </div>
                   )}
                   {step.id === 'dates' && (
@@ -752,9 +896,32 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-orange-500" />
                     <input
                       id={`${fieldId}-destination`}
+                      ref={destinationInputRef}
                       type="text"
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-haspopup="listbox"
+                      aria-expanded={isDestinationSuggestionsOpen && popularDestinations.length > 0}
+                      aria-controls={
+                        isDestinationSuggestionsOpen && popularDestinations.length > 0
+                          ? destinationListboxId
+                          : undefined
+                      }
+                      aria-activedescendant={
+                        isDestinationSuggestionsOpen &&
+                        activeDestinationIndex >= 0 &&
+                        activeDestinationIndex < popularDestinations.length
+                          ? `${destinationListboxId}-option-${activeDestinationIndex}`
+                          : undefined
+                      }
                       value={destination}
-                      onChange={(e) => setDestination(e.target.value)}
+                      onFocus={() => setIsDestinationSuggestionsOpen(true)}
+                      onChange={(event) => {
+                        setDestination(event.target.value);
+                        setActiveDestinationIndex(-1);
+                        setIsDestinationSuggestionsOpen(true);
+                      }}
+                      onKeyDown={handleDestinationKeyDown}
                       placeholder="Ex: Trancoso, Rio de Janeiro, Campos do Jordão..."
                       className="w-full pl-12 pr-12 py-3.5 rounded-2xl border border-neutral-300 focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900 focus-visible:ring-2 focus-visible:ring-orange-600 text-sm outline-none transition-all"
                     />
@@ -762,7 +929,12 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                       <button
                         type="button"
                         aria-label="Limpar destino"
-                        onClick={() => setDestination('')}
+                        onClick={() => {
+                          setDestination('');
+                          setActiveDestinationIndex(-1);
+                          setIsDestinationSuggestionsOpen(true);
+                          destinationInputRef.current?.focus();
+                        }}
                         className={`absolute right-1 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 ${focusRing}`}
                       >
                         <X className="w-4 h-4" />
@@ -772,19 +944,33 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                 </div>
 
                 <div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-3">
+                  <h4
+                    id={`${fieldId}-destination-suggestions-heading`}
+                    className="text-xs font-bold uppercase tracking-wider text-neutral-600 mb-3"
+                  >
                     {normalizedQuery ? 'Resultados da busca' : 'Destinos em destaque'}
                   </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {popularDestinations.length > 0 ? (
-                      popularDestinations.map((dest) => (
+                  {isDestinationSuggestionsOpen && popularDestinations.length > 0 && (
+                    <div
+                      id={destinationListboxId}
+                      role="listbox"
+                      aria-labelledby={`${fieldId}-destination-suggestions-heading`}
+                      className="grid grid-cols-1 gap-2.5 sm:grid-cols-2"
+                    >
+                      {popularDestinations.map((dest, index) => (
                         <button
-                          key={dest.name}
-                          onClick={() => {
-                            setDestination(dest.query);
-                            transitionToTab('dates');
+                          id={`${destinationListboxId}-option-${index}`}
+                          ref={(element) => {
+                            destinationOptionRefs.current[index] = element;
                           }}
-                          className={`flex items-center gap-3 p-3 rounded-2xl border border-neutral-100 hover:border-neutral-300 hover:bg-neutral-50 text-left transition-all cursor-pointer group ${focusRing}`}
+                          key={dest.id}
+                          type="button"
+                          role="option"
+                          aria-selected={destination === dest.query}
+                          tabIndex={-1}
+                          onMouseMove={() => setActiveDestinationIndex(index)}
+                          onClick={() => selectDestinationSuggestion(dest)}
+                          className={`flex items-center gap-3 rounded-2xl border border-neutral-100 p-3 text-left transition-all hover:border-neutral-300 hover:bg-neutral-50 group ${focusRing} ${activeDestinationIndex === index ? 'bg-neutral-100' : ''}`}
                         >
                           <div className="w-10 h-10 rounded-xl bg-orange-50 group-hover:bg-orange-100 text-orange-600 flex items-center justify-center flex-shrink-0 transition-colors">
                             <MapPin className="w-5 h-5" />
@@ -796,13 +982,23 @@ export const SearchModal: React.FC<SearchModalProps> = ({
                             <p className="text-xs text-neutral-500">{dest.subtitle}</p>
                           </div>
                         </button>
-                      ))
-                    ) : normalizedQuery && resorts.length > 0 ? (
-                      <p className="text-sm text-neutral-500">
-                        Nenhum condomínio encontrado. Tente outro nome.
-                      </p>
-                    ) : null}
-                  </div>
+                      ))}
+                    </div>
+                  )}
+                  {popularDestinations.length === 0 && isLoadingResorts ? (
+                    <p role="status" className="col-span-full text-sm text-neutral-600">
+                      Carregando destinos...
+                    </p>
+                  ) : popularDestinations.length === 0 && resorts.length === 0 ? (
+                    <p role="status" className="col-span-full text-sm text-neutral-600">
+                      Nenhuma sugestão disponível agora. Você pode continuar sem selecionar um
+                      condomínio.
+                    </p>
+                  ) : popularDestinations.length === 0 && normalizedQuery ? (
+                    <p role="status" className="text-sm text-neutral-600">
+                      Nenhum condomínio encontrado. Tente outro nome.
+                    </p>
+                  ) : null}
                 </div>
               </div>
             )}

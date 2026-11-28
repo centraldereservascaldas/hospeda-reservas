@@ -21,10 +21,10 @@ export const WishlistsView: React.FC<WishlistsViewProps> = ({
   showTotalWithTaxes,
 }) => {
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 [@media(max-height:640px)]:py-6 [@media(max-height:400px)]:py-1 min-h-[75vh]">
+    <div className="max-w-7xl mx-auto px-(--layout-page-gutter) py-10 [@media(max-height:640px)]:py-6 [@media(max-height:400px)]:py-1 min-h-[75vh]">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-8 [@media(max-height:400px)]:gap-2 [@media(max-height:400px)]:pb-1 [@media(min-width:480px)_and_(max-height:400px)]:flex-row [@media(min-width:480px)_and_(max-height:400px)]:items-center border-b border-neutral-100">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight">
+          <h1 className="text-page-title sm:text-page-title-wide font-extrabold text-neutral-900 tracking-tight">
             Lugares Favoritos
           </h1>
           <p className="text-xs sm:text-sm text-neutral-500 mt-1 [@media(max-height:400px)]:hidden">

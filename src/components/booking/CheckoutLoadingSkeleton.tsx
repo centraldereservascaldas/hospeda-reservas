@@ -1,13 +1,5 @@
 import { LogoCRCN } from '../LogoCRCN';
-
-function SkeletonBar({ className = '' }: { className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`block animate-pulse rounded-full bg-neutral-200 motion-reduce:animate-none ${className}`}
-    />
-  );
-}
+import { Skeleton } from '../Skeleton';
 
 function CheckoutSkeletonCards() {
   return (
@@ -17,40 +9,40 @@ function CheckoutSkeletonCards() {
         className="checkout-purchase-form liquid-glass-card min-w-0 space-y-6 rounded-3xl p-5 sm:p-7"
       >
         <div className="flex items-center gap-3">
-          <SkeletonBar className="h-10 w-10 rounded-xl" />
-          <SkeletonBar className="h-6 w-36" />
+          <Skeleton className="h-10 w-10" radius="xl" />
+          <Skeleton className="h-6 w-36" radius="full" />
         </div>
         <div className="grid gap-3 rounded-2xl border border-neutral-200 bg-white/65 p-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <SkeletonBar className="h-4 w-16" />
-            <SkeletonBar className="h-4 w-32" />
+            <Skeleton className="h-4 w-16" radius="full" />
+            <Skeleton className="h-4 w-32" radius="full" />
           </div>
           <div className="space-y-2">
-            <SkeletonBar className="h-4 w-20" />
-            <SkeletonBar className="h-4 w-24" />
+            <Skeleton className="h-4 w-20" radius="full" />
+            <Skeleton className="h-4 w-24" radius="full" />
           </div>
         </div>
-        <SkeletonBar className="aspect-video w-full rounded-2xl" />
+        <Skeleton className="aspect-video w-full" radius="2xl" />
         <div className="space-y-4">
-          <SkeletonBar className="h-5 w-48" />
-          <SkeletonBar className="h-12 w-full rounded-xl" />
-          <SkeletonBar className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-5 w-48" radius="full" />
+          <Skeleton className="h-12 w-full" radius="xl" />
+          <Skeleton className="h-12 w-full" radius="xl" />
         </div>
-        <SkeletonBar className="h-14 w-full rounded-2xl" />
+        <Skeleton className="h-14 w-full" radius="2xl" />
       </section>
       <aside
         aria-hidden="true"
         className="checkout-summary-card liquid-glass-card space-y-5 rounded-3xl p-5 sm:p-6"
       >
-        <SkeletonBar className="aspect-video w-full rounded-2xl" />
-        <SkeletonBar className="h-4 w-28" />
-        <SkeletonBar className="h-6 w-3/4" />
+        <Skeleton className="aspect-video w-full" radius="2xl" />
+        <Skeleton className="h-4 w-28" radius="full" />
+        <Skeleton className="h-6 w-3/4" radius="full" />
         <div className="space-y-3 border-t border-neutral-200 pt-5">
-          <SkeletonBar className="h-4 w-full" />
-          <SkeletonBar className="h-4 w-4/5" />
-          <SkeletonBar className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-full" radius="full" />
+          <Skeleton className="h-4 w-4/5" radius="full" />
+          <Skeleton className="h-4 w-2/3" radius="full" />
         </div>
-        <SkeletonBar className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-12 w-full" radius="xl" />
       </aside>
     </div>
   );
@@ -90,9 +82,9 @@ export function CheckoutLoadingSkeleton({
       <div className="mx-auto w-full max-w-6xl flex-1 px-5 py-7 sm:px-8 sm:py-10">
         <span className="sr-only">{label}</span>
         <div aria-hidden="true" className="mb-6 space-y-3">
-          <SkeletonBar className="h-4 w-40" />
-          <SkeletonBar className="h-9 w-64 max-w-full" />
-          <SkeletonBar className="h-4 w-80 max-w-full" />
+          <Skeleton className="h-4 w-40" radius="full" />
+          <Skeleton className="h-9 w-64 max-w-full" radius="full" />
+          <Skeleton className="h-4 w-80 max-w-full" radius="full" />
         </div>
         {variant === 'resume' ? <ResumeSkeletonCard /> : <CheckoutSkeletonCards />}
       </div>
@@ -106,12 +98,12 @@ function ResumeSkeletonCard() {
       aria-hidden="true"
       className="checkout-summary-card liquid-glass-card max-w-xl space-y-4 rounded-3xl p-5 sm:p-7"
     >
-      <SkeletonBar className="h-5 w-40" />
-      <SkeletonBar className="h-4 w-full" />
-      <SkeletonBar className="h-4 w-4/5" />
+      <Skeleton className="h-5 w-40" radius="full" />
+      <Skeleton className="h-4 w-full" radius="full" />
+      <Skeleton className="h-4 w-4/5" radius="full" />
       <div className="space-y-3 border-t border-neutral-200 pt-5">
-        <SkeletonBar className="h-4 w-2/3" />
-        <SkeletonBar className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-4 w-2/3" radius="full" />
+        <Skeleton className="h-12 w-full" radius="xl" />
       </div>
     </section>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   loadGtmIfConsented,
   readMeasurementConsent,
@@ -6,6 +6,7 @@ import {
   type MeasurementConsent,
 } from '../utils/measurementConsent';
 import { readLegalPageSummaries, type LegalPageSummary } from '../utils/legalPages';
+import { CheckboxInput } from './CheckboxInput';
 
 export const OPEN_MEASUREMENT_PREFERENCES = 'crcn:open-measurement-preferences';
 
@@ -26,6 +27,7 @@ export function MeasurementPreferences({
     savedConsent?.advertising ?? false,
   );
   const [legalPages, setLegalPages] = useState<LegalPageSummary[]>([]);
+  const preferenceId = useId();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const reopenButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -173,17 +175,23 @@ export function MeasurementPreferences({
         </div>
         {isCustomizing && (
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-            <label className="inline-flex min-h-11 items-center gap-2">
-              <input
-                type="checkbox"
+            <label
+              htmlFor={`${preferenceId}-analytics`}
+              className="inline-flex min-h-11 items-center gap-2"
+            >
+              <CheckboxInput
+                id={`${preferenceId}-analytics`}
                 checked={analyticsAccepted}
                 onChange={(event) => setAnalyticsAccepted(event.target.checked)}
               />
               Analytics (medição de uso)
             </label>
-            <label className="inline-flex min-h-11 items-center gap-2">
-              <input
-                type="checkbox"
+            <label
+              htmlFor={`${preferenceId}-advertising`}
+              className="inline-flex min-h-11 items-center gap-2"
+            >
+              <CheckboxInput
+                id={`${preferenceId}-advertising`}
                 checked={advertisingAccepted}
                 onChange={(event) => setAdvertisingAccepted(event.target.checked)}
               />

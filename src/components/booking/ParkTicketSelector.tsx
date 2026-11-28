@@ -1,6 +1,8 @@
 import { useId } from 'react';
 import { Minus, Plus, Ticket, Waves, CalendarDays } from 'lucide-react';
 import { formatCurrency } from '../../utils/formatters';
+import { NativeSelect } from '../NativeSelect';
+import { CheckboxInput } from '../CheckboxInput';
 
 // Visual fixtures only. Replace with validated supplier offers before enabling sales.
 export const previewParkOffers = [
@@ -101,10 +103,10 @@ export function ParkTicketSelector({
         Adicione ingressos para um parque à sua hospedagem, no mesmo resumo da compra.
       </p>
       <div className="mt-4 flex min-h-11 items-start gap-3 rounded-xl border border-orange-200 bg-white p-3 text-sm leading-6">
-        <input
+        <CheckboxInput
           id={bumpId}
           aria-describedby={`${bumpId}-description`}
-          type="checkbox"
+          size="large"
           checked={totalQuantity > 0}
           disabled={disabled}
           onChange={(event) =>
@@ -119,7 +121,7 @@ export function ParkTicketSelector({
                 : {},
             )
           }
-          className="mt-1 h-5 w-5 shrink-0 accent-orange-800"
+          className="mt-1"
         />
         <div>
           <label htmlFor={bumpId} className="block cursor-pointer font-bold text-neutral-950">
@@ -190,7 +192,7 @@ export function ParkTicketSelector({
                       <CalendarDays size={16} aria-hidden="true" />
                       Data da visita · {park.name}
                     </span>
-                    <select
+                    <NativeSelect
                       value={selected?.date ?? from}
                       onChange={(event) =>
                         onChange({
@@ -201,7 +203,7 @@ export function ParkTicketSelector({
                           },
                         })
                       }
-                      className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-neutral-300 bg-white px-3 font-normal focus-visible:outline-2 focus-visible:outline-orange-700"
+                      className="mt-2 w-full min-w-0 font-normal"
                     >
                       {visitDates.map((date) => (
                         <option key={date} value={date}>
@@ -213,7 +215,7 @@ export function ParkTicketSelector({
                           })}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </label>
                   {park.categories.map((category) => {
                     const quantity = selected?.quantities[category.id] ?? 0;

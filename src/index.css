@@ -27,9 +27,57 @@
   --color-glass-border: rgba(148, 163, 184, 0.3);
   --text-caption: 0.75rem;
   --text-caption--line-height: 1rem;
+  --text-page-title: 1.5rem;
+  --text-page-title--line-height: 2rem;
+  --text-page-title-wide: 1.875rem;
+  --text-page-title-wide--line-height: 2.25rem;
+}
+
+@theme inline {
+  --color-action-primary: var(--color-orange-600);
+  --color-action-primary-hover: var(--color-orange-700);
+  --color-action-primary-disabled: var(--color-orange-300);
+  --color-action-primary-foreground: var(--color-white);
+  --color-action-secondary: var(--color-white);
+  --color-action-secondary-hover: var(--color-neutral-100);
+  --color-action-secondary-disabled: var(--color-neutral-100);
+  --color-action-secondary-border: var(--color-neutral-300);
+  --color-action-secondary-foreground: var(--color-neutral-900);
+  --color-action-quiet-hover: var(--color-neutral-100);
+  --color-action-quiet-foreground: var(--color-neutral-800);
+  --color-action-danger: var(--color-rose-700);
+  --color-action-danger-hover: var(--color-rose-800);
+  --color-action-danger-disabled: var(--color-rose-300);
+  --color-action-danger-foreground: var(--color-white);
+  --color-status-neutral-badge-surface: var(--color-neutral-100);
+  --color-status-neutral-badge-foreground: var(--color-neutral-700);
+  --color-status-neutral-notice-surface: var(--color-neutral-50);
+  --color-status-neutral-notice-border: var(--color-neutral-200);
+  --color-status-neutral-notice-foreground: var(--color-neutral-800);
+  --color-status-info-badge-surface: var(--color-sky-100);
+  --color-status-info-badge-foreground: var(--color-sky-900);
+  --color-status-info-notice-surface: var(--color-sky-50);
+  --color-status-info-notice-border: var(--color-sky-200);
+  --color-status-info-notice-foreground: var(--color-sky-950);
+  --color-status-success-badge-surface: var(--color-emerald-100);
+  --color-status-success-badge-foreground: var(--color-emerald-900);
+  --color-status-success-notice-surface: var(--color-emerald-50);
+  --color-status-success-notice-border: var(--color-emerald-200);
+  --color-status-success-notice-foreground: var(--color-emerald-950);
+  --color-status-warning-badge-surface: var(--color-amber-100);
+  --color-status-warning-badge-foreground: var(--color-amber-950);
+  --color-status-warning-notice-surface: var(--color-amber-50);
+  --color-status-warning-notice-border: var(--color-amber-200);
+  --color-status-warning-notice-foreground: var(--color-amber-950);
+  --color-status-danger-badge-surface: var(--color-rose-100);
+  --color-status-danger-badge-foreground: var(--color-rose-900);
+  --color-status-danger-notice-surface: var(--color-rose-50);
+  --color-status-danger-notice-border: var(--color-rose-200);
+  --color-status-danger-notice-foreground: var(--color-rose-950);
 }
 
 :root {
+  --layout-page-gutter: 1rem;
   --header-edge-spacing: 0.75rem;
   --header-compact-search-width: 22rem;
   --header-expanded-width: 80rem;
@@ -45,6 +93,18 @@
   --search-bar-segment-height: 4rem;
   --search-bar-segment-padding: 1.5rem;
   --search-bar-divider-height: 2rem;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --layout-page-gutter: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --layout-page-gutter: 2rem;
+  }
 }
 
 @media (min-width: 640px) and (max-width: 900px) {

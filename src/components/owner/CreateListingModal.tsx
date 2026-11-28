@@ -1,8 +1,11 @@
 import React, { useId, useRef, useState } from 'react';
-import { X, Sparkles, Check } from 'lucide-react';
+import { X, Sparkles, Check, Link2 } from 'lucide-react';
 import { Property, Currency } from '../../types';
 import { CATEGORIES } from '../../data/mockProperties';
 import { useDialogFocus } from '../useDialogFocus';
+import { FormField } from '../FormField';
+import { NativeSelect } from '../NativeSelect';
+import { TextInput } from '../TextInput';
 
 interface CreateListingModalProps {
   isOpen: boolean;
@@ -56,6 +59,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
   const [maxGuests, setMaxGuests] = useState(4);
   const [selectedPhoto, setSelectedPhoto] = useState(PRESET_PHOTOS[0].url);
   const [customPhotoUrl, setCustomPhotoUrl] = useState('');
+  const [photoSource, setPhotoSource] = useState<'preset' | 'custom'>('preset');
 
   if (!isOpen) return null;
 
@@ -63,7 +67,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
     e.preventDefault();
     if (!title.trim()) return;
 
-    const mainPhoto = customPhotoUrl.trim() || selectedPhoto;
+    const mainPhoto = photoSource === 'custom' ? customPhotoUrl.trim() : selectedPhoto;
     const additionalPhotos = [
       mainPhoto,
       'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=1000&q=80',
@@ -196,120 +200,83 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
 
           <form onSubmit={handleSubmit} className="space-y-6 p-4 sm:p-8">
             {/* Title */}
-            <div>
-              <label
-                htmlFor={`${fieldId}-listing-title`}
-                className="mb-1 block text-sm font-bold text-neutral-900"
-              >
-                Título atrativo do anúncio *
-              </label>
-              <input
+            <FormField label="Título atrativo do anúncio" id={`${fieldId}-listing-title`} required>
+              <TextInput
                 ref={titleRef}
-                id={`${fieldId}-listing-title`}
                 type="text"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Ex: Chalé na Montanha com Lareira e Vista Panorâmica"
-                className="min-h-11 w-full rounded-xl border border-neutral-300 p-3 text-sm font-semibold outline-none focus:border-neutral-900"
+                className="w-full font-semibold"
               />
-            </div>
+            </FormField>
 
             {/* Category & Location */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <label
-                  htmlFor={`${fieldId}-category`}
-                  className="mb-1 block text-sm font-bold text-neutral-900"
-                >
-                  Categoria
-                </label>
-                <select
+              <FormField label="Categoria" id={`${fieldId}-category`}>
+                <NativeSelect
                   id={`${fieldId}-category`}
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="min-h-11 w-full rounded-xl border border-neutral-300 p-2.5 text-sm outline-none focus:border-neutral-900"
+                  className="w-full"
                 >
                   {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.label}
                     </option>
                   ))}
-                </select>
-              </div>
+                </NativeSelect>
+              </FormField>
 
-              <div>
-                <label
-                  htmlFor={`${fieldId}-city`}
-                  className="mb-1 block text-sm font-bold text-neutral-900"
-                >
-                  Cidade
-                </label>
-                <input
-                  id={`${fieldId}-city`}
+              <FormField label="Cidade" id={`${fieldId}-city`} required>
+                <TextInput
                   type="text"
                   required
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  className="min-h-11 w-full rounded-xl border border-neutral-300 p-2.5 text-sm outline-none focus:border-neutral-900"
+                  className="w-full"
                 />
-              </div>
+              </FormField>
 
-              <div>
-                <label
-                  htmlFor={`${fieldId}-state`}
-                  className="mb-1 block text-sm font-bold text-neutral-900"
-                >
-                  Estado
-                </label>
-                <input
-                  id={`${fieldId}-state`}
+              <FormField label="Estado" id={`${fieldId}-state`} required>
+                <TextInput
                   type="text"
                   required
                   value={state}
                   onChange={(e) => setState(e.target.value)}
-                  className="min-h-11 w-full rounded-xl border border-neutral-300 p-2.5 text-sm outline-none focus:border-neutral-900"
+                  className="w-full"
                 />
-              </div>
+              </FormField>
             </div>
 
             {/* Pricing */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label
-                  htmlFor={`${fieldId}-nightly-price`}
-                  className="mb-1 block text-sm font-bold text-neutral-900"
-                >
-                  Preço por noite ({currency})
-                </label>
-                <input
-                  id={`${fieldId}-nightly-price`}
+              <FormField
+                label={`Preço por noite (${currency})`}
+                id={`${fieldId}-nightly-price`}
+                required
+              >
+                <TextInput
                   type="number"
                   min="50"
                   max="50000"
                   required
                   value={pricePerNight}
                   onChange={(e) => setPricePerNight(Number(e.target.value))}
-                  className="min-h-11 w-full rounded-xl border border-neutral-300 p-2.5 text-sm font-bold outline-none focus:border-neutral-900"
+                  className="w-full font-bold"
                 />
-              </div>
+              </FormField>
 
-              <div>
-                <label
-                  htmlFor={`${fieldId}-cleaning-fee`}
-                  className="mb-1 block text-sm font-bold text-neutral-900"
-                >
-                  Taxa de limpeza ({currency})
-                </label>
-                <input
-                  id={`${fieldId}-cleaning-fee`}
+              <FormField label={`Taxa de limpeza (${currency})`} id={`${fieldId}-cleaning-fee`}>
+                <TextInput
                   type="number"
                   min="0"
                   value={cleaningFee}
                   onChange={(e) => setCleaningFee(Number(e.target.value))}
-                  className="min-h-11 w-full rounded-xl border border-neutral-300 p-2.5 text-sm font-bold outline-none focus:border-neutral-900"
+                  className="w-full font-bold"
                 />
-              </div>
+              </FormField>
             </div>
 
             {/* Capacity Specs */}
@@ -328,7 +295,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                   max="20"
                   value={bedrooms}
                   onChange={(e) => setBedrooms(Number(e.target.value))}
-                  className="min-h-11 w-full text-center text-sm font-bold outline-none"
+                  className="min-h-11 w-full text-center text-sm font-bold outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 />
               </div>
 
@@ -346,7 +313,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                   max="30"
                   value={beds}
                   onChange={(e) => setBeds(Number(e.target.value))}
-                  className="min-h-11 w-full text-center text-sm font-bold outline-none"
+                  className="min-h-11 w-full text-center text-sm font-bold outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 />
               </div>
 
@@ -364,7 +331,7 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                   max="20"
                   value={bathrooms}
                   onChange={(e) => setBathrooms(Number(e.target.value))}
-                  className="min-h-11 w-full text-center text-sm font-bold outline-none"
+                  className="min-h-11 w-full text-center text-sm font-bold outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 />
               </div>
 
@@ -382,82 +349,101 @@ export const CreateListingModal: React.FC<CreateListingModalProps> = ({
                   max="30"
                   value={maxGuests}
                   onChange={(e) => setMaxGuests(Number(e.target.value))}
-                  className="min-h-11 w-full text-center text-sm font-bold outline-none"
+                  className="min-h-11 w-full text-center text-sm font-bold outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
                 />
               </div>
             </div>
 
             {/* Photos selection */}
-            <div>
-              <p
-                id={`${fieldId}-photo-label`}
-                className="block text-xs font-bold text-neutral-900 mb-2"
-              >
+            <fieldset className="min-w-0">
+              <legend className="mb-2 block text-xs font-bold text-neutral-900">
                 Foto principal da acomodação
-              </p>
-              <div
-                role="group"
-                aria-labelledby={`${fieldId}-photo-label`}
-                className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-5"
-              >
+              </legend>
+              <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
                 {PRESET_PHOTOS.map((preset) => (
-                  <button
+                  <label
                     key={preset.url}
-                    type="button"
-                    aria-label={`Selecionar foto: ${preset.label}`}
-                    aria-pressed={selectedPhoto === preset.url && !customPhotoUrl}
-                    onClick={() => {
-                      setSelectedPhoto(preset.url);
-                      setCustomPhotoUrl('');
-                    }}
-                    className={`relative aspect-square min-h-11 rounded-xl border-2 transition-all cursor-pointer ${
-                      selectedPhoto === preset.url && !customPhotoUrl
+                    className={`relative aspect-square min-h-11 cursor-pointer rounded-xl border-2 motion-safe:transition-all focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus-ring ${
+                      photoSource === 'preset' && selectedPhoto === preset.url
                         ? 'border-orange-500 scale-105 shadow-md'
                         : 'border-transparent opacity-75 hover:opacity-100'
                     }`}
                   >
+                    <input
+                      type="radio"
+                      name={`${fieldId}-photo-source`}
+                      value={preset.url}
+                      checked={photoSource === 'preset' && selectedPhoto === preset.url}
+                      onChange={() => {
+                        setPhotoSource('preset');
+                        setSelectedPhoto(preset.url);
+                        setCustomPhotoUrl('');
+                      }}
+                      aria-label={`Usar ${preset.label} como foto principal`}
+                      className="sr-only"
+                    />
                     <img
                       src={preset.url}
                       alt={preset.label}
                       className="w-full h-full object-cover"
                     />
-                    {selectedPhoto === preset.url && !customPhotoUrl && (
+                    {photoSource === 'preset' && selectedPhoto === preset.url && (
                       <div className="absolute inset-0 bg-orange-500/20 flex items-center justify-center">
                         <Check className="w-4 h-4 text-white stroke-[3]" />
                       </div>
                     )}
-                  </button>
+                  </label>
                 ))}
+                <label
+                  className={`flex aspect-square min-h-11 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 px-2 text-center text-xs font-semibold motion-safe:transition-colors focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus-ring ${photoSource === 'custom' ? 'border-orange-500 bg-orange-50 text-orange-900 shadow-md' : 'border-neutral-200 bg-neutral-50 text-neutral-700 hover:border-neutral-300 hover:bg-white'}`}
+                >
+                  <input
+                    type="radio"
+                    name={`${fieldId}-photo-source`}
+                    value="custom"
+                    checked={photoSource === 'custom'}
+                    onChange={() => setPhotoSource('custom')}
+                    className="sr-only"
+                  />
+                  <Link2 aria-hidden="true" className="h-5 w-5" />
+                  <span>Usar URL própria</span>
+                </label>
               </div>
 
-              <input
+              <FormField
+                label="URL da foto principal"
                 id={`${fieldId}-custom-photo-url`}
-                aria-label="URL da foto principal personalizada"
-                type="url"
-                value={customPhotoUrl}
-                onChange={(e) => setCustomPhotoUrl(e.target.value)}
-                placeholder="Ou cole a URL de uma imagem direta (opcional)..."
-                className="min-h-11 w-full rounded-xl border border-neutral-300 p-2.5 text-sm outline-none"
-              />
-            </div>
+                required={photoSource === 'custom'}
+                hint={
+                  photoSource === 'custom'
+                    ? 'Informe o endereço direto da imagem escolhida.'
+                    : 'Opcional. Escolha “Usar URL própria” para informar uma imagem personalizada.'
+                }
+              >
+                <TextInput
+                  type="url"
+                  required={photoSource === 'custom'}
+                  value={customPhotoUrl}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setCustomPhotoUrl(value);
+                    setPhotoSource(value.trim() ? 'custom' : 'preset');
+                  }}
+                  className="w-full font-normal"
+                />
+              </FormField>
+            </fieldset>
 
             {/* Description */}
-            <div>
-              <label
-                htmlFor={`${fieldId}-description`}
-                className="mb-1 block text-sm font-bold text-neutral-900"
-              >
-                Descrição do espaço
-              </label>
+            <FormField label="Descrição do espaço" id={`${fieldId}-description`}>
               <textarea
-                id={`${fieldId}-description`}
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Descreva a experiência, vista, comodidades exclusivas e detalhes especiais..."
                 className="min-h-11 w-full rounded-xl border border-neutral-300 p-2.5 text-sm outline-none focus:border-neutral-900"
               />
-            </div>
+            </FormField>
 
             {/* Buttons */}
             <div className="flex flex-col-reverse justify-end gap-2 border-t border-neutral-100 pt-3 sm:flex-row sm:items-center sm:gap-3">

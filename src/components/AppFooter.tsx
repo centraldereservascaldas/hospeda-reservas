@@ -30,7 +30,7 @@ export function AppFooter({ currency, onCreateListing }: AppFooterProps) {
 
   return (
     <footer className="border-t border-white/60 bg-white/40 backdrop-blur-2xl text-xs text-neutral-600">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-10">
+      <div className="max-w-7xl mx-auto px-(--layout-page-gutter) py-10 pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-10">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div className="space-y-3">
             <LogoCRCN size="md" variant="glass" />

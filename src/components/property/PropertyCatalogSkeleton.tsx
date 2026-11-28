@@ -1,3 +1,5 @@
+import { Skeleton } from '../Skeleton';
+
 interface PropertyCatalogSkeletonProps {
   message?: string;
   description?: string;
@@ -19,12 +21,12 @@ export function PropertyCatalogSkeleton({
       >
         {Array.from({ length: 8 }, (_, index) => (
           <div key={index} className="rounded-3xl border border-white/80 p-2 sm:p-2.5">
-            <div className="aspect-[4/3] w-full rounded-2xl bg-neutral-200" />
+            <Skeleton animated={false} className="aspect-[4/3] w-full" radius="2xl" />
             <div className="flex flex-col gap-3 px-1 pb-2 pt-4">
-              <div className="h-5 w-3/4 rounded bg-neutral-200" />
-              <div className="h-4 w-1/2 rounded bg-neutral-100" />
-              <div className="h-4 w-2/3 rounded bg-neutral-100" />
-              <div className="h-6 w-1/2 rounded bg-neutral-200" />
+              <Skeleton animated={false} className="h-5 w-3/4" />
+              <Skeleton animated={false} className="h-4 w-1/2" tone="muted" />
+              <Skeleton animated={false} className="h-4 w-2/3" tone="muted" />
+              <Skeleton animated={false} className="h-6 w-1/2" />
             </div>
           </div>
         ))}

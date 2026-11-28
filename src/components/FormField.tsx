@@ -15,6 +15,7 @@ interface FormFieldProps {
   error?: ReactNode;
   required?: boolean;
   className?: string;
+  density?: 'regular' | 'compact';
   children: ReactElement<NativeFieldProps>;
 }
 
@@ -25,6 +26,7 @@ export function FormField({
   error,
   required = false,
   className = '',
+  density = 'regular',
   children,
 }: FormFieldProps) {
   const generatedId = useId();
@@ -47,9 +49,14 @@ export function FormField({
     'aria-describedby': describedBy || undefined,
   });
 
+  const labelClassName =
+    density === 'compact'
+      ? 'block text-xs font-bold text-neutral-700'
+      : 'block text-sm font-semibold text-neutral-800';
+
   return (
     <div className={className}>
-      <label htmlFor={fieldId} className="block text-sm font-semibold text-neutral-800">
+      <label htmlFor={fieldId} className={labelClassName}>
         {label}
         {required && (
           <span aria-hidden="true" className="ml-1 text-rose-700">

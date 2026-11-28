@@ -27,6 +27,7 @@ export function PagePagination({
   return (
     <nav
       aria-label={ariaLabel}
+      aria-busy={isBusy || undefined}
       className={`flex flex-wrap items-center justify-between gap-3 ${className}`}
     >
       <p className="text-xs text-neutral-600" aria-live="polite" aria-atomic="true">

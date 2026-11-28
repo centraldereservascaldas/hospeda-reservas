@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { checkoutApi } from '../../services/checkoutApi';
 import { InstallmentPicker } from './InstallmentPicker';
+import { NativeSelect } from '../NativeSelect';
 import { isValidBrazilianTaxId } from '../../utils/cpf';
 import type { CheckoutAccessCredentials } from '../../services/checkoutApi';
 import { loadCieloSopSdk } from '../../services/cieloSopSdk';
@@ -686,13 +687,13 @@ export function CieloSopCardForm({
           ) : (
             <label className="space-y-1 text-sm font-semibold text-neutral-800 sm:col-span-2">
               Parcelamento
-              <select
+              <NativeSelect
                 name="installments"
                 required
                 disabled={lockInstallments || installmentOptions.length === 0}
                 value={selectedPricing?.installments ?? installments}
                 onChange={(event) => setInstallments(Number(event.target.value))}
-                className="min-h-11 w-full rounded-xl border border-neutral-400/70 bg-white px-3 font-normal focus-visible:border-orange-700 focus-visible:outline-2 focus-visible:outline-orange-700"
+                className="w-full font-normal"
               >
                 {installmentOptions.length === 0 && (
                   <option value={1}>Cartão indisponível para este valor</option>
@@ -702,7 +703,7 @@ export function CieloSopCardForm({
                     {option.label}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               <span className="block text-xs font-normal leading-5 text-neutral-600">
                 {installmentOptions.length === 0 ? (
                   'A parcela mínima no cartão é de R$ 5,00. Escolha Pix ou fale com o atendimento.'

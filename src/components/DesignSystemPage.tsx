@@ -18,13 +18,20 @@ import {
   X,
 } from 'lucide-react';
 import { Button } from './Button';
+import { CheckboxInput } from './CheckboxInput';
+import { ConfirmationDialog } from './ConfirmationDialog';
 import { EmptyState } from './EmptyState';
 import { FormField } from './FormField';
+import { NativeSelect } from './NativeSelect';
+import { TextInput } from './TextInput';
 import { InlineNotice } from './InlineNotice';
 import { LoadingStatus } from './LoadingStatus';
 import { PagePagination } from './PagePagination';
+import { Skeleton } from './Skeleton';
 import { StatusBadge } from './StatusBadge';
 import { InstallmentPicker } from './booking/InstallmentPicker';
+import { TripsLoadingSkeleton } from './booking/TripsLoadingSkeleton';
+import { OwnerAdminQueueSkeleton, OwnerDashboardSkeleton } from './owner/OwnerPanelSkeletons';
 
 type CatalogDomain = {
   name: string;
@@ -56,9 +63,31 @@ const catalogDomains: CatalogDomain[] = [
         status: 'implemented',
       },
       {
+        name: 'Entrada de texto nativa',
+        file: 'components/TextInput.tsx',
+        purpose:
+          'Altura, borda, foco visível, placeholder e disabled consistentes para entradas nativas de texto e data.',
+        status: 'implemented',
+      },
+      {
+        name: 'Select nativo',
+        file: 'components/NativeSelect.tsx',
+        purpose:
+          'Estilo consistente para escolhas finitas, preservando semântica e interação nativas do navegador.',
+        status: 'implemented',
+      },
+      {
+        name: 'Checkbox nativo',
+        file: 'components/CheckboxInput.tsx',
+        purpose:
+          'Estilo semântico e foco visível para escolhas independentes, mantendo o input nativo e a composição da label no consumidor.',
+        status: 'implemented',
+      },
+      {
         name: 'Aviso de estado',
         file: 'components/InlineNotice.tsx',
-        purpose: 'Feedback inline com semântica e variantes de estado.',
+        purpose:
+          'Feedback inline com variantes de estado, anúncio acessível e densidade regular/compacta.',
         status: 'implemented',
       },
       {
@@ -79,6 +108,13 @@ const catalogDomains: CatalogDomain[] = [
         name: 'Estado vazio',
         file: 'components/EmptyState.tsx',
         purpose: 'Orientação quando uma lista ou área não tem conteúdo para mostrar.',
+        status: 'implemented',
+      },
+      {
+        name: 'Skeleton',
+        file: 'components/Skeleton.tsx',
+        purpose:
+          'Placeholder visual decorativo. A região consumidora comunica o estado de carregamento separadamente.',
         status: 'implemented',
       },
     ],
@@ -132,6 +168,13 @@ const catalogDomains: CatalogDomain[] = [
         name: 'Widget Stays',
         file: 'components/search/StaysSearchWidget.tsx',
         purpose: 'Busca em destaque e refinamento da consulta.',
+      },
+      {
+        name: 'Combobox de condomínio',
+        file: 'components/search/StaysSearchWidget.tsx',
+        purpose:
+          'Seletor pesquisável interno ao widget, com popover compacto e painel do hero. Mantém valor selecionado separado da opção ativa por teclado.',
+        status: 'observed',
       },
       {
         name: 'Modal de filtros',
@@ -522,6 +565,13 @@ const catalogDomains: CatalogDomain[] = [
         purpose: 'Análise de solicitações e permissões.',
       },
       {
+        name: 'Busca e vínculo de proprietário Stays',
+        file: 'components/owner/OwnerAccessAdminView.tsx',
+        purpose:
+          'Busca remota com debounce e escolha exclusiva por radio nativo; limpa resultados obsoletos ao editar e anuncia estados de busca e vazio.',
+        status: 'observed',
+      },
+      {
         name: 'Transações',
         file: 'components/owner/OwnerAccountingTransactions.tsx',
         purpose: 'Consulta de transações e conciliação.',
@@ -537,6 +587,13 @@ const catalogDomains: CatalogDomain[] = [
         name: 'Criar anúncio',
         file: 'components/owner/CreateListingModal.tsx',
         purpose: 'Cadastro de novo imóvel.',
+      },
+      {
+        name: 'Escolha da foto principal',
+        file: 'components/owner/CreateListingModal.tsx',
+        purpose:
+          'Seleção exclusiva entre fotos predefinidas ou uma URL própria, apresentada como radios nativos em cartões visuais.',
+        status: 'observed',
       },
     ],
   },
@@ -694,7 +751,7 @@ function SpecimenCard({
 }) {
   return (
     <article
-      className={`rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6 ${className ?? ''}`}
+      className={`min-w-0 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6 ${className ?? ''}`}
     >
       <div className="mb-5 flex flex-wrap items-start justify-between gap-2">
         <h3 className="font-bold text-neutral-900">{title}</h3>
@@ -851,6 +908,9 @@ export function DesignSystemPage({
   const [searchTerm, setSearchTerm] = useState('');
   const [previewInstallments, setPreviewInstallments] = useState(3);
   const [paginationPreviewPage, setPaginationPreviewPage] = useState(1);
+  const [isConfirmationPreviewOpen, setIsConfirmationPreviewOpen] = useState(false);
+  const confirmationPreviewTriggerRef = useRef<HTMLButtonElement>(null);
+  const [confirmationPreviewMessage, setConfirmationPreviewMessage] = useState('');
   const [motionDemoKey, setMotionDemoKey] = useState(0);
   const [isMotionDemoSelected, setIsMotionDemoSelected] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(
@@ -941,7 +1001,7 @@ export function DesignSystemPage({
   return (
     <div className="min-h-screen bg-[#f8f7f4] text-neutral-900">
       <header className="sticky top-0 z-30 border-b border-neutral-200/80 bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-(--layout-page-gutter) py-3">
           <a
             href="/"
             className="flex min-w-0 items-center gap-3 rounded-lg focus-visible:outline-2 focus-visible:outline-orange-600"
@@ -1058,9 +1118,10 @@ export function DesignSystemPage({
                       size={18}
                     />
                     <span>
-                      O inventário mapeia componentes existentes. As prévias de fluxos são
-                      estáticas; as seções de motion e espaçamento têm demonstrações isoladas. Elas
-                      não executam jornadas reais e nem todo padrão já foi consolidado em uma API
+                      O inventário mapeia componentes existentes. As prévias de jornadas são
+                      ilustrativas; algumas amostras interativas executam componentes reais de forma
+                      isolada, sem representar o fluxo completo nem chamar APIs. Outras prévias
+                      continuam estáticas, e nem todo padrão foi consolidado em uma API
                       compartilhada.
                     </span>
                   </div>
@@ -1126,10 +1187,40 @@ export function DesignSystemPage({
                   />
                 </div>
               </SpecimenCard>
+              <SpecimenCard
+                title="Papéis semânticos de status"
+                source="StatusBadge · InlineNotice · @theme inline"
+              >
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge tone="neutral">Neutro</StatusBadge>
+                  <StatusBadge tone="info">Informação</StatusBadge>
+                  <StatusBadge tone="success">Sucesso</StatusBadge>
+                  <StatusBadge tone="warning">Atenção</StatusBadge>
+                  <StatusBadge tone="danger">Erro ou risco</StatusBadge>
+                </div>
+                <ul className="mt-4 space-y-2 text-xs leading-5 text-neutral-700">
+                  <li>
+                    <strong>Badges:</strong> <code>--color-status-{'{tone}'}-badge-surface</code> e{' '}
+                    <code>--color-status-{'{tone}'}-badge-foreground</code>.
+                  </li>
+                  <li>
+                    <strong>Avisos:</strong> <code>--color-status-{'{tone}'}-notice-surface</code>,{' '}
+                    <code>--color-status-{'{tone}'}-notice-border</code> e{' '}
+                    <code>--color-status-{'{tone}'}-notice-foreground</code>.
+                  </li>
+                  <li>
+                    <code>InlineNotice</code> usa a paleta neutra no carregamento e o papel danger
+                    para erro. Os tons comunicam aparência; o consumidor continua responsável pelo
+                    significado do estado e pelo texto.
+                  </li>
+                </ul>
+              </SpecimenCard>
               <SpecimenCard title="Tipografia e geometria" source="index.css · tailwind v4">
                 <div className="grid gap-2">
                   <TokenRow name="Família principal" value="Plus Jakarta Sans · pesos 300–800" />
                   <TokenRow name="caption" value="0.75rem / 1rem (12px / 16px)" />
+                  <TokenRow name="page-title" value="1.5rem / 2rem (24px / 32px)" />
+                  <TokenRow name="page-title-wide" value="1.875rem / 2.25rem (30px / 36px)" />
                   <TokenRow name="Largura de busca" value="--search-bar-width · 53.125rem" />
                   <TokenRow name="Altura de segmento" value="--search-bar-segment-height · 4rem" />
                   <TokenRow
@@ -1240,17 +1331,25 @@ export function DesignSystemPage({
                   ação seguem disponíveis sem animação.
                 </p>
               </SpecimenCard>
-              <SpecimenCard title="Estado de carregamento" source="components/LoadingStatus.tsx">
-                <div className="flex min-h-32 items-center justify-center rounded-xl bg-neutral-100 p-4">
+              <SpecimenCard
+                title="Status e placeholder de carregamento"
+                source="LoadingStatus · Skeleton"
+              >
+                <div className="flex min-h-32 flex-col justify-center gap-4 rounded-xl bg-neutral-100 p-4">
                   <div aria-busy="true">
                     <LoadingStatus className="font-semibold text-neutral-700">
                       Carregando resultados
                     </LoadingStatus>
                   </div>
+                  <div aria-hidden="true" className="mx-auto w-full max-w-md space-y-3">
+                    <Skeleton className="h-5 w-2/3" radius="lg" />
+                    <Skeleton className="h-4 w-full" radius="full" tone="muted" />
+                    <Skeleton className="h-4 w-4/5" radius="full" tone="muted" />
+                  </div>
                 </div>
                 <p className="mt-3 text-xs leading-5 text-neutral-600">
-                  A região consumidora indica o estado ocupado; o componente anuncia o progresso. A
-                  mensagem permanece quando movimento reduzido desativa a rotação.
+                  O status nomeia a tarefa e o skeleton só sugere a forma do conteúdo. O placeholder
+                  respeita movimento reduzido e fica oculto da árvore acessível.
                 </p>
               </SpecimenCard>
               <SpecimenCard
@@ -1373,6 +1472,10 @@ export function DesignSystemPage({
                 source="src/index.css · :root e media queries"
               >
                 <div className="grid gap-2">
+                  <TokenRow
+                    name="Gutter de página"
+                    value="--layout-page-gutter · 16 px / 24 px / 32 px (base / ≥640 / ≥1024) · conferido no browser"
+                  />
                   <TokenRow name="Gutter do header" value="12 px base · 32 px ≥640 · 48 px ≥1440" />
                   <TokenRow
                     name="Largura de busca e calendário"
@@ -1436,6 +1539,7 @@ export function DesignSystemPage({
                   <Button variant="primary" className="shadow-sm">
                     Continuar
                   </Button>
+                  <Button variant="quiet">Ação discreta</Button>
                   <button
                     type="button"
                     className="liquid-glass-button min-h-11 rounded-full px-5 text-sm font-semibold text-neutral-800 transition hover:bg-orange-50"
@@ -1450,8 +1554,13 @@ export function DesignSystemPage({
                   </Button>
                 </div>
                 <p className="mt-5 text-xs text-neutral-500">
-                  Amostras de documentação. A chamada principal recebe destaque laranja; ações
-                  secundárias aparecem em superfícies claras/glass.
+                  Amostras de documentação. O botão compartilha tokens semânticos de ação para
+                  superfícies, texto, hover e desabilitado. A ação glass permanece composição local.
+                </p>
+                <p className="mt-2 text-xs leading-5 text-neutral-600">
+                  <code>--color-action-primary*</code>, <code>--color-action-secondary*</code>,{' '}
+                  <code>--color-action-quiet*</code> e <code>--color-action-danger*</code> preservam
+                  a paleta que já existia em <code>Button.tsx</code>.
                 </p>
               </SpecimenCard>
               <SpecimenCard
@@ -1567,28 +1676,18 @@ export function DesignSystemPage({
                     required
                     hint="Use um nome reconhecível no catálogo."
                   >
-                    <input
+                    <TextInput
                       type="text"
                       required
                       defaultValue="Apartamento com piscina"
-                      className="min-h-11 rounded-xl border border-neutral-300 bg-white px-3 text-sm font-normal outline-none transition-colors hover:border-neutral-400 focus:border-neutral-900"
+                      className="font-normal"
                     />
                   </FormField>
                   <FormField label="Categoria · select nativo" id="design-system-category">
-                    <div className="relative mt-1.5">
-                      <select
-                        defaultValue="apartamento"
-                        className="min-h-11 w-full appearance-none rounded-xl border border-neutral-300 bg-white px-3 pr-10 text-sm font-normal outline-none transition-colors hover:border-neutral-400 focus:border-orange-600 focus-visible:ring-2 focus-visible:ring-orange-600/20"
-                      >
-                        <option value="apartamento">Apartamento</option>
-                        <option value="casa">Casa</option>
-                      </select>
-                      <ChevronDown
-                        aria-hidden="true"
-                        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
-                        size={17}
-                      />
-                    </div>
+                    <NativeSelect defaultValue="apartamento" className="w-full font-normal">
+                      <option value="apartamento">Apartamento</option>
+                      <option value="casa">Casa</option>
+                    </NativeSelect>
                   </FormField>
                   <label className="grid gap-1.5 text-sm font-semibold">
                     Destino
@@ -1615,7 +1714,7 @@ export function DesignSystemPage({
               </SpecimenCard>
               <SpecimenCard
                 title="Dropdown customizado · seleção de parcelas"
-                source="StaysSearchWidget · InstallmentPicker"
+                source="Checkout Cielo · InstallmentPicker"
               >
                 <div className="mx-auto max-w-md rounded-2xl border border-neutral-200 bg-gradient-to-b from-white to-orange-50/30 p-4 sm:p-5">
                   <span
@@ -1696,6 +1795,7 @@ export function DesignSystemPage({
                 <p className="mt-4 text-xs leading-5 text-neutral-600">
                   Padrão de combobox pesquisável usado na busca. A amostra documenta aparência e
                   hierarquia; a interação real, inclusive teclado e resultados, permanece no widget.
+                  Na busca compacta e no hero compartilhado são duas composições do mesmo fluxo.
                 </p>
               </SpecimenCard>
               <SpecimenCard
@@ -1705,18 +1805,16 @@ export function DesignSystemPage({
                 <div className="space-y-5 text-sm">
                   <div>
                     <h3 className="font-bold text-neutral-900">
-                      Seletores nativos · 12 instâncias
+                      Select nativo · 8 usos controlados pelo app
                     </h3>
                     <p className="mt-1 text-xs leading-5 text-neutral-600">
-                      Mantemos o select do navegador em filtros, formulários e integrações de
-                      pagamento, onde seleção finita e teclado nativo atendem ao fluxo.
+                      São 6 instâncias em telas de produto e 2 espécimes desta página. Outros 4
+                      controles encontrados não pertencem a essa primitiva: 3 selects criados pelo
+                      SDK Mercado Pago e 1 select do sandbox.
                     </p>
                     <ul className="mt-2 grid gap-1.5 text-xs text-neutral-700 sm:grid-cols-2">
                       <li>
-                        <code>MercadoPagoCardForm.tsx</code> · banco, parcelas e documento
-                      </li>
-                      <li>
-                        <code>CieloSopCardForm.tsx</code> · parcelas no checkout
+                        <code>CieloSopCardForm.tsx</code> · estado sem parcela disponível
                       </li>
                       <li>
                         <code>CreateListingModal.tsx</code> · categoria
@@ -1731,12 +1829,14 @@ export function DesignSystemPage({
                         <code>ParkTicketSelector.tsx</code> · data de visita
                       </li>
                       <li>
-                        <code>PartnerSandboxCheckout.tsx</code> · sandbox
-                      </li>
-                      <li>
-                        <code>DesignSystemPage.tsx</code> · espécimes
+                        <code>DesignSystemPage.tsx</code> · 2 espécimes nativos
                       </li>
                     </ul>
+                    <p className="mt-2 text-xs leading-5 text-neutral-600">
+                      Exceções fora do wrapper: 3 controles do SDK em{' '}
+                      <code>MercadoPagoCardForm.tsx</code> e 1 select no sandbox em{' '}
+                      <code>PartnerSandboxCheckout.tsx</code>.
+                    </p>
                   </div>
                   <div className="border-t border-neutral-200 pt-4">
                     <h3 className="font-bold text-neutral-900">
@@ -1744,31 +1844,62 @@ export function DesignSystemPage({
                     </h3>
                     <ul className="mt-2 space-y-2 text-xs leading-5 text-neutral-700">
                       <li>
-                        <strong>Condomínio e hóspedes:</strong> <code>LiquidSelect</code> em{' '}
-                        <code>StaysSearchWidget.tsx</code>, com popover pesquisável e painel
-                        compartilhado no hero.
+                        <strong>Condomínio:</strong> <code>LiquidSelect</code> em{' '}
+                        <code>StaysSearchWidget.tsx</code>, com popover compacto ou painel
+                        compartilhado do hero. Busca com resultados em listbox.
+                      </li>
+                      <li>
+                        <strong>Sugestões de destino:</strong> <code>SearchModal.tsx</code> expõe
+                        combobox e listbox com opções filtradas, setas, Home/End, Enter, Escape e
+                        estados de carregamento/vazio. A seleção avança para datas e move o foco ao
+                        próximo passo.
+                      </li>
+                      <li>
+                        <strong>Hóspedes:</strong> no modo compacto, <code>LiquidSelect</code>{' '}
+                        oferece opções finitas de quantidade. No hero, abre um diálogo com steppers
+                        de adultos, crianças, bebês e pets, que não são um listbox.
                       </li>
                       <li>
                         <strong>Parcelas:</strong> <code>InstallmentPicker.tsx</code>, listbox de
-                        seleção única usado em Cielo e pagamento de reserva existente.
+                        seleção única usado no checkout Cielo. As duas ocorrências desta página são
+                        apenas espécimes interativos.
                       </li>
                       <li>
-                        <strong>Moeda e conta:</strong> painéis de opções com botões comuns em{' '}
-                        <code>Header.tsx</code>; permanecem grupos de ações/seleção, sem semântica
-                        ARIA de menu.
+                        <strong>Moeda:</strong> grupo de botões de seleção única em{' '}
+                        <code>Header.tsx</code>, com <code>aria-pressed</code>, Escape e foco de
+                        retorno.
+                      </li>
+                      <li>
+                        <strong>Conta:</strong> painel de navegação e ações em{' '}
+                        <code>Header.tsx</code>, anunciado como grupo. Não é um menu ARIA; aceita
+                        navegação Tab normal.
+                      </li>
+                      <li>
+                        <strong>Associação de hospedagem:</strong> opções exclusivas com radios
+                        nativos em <code>OwnerAccessAdminView.tsx</code>, dentro de{' '}
+                        <code>fieldset</code>. É um seletor de formulário, não um dropdown.
                       </li>
                       <li>
                         <strong>Não são dropdowns de opção:</strong> calendário de datas, contador
-                        de hóspedes, disclosures e diálogos de data/ocupação têm contratos
-                        separados.
+                        de hóspedes no hero, filtros por chips, disclosures e diálogos de
+                        data/ocupação têm contratos separados.
                       </li>
                     </ul>
                   </div>
                   <p className="rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-950">
-                    Auditoria: o painel compartilhado do condomínio agora associa busca e listbox,
-                    suporta setas, Home/End, Escape e feedback de resultado vazio. Moeda anuncia a
-                    opção ativa com <code>aria-pressed</code>. Rever integrações de pagamento com
-                    opções injetadas pelo provedor ao atualizar seus SDKs.
+                    Auditoria: os seletores de condomínio associam busca e listbox. Setas e Home/End
+                    movem a opção ativa sem perder o foco do campo; Escape fecha e devolve foco ao
+                    acionador. O estado vazio é anunciado. A amostra acima é estática; o browser
+                    conferiu o painel real do hero sem opções de condomínio carregadas pela API
+                    local. Moeda anuncia a opção ativa com <code>aria-pressed</code>. Rever
+                    integrações de pagamento com opções injetadas pelo provedor ao atualizar seus
+                    SDKs.
+                  </p>
+                  <p className="rounded-xl bg-blue-50 p-3 text-xs leading-5 text-blue-950">
+                    <code>NativeSelect</code> padroniza as 8 instâncias controladas pelo app: altura
+                    mínima de 44 px, foco visível e estado desabilitado. Continua sendo um{' '}
+                    <code>&lt;select&gt;</code> nativo; campos que um SDK de pagamento gerencia
+                    permanecem fora desse wrapper.
                   </p>
                 </div>
               </SpecimenCard>
@@ -1816,9 +1947,26 @@ export function DesignSystemPage({
                       className="min-h-11 cursor-not-allowed rounded-xl border border-neutral-200 bg-neutral-100 px-3 text-sm font-normal"
                     />
                   </label>
-                  <label className="flex min-h-11 items-center gap-3 text-sm text-neutral-700">
-                    <input type="checkbox" defaultChecked className="h-4 w-4 accent-orange-600" />
+                  <label
+                    htmlFor="design-system-checkbox-regular"
+                    className="flex min-h-11 items-center gap-3 text-sm text-neutral-700"
+                  >
+                    <CheckboxInput id="design-system-checkbox-regular" defaultChecked />
                     Aceito as condições desta reserva
+                  </label>
+                  <label
+                    htmlFor="design-system-checkbox-large"
+                    className="flex min-h-11 items-center gap-3 text-sm text-neutral-700"
+                  >
+                    <CheckboxInput id="design-system-checkbox-large" size="large" />
+                    Seleção independente com alvo de toque amplo
+                  </label>
+                  <label
+                    htmlFor="design-system-checkbox-disabled"
+                    className="flex min-h-11 items-center gap-3 text-sm text-neutral-500"
+                  >
+                    <CheckboxInput id="design-system-checkbox-disabled" disabled />
+                    Opção indisponível
                   </label>
                   <p role="status" aria-live="polite" className="text-xs text-neutral-600">
                     Salvando alterações… Preserve o valor e comunique o resultado sem mover o foco.
@@ -2502,6 +2650,16 @@ export function DesignSystemPage({
                   </div>
                 </div>
               </SpecimenCard>
+              <SpecimenCard title="Carregamento da lista de viagens" source="TripsLoadingSkeleton">
+                <div className="space-y-4" aria-busy="true">
+                  <LoadingStatus>Carregando suas viagens e compras…</LoadingStatus>
+                  <TripsLoadingSkeleton />
+                </div>
+                <p className="mt-3 text-xs leading-5 text-neutral-500">
+                  Placeholder de cartão usado apenas quando a lista ainda não tem dados; a
+                  atualização preserva cartões existentes e mostra o status inline.
+                </p>
+              </SpecimenCard>
             </div>
           </section>
 
@@ -2594,24 +2752,26 @@ export function DesignSystemPage({
                 title="Tabela e filtro de propriedades"
                 source="OwnerAccountingTransactions · HostDashboardView"
               >
-                <label className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-neutral-50 p-3 text-sm">
-                  <span className="font-semibold">Propriedade</span>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-neutral-50 p-3 text-sm">
+                  <label htmlFor="design-system-accounting-property" className="font-semibold">
+                    Propriedade
+                  </label>
                   <span className="relative">
-                    <select
+                    <NativeSelect
+                      id="design-system-accounting-property"
                       defaultValue="all"
-                      aria-label="Filtrar por propriedade"
-                      className="min-h-10 appearance-none rounded-lg border border-neutral-300 bg-white py-2 pl-3 pr-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"
+                      className="min-w-40 appearance-none pr-9"
                     >
                       <option value="all">Todas as propriedades</option>
                       <option>Apartamento Lago Azul</option>
-                    </select>
+                    </NativeSelect>
                     <ChevronDown
                       aria-hidden="true"
                       className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500"
                       size={16}
                     />
                   </span>
-                </label>
+                </div>
                 <div className="overflow-x-auto rounded-xl border border-neutral-200">
                   <table className="w-full min-w-[440px] border-collapse text-left text-sm">
                     <thead className="bg-neutral-50 text-xs uppercase text-neutral-500">
@@ -2740,6 +2900,21 @@ export function DesignSystemPage({
                   Verde: confirmado · âmbar: aguardando · vermelho: bloqueio
                 </p>
               </SpecimenCard>
+              <SpecimenCard
+                title="Carregamento dos painéis de gestão"
+                source="OwnerDashboardSkeleton · OwnerAdminQueueSkeleton"
+              >
+                <div className="space-y-5" aria-busy="true">
+                  <LoadingStatus>Carregando dados do painel…</LoadingStatus>
+                  <OwnerDashboardSkeleton section="overview" />
+                  <OwnerAdminQueueSkeleton variant="access" count={1} />
+                  <OwnerAdminQueueSkeleton variant="operation" count={1} />
+                </div>
+                <p className="mt-3 text-xs leading-5 text-neutral-500">
+                  Os blocos visuais são decorativos. O status anunciável permanece separado; fila de
+                  operação tem uma variação própria para seus dados e ações.
+                </p>
+              </SpecimenCard>
             </div>
           </section>
 
@@ -2795,24 +2970,44 @@ export function DesignSystemPage({
                 </p>
               </SpecimenCard>
               <SpecimenCard title="Confirmação consequencial" source="ConfirmationDialog">
-                <div className="rounded-3xl bg-neutral-800/90 p-4 sm:p-6">
-                  <div className="mx-auto max-w-lg rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xl sm:p-6">
-                    <h3 className="text-lg font-extrabold text-neutral-950">
-                      Revogar link de visitante?
-                    </h3>
-                    <p className="mt-2 text-sm leading-6 text-neutral-700">
-                      O link deixará de retomar o pedido como visitante. A reserva e o pagamento
-                      permanecem inalterados.
-                    </p>
-                    <div className="mt-6 flex flex-col-reverse justify-end gap-2 sm:flex-row">
-                      <Button variant="secondary">Cancelar</Button>
-                      <Button variant="danger">Revogar link</Button>
-                    </div>
-                  </div>
+                <div className="rounded-3xl bg-neutral-800/90 p-4 text-center sm:p-6">
+                  <p className="mb-4 text-sm text-white">
+                    Exemplo interativo. Nenhum link ou pedido será alterado.
+                  </p>
+                  <Button
+                    ref={confirmationPreviewTriggerRef}
+                    variant="secondary"
+                    onClick={() => {
+                      setConfirmationPreviewMessage('');
+                      setIsConfirmationPreviewOpen(true);
+                    }}
+                  >
+                    Abrir confirmação de exemplo
+                  </Button>
                 </div>
+                {confirmationPreviewMessage && (
+                  <p className="mt-3 text-sm text-neutral-600" role="status">
+                    {confirmationPreviewMessage}
+                  </p>
+                )}
+                <ConfirmationDialog
+                  isOpen={isConfirmationPreviewOpen}
+                  title="Revogar link de visitante?"
+                  description="Esta demonstração representa uma ação de risco. Nenhum link real será revogado."
+                  confirmLabel="Revogar link"
+                  cancelLabel="Manter link"
+                  onClose={() => setIsConfirmationPreviewOpen(false)}
+                  onConfirm={() => {
+                    setIsConfirmationPreviewOpen(false);
+                    setConfirmationPreviewMessage(
+                      'Demonstração concluída. Nenhuma alteração foi feita.',
+                    );
+                  }}
+                />
                 <p className="mt-3 text-xs leading-5 text-neutral-500">
-                  O consumidor fornece a consequência específica, bloqueia a repetição durante o
-                  envio e mantém o diálogo aberto se a ação falhar.
+                  O consumidor fornece a consequência e o estado da operação. A API permite variante
+                  de confirmação, tamanho, foco inicial/retorno e safe area; o diálogo bloqueia
+                  repetição durante envio e permanece aberto se a ação falhar.
                 </p>
               </SpecimenCard>
               <SpecimenCard
@@ -2842,6 +3037,9 @@ export function DesignSystemPage({
                   >
                     <strong>Solicitação enviada.</strong> Você receberá uma atualização sobre o
                     acesso.
+                  </InlineNotice>
+                  <InlineNotice variant="success" role="status" density="compact">
+                    Bloqueio de calendário registrado.
                   </InlineNotice>
                 </div>
               </SpecimenCard>
@@ -3135,11 +3333,24 @@ export function DesignSystemPage({
                 <h3 className="font-bold">Primitivas compartilhadas e consumidores</h3>
                 <ul className="mt-3 space-y-2 text-sm leading-6 text-neutral-600">
                   <li>
-                    <code>Button</code>: catálogo, paginação, aviso de catálogo e viagens.
+                    <code>Button</code>: catálogo, paginação, avisos e ações de voucher/cancelamento
+                    em viagens.
                   </li>
                   <li>
-                    <code>FormField</code>: conta/login e formulários de dados do hóspede no
-                    checkout.
+                    <code>FormField</code>: conta/login, dados do hóspede, cadastro de anúncio e
+                    bloqueio de datas do proprietário.
+                  </li>
+                  <li>
+                    <code>TextInput</code>: cadastro de anúncio, calendário do proprietário e
+                    espécime do catálogo.
+                  </li>
+                  <li>
+                    <code>NativeSelect</code>: filtros de painel, formulário de anúncio, ingresso e
+                    espécimes do catálogo.
+                  </li>
+                  <li>
+                    <code>CheckboxInput</code>: filtros contábeis, preferências de medição,
+                    confirmação de identidade e seleção opcional de ingressos.
                   </li>
                   <li>
                     <code>InlineNotice</code>: catálogo e alertas de carregamento em painéis do
@@ -3150,7 +3361,8 @@ export function DesignSystemPage({
                     anfitrião.
                   </li>
                   <li>
-                    <code>EmptyState</code>: catálogo, viagens e painel do anfitrião.
+                    <code>EmptyState</code>: catálogo, viagens, painel do anfitrião e filtro
+                    contábil.
                   </li>
                 </ul>
                 <p className="mt-3 border-t border-neutral-100 pt-3 text-xs leading-5 text-neutral-500">

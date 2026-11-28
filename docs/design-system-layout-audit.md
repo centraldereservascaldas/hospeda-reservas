@@ -30,17 +30,18 @@ Essas utilities são a escala-base existente, não uma nova escala própria apro
 
 ## Variáveis de layout semântico já existentes
 
-| Variável                        | Valor observado                                                       | Uso e status                                                                                                        |
-| ------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `--header-edge-spacing`         | 12 px por padrão, 32 px a partir de 640 px, 48 px a partir de 1440 px | Margem lateral responsiva do cabeçalho. **Observado** em `src/index.css`.                                           |
-| `--header-expanded-width`       | 1280 px                                                               | Limite configurado para o cabeçalho expandido. **Observado**; confirmar consumidores antes de generalizar.          |
-| `--header-compact-search-width` | 352 px por padrão, 256 px entre 640 e 900 px                          | Largura preferida da busca compacta, limitada pelo espaço disponível. **Observado**.                                |
-| `--search-bar-width`            | 850 px                                                                | Referência de largura da busca. **Observado**.                                                                      |
-| `--search-calendar-width`       | 850 px                                                                | Referência de largura do calendário de busca. Compartilha valor com a barra, mas o papel é separado. **Observado**. |
-| `--search-calendar-gap`         | 24 px                                                                 | Separação entre meses do calendário. **Observado**.                                                                 |
-| `--search-calendar-day-size`    | 52 px em telas maiores; 43 px até 639 px                              | Tamanho do dia do calendário. É uma medida de componente, não spacing geral. **Observado**.                         |
-| `--search-bar-segment-height`   | 64 px                                                                 | Altura mínima de segmentos da busca. É uma dimensão de componente. **Observado**.                                   |
-| `--search-bar-segment-padding`  | 24 px                                                                 | Padding horizontal do segmento de busca. **Observado**.                                                             |
+| Variável                        | Valor observado                                                       | Uso e status                                                                                                                                                                                          |
+| ------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--layout-page-gutter`          | 16 px base, 24 px a partir de 640 px, 32 px a partir de 1024 px       | **Implementado** em containers da área de usuário, proprietário, administração, detalhe de propriedade, rodapé e catálogo. Preserva as utilities `px-4 sm:px-6 lg:px-8` observadas antes da migração. |
+| `--header-edge-spacing`         | 12 px por padrão, 32 px a partir de 640 px, 48 px a partir de 1440 px | Margem lateral responsiva do cabeçalho. **Observado** em `src/index.css`.                                                                                                                             |
+| `--header-expanded-width`       | 1280 px                                                               | Limite configurado para o cabeçalho expandido. **Observado**; confirmar consumidores antes de generalizar.                                                                                            |
+| `--header-compact-search-width` | 352 px por padrão, 256 px entre 640 e 900 px                          | Largura preferida da busca compacta, limitada pelo espaço disponível. **Observado**.                                                                                                                  |
+| `--search-bar-width`            | 850 px                                                                | Referência de largura da busca. **Observado**.                                                                                                                                                        |
+| `--search-calendar-width`       | 850 px                                                                | Referência de largura do calendário de busca. Compartilha valor com a barra, mas o papel é separado. **Observado**.                                                                                   |
+| `--search-calendar-gap`         | 24 px                                                                 | Separação entre meses do calendário. **Observado**.                                                                                                                                                   |
+| `--search-calendar-day-size`    | 52 px em telas maiores; 43 px até 639 px                              | Tamanho do dia do calendário. É uma medida de componente, não spacing geral. **Observado**.                                                                                                           |
+| `--search-bar-segment-height`   | 64 px                                                                 | Altura mínima de segmentos da busca. É uma dimensão de componente. **Observado**.                                                                                                                     |
+| `--search-bar-segment-padding`  | 24 px                                                                 | Padding horizontal do segmento de busca. **Observado**.                                                                                                                                               |
 
 Os valores vêm de `:root` e media queries de `src/index.css`; seus nomes já expressam layout ou domínio. Valores iguais não tornam os tokens intercambiáveis: largura de calendário e largura de busca podem evoluir separadamente.
 
@@ -66,9 +67,9 @@ Os valores vêm de `:root` e media queries de `src/index.css`; seus nomes já ex
 - [x] Confirmar versão do Tailwind e escala-base existente.
 - [x] Levantar utilities e variáveis globais relacionadas a espaçamento, layout e raio.
 - [x] Separar medidas primitivas, semânticas, de componente e valores arbitrários.
-- [ ] Validar os candidatos de tokens semânticos nos layouts renderizados em larguras representativas.
-- [ ] Registrar uma pequena escala semântica de layout, se os usos compartilhados confirmarem a necessidade.
-- [ ] Migrar em etapas os consumidores escolhidos e registrar exceções restantes.
+- [~] Validar os candidatos de tokens semânticos nos layouts renderizados em larguras representativas. `--layout-page-gutter` e a utility Tailwind foram conferidos no catálogo em 390/640/1024 px (16/24/32 px, sem overflow); comparar consumidores autenticados ainda pendente.
+- [x] Registrar um token semântico de layout onde usos compartilhados confirmaram a necessidade: gutter de página.
+- [~] Migrar em etapas os consumidores escolhidos. Sete containers foram migrados; restantes utilities são candidatas separadas e não foram alteradas.
 - [ ] Rever bordas, grids, larguras de conteúdo, breakpoints e safe areas em fluxos representativos.
 
 ## Referências de origem

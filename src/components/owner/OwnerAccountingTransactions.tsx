@@ -4,6 +4,9 @@ import { Download, Printer, X } from 'lucide-react';
 import type { OwnerAccountingDetails, OwnerDashboardData } from '../../services/crcnBackendApi';
 import { crcnBackendApi } from '../../services/crcnBackendApi';
 import { LoadingStatus } from '../LoadingStatus';
+import { NativeSelect } from '../NativeSelect';
+import { EmptyState } from '../EmptyState';
+import { CheckboxInput } from '../CheckboxInput';
 import { useDialogFocus } from '../useDialogFocus';
 
 type Entry = OwnerDashboardData['entries'][number];
@@ -41,6 +44,8 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
   const [detailError, setDetailError] = useState('');
   const detailRequestGenerationRef = useRef(0);
   const titleId = useId();
+  const debitFilterId = useId();
+  const creditFilterId = useId();
   const closeRef = useRef<HTMLButtonElement>(null);
   const currentContextId = `${accessToken}\u0000${period.from}\u0000${period.to}`;
   const hasCurrentSelection = selectedEntry !== null && selectedContextId === currentContextId;
@@ -177,10 +182,10 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
         <div className="grid gap-4 border-b border-neutral-200/80 px-4 py-4 sm:grid-cols-2">
           <label className="grid gap-1 text-xs font-bold text-neutral-700">
             Anúncio
-            <select
+            <NativeSelect
               value={listingId}
               onChange={(event) => setListingId(event.target.value)}
-              className="min-h-10 rounded-xl border border-neutral-200 bg-white px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-200"
+              className="w-full"
             >
               <option value="all">Todos os anúncios</option>
               {properties.map((property) => (
@@ -188,36 +193,45 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
                   {property.title}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
           <fieldset className="flex flex-wrap content-end gap-x-5 gap-y-2">
             <legend className="mb-2 w-full text-xs font-bold text-neutral-700">
               Exibir lançamentos
             </legend>
-            <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
-              <input
-                type="checkbox"
+            <label
+              htmlFor={debitFilterId}
+              className="inline-flex items-center gap-2 text-sm text-neutral-700"
+            >
+              <CheckboxInput
+                id={debitFilterId}
                 checked={includeDebits}
                 onChange={(event) => setIncludeDebits(event.target.checked)}
-                className="h-4 w-4 accent-orange-600"
               />
               Débitos
             </label>
-            <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
-              <input
-                type="checkbox"
+            <label
+              htmlFor={creditFilterId}
+              className="inline-flex items-center gap-2 text-sm text-neutral-700"
+            >
+              <CheckboxInput
+                id={creditFilterId}
                 checked={includeCredits}
                 onChange={(event) => setIncludeCredits(event.target.checked)}
-                className="h-4 w-4 accent-orange-600"
               />
               Créditos
             </label>
           </fieldset>
         </div>
         {visibleEntries.length === 0 ? (
-          <p className="px-4 py-12 text-center text-sm text-neutral-500">
-            Nenhum lançamento encontrado para os filtros selecionados.
-          </p>
+          <div role="status">
+            <EmptyState
+              headingLevel="h4"
+              density="compact"
+              title="Nenhum lançamento encontrado"
+              description="Ajuste o anúncio, os tipos de lançamento ou o período para consultar outra seleção."
+            />
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[850px] text-left text-sm">
@@ -329,9 +343,7 @@ export const OwnerAccountingTransactions: React.FC<OwnerAccountingTransactionsPr
                 </button>
               </header>
               <div className="space-y-6 px-5 py-5">
-                {detailLoading && (
-                  <LoadingStatus>Consultando detalhes na Stays…</LoadingStatus>
-                )}
+                {detailLoading && <LoadingStatus>Consultando detalhes na Stays…</LoadingStatus>}
                 {detailError && (
                   <p
                     role="alert"

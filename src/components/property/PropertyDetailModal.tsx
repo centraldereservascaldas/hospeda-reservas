@@ -511,7 +511,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       className={
         isDialog
           ? 'fixed inset-0 z-50 overflow-y-auto bg-white/25 backdrop-blur-xl animate-in fade-in duration-200'
-          : `mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 ${showMobileBookingAction ? 'pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-6' : ''}`
+          : `mx-auto w-full max-w-7xl px-(--layout-page-gutter) py-6 ${showMobileBookingAction ? 'pb-[calc(6rem_+_env(safe-area-inset-bottom,0px))] sm:pb-6' : ''}`
       }
     >
       <div

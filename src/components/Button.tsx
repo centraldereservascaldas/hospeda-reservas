@@ -1,10 +1,11 @@
 import { LoaderCircle } from 'lucide-react';
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'quiet' | 'danger';
 export type ButtonSize = 'small' | 'medium';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  ref?: Ref<HTMLButtonElement>;
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean;
@@ -14,12 +15,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'border border-transparent bg-orange-600 text-white hover:bg-orange-700 disabled:bg-orange-300',
+    'border border-transparent bg-action-primary text-action-primary-foreground hover:bg-action-primary-hover disabled:bg-action-primary-disabled',
   secondary:
-    'border border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100 disabled:bg-neutral-100',
+    'border border-action-secondary-border bg-action-secondary text-action-secondary-foreground hover:bg-action-secondary-hover disabled:bg-action-secondary-disabled',
   quiet:
-    'border border-transparent bg-transparent text-neutral-800 hover:bg-neutral-100 disabled:bg-transparent',
-  danger: 'border border-transparent bg-rose-700 text-white hover:bg-rose-800 disabled:bg-rose-300',
+    'border border-transparent bg-transparent text-action-quiet-foreground hover:bg-action-quiet-hover disabled:bg-transparent',
+  danger:
+    'border border-transparent bg-action-danger text-action-danger-foreground hover:bg-action-danger-hover disabled:bg-action-danger-disabled',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -28,6 +30,7 @@ const sizeClasses: Record<ButtonSize, string> = {
 };
 
 export function Button({
+  ref,
   variant = 'primary',
   size = 'medium',
   loading = false,
@@ -43,6 +46,7 @@ export function Button({
   return (
     <button
       {...props}
+      ref={ref}
       type={type}
       disabled={isDisabled}
       aria-busy={loading || undefined}

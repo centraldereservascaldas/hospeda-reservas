@@ -11,8 +11,11 @@ import { getPublicPropertyTitle } from '../../utils/publicPropertyTitle';
 import { useDialogFocus } from '../useDialogFocus';
 import { Button } from '../Button';
 import { EmptyState } from '../EmptyState';
+import { InlineNotice } from '../InlineNotice';
 import { LoadingStatus } from '../LoadingStatus';
 import { StatusBadge } from '../StatusBadge';
+import { ConfirmationDialog } from '../ConfirmationDialog';
+import { TripsLoadingSkeleton } from './TripsLoadingSkeleton';
 import {
   Calendar,
   MapPin,
@@ -129,24 +132,12 @@ export const TripsView: React.FC<TripsViewProps> = ({
   const [locallyRequestedCancellationIds, setLocallyRequestedCancellationIds] = useState<string[]>(
     [],
   );
+  const tripsViewRef = useRef<HTMLDivElement>(null);
   const voucherCloseButtonRef = useRef<HTMLButtonElement>(null);
   const keepTripButtonRef = useRef<HTMLButtonElement>(null);
   const voucherDialogRef = useDialogFocus(!!selectedVoucher, () => setSelectedVoucher(null), {
     initialFocusRef: voucherCloseButtonRef,
   });
-  const cancellationDialogRef = useDialogFocus(
-    !!cancellingId,
-    () => {
-      if (!isSubmittingCancellation) {
-        setCancellingId(null);
-        setCancellationError('');
-      }
-    },
-    {
-      initialFocusRef: keepTripButtonRef,
-    },
-  );
-
   const activeReservations = reservations.filter(
     (r) => r.status === 'confirmed' || r.status === 'pending',
   );
@@ -165,6 +156,8 @@ export const TripsView: React.FC<TripsViewProps> = ({
     order: DirectBookingOrderListItem,
   ): Promise<void> => {
     if (!accessToken) return;
+    setCancellationNotice('');
+    setCancellationNoticeReceipt(null);
     setCancellationRequestSubmittingId(order.publicReference);
     setCancellationRequestErrors((errors) => ({ ...errors, [order.publicReference]: '' }));
     try {
@@ -191,11 +184,44 @@ export const TripsView: React.FC<TripsViewProps> = ({
     }
   };
 
+  const confirmReservationCancellation = async (): Promise<void> => {
+    if (!cancellingId || isSubmittingCancellation) return;
+
+    setIsSubmittingCancellation(true);
+    setCancellationError('');
+    setCancellationNotice('');
+    setCancellationNoticeReceipt(null);
+    try {
+      const result = await onCancelReservation(cancellingId);
+      if (result === 'requested') {
+        setCancellationNotice(
+          'Sua solicitação foi registrada para análise da Central. A reserva continua ativa até a confirmação do cancelamento.',
+        );
+      } else if (result === 'cancelled') {
+        setCancellationNotice('A reserva foi cancelada.');
+      }
+      setCancellingId(null);
+    } catch (error) {
+      console.warn('Unable to cancel guest reservation:', error);
+      setCancellationError(
+        error instanceof ReservationCancellationSupportRequiredError
+          ? 'Entre em contato com o atendimento para analisar o cancelamento desta reserva e seus pagamentos. A reserva continua ativa.'
+          : 'Não foi possível solicitar o cancelamento. A reserva continua ativa.',
+      );
+    } finally {
+      setIsSubmittingCancellation(false);
+    }
+  };
+
   return (
-    <div className="mx-auto min-h-[75vh] max-w-7xl px-4 py-6 [@media(max-height:400px)]:py-2 sm:px-6 sm:py-10 lg:px-8">
+    <div
+      ref={tripsViewRef}
+      tabIndex={-1}
+      className="mx-auto min-h-[75vh] max-w-7xl px-(--layout-page-gutter) py-6 [@media(max-height:400px)]:py-2 sm:py-10"
+    >
       <div className="flex flex-col items-start justify-between gap-3 border-b border-neutral-100 pb-5 [@media(max-height:400px)]:gap-1 [@media(max-height:400px)]:pb-2 sm:flex-row sm:items-center sm:gap-4 sm:pb-8">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-neutral-900 tracking-tight [@media(max-width:639px)_and_(max-height:400px)]:text-base">
+          <h1 className="text-page-title sm:text-page-title-wide font-extrabold text-neutral-900 tracking-tight [@media(max-width:639px)_and_(max-height:400px)]:text-base">
             Minhas Viagens e Reservas
           </h1>
           <p className="text-xs sm:text-sm text-neutral-500 mt-1 [@media(max-width:639px)_and_(max-height:400px)]:hidden">
@@ -204,8 +230,9 @@ export const TripsView: React.FC<TripsViewProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={onExploreMore}
-          className="flex min-h-11 items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-black [@media(max-height:400px)]:hidden"
+          className="flex min-h-11 items-center gap-2 rounded-full bg-neutral-900 px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-black focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 [@media(max-height:400px)]:hidden"
         >
           <Compass className="w-4 h-4" />
           <span>Explorar mais lugares</span>
@@ -213,11 +240,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
       </div>
 
       {cancellationNotice && (
-        <p
-          role="status"
-          aria-live="polite"
-          className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950"
-        >
+        <InlineNotice variant="success" role="status" className="mt-5 font-semibold">
           {cancellationNotice}
           {cancellationNoticeReceipt && (
             <span className="mt-1 block font-mono text-xs font-bold">
@@ -227,7 +250,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
               )}
             </span>
           )}
-        </p>
+        </InlineNotice>
       )}
 
       {(reservationsError || directBookingOrdersError) && (
@@ -342,7 +365,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                               type="button"
                               onClick={() => setCancellationConfirmationOrderId(null)}
                               disabled={cancellationRequestSubmittingId === order.publicReference}
-                              className="min-h-11 w-full rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 sm:w-auto"
+                              className="min-h-11 w-full rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:opacity-50 sm:w-auto"
                             >
                               Manter reserva
                             </button>
@@ -350,7 +373,7 @@ export const TripsView: React.FC<TripsViewProps> = ({
                               type="button"
                               onClick={() => void submitDirectBookingCancellation(order)}
                               disabled={cancellationRequestSubmittingId === order.publicReference}
-                              className="min-h-11 w-full rounded-xl bg-neutral-950 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                              className="min-h-11 w-full rounded-xl bg-neutral-950 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                             >
                               {cancellationRequestSubmittingId === order.publicReference
                                 ? 'Enviando…'
@@ -475,9 +498,12 @@ export const TripsView: React.FC<TripsViewProps> = ({
           aria-busy={reservationsLoading || directBookingOrdersLoading || undefined}
         >
           {reservationsLoading || directBookingOrdersLoading ? (
-            <LoadingStatus className="justify-center font-semibold text-neutral-700">
-              Carregando suas viagens e compras…
-            </LoadingStatus>
+            <>
+              <LoadingStatus className="justify-center font-semibold text-neutral-700">
+                Carregando suas viagens e compras…
+              </LoadingStatus>
+              <TripsLoadingSkeleton />
+            </>
           ) : (
             <>
               <p className="text-sm text-neutral-700">
@@ -585,24 +611,26 @@ export const TripsView: React.FC<TripsViewProps> = ({
 
                           <div className="flex items-center gap-2">
                             {res.status === 'confirmed' && (
-                              <button
+                              <Button
+                                variant="secondary"
                                 onClick={() => setSelectedVoucher(res)}
-                                className="px-3.5 py-1.5 rounded-xl bg-white/80 hover:bg-white border border-white/90 text-xs font-bold text-neutral-700 shadow-2xs hover:scale-105 transition-all cursor-pointer"
+                                className="rounded-xl px-3.5 py-1.5 text-xs font-bold shadow-2xs transition-all hover:scale-105"
                               >
                                 {res.directBookingReference ? 'Comprovante' : 'Voucher'}
-                              </button>
+                              </Button>
                             )}
 
                             {res.status === 'confirmed' && !res.cancellationRequested && (
-                              <button
+                              <Button
+                                variant="quiet"
                                 onClick={() => {
                                   setCancellationError('');
                                   setCancellingId(res.id);
                                 }}
-                                className="px-3 py-1.5 rounded-xl text-xs font-bold text-orange-600 hover:bg-orange-50/80 transition-colors cursor-pointer"
+                                className="rounded-xl px-3 py-1.5 text-xs font-bold text-orange-700 transition-colors hover:bg-orange-50/80"
                               >
                                 Cancelar
-                              </button>
+                              </Button>
                             )}
                           </div>
                         </div>
@@ -642,13 +670,13 @@ export const TripsView: React.FC<TripsViewProps> = ({
                       >
                         Concluída
                       </StatusBadge>
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
                         onClick={() => setSelectedVoucher(res)}
-                        className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-neutral-50 border border-neutral-200 text-xs font-bold text-neutral-700 shadow-2xs transition-colors cursor-pointer"
+                        className="rounded-xl px-3.5 py-1.5 text-xs font-bold shadow-2xs transition-colors"
                       >
                         Comprovante
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -828,95 +856,27 @@ export const TripsView: React.FC<TripsViewProps> = ({
         </div>
       )}
 
-      {/* Cancellation Confirmation Modal */}
-      {cancellingId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto overscroll-contain bg-black/60 p-4 backdrop-blur-sm"
-          style={tripDialogOverlaySafeAreaStyle}
-        >
-          <div
-            ref={cancellationDialogRef}
-            data-dialog-focus-root
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cancel-reservation-title"
-            aria-describedby="cancel-reservation-description"
-            tabIndex={-1}
-            className="my-auto w-full max-w-md space-y-4 overflow-y-auto overscroll-contain rounded-3xl border border-neutral-100 bg-white p-4 shadow-2xl animate-in zoom-in-95 duration-150 sm:p-6"
-            style={tripDialogSafeAreaHeightStyle}
-          >
-            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-orange-200/80 bg-orange-100 text-orange-600 sm:h-12 sm:w-12">
-              <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6" />
-            </div>
-
-            <div className="text-center">
-              <h3 id="cancel-reservation-title" className="font-bold text-base text-neutral-900">
-                Deseja cancelar esta reserva?
-              </h3>
-              <p id="cancel-reservation-description" className="text-xs text-neutral-500 mt-1">
-                Vamos enviar seu pedido para análise. Reembolso e eventuais cobranças seguem as
-                condições da sua reserva. Reservas feitas por Airbnb, Booking ou outro canal devem
-                ser canceladas no próprio canal.
-              </p>
-            </div>
-
-            {cancellationError && (
-              <p
-                role="alert"
-                className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800"
-              >
-                {cancellationError}
-              </p>
-            )}
-
-            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:gap-3">
-              <button
-                ref={keepTripButtonRef}
-                type="button"
-                disabled={isSubmittingCancellation}
-                onClick={() => {
-                  setCancellingId(null);
-                  setCancellationError('');
-                }}
-                className="min-h-11 w-full rounded-full border border-neutral-300 px-3 py-2.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:flex-1"
-              >
-                Manter viagem
-              </button>
-              <button
-                type="button"
-                disabled={isSubmittingCancellation}
-                onClick={async () => {
-                  setIsSubmittingCancellation(true);
-                  setCancellationError('');
-                  try {
-                    const result = await onCancelReservation(cancellingId);
-                    if (result === 'requested') {
-                      setCancellationNotice(
-                        'Sua solicitação foi registrada para análise da Central. A reserva continua ativa até a confirmação do cancelamento.',
-                      );
-                    } else if (result === 'cancelled') {
-                      setCancellationNotice('A reserva foi cancelada.');
-                    }
-                    setCancellingId(null);
-                  } catch (error) {
-                    console.warn('Unable to cancel guest reservation:', error);
-                    setCancellationError(
-                      error instanceof ReservationCancellationSupportRequiredError
-                        ? 'Entre em contato com o atendimento para analisar o cancelamento desta reserva e seus pagamentos. A reserva continua ativa.'
-                        : 'Não foi possível solicitar o cancelamento. A reserva continua ativa.',
-                    );
-                  } finally {
-                    setIsSubmittingCancellation(false);
-                  }
-                }}
-                className="min-h-11 w-full rounded-full bg-gradient-to-r from-orange-700 to-amber-700 px-3 py-2.5 text-xs font-extrabold text-white shadow-md shadow-orange-500/25 transition-all hover:from-orange-800 hover:to-amber-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60 sm:flex-1"
-              >
-                {isSubmittingCancellation ? 'Enviando pedido…' : 'Confirmar cancelamento'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationDialog
+        isOpen={Boolean(cancellingId)}
+        title="Deseja cancelar esta reserva?"
+        description="Vamos enviar seu pedido para análise. Reembolso e eventuais cobranças seguem as condições da sua reserva. Reservas feitas por Airbnb, Booking ou outro canal devem ser canceladas no próprio canal."
+        confirmLabel="Confirmar cancelamento"
+        pendingLabel="Enviando pedido…"
+        cancelLabel="Manter viagem"
+        confirmVariant="primary"
+        size="medium"
+        isPending={isSubmittingCancellation}
+        error={cancellationError}
+        initialFocusRef={keepTripButtonRef}
+        returnFocusRef={tripsViewRef}
+        onClose={() => {
+          if (!isSubmittingCancellation) {
+            setCancellingId(null);
+            setCancellationError('');
+          }
+        }}
+        onConfirm={() => void confirmReservationCancellation()}
+      />
     </div>
   );
 };

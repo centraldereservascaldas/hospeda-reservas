@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   AlertCircle,
-  Check,
   LoaderCircle,
   RefreshCw,
   Search,
@@ -17,8 +16,10 @@ import {
 } from '../../services/crcnBackendApi';
 import { ConfirmationDialog } from '../ConfirmationDialog';
 import { InlineNotice } from '../InlineNotice';
+import { CheckboxInput } from '../CheckboxInput';
 import { LoadingStatus } from '../LoadingStatus';
 import { PagePagination } from '../PagePagination';
+import { OwnerAdminQueueSkeleton } from './OwnerPanelSkeletons';
 
 interface OwnerAccessAdminViewProps {
   accessToken: string;
@@ -58,6 +59,8 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [operationsNotice, setOperationsNotice] = useState('');
+  const [requestNotice, setRequestNotice] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -126,13 +129,28 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
     };
   }, [accessToken, canManagePayments, operationsPage, webhookPage, operationsRefreshKey]);
 
-  const handleApproved = () => setRefreshKey((value) => value + 1);
+  const handleActionStart = (): void => {
+    setOperationsNotice('');
+    setRequestNotice('');
+  };
+  const handleApproved = (message: string): void => {
+    setRequestNotice(message);
+    setRefreshKey((value) => value + 1);
+  };
+  const handleOperationUpdated = (message: string): void => {
+    setOperationsNotice(message);
+    setOperationsRefreshKey((value) => value + 1);
+  };
+  const handleWebhookRetried = (): void => {
+    setOperationsNotice('Notificação enviada para uma nova tentativa de conciliação.');
+    setOperationsRefreshKey((value) => value + 1);
+  };
 
   return (
     <section
       ref={dialogReturnFocusRef}
       tabIndex={-1}
-      className="mx-auto w-full max-w-5xl px-4 py-8 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 sm:px-6 lg:px-8"
+      className="mx-auto w-full max-w-5xl px-(--layout-page-gutter) py-8 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
     >
       {canManagePayments && (
         <div className="mb-10">
@@ -141,7 +159,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">
                 <AlertCircle className="h-4 w-4" aria-hidden="true" /> Operação de vendas diretas
               </div>
-              <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">
+              <h1 className="text-page-title font-black tracking-tight text-neutral-950 sm:text-page-title-wide">
                 Itens que precisam de ação
               </h1>
               <p className="mt-1 max-w-2xl text-sm text-neutral-600">
@@ -151,7 +169,10 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => setOperationsRefreshKey((value) => value + 1)}
+              onClick={() => {
+                handleActionStart();
+                setOperationsRefreshKey((value) => value + 1);
+              }}
               disabled={operationsLoading}
               className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/80 bg-white/75 px-4 py-2.5 text-sm font-bold text-neutral-700 shadow-sm backdrop-blur-xl hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-60"
             >
@@ -162,17 +183,20 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
               Atualizar fila
             </button>
           </div>
+          {operationsNotice && (
+            <InlineNotice variant="success" role="status" className="mb-4 font-semibold">
+              {operationsNotice}
+            </InlineNotice>
+          )}
           {operationsError && (
             <InlineNotice variant="error" role="alert" className="mb-4 font-semibold">
               {operationsError}
             </InlineNotice>
           )}
           {operationsLoading ? (
-            <div
-              aria-busy="true"
-              className="flex items-center justify-center rounded-3xl border border-white/80 bg-white/65 p-8 backdrop-blur-xl"
-            >
+            <div aria-busy="true" className="space-y-4">
               <LoadingStatus className="font-semibold">Carregando pedidos…</LoadingStatus>
+              <OwnerAdminQueueSkeleton variant="operation" />
             </div>
           ) : !operationsError && operationsOrders.length === 0 && unmatchedWebhookTotal === 0 ? (
             <div className="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-8 text-center text-sm font-semibold text-emerald-900">
@@ -207,7 +231,8 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
                         key={webhook.id}
                         webhook={webhook}
                         accessToken={accessToken}
-                        onRetried={() => setOperationsRefreshKey((value) => value + 1)}
+                        onActionStart={handleActionStart}
+                        onRetried={handleWebhookRetried}
                       />
                     ))}
                   </div>
@@ -233,7 +258,8 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
                         order={order}
                         accessToken={accessToken}
                         dialogReturnFocusRef={dialogReturnFocusRef}
-                        onUpdated={() => setOperationsRefreshKey((value) => value + 1)}
+                        onActionStart={handleActionStart}
+                        onUpdated={handleOperationUpdated}
                       />
                     ))}
                   </div>
@@ -259,7 +285,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50/80 px-3 py-1 text-xs font-bold text-orange-800">
               <ShieldCheck className="h-4 w-4" /> Área restrita da Central
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">
+            <h1 className="text-page-title font-black tracking-tight text-neutral-950 sm:text-page-title-wide">
               Acessos de proprietários
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-neutral-600">
@@ -270,7 +296,10 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
           </div>
           <button
             type="button"
-            onClick={() => setRefreshKey((value) => value + 1)}
+            onClick={() => {
+              handleActionStart();
+              setRefreshKey((value) => value + 1);
+            }}
             disabled={loading}
             className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/80 bg-white/75 px-4 py-2.5 text-sm font-bold text-neutral-700 shadow-sm backdrop-blur-xl hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 disabled:opacity-60"
           >
@@ -278,17 +307,20 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
           </button>
         </div>
 
+        {requestNotice && (
+          <InlineNotice variant="success" role="status" className="mb-4 font-semibold">
+            {requestNotice}
+          </InlineNotice>
+        )}
         {error && (
           <InlineNotice variant="error" role="alert" className="mb-4 font-semibold">
             {error}
           </InlineNotice>
         )}
         {loading ? (
-          <div
-            aria-busy="true"
-            className="flex items-center justify-center rounded-3xl border border-white/80 bg-white/65 p-10 backdrop-blur-xl"
-          >
+          <div aria-busy="true" className="space-y-4">
             <LoadingStatus className="font-semibold">Carregando solicitações…</LoadingStatus>
+            <OwnerAdminQueueSkeleton variant="access" count={3} />
           </div>
         ) : requests.length === 0 ? (
           <div className="rounded-3xl border border-white/80 bg-white/65 p-10 text-center text-sm text-neutral-600 backdrop-blur-xl">
@@ -302,6 +334,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
                 request={request}
                 accessToken={accessToken}
                 dialogReturnFocusRef={dialogReturnFocusRef}
+                onActionStart={handleActionStart}
                 onApproved={handleApproved}
               />
             ))}
@@ -438,8 +471,9 @@ const DirectBookingOperationsCard: React.FC<{
   order: DirectBookingOperationsOrder;
   accessToken: string;
   dialogReturnFocusRef: RefObject<HTMLElement | null>;
-  onUpdated: () => void;
-}> = ({ order, accessToken, dialogReturnFocusRef, onUpdated }) => {
+  onActionStart: () => void;
+  onUpdated: (message: string) => void;
+}> = ({ order, accessToken, dialogReturnFocusRef, onActionStart, onUpdated }) => {
   const [confirmingManualCancellation, setConfirmingManualCancellation] = useState(false);
   const [confirmingResumeTokenRevocation, setConfirmingResumeTokenRevocation] = useState(false);
   const [startingManualCancellation, setStartingManualCancellation] = useState(false);
@@ -452,12 +486,13 @@ const DirectBookingOperationsCard: React.FC<{
   const [resumeTokenRevocationError, setResumeTokenRevocationError] = useState('');
 
   const startManualCancellation = async (): Promise<void> => {
+    onActionStart();
     setStartingManualCancellation(true);
     setManualCancellationError('');
     try {
       await crcnBackendApi.startManualDirectBookingCancellation(accessToken, order.publicReference);
       setConfirmingManualCancellation(false);
-      onUpdated();
+      onUpdated('Pedido encaminhado para cancelamento manual.');
     } catch (error) {
       setManualCancellationError(
         error instanceof Error ? error.message : 'Não foi possível encaminhar o pedido.',
@@ -468,6 +503,7 @@ const DirectBookingOperationsCard: React.FC<{
   };
 
   const verifyStaysCancellation = async (): Promise<void> => {
+    onActionStart();
     setVerifyingStaysCancellation(true);
     setStaysCancellationError('');
     try {
@@ -475,7 +511,7 @@ const DirectBookingOperationsCard: React.FC<{
         accessToken,
         order.publicReference,
       );
-      onUpdated();
+      onUpdated('Cancelamento confirmado na Stays.');
     } catch (error) {
       setStaysCancellationError(
         error instanceof Error
@@ -488,6 +524,7 @@ const DirectBookingOperationsCard: React.FC<{
   };
 
   const verifyGatewayRefund = async (): Promise<void> => {
+    onActionStart();
     setVerifyingGatewayRefund(true);
     setGatewayRefundError('');
     try {
@@ -495,7 +532,7 @@ const DirectBookingOperationsCard: React.FC<{
         accessToken,
         order.publicReference,
       );
-      onUpdated();
+      onUpdated('Estorno confirmado no Mercado Pago.');
     } catch (error) {
       setGatewayRefundError(
         error instanceof Error
@@ -508,12 +545,13 @@ const DirectBookingOperationsCard: React.FC<{
   };
 
   const revokeResumeToken = async (): Promise<void> => {
+    onActionStart();
     setRevokingResumeToken(true);
     setResumeTokenRevocationError('');
     try {
       await crcnBackendApi.revokeDirectBookingResumeToken(accessToken, order.publicReference);
       setConfirmingResumeTokenRevocation(false);
-      onUpdated();
+      onUpdated('Link de retomada revogado.');
     } catch (error) {
       setResumeTokenRevocationError(
         error instanceof Error
@@ -766,56 +804,49 @@ const DirectBookingOperationsCard: React.FC<{
       )}
       {canStartManualCancellation && (
         <div className="mt-4 border-t border-neutral-100 pt-4">
-          {confirmingManualCancellation ? (
-            <div className="space-y-3">
-              <p className="text-xs leading-5 text-neutral-700">
-                {latePaymentCancellationReview
-                  ? 'O pagamento foi aprovado após o prazo da pré-reserva. Este registro inicia a revisão manual; não altera a Stays nem o Mercado Pago. A equipe ainda precisa cancelar a reserva na Stays e executar o estorno conforme a política aplicável.'
-                  : 'Este encaminhamento só registra a decisão e não altera a Stays nem o gateway. A equipe ainda precisará cancelar a reserva na Stays, executar o reembolso e conferir ambos.'}
-              </p>
-              {manualCancellationError && (
-                <p className="text-xs font-semibold text-rose-800" role="alert">
-                  {manualCancellationError}
-                </p>
-              )}
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmingManualCancellation(false)}
-                  disabled={startingManualCancellation}
-                  className="min-h-11 rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:opacity-50"
-                >
-                  Voltar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void startManualCancellation()}
-                  disabled={startingManualCancellation}
-                  className="min-h-11 rounded-xl bg-neutral-950 px-3 py-2 text-xs font-bold text-white hover:bg-neutral-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {startingManualCancellation
-                    ? 'Registrando…'
-                    : latePaymentCancellationReview
-                      ? 'Registrar revisão de pagamento tardio'
-                      : 'Registrar encaminhamento manual'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setConfirmingManualCancellation(true)}
-                className="min-h-11 rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
-              >
-                {latePaymentCancellationReview
-                  ? 'Registrar revisão de pagamento tardio'
-                  : 'Registrar encaminhamento manual'}
-              </button>
-            </div>
-          )}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setManualCancellationError('');
+                setConfirmingManualCancellation(true);
+              }}
+              className="min-h-11 rounded-xl border border-neutral-300 px-3 py-2 text-xs font-bold text-neutral-700 hover:bg-neutral-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-700"
+            >
+              {latePaymentCancellationReview
+                ? 'Registrar revisão de pagamento tardio'
+                : 'Registrar encaminhamento manual'}
+            </button>
+          </div>
         </div>
       )}
+      <ConfirmationDialog
+        isOpen={confirmingManualCancellation}
+        title={
+          latePaymentCancellationReview
+            ? 'Registrar revisão de pagamento tardio?'
+            : 'Registrar encaminhamento manual?'
+        }
+        description={
+          latePaymentCancellationReview
+            ? 'O pagamento foi aprovado após o prazo da pré-reserva. Este registro inicia a revisão manual; não altera a Stays nem o Mercado Pago. A equipe ainda precisa cancelar a reserva na Stays e executar o estorno conforme a política aplicável.'
+            : 'Este encaminhamento só registra a decisão e não altera a Stays nem o gateway. A equipe ainda precisará cancelar a reserva na Stays, executar o reembolso e conferir ambos.'
+        }
+        confirmLabel={
+          latePaymentCancellationReview ? 'Registrar revisão' : 'Registrar encaminhamento'
+        }
+        pendingLabel="Registrando…"
+        cancelLabel="Voltar"
+        confirmVariant="primary"
+        size="medium"
+        isPending={startingManualCancellation}
+        error={manualCancellationError}
+        returnFocusRef={dialogReturnFocusRef}
+        onClose={() => {
+          if (!startingManualCancellation) setConfirmingManualCancellation(false);
+        }}
+        onConfirm={() => void startManualCancellation()}
+      />
       {order.status === 'reembolso_pendente' && (
         <section
           className="mt-4 space-y-3 border-t border-neutral-100 pt-4"
@@ -941,12 +972,14 @@ const getUnmatchedWebhookNextAction = (webhook: DirectBookingOperationsWebhook):
 const UnmatchedWebhookCard: React.FC<{
   webhook: DirectBookingOperationsWebhook;
   accessToken: string;
+  onActionStart: () => void;
   onRetried: () => void;
-}> = ({ webhook, accessToken, onRetried }) => {
+}> = ({ webhook, accessToken, onActionStart, onRetried }) => {
   const [isRetrying, setIsRetrying] = useState(false);
   const [retryError, setRetryError] = useState('');
 
   const retryWebhook = async (): Promise<void> => {
+    onActionStart();
     setIsRetrying(true);
     setRetryError('');
     try {
@@ -1026,8 +1059,9 @@ const OwnerRequestCard: React.FC<{
   request: OwnerAccessRequest;
   accessToken: string;
   dialogReturnFocusRef: RefObject<HTMLElement | null>;
-  onApproved: () => void;
-}> = ({ request, accessToken, dialogReturnFocusRef, onApproved }) => {
+  onActionStart: () => void;
+  onApproved: (message: string) => void;
+}> = ({ request, accessToken, dialogReturnFocusRef, onActionStart, onApproved }) => {
   const [query, setQuery] = useState('');
   const [owners, setOwners] = useState<StaysOwnerSummary[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState('');
@@ -1075,11 +1109,12 @@ const OwnerRequestCard: React.FC<{
 
   const handleApprove = async () => {
     if (!identityVerified || !selectedOwnerId) return;
+    onActionStart();
     setSaving(true);
     setError('');
     try {
       await crcnBackendApi.approveOwnerAccess(accessToken, request.userId, selectedOwnerId);
-      onApproved();
+      onApproved('Acesso de proprietário aprovado.');
     } catch (approveError) {
       setError(
         approveError instanceof Error ? approveError.message : 'Não foi possível aprovar o acesso.',
@@ -1090,12 +1125,13 @@ const OwnerRequestCard: React.FC<{
   };
 
   const handleReject = async () => {
+    onActionStart();
     setSaving(true);
     setRejectionError('');
     try {
       await crcnBackendApi.rejectOwnerAccess(accessToken, request.userId);
       setConfirmingRejection(false);
-      onApproved();
+      onApproved('Solicitação de acesso recusada.');
     } catch (rejectError) {
       setRejectionError(
         rejectError instanceof Error ? rejectError.message : 'Não foi possível recusar o acesso.',
@@ -1142,35 +1178,56 @@ const OwnerRequestCard: React.FC<{
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
           <input
             id={`stays-owner-search-${request.userId}`}
+            type="search"
+            aria-describedby={`stays-owner-search-help-${request.userId}`}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
+              setOwners([]);
               setSelectedOwnerId('');
               setError('');
             }}
-            placeholder="Pesquise pelo nome ou ID (mín. 2 caracteres)"
+            placeholder="Pesquise pelo nome ou ID"
             className="min-h-11 w-full rounded-xl border border-neutral-200 bg-white/90 py-3 pl-10 pr-3 text-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100"
           />
         </div>
+        <p
+          id={`stays-owner-search-help-${request.userId}`}
+          className="mt-1 text-xs text-neutral-500"
+        >
+          Digite pelo menos 2 caracteres do nome ou ID do cadastro na Stays.
+        </p>
         {searching && (
-          <p className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
+          <p role="status" className="mt-2 flex items-center gap-2 text-xs text-neutral-500">
             <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Pesquisando na Stays…
           </p>
         )}
         {!searching && query.trim().length >= 2 && owners.length === 0 && !error && (
-          <p className="mt-2 text-xs text-neutral-500">Nenhum cadastro corresponde à pesquisa.</p>
+          <p role="status" className="mt-2 text-xs text-neutral-500">
+            Nenhum cadastro corresponde à pesquisa.
+          </p>
         )}
         {owners.length > 0 && (
-          <div className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-neutral-200 bg-white/90 p-1">
+          <fieldset
+            aria-busy={searching}
+            className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-neutral-200 bg-white/90 p-1"
+          >
+            <legend className="sr-only">Cadastros correspondentes na Stays</legend>
             {owners.map((owner) => (
-              <button
+              <label
                 key={owner.id}
-                type="button"
-                aria-pressed={selectedOwnerId === owner.id}
-                onClick={() => setSelectedOwnerId(owner.id)}
-                className={`flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 ${selectedOwnerId === owner.id ? 'bg-orange-50 ring-1 ring-orange-300' : 'hover:bg-neutral-50'}`}
+                className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left transition focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-orange-600 ${selectedOwnerId === owner.id ? 'bg-orange-50 ring-1 ring-orange-300' : 'hover:bg-neutral-50'}`}
               >
-                <span className="min-w-0">
+                <input
+                  type="radio"
+                  name={`stays-owner-match-${request.userId}`}
+                  value={owner.id}
+                  checked={selectedOwnerId === owner.id}
+                  onChange={() => setSelectedOwnerId(owner.id)}
+                  aria-label={`${owner.name}, ID ${owner.id}`}
+                  className="h-4 w-4 shrink-0 accent-orange-600"
+                />
+                <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-neutral-800">
                     {owner.name}
                   </span>
@@ -1181,21 +1238,22 @@ const OwnerRequestCard: React.FC<{
                       : `${owner.propertyCount} imóvel(is)`}
                   </span>
                 </span>
-                {selectedOwnerId === owner.id && (
-                  <Check className="h-4 w-4 shrink-0 text-orange-600" />
-                )}
-              </button>
+              </label>
             ))}
-          </div>
+          </fieldset>
         )}
       </div>
 
-      <label className="mt-4 flex min-h-11 cursor-pointer items-start gap-2.5 rounded-xl px-2 py-2 text-xs leading-relaxed text-neutral-700">
-        <input
-          type="checkbox"
+      <label
+        htmlFor={`identity-verified-${request.userId}`}
+        className="mt-4 flex min-h-11 cursor-pointer items-start gap-2.5 rounded-xl px-2 py-2 text-xs leading-relaxed text-neutral-700"
+      >
+        <CheckboxInput
+          id={`identity-verified-${request.userId}`}
+          size="large"
           checked={identityVerified}
           onChange={(event) => setIdentityVerified(event.target.checked)}
-          className="mt-0.5 h-5 w-5 shrink-0 accent-orange-600"
+          className="mt-0.5"
         />
         <span>
           Confirmei a identidade do solicitante por um canal oficial da Central e verifiquei que ele

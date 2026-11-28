@@ -8,11 +8,11 @@ interface StatusBadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const toneClasses: Record<StatusBadgeTone, string> = {
-  neutral: 'bg-neutral-100 text-neutral-700',
-  info: 'bg-sky-100 text-sky-900',
-  success: 'bg-emerald-100 text-emerald-900',
-  warning: 'bg-amber-100 text-amber-950',
-  danger: 'bg-rose-100 text-rose-900',
+  neutral: 'bg-status-neutral-badge-surface text-status-neutral-badge-foreground',
+  info: 'bg-status-info-badge-surface text-status-info-badge-foreground',
+  success: 'bg-status-success-badge-surface text-status-success-badge-foreground',
+  warning: 'bg-status-warning-badge-surface text-status-warning-badge-foreground',
+  danger: 'bg-status-danger-badge-surface text-status-danger-badge-foreground',
 };
 
 export function StatusBadge({

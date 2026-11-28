@@ -521,6 +521,9 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [position, setPosition] = useState({ left: 8, top: 8, width: 300, maxHeight: 360 });
   const [query, setQuery] = useState('');
+  const [activeOptionIndex, setActiveOptionIndex] = useState(0);
+  const listboxId = `${labelId}-listbox`;
+  const searchInputId = `${labelId}-query`;
 
   const updatePosition = () => {
     const trigger = triggerRef.current;
@@ -573,6 +576,14 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
   const selectedIndex = visibleOptions.findIndex((option) => option.value === value);
 
   useEffect(() => {
+    if (selectedIndex >= 0) {
+      setActiveOptionIndex(selectedIndex);
+    } else {
+      setActiveOptionIndex(0);
+    }
+  }, [selectedIndex, query]);
+
+  useEffect(() => {
     if (!isOpen || sharedPanel) return;
     const frame = window.requestAnimationFrame(() => {
       if (searchable) searchInputRef.current?.focus();
@@ -587,9 +598,11 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
     if (!advanceOnSelect) triggerRef.current?.focus();
   };
 
-  const moveOptionFocus = (index: number, direction: -1 | 1) => {
-    const next = Math.min(Math.max(index + direction, 0), visibleOptions.length - 1);
-    optionRefs.current[next]?.focus();
+  const moveActiveOption = (index: number): void => {
+    if (visibleOptions.length === 0) return;
+    const next = Math.min(Math.max(index, 0), visibleOptions.length - 1);
+    setActiveOptionIndex(next);
+    optionRefs.current[next]?.scrollIntoView({ block: 'nearest' });
   };
 
   return (
@@ -597,10 +610,12 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
       <button
         ref={triggerRef}
         type="button"
-        aria-haspopup={sharedPanel ? 'dialog' : 'listbox'}
+        aria-haspopup={sharedPanel || searchable ? 'dialog' : 'listbox'}
         data-search-resort-trigger={sharedPanel ? labelId.replace(/-resort-label$/, '') : undefined}
         aria-labelledby={`${labelId} ${labelId}-value`}
-        aria-controls={sharedPanel ? `${labelId}-dialog` : `${labelId}-listbox`}
+        aria-controls={
+          isOpen ? (sharedPanel || searchable ? `${labelId}-dialog` : listboxId) : undefined
+        }
         aria-expanded={isOpen}
         onClick={() => onOpen()}
         className="flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-2xl border border-white/85 bg-white/55 py-3 pl-10 pr-3 text-left text-xs font-bold text-neutral-900 shadow-[inset_0_1px_2px_rgba(255,255,255,0.85),0_3px_10px_rgba(15,23,42,0.04)] backdrop-blur-xl transition hover:bg-white/70 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-400/20 sm:text-sm"
@@ -621,13 +636,24 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
         createPortal(
           <div
             ref={menuRef}
+            id={searchable ? `${labelId}-dialog` : undefined}
             data-dialog-focus-portal
             aria-hidden={!isOpen}
             inert={!isOpen}
             data-closing={!isOpen || undefined}
-            role="group"
+            role={searchable ? 'dialog' : 'group'}
             aria-label="Opções de filtro"
             className="search-popover-enter fixed z-[1000] overflow-hidden rounded-2xl border border-white/90 bg-white/78 p-2 text-neutral-800 shadow-[0_18px_55px_-16px_rgba(15,23,42,0.24)] backdrop-blur-2xl"
+            onBlur={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (
+                !(nextTarget instanceof Node) ||
+                (!menuRef.current?.contains(nextTarget) &&
+                  !triggerRef.current?.contains(nextTarget))
+              ) {
+                onClose();
+              }
+            }}
             style={{
               left: position.left,
               top: position.top,
@@ -637,15 +663,37 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
           >
             {searchable && (
               <input
+                id={searchInputId}
                 ref={searchInputRef}
+                role="combobox"
                 value={query}
+                aria-controls={listboxId}
+                aria-expanded={isOpen}
+                aria-haspopup="listbox"
+                aria-autocomplete="list"
+                aria-activedescendant={
+                  visibleOptions.length > 0 ? `${listboxId}-option-${activeOptionIndex}` : undefined
+                }
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'ArrowDown' && visibleOptions.length > 0) {
                     event.preventDefault();
-                    (optionRefs.current[selectedIndex] || optionRefs.current[0])?.focus();
+                    moveActiveOption(activeOptionIndex + 1);
+                  } else if (event.key === 'ArrowUp' && visibleOptions.length > 0) {
+                    event.preventDefault();
+                    moveActiveOption(activeOptionIndex - 1);
+                  } else if (event.key === 'Home' && visibleOptions.length > 0) {
+                    event.preventDefault();
+                    moveActiveOption(0);
+                  } else if (event.key === 'End' && visibleOptions.length > 0) {
+                    event.preventDefault();
+                    moveActiveOption(visibleOptions.length - 1);
+                  } else if (event.key === 'Enter' && visibleOptions.length > 0) {
+                    event.preventDefault();
+                    selectOption(visibleOptions[activeOptionIndex]);
                   }
                   if (event.key === 'Escape') {
+                    event.preventDefault();
                     onClose();
                     triggerRef.current?.focus();
                   }
@@ -656,14 +704,16 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
               />
             )}
             <div
-              id={`${labelId}-listbox`}
+              id={listboxId}
               role="listbox"
-              aria-label="Opções disponíveis"
+              aria-label={searchable ? undefined : 'Opções disponíveis'}
+              aria-labelledby={searchable ? searchInputId : undefined}
               className="overflow-y-auto overscroll-contain"
               style={{ maxHeight: Math.max(0, position.maxHeight - (searchable ? 68 : 16)) }}
             >
               {visibleOptions.map((option, index) => (
                 <button
+                  id={`${listboxId}-option-${index}`}
                   ref={(element) => {
                     optionRefs.current[index] = element;
                   }}
@@ -671,40 +721,47 @@ const LiquidSelect: React.FC<LiquidSelectProps> = ({
                   type="button"
                   role="option"
                   aria-selected={option.value === value}
+                  tabIndex={-1}
+                  onMouseMove={() => setActiveOptionIndex(index)}
                   onClick={() => selectOption(option)}
                   onKeyDown={(event) => {
                     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                       event.preventDefault();
-                      moveOptionFocus(index, event.key === 'ArrowDown' ? 1 : -1);
+                      moveActiveOption(index + (event.key === 'ArrowDown' ? 1 : -1));
                     } else if (event.key === 'Home' || event.key === 'End') {
                       event.preventDefault();
-                      optionRefs.current[
-                        event.key === 'Home' ? 0 : visibleOptions.length - 1
-                      ]?.focus();
+                      moveActiveOption(event.key === 'Home' ? 0 : visibleOptions.length - 1);
                     } else if (event.key === 'Escape') {
                       event.preventDefault();
                       onClose();
                       triggerRef.current?.focus();
+                    } else if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      selectOption(visibleOptions[index]);
                     }
                   }}
                   className={`flex min-h-11 w-full items-center rounded-xl px-3 py-2.5 text-left text-xs transition sm:text-sm ${
                     option.value === value
                       ? 'bg-orange-500/10 font-extrabold text-orange-800 ring-1 ring-inset ring-orange-300/50'
-                      : 'font-semibold text-neutral-700 hover:bg-white/75 hover:text-orange-700'
+                      : index === activeOptionIndex
+                        ? 'bg-white/80 font-semibold text-orange-700 ring-1 ring-inset ring-neutral-200'
+                        : 'font-semibold text-neutral-700 hover:bg-white/75 hover:text-orange-700'
                   }`}
                 >
                   <span className="truncate">{option.label}</span>
                 </button>
               ))}
-              {visibleOptions.length === 0 && (
-                <p className="px-3 py-4 text-center text-xs text-neutral-500">
-                  {message || 'Nenhuma opção encontrada.'}
-                </p>
-              )}
-              {visibleOptions.length === 1 && options.length === 1 && message && (
-                <p className="px-3 py-2 text-xs text-neutral-500">{message}</p>
-              )}
             </div>
+            {visibleOptions.length === 0 && (
+              <p role="status" className="px-3 py-4 text-center text-xs text-neutral-500">
+                {message || 'Nenhuma opção encontrada.'}
+              </p>
+            )}
+            {visibleOptions.length === 1 && options.length === 1 && message && (
+              <p role="status" className="px-3 py-2 text-xs text-neutral-500">
+                {message}
+              </p>
+            )}
           </div>,
           document.body,
         )}
@@ -936,6 +993,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
   });
   const [sharedPanelVisible, setSharedPanelVisible] = useState(false);
   const [sharedResortQuery, setSharedResortQuery] = useState('');
+  const [sharedActiveResortIndex, setSharedActiveResortIndex] = useState(0);
   const sharedResortOptionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const sharedPanelRef = useRef<HTMLDivElement>(null);
   const [resorts, setResorts] = useState<Array<{ id: string; name: string }>>([]);
@@ -1068,7 +1126,7 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       if (event.key !== 'Tab' || !sharedPanelRef.current?.contains(event.target as Node)) return;
       const controls = Array.from(
         sharedPanelRef.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), a[href], input:not([disabled]), [tabindex="0"]',
+          'button:not([disabled]):not([tabindex="-1"]), a[href], input:not([disabled]), [tabindex="0"]',
         ),
       );
       const firstControl = controls[0];
@@ -1178,13 +1236,16 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
     });
   };
 
-  const resortOptions = [
-    { value: '', label: 'Todos os condomínios' },
-    ...resorts.map((resort) => ({
-      value: resort.id,
-      label: resort.name.replace(/^CRCN\s*[-–]\s*/i, ''),
-    })),
-  ];
+  const resortOptions = React.useMemo(
+    () => [
+      { value: '', label: 'Todos os condomínios' },
+      ...resorts.map((resort) => ({
+        value: resort.id,
+        label: resort.name.replace(/^CRCN\s*[-–]\s*/i, ''),
+      })),
+    ],
+    [resorts],
+  );
   const normalizedResortQuery = sharedResortQuery
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -1196,6 +1257,8 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
       .toLocaleLowerCase('pt-BR')
       .includes(normalizedResortQuery),
   );
+  const sharedResortListboxId = `${fieldId}-resort-label-shared-listbox`;
+
   const guestOptions = [
     { value: '', label: 'Hóspedes' },
     ...Array.from({ length: 17 }, (_, index) => ({
@@ -1364,6 +1427,13 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     isOpen={activeDropdown === 'resort'}
                     onOpen={() => {
                       setActiveDatePicker(null);
+                      setSharedResortQuery('');
+                      setSharedActiveResortIndex(
+                        Math.max(
+                          0,
+                          resortOptions.findIndex((option) => option.value === selectedResortId),
+                        ),
+                      );
                       setActiveDropdown('resort');
                     }}
                     onClose={() => setActiveDropdown(null)}
@@ -1641,14 +1711,59 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                   </label>
                   <input
                     id={`${fieldId}-resorts-query`}
+                    role="combobox"
                     aria-label="Buscar condomínio"
                     value={sharedResortQuery}
-                    aria-controls={`${fieldId}-resort-label-shared-listbox`}
-                    onChange={(event) => setSharedResortQuery(event.target.value)}
+                    aria-controls={sharedResortListboxId}
+                    aria-expanded={activeDropdown === 'resort'}
+                    aria-haspopup="listbox"
+                    aria-autocomplete="list"
+                    aria-activedescendant={
+                      sharedResortOptions.length > 0
+                        ? `${sharedResortListboxId}-option-${sharedActiveResortIndex}`
+                        : undefined
+                    }
+                    onChange={(event) => {
+                      setSharedResortQuery(event.target.value);
+                      setSharedActiveResortIndex(0);
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === 'ArrowDown' && sharedResortOptions.length > 0) {
                         event.preventDefault();
-                        sharedResortOptionRefs.current[0]?.focus();
+                        const nextIndex = Math.min(
+                          sharedActiveResortIndex + 1,
+                          sharedResortOptions.length - 1,
+                        );
+                        setSharedActiveResortIndex(nextIndex);
+                        sharedResortOptionRefs.current[nextIndex]?.scrollIntoView({
+                          block: 'nearest',
+                        });
+                      } else if (event.key === 'ArrowUp' && sharedResortOptions.length > 0) {
+                        event.preventDefault();
+                        const nextIndex = Math.max(sharedActiveResortIndex - 1, 0);
+                        setSharedActiveResortIndex(nextIndex);
+                        sharedResortOptionRefs.current[nextIndex]?.scrollIntoView({
+                          block: 'nearest',
+                        });
+                      } else if (event.key === 'Home' && sharedResortOptions.length > 0) {
+                        event.preventDefault();
+                        setSharedActiveResortIndex(0);
+                        sharedResortOptionRefs.current[0]?.scrollIntoView({ block: 'nearest' });
+                      } else if (event.key === 'End' && sharedResortOptions.length > 0) {
+                        event.preventDefault();
+                        const lastIndex = sharedResortOptions.length - 1;
+                        setSharedActiveResortIndex(lastIndex);
+                        sharedResortOptionRefs.current[lastIndex]?.scrollIntoView({
+                          block: 'nearest',
+                        });
+                      } else if (event.key === 'Enter' && sharedResortOptions.length > 0) {
+                        event.preventDefault();
+                        const option = sharedResortOptions[sharedActiveResortIndex];
+                        setSelectedResortId(option.value);
+                        setSelectedResort(option.value ? option.label : '');
+                        setSharedResortQuery('');
+                        setActiveDropdown(null);
+                        setActiveDatePicker('checkIn');
                       } else if (event.key === 'Escape') {
                         event.preventDefault();
                         setSharedResortQuery('');
@@ -1664,13 +1779,14 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                     className="mb-2 min-h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm outline-none focus:border-orange-500"
                   />
                   <div
-                    id={`${fieldId}-resort-label-shared-listbox`}
+                    id={sharedResortListboxId}
                     role="listbox"
-                    aria-label="Opções disponíveis"
+                    aria-labelledby={`${fieldId}-resorts-query`}
                     className="max-h-[calc(100%-3.5rem)] overflow-y-auto"
                   >
                     {sharedResortOptions.map((option, index) => (
                       <button
+                        id={`${sharedResortListboxId}-option-${index}`}
                         ref={(element) => {
                           sharedResortOptionRefs.current[index] = element;
                         }}
@@ -1678,32 +1794,8 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                         type="button"
                         role="option"
                         aria-selected={selectedResortId === option.value}
-                        tabIndex={selectedResortId === option.value ? 0 : -1}
-                        onKeyDown={(event) => {
-                          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                            event.preventDefault();
-                            const direction = event.key === 'ArrowDown' ? 1 : -1;
-                            const nextIndex = Math.min(
-                              Math.max(index + direction, 0),
-                              sharedResortOptions.length - 1,
-                            );
-                            sharedResortOptionRefs.current[nextIndex]?.focus();
-                          } else if (event.key === 'Home' || event.key === 'End') {
-                            event.preventDefault();
-                            const edgeIndex =
-                              event.key === 'Home' ? 0 : sharedResortOptions.length - 1;
-                            sharedResortOptionRefs.current[edgeIndex]?.focus();
-                          } else if (event.key === 'Escape') {
-                            event.preventDefault();
-                            setSharedResortQuery('');
-                            setActiveDropdown(null);
-                            document
-                              .querySelector<HTMLButtonElement>(
-                                `[data-search-resort-trigger="${fieldId}"]`,
-                              )
-                              ?.focus();
-                          }
-                        }}
+                        tabIndex={-1}
+                        onMouseMove={() => setSharedActiveResortIndex(index)}
                         onClick={() => {
                           setSelectedResortId(option.value);
                           setSelectedResort(option.value ? option.label : '');
@@ -1711,19 +1803,23 @@ export const StaysSearchWidget: React.FC<StaysSearchWidgetProps> = ({
                           setActiveDropdown(null);
                           setActiveDatePicker('checkIn');
                         }}
-                        className="flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm hover:bg-orange-50"
+                        className={`flex min-h-11 w-full items-center rounded-xl px-3 text-left text-sm ${selectedResortId === option.value ? 'bg-orange-50 font-bold text-orange-950' : index === sharedActiveResortIndex ? 'bg-neutral-50 text-neutral-900' : 'text-neutral-700 hover:bg-orange-50'}`}
                       >
                         {option.label}
                       </button>
                     ))}
-                    {sharedResortOptions.length === 0 && (
-                      <p role="status" className="px-3 py-4 text-center text-sm text-neutral-600">
-                        {isLoadingResorts
-                          ? 'Carregando condomínios...'
-                          : 'Nenhum condomínio encontrado.'}
-                      </p>
-                    )}
                   </div>
+                  {resorts.length === 0 ? (
+                    <p role="status" className="px-3 py-4 text-center text-sm text-neutral-600">
+                      {isLoadingResorts
+                        ? 'Carregando condomínios...'
+                        : 'Sugestões indisponíveis no momento. Você pode buscar em todos os empreendimentos.'}
+                    </p>
+                  ) : sharedResortOptions.length === 0 ? (
+                    <p role="status" className="px-3 py-4 text-center text-sm text-neutral-600">
+                      Nenhum condomínio encontrado.
+                    </p>
+                  ) : null}
                 </div>
               )}
               {activeDropdown === 'guests' && (
