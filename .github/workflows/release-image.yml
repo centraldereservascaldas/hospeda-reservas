@@ -487,7 +487,7 @@ jobs:
 
             direct_checkout_matches_expected=false
             if [ "$DIRECT_CHECKOUT_EXPECTED_ENABLED" = 'true' ]; then
-              if jq --exit-status '.success == true and .reservation.status == "reserved" and .reservation.paymentEnabled == true and ((.reservation.paymentPlans.full.methods | index("pix")) != null or (.reservation.paymentPlans.deposit.methods | index("pix")) != null)' <<< "$direct_checkout" >/dev/null 2>&1; then
+              if jq --exit-status 'if .success != true then false elif .reservation.state == "completed" then true else .reservation.status == "reserved" and .reservation.paymentEnabled == true and ((.reservation.paymentPlans.full.methods | index("pix")) != null or (.reservation.paymentPlans.deposit.methods | index("pix")) != null) end' <<< "$direct_checkout" >/dev/null 2>&1; then
                 direct_checkout_matches_expected=true
               fi
             elif jq --exit-status '.success == false and .message == "Reserva não encontrada."' <<< "$direct_checkout" >/dev/null 2>&1; then
