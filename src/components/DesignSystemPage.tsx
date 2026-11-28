@@ -134,6 +134,13 @@ const catalogDomains: CatalogDomain[] = [
         purpose: 'Acesso às áreas principais em telas estreitas.',
       },
       {
+        name: 'Seções do painel do proprietário',
+        file: 'components/owner/HostDashboardView.tsx',
+        purpose:
+          'Navegação local entre visão geral, propriedades, reservas, calendário e contabilidade; permanece um padrão do domínio, sem abstração compartilhada aprovada.',
+        status: 'observed',
+      },
+      {
         name: 'Rodapé',
         file: 'components/AppFooter.tsx',
         purpose: 'Links institucionais, preferências e acesso do anfitrião.',

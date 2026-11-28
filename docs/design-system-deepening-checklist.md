@@ -65,6 +65,16 @@ Este é um mapa estático de pontos de entrada/estrutura de código, não uma va
 | Administração | Rever pedidos de acesso; quando permitido, tratar pedidos/webhooks em conferência, paginação, falhas e ações de operação; consultar proprietários Stays.                                                         | `src/components/owner/OwnerAccessAdminView.tsx`, `src/components/MainContentRouter.tsx`, `src/App.tsx`                                              | Walkthrough por capacidade, impacto e permissão; revisar ações repetíveis, resultado incerto, confirmação e trilha operacional sem alterar regras de servidor.   |
 | Afiliado      | Nenhuma tarefa de dashboard confirmada no frontend. `partnerCode` é exibido em resumo de reserva e rotas de sandbox têm finalidade de teste/operação.                                                            | `src/components/booking/ExistingReservationStayCard.tsx`, `src/components/booking/PartnerSandboxOperations.tsx`, `src/App.tsx`                      | Descobrir modelo de afiliado, papéis, vínculo, atribuição, comissão, repasse e API antes de definir métricas, tabelas ou ações.                                  |
 
+### Navegação e localização dos painéis
+
+- **Entrada e autorização observadas:** `App.tsx` mantém `MainView` (`explore`, `trips`, `wishlists`, `host`, `ownerAdmin`) em estado da SPA. `MainContentRouter.tsx` carrega as superfícies de forma lazy; proprietário só aparece com acesso aprovado e token, administração exige `isOwnerAdmin` e token. A seção operacional financeira depende também de `canManagePayments`.
+- **Usuário:** `Header.tsx` oferece navegação da conta para explorar, viagens, favoritos e, conforme o status, painel/solicitação de acesso do proprietário e administração. `MobileBottomNavigation.tsx` mostra explorar, favoritos e reservas; acrescenta proprietário aprovado, mas não inclui entrada administrativa. Esses controles usam navegação SPA, não URLs dedicadas por destino.
+- **Proprietário:** `HostDashboardView.tsx` tem título/contexto, filtro de imóvel, navegação de mês e cinco botões de seção: visão geral, propriedades, reservas, calendário e contabilidade. O conteúdo alterna localmente; a seção ativa usa `aria-current="page"`. É navegação interna do domínio. Não generalizar para o cabeçalho global sem contrato comum de destino, URL e permissão.
+- **Administração:** `OwnerAccessAdminView.tsx` combina fila de operações (somente quando permitido) e fila de acessos na mesma superfície, em seções empilhadas. Não há seletor global de seções. Quando a operação está presente, “Itens que precisam de ação” é o único `h1` e “Acessos de proprietários” é `h2`; sem a permissão financeira, o título de acessos permanece `h1`.
+- **Decisão de sistema:** manter navegação global, navegação mobile, seções do proprietário e filas administrativas como composições distintas. Evidência estática não sustenta um `DashboardShell` ou `Tabs` universal. O catálogo documenta a navegação de seções do proprietário como padrão observado, ainda sem validação completa de estados/teclado.
+- **Afiliado:** segue desconhecido; nenhum shell, navegação, comissão, saldo ou ação administrativa será inferido a partir de `partnerCode` ou sandbox.
+- **Validação pendente:** walkthrough renderizado por permissão e viewport; verificar orientação ao navegar/retornar, foco após troca de seção, zoom/reflow e acesso administrativo em viewport estreito. A inspeção atual é estática e não prova tarefa concluída ou validação com usuários.
+
 ## Wave 0 — enquadrar e auditar
 
 - [x] Confirmar escopo Laravel/React principal e excluir Astro.
@@ -137,7 +147,7 @@ Para cada família, registrar rota/tarefa, arquivos e consumidores, contrato/est
 
 Famílias adicionais a avaliar depois das seis prioridades, sem obrigação de criar todas:
 
-- [ ] Estrutura e navegação de painel: shell, navegação de seção, título/contexto, breadcrumb ou localização, abas versus navegação, ações de página.
+- [~] Estrutura e navegação de painel: inventariados estaticamente `MainView`, menus do usuário, navegação mobile, cinco seções do proprietário e filas empilhadas da administração. Não há evidência para shell universal; walkthrough renderizado por permissão/viewport continua pendente.
 - [ ] Resumo e dados: cartão de métrica, tendência quando houver dados válidos, tabela/lista, paginação, filtros, intervalo de datas, seleção de imóvel e estados sem dados.
 - [ ] Entrada e edição: campo, seletor, formulário, validação, resumo de erros, upload/editor apenas se o fluxo existente exigir.
 - [ ] Feedback e tarefa: aviso, badge de estado, loading/skeleton, vazio, falha/retry, confirmação, progresso e notificação apenas quando houver necessidade observada.

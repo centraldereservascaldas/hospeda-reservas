@@ -43,6 +43,7 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
   accessToken,
   canManagePayments,
 }) => {
+  const AccessRequestsHeading = canManagePayments ? 'h2' : 'h1';
   const dialogReturnFocusRef = useRef<HTMLElement>(null);
   const [requests, setRequests] = useState<OwnerAccessRequest[]>([]);
   const [operationsOrders, setOperationsOrders] = useState<DirectBookingOperationsOrder[]>([]);
@@ -285,9 +286,9 @@ export const OwnerAccessAdminView: React.FC<OwnerAccessAdminViewProps> = ({
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50/80 px-3 py-1 text-xs font-bold text-orange-800">
               <ShieldCheck className="h-4 w-4" /> Área restrita da Central
             </div>
-            <h1 className="text-page-title font-black tracking-tight text-neutral-950 sm:text-page-title-wide">
+            <AccessRequestsHeading className="text-page-title font-black tracking-tight text-neutral-950 sm:text-page-title-wide">
               Acessos de proprietários
-            </h1>
+            </AccessRequestsHeading>
             <p className="mt-1 max-w-2xl text-sm text-neutral-600">
               Confira a identidade por um canal oficial antes de associar uma conta do site ao
               cadastro da Stays. A pesquisa mostra apenas nome, identificador e quantidade de
