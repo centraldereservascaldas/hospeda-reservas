@@ -1,5 +1,6 @@
 export interface ReservationSummary {
   code: string;
+  partnerCode?: string | null;
   listingId: string | null;
   propertyDetails?: {
     images: string[];
@@ -183,6 +184,7 @@ export function isSummary(value: unknown, code: string): value is ReservationSum
   const item = value as Record<string, unknown>;
   return (
     item.code === code &&
+    (item.partnerCode === undefined || nullableString(item.partnerCode)) &&
     nullableString(item.listingId) &&
     validPropertyDetails(item.propertyDetails) &&
     nullableString(item.property) &&

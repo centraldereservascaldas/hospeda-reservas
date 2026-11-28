@@ -12,7 +12,7 @@ O titular compartilha `/checkout/{codigoDaReserva}` para pagar uma reserva da St
 2. O sistema exibe o link curto para novas pré-reservas (`type=reserved`). O backend consulta a Stays em cada resumo e criação de checkout. Um link já compartilhado pode continuar o pagamento quando a Stays promover a reserva a `booked`, desde que exista saldo positivo confirmado e verificável. Reservas pagas, canceladas ou em outro estado não liberam cobrança.
 3. O checkout mostra apenas o necessário para pagar. A consulta de saldo usa total e pagamentos registrados na Stays; se o total for positivo, o pago for zero e não existir crédito/recebível, oferece quitação de 100% ou entrada Pix de 50%. Depois de uma entrada conciliada, o mesmo link pode oferecer apenas o saldo restante verificado.
 4. Cada pagamento deve lançar/conciliar somente o valor capturado como pagamento na Stays. O total da reserva permanece inalterado, o valor pago é acumulado e o saldo restante é recalculado pela Stays após a conferência do pagamento.
-5. O código curto é uma decisão explícita de acesso ao checkout, com link exibido para estado `reserved` e pagamentos subsequentes condicionados ao saldo verificado, limites de requisição e ausência de cache. Respostas não devem incluir dados de contato do hóspede ou código do parceiro.
+5. O código curto é a única informação usada no endereço de acesso. A rota aplica limites de requisição, ausência de cache e validação do saldo no servidor. Respostas nunca devem incluir dados de contato do hóspede.
 6. A ativação dessas rotas e do plano de entrada é independente da criação de novas reservas e das flags de cobrança real em produção. Este ADR não declara credenciais Cielo, configuração Stays ou ambiente de produção prontos.
 
 ## Consequências

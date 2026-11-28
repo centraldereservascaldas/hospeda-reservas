@@ -152,6 +152,7 @@ class ExistingReservationCheckoutController extends Controller
                 'status' => $reservation['type'],
                 'listingId' => is_string($listingId) ? $listingId : null,
                 'property' => is_array($property) ? ($property['title'] ?? null) : null,
+                'partnerCode' => is_string($reservation['partner']['name'] ?? null) && mb_strtolower(trim($reservation['partner']['name'])) === 'api booking.com' && is_string($reservation['partnerCode'] ?? null) ? mb_substr($reservation['partnerCode'], 0, 100) : null,
                 'propertyDetails' => is_array($property) ? array_intersect_key($property, array_flip(['images', 'description', 'condoTitle', 'condoDescription', 'condoImages'])) : null,
                 'image' => is_array($property) ? ($property['images'][0] ?? null) : null,
                 'checkIn' => $reservation['checkInDate'] ?? null,
